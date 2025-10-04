@@ -1,0 +1,1 @@
+export const agentHost = process.env.AGENT_HOST || "http://localhost:8081";
