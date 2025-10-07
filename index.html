@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <title>Template UI</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script>
+    window.USER_DATA = {
+      accessToken: "access-token",
+      expiresAt: "2026-10-29T23:20:00.417Z",
+      cn: "John Wick",
+      displayName: "John",
+      email: "johnwick@redhat.com",
+      email_verified: false,
+      family_name: "Wick",
+      givenName: "John",
+      given_name: "John",
+      mail: "johnwick@redhat.com",
+      name: "John Wick",
+      preferred_username: "johnwickdev",
+      rhatUUID: "asssdsadsad-e119s4-11ef-a0f1-saqdsass",
+      sn: "Wick",
+      sub: "1udsd1ef7-7e0c-4cr45-a250-dssdsd"
+    }
+
+    window.APP_DATA = {
+      apiUrl: "http://localhost:5002",
+    }
+  </script>
+  <script type="module" src="/src/frontend/main.tsx"></script>
+</body>
+
+</html>
