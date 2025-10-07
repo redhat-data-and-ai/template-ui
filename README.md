@@ -96,7 +96,7 @@ SSO_CALLBACK_URL=http://localhost:8080/auth/callback/oidc
 
 ### Agent Host
 ```bash
-AGENT_HOST=http://localhost:8081
+AGENT_HOST=http://localhost:5002
 ```
 
 ## 🏗️ Project Structure
