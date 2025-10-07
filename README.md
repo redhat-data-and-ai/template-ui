@@ -13,7 +13,7 @@ A modern React-based frontend application with Fastify backend for interacting w
 
 1. **Clone the repository**
    ```bash
-   git clone git@github.com:redhat-data-and-ai/template-ui.git
+   git clone https://github.com/redhat-data-and-ai/template-ui.git
    cd template-ui
    ```
 
