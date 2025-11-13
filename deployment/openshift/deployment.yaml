@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: template-ui
+  labels:
+    app: template-ui
+    component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: template-ui
+      component: ui
+  template:
+    metadata:
+      labels:
+        app: template-ui
+        component: ui
+    spec:
+      containers:
+        - name: template-ui
+          image: template-ui:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: template-ui-config
+                  key: ENVIRONMENT
+            - name: AUTH_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: template-ui-config
+                  key: AUTH_ENABLED
+            - name: SSO_ISSUER_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: template-ui-config
+                  key: SSO_ISSUER_HOST
+                  optional: true
+            - name: SSO_CALLBACK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: template-ui-config
+                  key: SSO_CALLBACK_URL
+                  optional: true
+            - name: AGENT_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: template-ui-config
+                  key: AGENT_HOST
+            - name: COOKIE_SIGN
+              valueFrom:
+                secretKeyRef:
+                  name: template-ui-secrets
+                  key: COOKIE_SIGN
+            - name: SSO_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: template-ui-secrets
+                  key: SSO_CLIENT_ID
+                  optional: true
+            - name: SSO_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: template-ui-secrets
+                  key: SSO_CLIENT_SECRET
+                  optional: true
+          envFrom:
+            - secretRef:
+                name: template-ui-secrets
+                optional: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      restartPolicy: Always
+
