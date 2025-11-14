@@ -5,14 +5,7 @@ export interface Thread {
     messages: Message[];
 }
 
-declare global {
-    interface Window {
-        APP_DATA: {
-            apiUrl: string;
-            refreshableToken: string;
-        };
-    }
-}
+// Note: APP_DATA type is declared in types/user.ts
 
 const apiUrl = window.APP_DATA.apiUrl;
 
@@ -44,23 +37,36 @@ function combineToolCallandResult(messages: Message[]) {
 
 
 export async function getThreadIdsByUserId(userId: string) {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    };
+
+    // Add SSO token if available
+    if (window.USER_DATA?.accessToken) {
+        headers["X-Token"] = window.USER_DATA.accessToken;
+    }
 
     const threadIds = await fetch(`${apiUrl}/v1/threads/${userId}`, {
         method: "GET",
-        headers: {
-            "Content-Type": "application/json",
-        },
+        headers,
     });
 
     return threadIds.json();
 }
 
 export async function gethistoryByThreadId(threadId: string) {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    };
+
+    // Add SSO token if available
+    if (window.USER_DATA?.accessToken) {
+        headers["X-Token"] = window.USER_DATA.accessToken;
+    }
+
     const history = await fetch(`${apiUrl}/v1/history/${threadId}`, {
         method: "GET",
-        headers: {
-            "Content-Type": "application/json",
-        },
+        headers,
     });
     return history.json().then(history => {
         console.log(history);

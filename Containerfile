@@ -1,23 +1,23 @@
-FROM --platform=linux/amd64 node:24-alpine
+FROM registry.access.redhat.com/ubi10/nodejs-24:10.1
 
-WORKDIR /usr/app
+USER root
 
-COPY package*.json /usr/app
-COPY src /usr/app/src
-COPY public /usr/app/public
+WORKDIR /opt/app-root/src
 
-COPY components.json /usr/app/components.json
-COPY eslint.config.js /usr/app/eslint.config.js
-COPY vite.config.ts /usr/app/vite.config.ts
-COPY vite-env.d.ts /usr/app/vite-env.d.ts
-COPY tsconfig.json /usr/app/tsconfig.json
-COPY tsconfig.node.json /usr/app/tsconfig.node.json
+COPY --chown=1001:0 package*.json ./
+COPY --chown=1001:0 src ./src
+COPY --chown=1001:0 public ./public
+COPY --chown=1001:0 components.json ./
+COPY --chown=1001:0 eslint.config.js ./
+COPY --chown=1001:0 vite.config.ts ./
+COPY --chown=1001:0 vite-env.d.ts ./
+COPY --chown=1001:0 tsconfig.json ./
+COPY --chown=1001:0 tsconfig.node.json ./
 
-RUN npm ci \
-    && npm run build
+USER 1001
 
-USER node
+RUN npm ci && npm run build
 
 EXPOSE 8080
 
-CMD "node" "dist/server/index.js"
+CMD ["node", "dist/server/index.js"]

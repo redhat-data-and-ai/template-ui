@@ -87,7 +87,7 @@ export function useDataStream({
       };
       
       if (refreshableToken) {
-        headers["Authorization"] = `Bearer ${refreshableToken}`;
+        headers["X-Token"] = refreshableToken;
       }
 
       const response = await fetch(`${apiUrl}/v1/stream`, {
@@ -99,7 +99,6 @@ export function useDataStream({
           session_id: threadId || "default-session",
           user_id: window.USER_DATA.preferred_username,
           stream_tokens: true,
-          access_token: refreshableToken,
         }),
         signal: abortControllerRef.current.signal,
       });

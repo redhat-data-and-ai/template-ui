@@ -33,7 +33,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   // API integration
   const thread = useDataStream({
-    apiUrl: "http://localhost:5002",
+    apiUrl: window.APP_DATA?.apiUrl || "http://localhost:5002",
     threadId: threadId || "",
     onError: (error: Error) => {
       setError(error.message);

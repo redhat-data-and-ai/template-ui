@@ -16,10 +16,16 @@ export interface UserData {
   sub: string;
 }
 
-// Extend the Window interface to include USER_DATA
+export interface AppData {
+  apiUrl: string;
+  refreshableToken: string;
+}
+
+// Extend the Window interface to include USER_DATA and APP_DATA
 declare global {
   interface Window {
     USER_DATA: UserData;
+    APP_DATA: AppData;
   }
 }
 
