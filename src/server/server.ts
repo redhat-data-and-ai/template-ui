@@ -1,7 +1,14 @@
 import Fastify from "fastify";
 import { clientRoutes } from "./router/client.router.js";
 import { apiRoutes } from "./router/api.router.js";
-import { authPlugin } from "./plugins/auth.plugin.js";
+import { redhatAuthPlugin } from "./plugins/redhat-auth.plugin.js";
+import { googleAuthPlugin } from "./plugins/google-auth.plugin.js";
+import { authType } from "./utils/config.js";
+
+const authPlugins = {
+  redhat: redhatAuthPlugin,
+  google: googleAuthPlugin,
+}
 
 interface LoggerConfig {
   development: {
@@ -57,8 +64,9 @@ export async function setupServer() {
     },
   });
 
-  if (process.env.AUTH_ENABLED === "true") {
-    await fastify.register(authPlugin);
+  if (authType) {
+    fastify.log.info(`Registering auth plugin: ${authType}`);
+    await fastify.register(authPlugins[authType]);
   }
 
   await fastify.register(apiRoutes, { prefix: "/api" });

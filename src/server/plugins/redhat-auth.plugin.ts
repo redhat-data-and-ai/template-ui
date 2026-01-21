@@ -1,12 +1,11 @@
-import oauthPlugin from "@fastify/oauth2";
+import oauthPlugin, { OAuth2Namespace } from "@fastify/oauth2";
 import { FastifyInstance } from "fastify";
 
 const SSO_CLIENT_ID = process.env.SSO_CLIENT_ID;
 const SSO_CLIENT_SECRET = process.env.SSO_CLIENT_SECRET;
 const SSO_ISSUER_HOST = process.env.SSO_ISSUER_HOST;
 const SSO_CALLBACK_URL = process.env.SSO_CALLBACK_URL;
-
-import { OAuth2Namespace } from "@fastify/oauth2";
+const SSO_SCOPE = (process.env.SSO_SCOPE || "profile email").split(",");
 
 type UserInfo = {
   sub: string;
@@ -27,7 +26,7 @@ declare module "fastify" {
 async function routes(fastify: FastifyInstance) {
   fastify.register(oauthPlugin as any, {
     name: "redhatSSO",
-    scope: ["profile", "email", "session:role-any"],
+    scope: SSO_SCOPE,
     credentials: {
       client: {
         id: SSO_CLIENT_ID,
@@ -123,4 +122,4 @@ async function routes(fastify: FastifyInstance) {
   });
 }
 
-export { routes as authPlugin };
+export { routes as redhatAuthPlugin };
