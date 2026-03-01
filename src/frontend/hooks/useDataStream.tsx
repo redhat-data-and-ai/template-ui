@@ -28,10 +28,12 @@ export function useDataStream({
   apiUrl,
   threadId,
   onError,
+  onLoadingChange,
 }: {
   apiUrl: string;
   threadId: string;
   onError: (error: Error) => void;
+  onLoadingChange?: (loading: boolean) => void;
 }) {
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
@@ -77,6 +79,7 @@ export function useDataStream({
     processedChunkIdsRef.current.clear();
 
     setIsLoading(true);
+    onLoadingChange?.(true);
     setMessages(messages);
     chatStorage.saveChatByThreadId(threadId, messages);
     setStreamEvents([]);
@@ -95,8 +98,8 @@ export function useDataStream({
         headers,
         body: JSON.stringify({
           message: messages[messages.length - 1].content,
-          thread_id: threadId || "default-thread",
-          session_id: threadId || "default-session",
+          thread_id: threadId,
+          session_id: threadId,
           user_id: window.USER_DATA.preferred_username,
           stream_tokens: true,
         }),
@@ -223,16 +226,18 @@ export function useDataStream({
       }
     } finally {
       setIsLoading(false);
+      onLoadingChange?.(false);
       abortControllerRef.current = null;
     }
-  }, [apiUrl, onError, refreshableToken, threadId]);
+  }, [apiUrl, onError, onLoadingChange, refreshableToken, threadId]);
 
   const stop = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     setIsLoading(false);
-  }, []);
+    onLoadingChange?.(false);
+  }, [onLoadingChange]);
 
   return { messages, streamEvents, isLoading, submit, stop, setMessages };
 }
