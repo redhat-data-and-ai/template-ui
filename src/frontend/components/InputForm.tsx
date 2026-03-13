@@ -1,15 +1,28 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
-import { SquarePen, Send, StopCircle } from "lucide-react";
+import { SquarePen, Send, StopCircle, Microscope } from "lucide-react";
 import { Textarea } from "./ui/textarea";
 
-
-// Updated InputFormProps
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
   onCancel: () => void;
   isLoading: boolean;
   hasHistory: boolean;
+  deepResearchEnabled: boolean;
+  deepResearchLocked?: boolean;
+  onToggleDeepResearch: () => void;
+}
+
+function getPlaceholder(isLoading: boolean, deepResearchEnabled: boolean): string {
+  if (isLoading) return "Waiting for response...";
+  if (deepResearchEnabled) return "Ask a complex research question...";
+  return "Ask me anything about the data";
+}
+
+function getToggleStyle(enabled: boolean, locked: boolean): string {
+  if (locked) return "bg-purple-600/30 border border-purple-500/50 text-purple-300 opacity-60 cursor-not-allowed";
+  if (enabled) return "bg-purple-600/30 border border-purple-500/50 text-purple-300 hover:bg-purple-600/40 cursor-pointer";
+  return "bg-neutral-700 border border-neutral-600 text-neutral-400 hover:bg-neutral-600 hover:text-neutral-300 cursor-pointer";
 }
 
 export const InputForm: React.FC<InputFormProps> = ({
@@ -17,20 +30,20 @@ export const InputForm: React.FC<InputFormProps> = ({
   onCancel,
   isLoading,
   hasHistory,
+  deepResearchEnabled,
+  deepResearchLocked = false,
+  onToggleDeepResearch,
 }) => {
   const [internalInputValue, setInternalInputValue] = useState("");
-  // const [effort, setEffort] = useState("medium");
-  // const [model, setModel] = useState("gemini-2.5-flash-preview-04-17");
 
   const handleInternalSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!internalInputValue.trim()) return;
+    if (!internalInputValue.trim() || isLoading) return;
     onSubmit(internalInputValue);
     setInternalInputValue("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Submit with Enter and create new line with Shift+Enter
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleInternalSubmit();
@@ -53,9 +66,10 @@ export const InputForm: React.FC<InputFormProps> = ({
           value={internalInputValue}
           onChange={(e) => setInternalInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask me anything about the data"
+          disabled={isLoading}
+          placeholder={getPlaceholder(isLoading, deepResearchEnabled)}
           className={`w-full text-neutral-100 placeholder-neutral-500 resize-none border-0 focus:outline-none focus:ring-0 outline-none focus-visible:ring-0 shadow-none
-                        md:text-base  min-h-[56px] max-h-[200px]`}
+                        md:text-base  min-h-[56px] max-h-[200px] disabled:opacity-50 disabled:cursor-not-allowed`}
           rows={1}
         />
         <div className="-mt-3">
@@ -88,74 +102,18 @@ export const InputForm: React.FC<InputFormProps> = ({
       </div>
       <div className="flex items-center justify-between">
         <div className="flex flex-row gap-2">
-          {/* <div className="flex flex-row gap-2 bg-neutral-700 border-neutral-600 text-neutral-300 focus:ring-neutral-500 rounded-xl rounded-t-sm pl-2  max-w-[100%] sm:max-w-[90%]">
-            <div className="flex flex-row items-center text-sm">
-              <Brain className="h-4 w-4 mr-2" />
-              Effort
-            </div>
-            <Select value={effort} onValueChange={setEffort}>
-              <SelectTrigger className="w-[120px] bg-transparent border-none cursor-pointer">
-                <SelectValue placeholder="Effort" />
-              </SelectTrigger>
-              <SelectContent className="bg-neutral-700 border-neutral-600 text-neutral-300 cursor-pointer">
-                <SelectItem
-                  value="low"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  Low
-                </SelectItem>
-                <SelectItem
-                  value="medium"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  Medium
-                </SelectItem>
-                <SelectItem
-                  value="high"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  High
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div> */}
-          {/* <div className="flex flex-row gap-2 bg-neutral-700 border-neutral-600 text-neutral-300 focus:ring-neutral-500 rounded-xl rounded-t-sm pl-2  max-w-[100%] sm:max-w-[90%]">
-            <div className="flex flex-row items-center text-sm ml-2">
-              <Cpu className="h-4 w-4 mr-2" />
-              Model
-            </div>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="w-[150px] bg-transparent border-none cursor-pointer">
-                <SelectValue placeholder="Model" />
-              </SelectTrigger>
-              <SelectContent className="bg-neutral-700 border-neutral-600 text-neutral-300 cursor-pointer">
-                <SelectItem
-                  value="gemini-2.0-flash"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  <div className="flex items-center">
-                    <Zap className="h-4 w-4 mr-2 text-yellow-400" /> 2.0 Flash
-                  </div>
-                </SelectItem>
-                <SelectItem
-                  value="gemini-2.5-flash-preview-04-17"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  <div className="flex items-center">
-                    <Zap className="h-4 w-4 mr-2 text-orange-400" /> 2.5 Flash
-                  </div>
-                </SelectItem>
-                <SelectItem
-                  value="gemini-2.5-pro-preview-05-06"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  <div className="flex items-center">
-                    <Cpu className="h-4 w-4 mr-2 text-purple-400" /> 2.5 Pro
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div> */}
+          <button
+            type="button"
+            onClick={deepResearchLocked ? undefined : onToggleDeepResearch}
+            disabled={deepResearchLocked}
+            title={deepResearchLocked ? "Deep Research cannot be disabled in an active research chat" : undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl rounded-t-sm text-sm font-medium transition-all duration-200 ${
+              getToggleStyle(deepResearchEnabled, deepResearchLocked)
+            }`}
+          >
+            <Microscope className={`h-4 w-4 ${deepResearchEnabled ? "text-purple-400" : ""}`} />
+            Deep Research
+          </button>
         </div>
         {hasHistory && (
           <Button

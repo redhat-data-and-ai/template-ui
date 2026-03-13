@@ -6,10 +6,17 @@ interface StreamRequest {
   thread_id: string;
   session_id: string;
   user_id: string;
+  stream_tokens?: boolean;
+  deep_research_enabled?: boolean;
+  deep_research_require_plan_approval?: boolean;
+  deep_research_model?: string;
+  deep_research_max_mode?: boolean;
+  deep_research_max_subqueries?: number;
+  [key: string]: unknown;
 }
 
 export async function handleStreamPost(fastify: FastifyInstance, request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) {
-  const { message, thread_id, session_id, user_id } = request.body;
+  const { thread_id, user_id } = request.body;
 
   // Extract SSO access token from session
   const accessToken = request.session?.token?.access_token;
@@ -47,10 +54,7 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
       method: 'POST',
       headers,
       body: JSON.stringify({
-        message,
-        thread_id,
-        session_id,
-        user_id,
+        ...request.body,
         stream_tokens: true
       })
     });
@@ -140,6 +144,46 @@ export async function handleHistoryGet(fastify: FastifyInstance, request: Fastif
 
   } catch (error) {
     fastify.log.error(`Error proxying to agent: ${error}`);
+    reply.status(500).send({
+      error: 'Failed to connect to agent service',
+      message: String(error)
+    });
+  }
+}
+
+export async function handleCancelDelete(fastify: FastifyInstance, request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) {
+  const { threadId } = request.params;
+  const accessToken = request.session?.token?.access_token;
+  
+  fastify.log.info(`Cancel request for thread: ${threadId}`);
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    if (accessToken) {
+      headers['X-Token'] = accessToken;
+    }
+
+    const agentUrl = `${agentHost}/v1/cancel/${threadId}`;
+    const agentResponse = await fetch(agentUrl, {
+      method: 'DELETE',
+      headers
+    });
+
+    if (!agentResponse.ok) {
+      return reply.status(agentResponse.status).send({
+        error: 'Failed to cancel research',
+        status: agentResponse.status
+      });
+    }
+
+    const result = await agentResponse.json();
+    reply.send(result);
+
+  } catch (error) {
+    fastify.log.error(`Error proxying cancel to agent: ${error}`);
     reply.status(500).send({
       error: 'Failed to connect to agent service',
       message: String(error)

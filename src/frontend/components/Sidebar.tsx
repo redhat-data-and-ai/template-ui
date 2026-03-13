@@ -25,7 +25,6 @@ interface SidebarProps {
   currentChatId?: string;
   chatHistory: ChatItem[];
   isCollapsed?: boolean;
-  tokenExpiry?: Date;
   onToggleCollapse: () => void;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
@@ -62,27 +61,6 @@ function SidebarComponent({
     setEditingChat(null);
     setEditTitle("");
   };
-
-  // const formatRelativeTime = (date: Date) => {
-  //   const now = new Date();
-  //   const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
-  //   if (diffInMinutes < 60) {
-  //     return diffInMinutes <= 1 ? "Just now" : `${diffInMinutes}m ago`;
-  //   }
-    
-  //   const diffInHours = Math.floor(diffInMinutes / 60);
-  //   if (diffInHours < 24) {
-  //     return `${diffInHours}h ago`;
-  //   }
-    
-  //   const diffInDays = Math.floor(diffInHours / 24);
-  //   if (diffInDays < 7) {
-  //     return `${diffInDays}d ago`;
-  //   }
-    
-  //   return date.toLocaleDateString();
-  // };
 
   if (isCollapsed) {
     return (
@@ -247,9 +225,6 @@ function SidebarComponent({
                         <p className="text-xs text-neutral-400 truncate mt-0.5">
                           {chat.preview}
                         </p>
-                        {/* <p className="text-xs text-neutral-500 mt-1">
-                          {formatRelativeTime(chat.timestamp)}
-                        </p> */}
                       </>
                     )}
                   </div>
@@ -290,12 +265,6 @@ function SidebarComponent({
         </div>
       </div>
 
-      {/* Footer/Settings could go here */}
-      <div className="p-4 border-t border-neutral-700">
-        <p className="text-xs text-neutral-500 text-center">
-          Dataverse AI Chat
-        </p>
-      </div>
     </div>
   );
 }

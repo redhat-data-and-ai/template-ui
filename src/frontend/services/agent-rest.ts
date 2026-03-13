@@ -54,7 +54,7 @@ export async function getThreadIdsByUserId(userId: string) {
     return threadIds.json();
 }
 
-export async function gethistoryByThreadId(threadId: string) {
+export async function getHistoryByThreadId(threadId: string) {
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
     };
@@ -69,7 +69,6 @@ export async function gethistoryByThreadId(threadId: string) {
         headers,
     });
     return history.json().then(history => {
-        console.log(history);
         history.id = threadId;
         return history;
     });
@@ -77,9 +76,7 @@ export async function gethistoryByThreadId(threadId: string) {
 
 export async function getAllThreadsByUserId(userId: string) {
     const threadIds = await getThreadIdsByUserId(userId);
-    console.log('threadIds: ', threadIds);
-    const threads = await Promise.all(threadIds.map(gethistoryByThreadId)) as Thread[];
-    console.log('threads: ', threads);
+    const threads = await Promise.all(threadIds.map(getHistoryByThreadId)) as Thread[];
     const transformed = threads.map(thread => {
         return {
             ...thread,

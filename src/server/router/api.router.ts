@@ -1,11 +1,12 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
+import { handleCancelDelete, handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
 
 interface StreamRequest {
   message: string;
   thread_id: string;
   session_id: string;
   user_id: string;
+  [key: string]: unknown;
 }
 
 async function apiRoutes(fastify: FastifyInstance) {
@@ -14,11 +15,15 @@ async function apiRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/v1/stream", async (request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) => {
-   handleStreamPost(fastify, request, reply);
+    await handleStreamPost(fastify, request, reply);
   });
 
   fastify.get("/v1/history/:threadId", async (request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) => {
-    handleHistoryGet(fastify, request, reply);
+    await handleHistoryGet(fastify, request, reply);
+  });
+
+  fastify.delete("/v1/cancel/:threadId", async (request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) => {
+    await handleCancelDelete(fastify, request, reply);
   });
 }
 

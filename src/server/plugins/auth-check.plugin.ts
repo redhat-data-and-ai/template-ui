@@ -30,25 +30,23 @@ function authCheck(
 ) {
   instance.addHook("preHandler", (request: FastifyRequest, reply: FastifyReply, next: () => void) => {
     if (process.env.AUTH_ENABLED === "false") {
-      const dummyUser = {
-        accessToken: "access-token",
-        expiresAt: "2026-10-29T23:20:00.417Z",
-        cn: "John Wick",
-        displayName: "John",
-        email: "johnwick@redhat.com",
-        email_verified: false,
-        family_name: "Wick",
-        givenName: "John",
-        given_name: "John",
-        mail: "johnwick@redhat.com",
-        name: "John Wick",
-        preferred_username: "johnwick",
-        rhatUUID: "asdsadsad-e194-11ef-a0f1-safdsfds",
-        sn: "Wick",
-        sub: "1sdsd1ef7-7e0c-4c45-a250-dssdsd"
+      request.session.user = {
+        email: "developer@example.com",
+        email_verified: true,
+        family_name: "Developer",
+        given_name: "Local",
+        name: "Local Developer",
+        preferred_username: "local-dev",
+        sub: "dev-local-00000000-0000-0000-0000-000000000000",
       };
 
-      request.session.user = dummyUser;
+      request.session.token = {
+        access_token: "dev-access-token",
+        expires_at: Math.floor(Date.now() / 1000) + 86400,
+        id_token: "dev-id-token",
+        refresh_token: "dev-refresh-token",
+        scope: "openid profile email",
+      };
     }
 
     if (!request.session?.user) {

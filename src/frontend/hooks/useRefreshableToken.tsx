@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const updateTokenStatus = (tokenExpiry: Date) => {
-  if (!tokenExpiry) {
+  if (!tokenExpiry || Number.isNaN(tokenExpiry.getTime())) {
     return ({ text: "No token", color: "text-red-400" });
   }
 
@@ -34,8 +34,8 @@ const updateTokenStatus = (tokenExpiry: Date) => {
 };
 
 export function useRefreshableToken() {
-  const [token, setToken] = useState<string | null>(window.USER_DATA.accessToken);
-  const [expiresAt, setExpiresAt] = useState<string>(window.USER_DATA.expiresAt);
+  const [token, setToken] = useState<string | null>(window.USER_DATA?.accessToken ?? null);
+  const [expiresAt, setExpiresAt] = useState<string | number>(window.USER_DATA?.expiresAt ?? "");
   const [tokenStatus, setTokenStatus] = useState<{ text: string, color: string }>({ text: "No token", color: "text-red-400" });
   const keepTokenRefreshedIntervalRef = useRef<NodeJS.Timeout | null>(null);
 

@@ -38,13 +38,18 @@ const fastify = Fastify({
   logger: envToLogger[environment] ?? true,
 });
 
+const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
+
 await fastify.register(import("@fastify/cors"), {
-  origin: 'http://localhost:5173', // Or your specific origin
+  origin: corsOrigin,
   optionsSuccessStatus: 200,
-  credentials: true
+  credentials: true,
 });
+
 export async function setupServer() {
-  // Register CORS to allow cross-origin requests
+  if (process.env.ENVIRONMENT === "production" && !process.env.COOKIE_SIGN) {
+    throw new Error("COOKIE_SIGN environment variable is required in production");
+  }
 
   await fastify.register(import("@fastify/cookie"));
   await fastify.register(import("@fastify/session"), {
@@ -52,7 +57,7 @@ export async function setupServer() {
       process.env.COOKIE_SIGN ||
       "a secret with minimum length of 32 characters",
     cookie: {
-      secure: false,
+      secure: process.env.ENVIRONMENT === "production",
       maxAge: 1000 * 60 * 60 * 24 * 30,
     },
   });

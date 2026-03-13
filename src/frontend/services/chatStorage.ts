@@ -28,20 +28,27 @@ class ChatStorageService {
     }
   }
 
-  saveChatByThreadId(threadId: string, messages: any[]): boolean {
-    
+  saveChatByThreadId(threadId: string, messages: any[], deepResearchEvents?: any[]): boolean {
     const chats = this.loadChats();
     const threadIdChat = chats.find((chat) => chat.id === threadId);
     if (threadIdChat) {
       threadIdChat.messages = messages;
+      if (deepResearchEvents !== undefined) {
+        threadIdChat.deepResearchEvents = deepResearchEvents;
+      }
     } else {
+      const lastContent = messages.at(-1)?.content;
+      const textPreview = typeof lastContent === "string"
+        ? lastContent
+        : "New Chat";
       chats.push({
         id: threadId,
         messages: messages,
-        title: messages[messages.length - 1]?.content,
+        title: textPreview.substring(0, 80) || "New Chat",
         timestamp: new Date(),
-        preview: messages[messages.length - 1]?.content,
+        preview: textPreview.substring(0, 60),
         historicalActivities: {},
+        deepResearchEvents: deepResearchEvents || [],
       });
     }
     return this.saveChats(chats);
@@ -59,12 +66,13 @@ class ChatStorageService {
       
       // Validate and transform data
       return parsedChats
-        .filter(chat => chat.id && chat.title) // Filter invalid entries
+        .filter(chat => chat.id && chat.title)
         .map(chat => ({
           ...chat,
-          timestamp: new Date(chat.timestamp), // Convert string back to Date
+          timestamp: new Date(chat.timestamp),
           messages: chat.messages || [],
-          historicalActivities: chat.historicalActivities || {}
+          historicalActivities: chat.historicalActivities || {},
+          deepResearchEvents: chat.deepResearchEvents || [],
         }));
     } catch (error) {
       console.error('Error loading chats from localStorage:', error);
@@ -86,24 +94,6 @@ class ChatStorageService {
     }
   }
 
-  /**
-   * Get storage usage info for debugging
-   */
-  getStorageInfo(): { used: number; total: number; chatsCount: number } {
-    try {
-      const chats = this.loadChats();
-      const chatsData = localStorage.getItem(this.CHATS_STORAGE_KEY) || '';
-      
-      return {
-        used: chatsData.length,
-        total: 5242880, // 5MB typical localStorage limit
-        chatsCount: chats.length
-      };
-    } catch (error) {
-      console.error('Error getting storage info:', error);
-      return { used: 0, total: 5242880, chatsCount: 0 };
-    }
-  }
 }
 
 // Export singleton instance

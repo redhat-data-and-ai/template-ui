@@ -7,66 +7,47 @@ import { useDataStream } from '../hooks/useDataStream';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { Button } from '../components/ui/button';
-import { ProcessedEvent } from '../components/ActivityTimeline';
 
-export function ChatPage({ threadId }: { threadId: string }) {
+export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
   const {
     isLoading: chatsLoading,
     error,
     updateChatMessages,
     updateChatActivities,
+    updateChatDeepResearchEvents,
     setError,
     getChatById
   } = useChat();
 
-  // Local state
-  const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
-  const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({});
+  const currentChat = useMemo(() => threadId ? getChatById(threadId) : undefined, [threadId, getChatById]);
 
+  const hadDeepResearch = (currentChat?.deepResearchEvents?.length ?? 0) > 0;
+  const [deepResearchEnabled, setDeepResearchEnabled] = useState(hadDeepResearch);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const hasFinalizeEventOccurredRef = useRef(false);
 
-  // Get current chat data directly by threadId
-  const currentChat = useMemo(() => threadId ? getChatById(threadId) : undefined, [threadId, getChatById]);
-
-  console.log({ currentChat })
-
-  // API integration
   const thread = useDataStream({
-    apiUrl: window.APP_DATA?.apiUrl || "http://localhost:5002",
+    apiUrl: (globalThis as Record<string, unknown> as { APP_DATA?: { apiUrl?: string } }).APP_DATA?.apiUrl || "http://localhost:5002",
     threadId: threadId || "",
-    onError: (error: Error) => {
-      setError(error.message);
-    },
+    onError: (err: Error) => setError(err.message),
+    deepResearchEnabled,
   });
 
   useEffect(() => {
-    if (currentChat) {
-      thread.setMessages(currentChat.messages)
+    if (currentChat && currentChat.messages.length > 0 && thread.messages.length === 0) {
+      thread.setMessages(currentChat.messages);
     }
   }, [currentChat?.messages, currentChat?.messages?.length]);
 
-  // // Load chat data when threadId changes
-  // useEffect(() => {
-  //   if (currentChat) {
-  //     setHistoricalActivities(currentChat.historicalActivities);
-  //     setProcessedEventsTimeline([]);
-  //   }
-  // }, [currentChat, threadId]);
-
-  // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (scrollAreaRef.current) {
-      const scrollViewport = scrollAreaRef.current.querySelector(
-        "[data-radix-scroll-area-viewport]"
-      );
+      const scrollViewport = scrollAreaRef.current.querySelector("[data-radix-scroll-area-viewport]");
       if (scrollViewport) {
         scrollViewport.scrollTop = scrollViewport.scrollHeight;
       }
     }
   }, [thread.messages]);
 
-  // Update chat messages when thread messages change
   const previousMessagesLength = useRef(0);
   useEffect(() => {
     if (threadId && thread.messages.length > 0 && thread.messages.length !== previousMessagesLength.current) {
@@ -75,7 +56,15 @@ export function ChatPage({ threadId }: { threadId: string }) {
     }
   }, [threadId, thread.messages, updateChatMessages]);
 
-  // Handle finalization of activities
+  useEffect(() => {
+    if (threadId && thread.deepResearchEvents.length > 0) {
+      updateChatDeepResearchEvents(threadId, thread.deepResearchEvents);
+      if (!deepResearchEnabled) {
+        setDeepResearchEnabled(true);
+      }
+    }
+  }, [threadId, thread.deepResearchEvents, updateChatDeepResearchEvents]);
+
   useEffect(() => {
     if (
       hasFinalizeEventOccurredRef.current &&
@@ -83,15 +72,14 @@ export function ChatPage({ threadId }: { threadId: string }) {
       thread.messages.length > 0 &&
       threadId
     ) {
-      const lastMessage = thread.messages[thread.messages.length - 1];
-      if (lastMessage && lastMessage.type === "ai" && lastMessage.id) {
-        updateChatActivities(threadId, lastMessage.id, processedEventsTimeline);
+      const lastMessage = thread.messages.at(-1);
+      if (lastMessage?.type === "ai" && lastMessage.id) {
+        updateChatActivities(threadId, lastMessage.id, []);
       }
       hasFinalizeEventOccurredRef.current = false;
     }
-  }, [thread.isLoading, threadId, updateChatActivities, thread.messages, processedEventsTimeline]); // Removed thread.messages and processedEventsTimeline to prevent loops
+  }, [thread.isLoading, threadId, updateChatActivities, thread.messages]);
 
-  // Handle submit
   const handleSubmit = useCallback(
     async (inputValue: string) => {
       if (!threadId || !currentChat) {
@@ -99,51 +87,35 @@ export function ChatPage({ threadId }: { threadId: string }) {
         return;
       }
 
-      // Create message from user input
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
         type: "human",
-        content: inputValue.trim()
+        content: inputValue.trim(),
       };
 
-      // Add user message to existing messages
       const messages = [...thread.messages, userMessage];
 
-      // Submit to the thread
       try {
         await thread.submit({ messages });
-
-        // Mark that we're waiting for finalization
-        setTimeout(() => {
-          hasFinalizeEventOccurredRef.current = true;
-        }, 100);
-      } catch (error) {
-        console.error('Failed to submit message:', error);
+        setTimeout(() => { hasFinalizeEventOccurredRef.current = true; }, 100);
+      } catch {
         setError('Failed to send message. Please try again.');
       }
     },
     [thread, threadId, currentChat, setError]
   );
 
-  // Handle cancel
   const handleCancel = useCallback(() => {
     thread.stop();
   }, [thread]);
 
-  // Handle retry for error boundary
   const handleRetry = useCallback(() => {
-    setProcessedEventsTimeline([]);
-    setHistoricalActivities(currentChat?.historicalActivities || {});
-    // Reset any error state
-    if (currentChat) {
-      setHistoricalActivities(currentChat.historicalActivities);
-    }
-  }, [currentChat]);
+    // no-op: error boundary reset
+  }, []);
 
-  // Show loading while chats are being loaded from localStorage
   if (chatsLoading) {
     return (
-      <main className="flex-1 h-full max-w-4xl mx-auto">
+      <main className="flex-1 h-full w-full">
         <div className="flex flex-col items-center justify-center h-full">
           <div className="flex flex-col items-center justify-center gap-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-400"></div>
@@ -154,60 +126,52 @@ export function ChatPage({ threadId }: { threadId: string }) {
     );
   }
 
-  // Handle case where chat doesn't exist (after chats have loaded)
   if (threadId && !currentChat) {
     return (
-      <main className="flex-1 h-full max-w-4xl mx-auto">
+      <main className="flex-1 h-full w-full">
         <div className="flex flex-col items-center justify-center h-full">
           <div className="flex flex-col items-center justify-center gap-4">
             <h1 className="text-2xl text-neutral-400 font-bold">Chat Not Found</h1>
             <p className="text-neutral-500">The requested chat could not be found.</p>
-            <Button onClick={() => window.location.href = '/'}>
-              Go Home
-            </Button>
+            <Button onClick={() => window.location.href = '/'}>Go Home</Button>
           </div>
         </div>
       </main>
     );
   }
 
-  // Handle error state
   if (error) {
     return (
-      <main className="flex-1 h-full max-w-4xl mx-auto">
+      <main className="flex-1 h-full w-full">
         <div className="flex flex-col items-center justify-center h-full">
           <div className="flex flex-col items-center justify-center gap-4">
             <h1 className="text-2xl text-red-400 font-bold">Error</h1>
             <p className="text-red-400">{error}</p>
-            <Button
-              variant="destructive"
-              onClick={() => window.location.reload()}
-            >
-              Retry
-            </Button>
+            <Button variant="destructive" onClick={() => window.location.reload()}>Retry</Button>
           </div>
         </div>
       </main>
     );
   }
 
-  // Render chat interface
   return (
-    <main className="flex-1 h-full max-w-4xl mx-auto">
-      <ChatErrorBoundary
-        chatId={threadId}
-        onRetry={handleRetry}
-      >
+    <main className="flex-1 h-full w-full">
+      <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
         <ChatMessagesView
           key={threadId}
           messages={thread.messages}
-          streamEvents={thread.streamEvents}
           isLoading={thread.isLoading}
           scrollAreaRef={scrollAreaRef}
           onSubmit={handleSubmit}
           onCancel={handleCancel}
-          liveActivityEvents={processedEventsTimeline}
-          historicalActivities={historicalActivities}
+          liveActivityEvents={[]}
+          deepResearchEnabled={deepResearchEnabled}
+          deepResearchLocked={hadDeepResearch || (deepResearchEnabled && thread.messages.length > 0)}
+          onToggleDeepResearch={() => setDeepResearchEnabled(prev => !prev)}
+          deepResearchEvents={thread.deepResearchEvents}
+          pendingPlan={thread.pendingPlan}
+          onApprovePlan={(subqueries) => thread.approvePlan(subqueries)}
+          onRejectPlan={() => thread.stop()}
         />
       </ChatErrorBoundary>
     </main>
@@ -216,8 +180,5 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
 export function ChatRoutePage() {
   const { threadId = "" } = useParams<{ threadId: string }>();
-
-  return (
-    <ChatPage threadId={threadId} key={threadId} />
-  );
+  return <ChatPage threadId={threadId} key={threadId} />;
 }

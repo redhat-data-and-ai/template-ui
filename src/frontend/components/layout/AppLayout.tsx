@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Sidebar } from '../Sidebar';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { useChat } from '../../contexts/ChatContext';
@@ -13,23 +13,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { chats, deleteChat, renameChat, createNewChat } = useChat();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigate = useNavigate();
+  const { threadId } = useParams<{ threadId?: string }>();
   
   // Get user data from window.USER_DATA
   const userData = useMemo(() => {
     return window.USER_DATA;
   }, []);
   
-  // Extract user name and token expiry from real user data
-  const userName = userData?.displayName || userData?.name || "User";
-  const tokenExpiry = useMemo(() => {
-    if (userData?.expiresAt) {
-      return new Date(userData.expiresAt);
-    }
-    // Fallback to mock expiry if no real data
-    const fallback = new Date();
-    fallback.setHours(fallback.getHours() + 2);
-    return fallback;
-  }, [userData?.expiresAt]);
+  const userName = userData?.name || userData?.given_name || "User";
 
   // Convert chats to sidebar format
   const sidebarChats: SidebarChatItem[] = useMemo(() => 
@@ -73,10 +64,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       >
         <Sidebar
           userName={userName}
-          currentChatId={undefined} // No longer needed - sidebar will use URL
+          currentChatId={threadId}
           chatHistory={sidebarChats}
           isCollapsed={sidebarCollapsed}
-          tokenExpiry={tokenExpiry}
           onToggleCollapse={handleToggleCollapse}
           onNewChat={createNewChat}
           onSelectChat={handleSelectChat}

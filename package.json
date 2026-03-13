@@ -35,10 +35,12 @@
     "fastify": "^5.5.0",
     "fastify-plugin": "^5.0.1",
     "lucide-react": "^0.508.0",
+    "mermaid": "^11.13.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^9.0.3",
     "react-router-dom": "^7.5.3",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.2.0",
     "tailwindcss": "^4.1.5",
     "uuid": "^11.1.0"

@@ -118,7 +118,7 @@ async function routes(fastify: FastifyInstance) {
       return reply.redirect(defaultRedirect);
     } catch (error) {
       console.error(error);
-      return reply.send({ message: "Some error occured!" });
+      return reply.send({ message: "Some error occurred!" });
     }
   });
 }

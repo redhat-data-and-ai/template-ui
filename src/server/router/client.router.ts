@@ -4,8 +4,7 @@ import authCheckPlugin from "../plugins/auth-check.plugin.js";
 import { agentHost } from "../utils/config.js";
 
 const appData = {
-  apiUrl: agentHost, // Agent backend URL - frontend calls agent directly
-  refreshableToken: "", // Unused - token comes from USER_DATA.accessToken
+  apiUrl: agentHost,
 };
 
 async function routes(fastify: FastifyInstance) {
@@ -25,9 +24,8 @@ async function routes(fastify: FastifyInstance) {
   });
 
   fastify.get("/*", (request: FastifyRequest, reply: FastifyReply) => {
-    const session = request.session;
-    const { user, token } = session;
-    console.log(token);
+    const session = request.session ?? {};
+    const { user, token } = session as { user?: Record<string, unknown>; token?: Record<string, unknown> };
 
     const userData = {
       ...user,

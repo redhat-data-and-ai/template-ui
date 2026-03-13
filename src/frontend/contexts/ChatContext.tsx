@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import type { Message } from "@langchain/langgraph-sdk";
 
-import { ChatItem, ChatState, ChatContextType } from '../types/chat';
+import { ChatItem, ChatState, ChatContextType, DeepResearchEvent } from '../types/chat';
 import { chatStorage } from '../services/chatStorage';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getAllThreadsByUserId } from '@/services/agent-rest';
@@ -88,10 +88,19 @@ export function ChatProvider({ children }: ChatProviderProps) {
     dispatch({ type: 'SET_LOADING', payload: false }); // Mark loading as complete
   }, []);
 
-  // Save chats to storage whenever they change
+  // Save chats to storage whenever they change (merge to protect background stream data)
   useEffect(() => {
     if (state.chats.length > 0) {
-      chatStorage.saveChats(state.chats);
+      const stored = chatStorage.loadChats();
+      const storedMap = new Map(stored.map(c => [c.id, c]));
+      const merged = state.chats.map(chat => {
+        const inStorage = storedMap.get(chat.id);
+        if (inStorage && (inStorage.messages?.length ?? 0) > (chat.messages?.length ?? 0)) {
+          return { ...chat, messages: inStorage.messages };
+        }
+        return chat;
+      });
+      chatStorage.saveChats(merged);
     }
   }, [state.chats]);
 
@@ -99,16 +108,14 @@ export function ChatProvider({ children }: ChatProviderProps) {
     async function loadUserHistory() {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
-        const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
+        const userId = window.USER_DATA?.preferred_username ?? 'anonymous';
+        const history = await getAllThreadsByUserId(userId);
 
-        const chats: ChatItem[] = history.map((conversation) => {
-
+        const serverChats: ChatItem[] = history.map((conversation) => {
           let title = 'New Chat';
-
           if (Array.isArray(conversation.messages) && conversation.messages.length > 0) {
             title = conversation.messages.find((message) => message.type === 'human')?.content as string;
           }
-
           return {
             id: conversation.id,
             messages: conversation.messages,
@@ -117,14 +124,29 @@ export function ChatProvider({ children }: ChatProviderProps) {
           }
         });
 
-        dispatch({ type: 'SET_CHATS', payload: chats });
-        console.log(history)
+        const localChats = chatStorage.loadChats();
+        const mergedMap = new Map<string, ChatItem>(localChats.map(c => [c.id, c]));
+
+        for (const serverChat of serverChats) {
+          const local = mergedMap.get(serverChat.id);
+          if (!local) {
+            mergedMap.set(serverChat.id, serverChat);
+          } else if (serverChat.messages.length > (local.messages?.length || 0)) {
+            mergedMap.set(serverChat.id, {
+              ...serverChat,
+              historicalActivities: local.historicalActivities || {},
+              deepResearchEvents: local.deepResearchEvents || [],
+            });
+          }
+        }
+
+        const merged = Array.from(mergedMap.values());
+        dispatch({ type: 'SET_CHATS', payload: merged });
       } catch (error) {
         console.error(error)
       } finally {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
-
     }
 
     loadUserHistory()
@@ -210,6 +232,13 @@ export function ChatProvider({ children }: ChatProviderProps) {
     }
   }, [state.chats]);
 
+  const updateChatDeepResearchEvents = useCallback((chatId: string, drEvents: DeepResearchEvent[]) => {
+    dispatch({
+      type: 'UPDATE_CHAT',
+      payload: { id: chatId, updates: { deepResearchEvents: drEvents } }
+    });
+  }, []);
+
   const clearError = useCallback(() => {
     dispatch({ type: 'SET_ERROR', payload: null });
   }, []);
@@ -219,7 +248,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
   }, []);
 
   const getChatById = useCallback((chatId: string) => {
-    console.log('get chat : ', JSON.parse(JSON.stringify({state, chatId})))
     return state.chats.find(chat => chat.id === chatId);
   }, [state]);
 
@@ -233,6 +261,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     renameChat,
     updateChatMessages,
     updateChatActivities,
+    updateChatDeepResearchEvents,
     clearError,
     setError,
     getChatById,
