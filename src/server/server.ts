@@ -47,8 +47,11 @@ await fastify.register(import("@fastify/cors"), {
 });
 
 export async function setupServer() {
-  if (process.env.ENVIRONMENT === "production" && !process.env.COOKIE_SIGN) {
-    throw new Error("COOKIE_SIGN environment variable is required in production");
+  if (environment !== "development" && !process.env.COOKIE_SIGN) {
+    throw new Error(
+      "COOKIE_SIGN environment variable is required outside development. " +
+      "Set COOKIE_SIGN or ENVIRONMENT=development to use the default.",
+    );
   }
 
   await fastify.register(import("@fastify/cookie"));

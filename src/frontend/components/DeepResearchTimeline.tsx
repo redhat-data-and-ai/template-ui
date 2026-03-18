@@ -94,7 +94,7 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ event, status, isLast }) =>
   const stageKey = event.event_type || event.stage || "";
 
   return (
-    <div className="relative flex gap-3">
+    <li className="relative flex gap-3 list-none">
       {!isLast && (
         <div className={`absolute left-[9px] top-6 w-0.5 h-full ${getLineColor()}`} />
       )}
@@ -116,28 +116,9 @@ const TimelineItem: React.FC<TimelineItemProps> = ({ event, status, isLast }) =>
           {event.display_text || event.message || ""}
         </p>
       </div>
-    </div>
+    </li>
   );
 };
-
-function getPhaseIndex(stage: string): number {
-  const s = stage.toLowerCase();
-  if (s === "started" || s === "context_loaded" || s.includes("triage") || s.includes("context_answer")) return 0;
-  if (s === "tool_discovery" || s.includes("discovery") || s.includes("probe")) return 1;
-  if (s.includes("plan") || s.includes("understanding") || s.includes("subquery_enrichment") || s.includes("subquery_validation") || s === "enrichment_progress") return 2;
-  if (s.includes("supervisor") || s.includes("worker_self") || s.includes("worker_reform") || s.includes("inter_agent")) return 3;
-  if (s.includes("research") || s.includes("subquery") || s === "worker_progress") return 4;
-  if (s.includes("completeness")) return 5;
-  if (s.includes("validation") || s.includes("synthesis") || s.includes("visualization") || s.includes("data_aggregation") || s.includes("report_generation") || s.includes("fact_check") || s.includes("revision")) return 6;
-  if (s.includes("review") || s.includes("consensus") || s.includes("reviewer")) return 7;
-  if (s.includes("complete") || s.includes("final")) return 8;
-  return -1;
-}
-
-const PHASE_NAMES = [
-  "Triage", "Discovery", "Planning", "Coordination", "Research",
-  "Completeness", "Synthesis", "Review", "Completion",
-];
 
 function computeElapsedTime(events: DeepResearchEvent[]): string | null {
   if (events.length < 2) return null;
@@ -157,15 +138,6 @@ export function DeepResearchTimeline({ events, isLoading }: Readonly<DeepResearc
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const visibleEvents = events.filter(e => e.ui_visible);
-
-  const activePhaseIndex = React.useMemo(() => {
-    let maxIdx = -1;
-    for (const event of visibleEvents) {
-      const idx = getPhaseIndex(event.event_type || event.stage || "");
-      if (idx > maxIdx) maxIdx = idx;
-    }
-    return maxIdx;
-  }, [visibleEvents]);
 
   const isCompleted = visibleEvents.some(e => {
     const et = e.event_type?.toLowerCase() ?? "";
@@ -198,6 +170,8 @@ export function DeepResearchTimeline({ events, isLoading }: Readonly<DeepResearc
       <button
         type="button"
         onClick={() => setIsExpanded(prev => !prev)}
+        aria-expanded={isExpanded}
+        aria-label={`Deep Research timeline, ${visibleEvents.length} events`}
         className="w-full px-4 py-3 flex items-center gap-2 hover:bg-neutral-700/30 transition-colors cursor-pointer"
       >
         <Microscope className="w-4 h-4 text-purple-400 shrink-0" />
@@ -222,34 +196,8 @@ export function DeepResearchTimeline({ events, isLoading }: Readonly<DeepResearc
 
       {isExpanded && (
         <div className="px-4 pb-3">
-          {/* Phase Progress Bar */}
-          <div className="flex items-center gap-1 mb-1">
-            {PHASE_NAMES.map((name, idx) => (
-              <React.Fragment key={name}>
-                <div
-                  className={`flex-1 h-1.5 rounded-full transition-colors duration-300 ${(() => {
-                    if (idx < activePhaseIndex) return "bg-green-500";
-                    if (idx === activePhaseIndex) return isCompleted ? "bg-green-500" : "bg-blue-500";
-                    return "bg-neutral-700";
-                  })()}`}
-                />
-                {idx < PHASE_NAMES.length - 1 && <div className="w-0.5" />}
-              </React.Fragment>
-            ))}
-          </div>
-          <div className="flex justify-between text-[10px] text-neutral-500 mb-4">
-            {PHASE_NAMES.map((name, idx) => (
-              <span key={name} className={(() => {
-                if (idx !== activePhaseIndex) return "";
-                return isCompleted ? "text-green-400 font-medium" : "text-blue-400 font-medium";
-              })()}>
-                {name}
-              </span>
-            ))}
-          </div>
-
           {/* Timeline Events */}
-          <div className="max-h-[350px] overflow-y-auto">
+          <ul className="max-h-[350px] overflow-y-auto list-none p-0 m-0" aria-label="Research events">
             {visibleEvents.map((event, idx) => {
               const status = resolveStatus(event, idx === visibleEvents.length - 1, isLoading);
               return (
@@ -261,8 +209,8 @@ export function DeepResearchTimeline({ events, isLoading }: Readonly<DeepResearc
                 />
               );
             })}
-            <div ref={bottomRef} />
-          </div>
+            <li className="list-none" aria-hidden="true"><div ref={bottomRef} /></li>
+          </ul>
         </div>
       )}
     </div>

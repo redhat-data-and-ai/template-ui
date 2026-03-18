@@ -1,11 +1,10 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import type { Message } from "@langchain/langgraph-sdk";
 
-import { ChatItem, ChatState, ChatContextType, DeepResearchEvent } from '../types/chat';
+import { ChatItem, ChatState, ChatContextType, DeepResearchEvent, ProcessedEvent } from '../types/chat';
 import { chatStorage } from '../services/chatStorage';
-import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getAllThreadsByUserId } from '@/services/agent-rest';
 
 // Action types
@@ -55,8 +54,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         chats: state.chats.filter(chat => chat.id !== action.payload),
       };
 
-    default:
-      return state;
+    default: {
+      const _exhaustive: never = action;
+      return _exhaustive as unknown as ChatState ?? state;
+    }
   }
 }
 
@@ -251,11 +252,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
     return state.chats.find(chat => chat.id === chatId);
   }, [state]);
 
-  // Context value
-  const value: ChatContextType = {
-    // State
+  const value: ChatContextType = useMemo(() => ({
     ...state,
-    // Actions
     createNewChat,
     deleteChat,
     renameChat,
@@ -265,7 +263,18 @@ export function ChatProvider({ children }: ChatProviderProps) {
     clearError,
     setError,
     getChatById,
-  };
+  }), [
+    state,
+    createNewChat,
+    deleteChat,
+    renameChat,
+    updateChatMessages,
+    updateChatActivities,
+    updateChatDeepResearchEvents,
+    clearError,
+    setError,
+    getChatById,
+  ]);
 
   return (
     <ChatContext.Provider value={value}>

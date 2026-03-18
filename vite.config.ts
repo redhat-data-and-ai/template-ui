@@ -1,11 +1,26 @@
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 
+function injectBackendUrl(): Plugin {
+  return {
+    name: "inject-backend-url",
+    transformIndexHtml(html) {
+      const backendUrl = process.env.VITE_BACKEND_URL;
+      if (!backendUrl) {
+        throw new Error(
+          "VITE_BACKEND_URL is not set. Add it to your .env file (see .env.template).",
+        );
+      }
+      return html.replaceAll("__BACKEND_URL__", backendUrl);
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), injectBackendUrl()],
   build: {
     lib: {
       entry: path.resolve(__dirname, "src/frontend/main.tsx"),
@@ -28,20 +43,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // Proxy API requests to the backend server
       "/api": {
-        target: "http://127.0.0.1:8080", // Backend server port (matches env.template)
+        target: `http://127.0.0.1:${process.env.PORT || "8080"}`,
         changeOrigin: true,
-        // Optionally rewrite path if needed (e.g., remove /api prefix if backend doesn't expect it)
-        // rewrite: (path) => path.replace(/^\/api/, ''),
       },
-      // Also proxy the /stream endpoint for Server-Sent Events
       "/api/v1/stream": {
-        target: "http://127.0.0.1:8080",
+        target: `http://127.0.0.1:${process.env.PORT || "8080"}`,
         changeOrigin: true,
       },
       "/auth/refresh": {
-        target: "http://127.0.0.1:8080",
+        target: `http://127.0.0.1:${process.env.PORT || "8080"}`,
         changeOrigin: true,
       },
     },

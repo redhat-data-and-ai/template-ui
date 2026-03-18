@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
       // Default error UI
       return (
-        <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8 bg-neutral-900 rounded-lg border border-red-500/20">
+        <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8 bg-neutral-900 rounded-lg border border-red-500/20" role="alert">
           <div className="text-center space-y-4 max-w-md">
             <div className="text-red-400 text-4xl mb-4">⚠️</div>
             <h2 className="text-xl font-bold text-red-100">Something went wrong</h2>

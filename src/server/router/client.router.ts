@@ -1,11 +1,14 @@
 import * as path from "node:path";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
-import { agentHost } from "../utils/config.js";
+import { agentHost, drBackendUrl } from "../utils/config.js";
 
-const appData = {
+const appData: Record<string, string> = {
   apiUrl: agentHost,
 };
+if (drBackendUrl) {
+  appData.drBackendUrl = drBackendUrl;
+}
 
 async function routes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);

@@ -5,9 +5,9 @@ export interface Thread {
     messages: Message[];
 }
 
-// Note: APP_DATA type is declared in types/user.ts
-
-const apiUrl = window.APP_DATA.apiUrl;
+function getApiUrl(): string {
+  return window.APP_DATA?.apiUrl ?? "";
+}
 
 function combineToolCallandResult(messages: Message[]) {
     const newMessages: Message[] = [];
@@ -46,7 +46,7 @@ export async function getThreadIdsByUserId(userId: string) {
         headers["X-Token"] = window.USER_DATA.accessToken;
     }
 
-    const threadIds = await fetch(`${apiUrl}/v1/threads/${userId}`, {
+    const threadIds = await fetch(`${getApiUrl()}/v1/threads/${userId}`, {
         method: "GET",
         headers,
     });
@@ -64,7 +64,7 @@ export async function getHistoryByThreadId(threadId: string) {
         headers["X-Token"] = window.USER_DATA.accessToken;
     }
 
-    const history = await fetch(`${apiUrl}/v1/history/${threadId}`, {
+    const history = await fetch(`${getApiUrl()}/v1/history/${threadId}`, {
         method: "GET",
         headers,
     });

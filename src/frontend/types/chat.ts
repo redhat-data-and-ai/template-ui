@@ -1,5 +1,9 @@
 import type { Message } from "@langchain/langgraph-sdk";
-import { ProcessedEvent } from "../components/ActivityTimeline";
+
+export interface ProcessedEvent {
+  title: string;
+  data: unknown;
+}
 
 export interface ChatItem {
   id: string;
@@ -45,7 +49,7 @@ export interface DeepResearchEvent {
   display_text: string;
   log_entry: string;
   ui_visible: boolean;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   timestamp?: string;
   triggerMessageId?: string;
 }

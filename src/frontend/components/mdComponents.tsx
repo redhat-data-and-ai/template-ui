@@ -107,8 +107,8 @@ export const mdComponents = {
     <hr className={cn("border-neutral-600 my-4", className)} {...props} />
   ),
   table: ({ className, children, ...props }: MdComponentProps) => (
-    <div className="my-3 overflow-x-auto">
-      <table className={cn("border-collapse w-full", className)} {...props}>
+    <div className="my-3 overflow-x-auto max-w-full">
+      <table className={cn("border-collapse w-full table-fixed", className)} {...props}>
         {children}
       </table>
     </div>
@@ -134,7 +134,7 @@ export const mdComponents = {
     </th>
   ),
   td: ({ className, children, ...props }: MdComponentProps) => (
-    <td className={cn("border border-neutral-600 px-3 py-2", className)} {...props}>
+    <td className={cn("border border-neutral-600 px-3 py-2 break-words", className)} {...props}>
       {children}
     </td>
   ),

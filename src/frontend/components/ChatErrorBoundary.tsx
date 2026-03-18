@@ -43,7 +43,7 @@ export class ChatErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-full p-8">
+        <div className="flex flex-col items-center justify-center h-full p-8" role="alert">
           <div className="text-center space-y-4 max-w-lg">
             <div className="text-orange-400 text-3xl mb-4">🔧</div>
             <h2 className="text-lg font-bold text-orange-100">Chat Error</h2>

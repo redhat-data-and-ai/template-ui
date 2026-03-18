@@ -71,6 +71,7 @@ function SidebarComponent({
             onClick={onToggleCollapse}
             className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-neutral-800 hover:shadow-md transform hover:scale-110 active:scale-95 transition-all duration-200"
             title="Expand Sidebar"
+            aria-label="Expand sidebar"
           >
             <PanelLeftOpen className="w-4 h-4 text-neutral-400 hover:text-neutral-200" />
           </button>
@@ -136,6 +137,7 @@ function SidebarComponent({
           onClick={onToggleCollapse}
           className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-neutral-800 hover:shadow-md transform hover:scale-110 active:scale-95 transition-all duration-200"
           title="Collapse Sidebar"
+          aria-label="Collapse sidebar"
         >
           <PanelLeftClose className="w-4 h-4 text-neutral-400 hover:text-neutral-200 transition-colors duration-200" />
         </button>
@@ -200,7 +202,7 @@ function SidebarComponent({
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
                         onBlur={() => handleSaveRename(chat.id)}
-                        onKeyPress={(e) => {
+                        onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             handleSaveRename(chat.id);
                           }
@@ -240,6 +242,7 @@ function SidebarComponent({
                           handleRename(chat.id, chat.title);
                         }}
                         title="Rename chat"
+                        aria-label={`Rename chat: ${chat.title}`}
                       >
                         <Edit3 className="w-3 h-3" />
                       </Button>
@@ -252,6 +255,7 @@ function SidebarComponent({
                           onDeleteChat(chat.id);
                         }}
                         title="Delete chat"
+                        aria-label={`Delete chat: ${chat.title}`}
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>

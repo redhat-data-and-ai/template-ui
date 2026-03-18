@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -13,6 +13,10 @@ interface PlanApprovalCardProps {
 export function PlanApprovalCard({ plan, onApprove, onReject }: PlanApprovalCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedQueries, setEditedQueries] = useState<string[]>(plan.subqueries);
+
+  useEffect(() => {
+    setEditedQueries(plan.subqueries);
+  }, [plan.subqueries]);
 
   const handleQueryChange = (index: number, value: string) => {
     setEditedQueries(prev => {
@@ -90,6 +94,7 @@ export function PlanApprovalCard({ plan, onApprove, onReject }: PlanApprovalCard
                     onClick={() => handleRemoveQuery(idx)}
                     className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors"
                     title="Remove subquery"
+                    aria-label={`Remove subquery ${idx + 1}`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

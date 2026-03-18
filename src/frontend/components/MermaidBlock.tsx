@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import mermaid from "mermaid";
+import DOMPurify from "dompurify";
 
 mermaid.initialize({
   startOnLoad: false,
@@ -82,7 +83,11 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
       try {
         const { svg: rendered } = await mermaid.render(id, sanitized);
         if (!cancelled) {
-          setSvg(rendered);
+          const clean = DOMPurify.sanitize(rendered, {
+            USE_PROFILES: { svg: true, svgFilters: true },
+            ADD_TAGS: ["foreignObject"],
+          });
+          setSvg(clean);
           setError("");
         }
       } catch (e) {
@@ -90,8 +95,7 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
           setError(String(e));
           setSvg("");
         }
-        const ghost = document.getElementById(`d${id}`);
-        ghost?.remove();
+        document.getElementById(id)?.remove();
       }
     })();
 
@@ -113,7 +117,7 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
   return (
     <div
       ref={containerRef}
-      className="my-4 flex justify-center overflow-x-auto"
+      className="my-4 flex justify-center overflow-x-auto max-w-full [&_svg]:max-w-full [&_svg]:h-auto"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

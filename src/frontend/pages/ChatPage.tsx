@@ -25,11 +25,16 @@ export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
   const [deepResearchEnabled, setDeepResearchEnabled] = useState(hadDeepResearch);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const hasFinalizeEventOccurredRef = useRef(false);
+  const lastSubmittedInputRef = useRef<string>("");
+
+  const handleStreamError = useCallback(
+    (err: Error) => setError(err.message),
+    [setError],
+  );
 
   const thread = useDataStream({
-    apiUrl: (globalThis as Record<string, unknown> as { APP_DATA?: { apiUrl?: string } }).APP_DATA?.apiUrl || "http://localhost:5002",
     threadId: threadId || "",
-    onError: (err: Error) => setError(err.message),
+    onError: handleStreamError,
     deepResearchEnabled,
   });
 
@@ -87,6 +92,8 @@ export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
         return;
       }
 
+      lastSubmittedInputRef.current = inputValue;
+
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
         type: "human",
@@ -110,15 +117,34 @@ export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
   }, [thread]);
 
   const handleRetry = useCallback(() => {
-    // no-op: error boundary reset
-  }, []);
+    setError(null);
+    if (lastSubmittedInputRef.current) {
+      handleSubmit(lastSubmittedInputRef.current);
+    }
+  }, [handleSubmit, setError]);
+
+  const handleApprovePlan = useCallback(async (subqueries: string[]) => {
+    try {
+      await thread.approvePlan(subqueries);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Plan approval failed");
+    }
+  }, [thread, setError]);
+
+  const handleSendSteering = useCallback(async (message: string) => {
+    try {
+      await thread.sendSteering(message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Steering message failed");
+    }
+  }, [thread, setError]);
 
   if (chatsLoading) {
     return (
-      <main className="flex-1 h-full w-full">
-        <div className="flex flex-col items-center justify-center h-full">
+      <main className="flex-1 h-full w-full min-w-0">
+        <div className="flex flex-col items-center justify-center h-full" role="status" aria-live="polite" aria-busy="true">
           <div className="flex flex-col items-center justify-center gap-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-400"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-400" aria-hidden="true"></div>
             <p className="text-neutral-500">Loading chat...</p>
           </div>
         </div>
@@ -128,12 +154,12 @@ export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
 
   if (threadId && !currentChat) {
     return (
-      <main className="flex-1 h-full w-full">
+      <main className="flex-1 h-full w-full min-w-0">
         <div className="flex flex-col items-center justify-center h-full">
           <div className="flex flex-col items-center justify-center gap-4">
             <h1 className="text-2xl text-neutral-400 font-bold">Chat Not Found</h1>
             <p className="text-neutral-500">The requested chat could not be found.</p>
-            <Button onClick={() => window.location.href = '/'}>Go Home</Button>
+            <Button onClick={() => { globalThis.location.href = '/'; }}>Go Home</Button>
           </div>
         </div>
       </main>
@@ -142,12 +168,12 @@ export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
 
   if (error) {
     return (
-      <main className="flex-1 h-full w-full">
+      <main className="flex-1 h-full w-full min-w-0">
         <div className="flex flex-col items-center justify-center h-full">
           <div className="flex flex-col items-center justify-center gap-4">
             <h1 className="text-2xl text-red-400 font-bold">Error</h1>
             <p className="text-red-400">{error}</p>
-            <Button variant="destructive" onClick={() => window.location.reload()}>Retry</Button>
+            <Button variant="destructive" onClick={handleRetry} aria-label="Retry failed request">Retry</Button>
           </div>
         </div>
       </main>
@@ -155,7 +181,7 @@ export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
   }
 
   return (
-    <main className="flex-1 h-full w-full">
+    <main className="flex-1 h-full w-full min-w-0">
       <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
         <ChatMessagesView
           key={threadId}
@@ -170,8 +196,10 @@ export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
           onToggleDeepResearch={() => setDeepResearchEnabled(prev => !prev)}
           deepResearchEvents={thread.deepResearchEvents}
           pendingPlan={thread.pendingPlan}
-          onApprovePlan={(subqueries) => thread.approvePlan(subqueries)}
+          onApprovePlan={handleApprovePlan}
           onRejectPlan={() => thread.stop()}
+          adapterFeatures={thread.adapterFeatures}
+          onSendSteering={handleSendSteering}
         />
       </ChatErrorBoundary>
     </main>

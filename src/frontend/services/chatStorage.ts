@@ -1,4 +1,5 @@
-import { ChatItem } from '../types/chat';
+import type { Message } from '@langchain/langgraph-sdk';
+import type { ChatItem, DeepResearchEvent } from '../types/chat';
 
 class ChatStorageService {
   private readonly CHATS_STORAGE_KEY = 'dataverse-ai-chats';
@@ -28,14 +29,16 @@ class ChatStorageService {
     }
   }
 
-  saveChatByThreadId(threadId: string, messages: any[], deepResearchEvents?: any[]): boolean {
+  saveChatByThreadId(threadId: string, messages: Message[], deepResearchEvents?: DeepResearchEvent[]): boolean {
     const chats = this.loadChats();
-    const threadIdChat = chats.find((chat) => chat.id === threadId);
-    if (threadIdChat) {
-      threadIdChat.messages = messages;
-      if (deepResearchEvents !== undefined) {
-        threadIdChat.deepResearchEvents = deepResearchEvents;
-      }
+    const existingIndex = chats.findIndex((chat) => chat.id === threadId);
+    if (existingIndex !== -1) {
+      const existing = chats[existingIndex];
+      chats[existingIndex] = {
+        ...existing,
+        messages,
+        ...(deepResearchEvents !== undefined ? { deepResearchEvents } : {}),
+      };
     } else {
       const lastContent = messages.at(-1)?.content;
       const textPreview = typeof lastContent === "string"

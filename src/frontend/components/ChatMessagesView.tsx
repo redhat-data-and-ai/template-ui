@@ -1,12 +1,15 @@
 import React, { useState, useMemo } from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { ScrollArea } from "./ui/scroll-area";
-import { CheckCircle, ChevronDown, ChevronRight, Loader2, Settings } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronRight, Loader2, Send, Settings } from "lucide-react";
 import { InputForm } from "./InputForm";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import type { DeepResearchEvent } from "../types/chat";
 import type { PendingPlan } from "../hooks/useDataStream";
+import type { AdapterFeatures } from "../adapters/deep-research";
 import { DeepResearchTimeline } from "./DeepResearchTimeline";
 import { PlanApprovalCard } from "./PlanApprovalCard";
 import { mdComponents } from "./mdComponents";
@@ -15,23 +18,47 @@ import {
   ProcessedEvent,
 } from "./ActivityTimeline";
 
-const HumanMessageBubble: React.FC<{ readonly message: Message }> = ({ message }) => (
+const HumanMessageBubble: React.FC<{ readonly message: Message }> = React.memo(({ message }) => (
   <div className="text-white rounded-3xl break-words min-h-7 bg-neutral-700 max-w-[100%] sm:max-w-[90%] p-3 rounded-br-xs">
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
       {typeof message.content === "string" ? message.content : JSON.stringify(message.content)}
     </ReactMarkdown>
   </div>
-);
+));
 
-const AiMessageBubble: React.FC<{ readonly message: Message }> = ({ message }) => (
-  <div className="relative break-words flex flex-col w-full">
-    <div className="w-full prose prose-invert prose-sm md:prose-base max-w-none prose-table:border-collapse prose-th:bg-neutral-800 prose-td:border prose-td:border-neutral-700 prose-td:px-3 prose-td:py-2 prose-th:border prose-th:border-neutral-700 prose-th:px-3 prose-th:py-2 prose-strong:text-neutral-100">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-        {typeof message.content === "string" ? message.content : JSON.stringify(message.content)}
-      </ReactMarkdown>
+const htmlSanitizeSchema = {
+  ...defaultSchema,
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "div", "span", "style", "section", "article", "header", "footer", "nav", "figure", "figcaption",
+  ],
+  attributes: {
+    ...defaultSchema.attributes,
+    div: [...(defaultSchema.attributes?.div ?? []), "className", "class", "style"],
+    span: [...(defaultSchema.attributes?.span ?? []), "className", "class", "style"],
+    img: [...(defaultSchema.attributes?.img ?? []), "src", "alt", "width", "height", "style", "class"],
+    "*": [...(defaultSchema.attributes?.["*"] ?? []), "className", "class", "style"],
+  },
+};
+
+const AiMessageBubble: React.FC<{ readonly message: Message }> = React.memo(({ message }) => {
+  const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content);
+  const hasHtml = /<[a-z][\s\S]*>/i.test(content);
+
+  return (
+    <div className="relative break-words flex flex-col w-full">
+      <div className="w-full prose prose-invert prose-sm md:prose-base max-w-none overflow-hidden [overflow-wrap:anywhere] prose-table:border-collapse prose-th:bg-neutral-800 prose-td:border prose-td:border-neutral-700 prose-td:px-3 prose-td:py-2 prose-th:border prose-th:border-neutral-700 prose-th:px-3 prose-th:py-2 prose-strong:text-neutral-100">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={hasHtml ? [rehypeRaw, [rehypeSanitize, htmlSanitizeSchema]] : []}
+          components={mdComponents}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
     </div>
-  </div>
-);
+  );
+});
 
 interface ChatMessagesViewProps {
   messages: Message[];
@@ -47,6 +74,41 @@ interface ChatMessagesViewProps {
   pendingPlan?: PendingPlan | null;
   onApprovePlan?: (subqueries: string[]) => void;
   onRejectPlan?: () => void;
+  adapterFeatures?: AdapterFeatures;
+  onSendSteering?: (message: string) => Promise<unknown>;
+}
+
+function SteeringInput({ onSend, disabled }: Readonly<{ onSend: (msg: string) => void; disabled: boolean }>) {
+  const [value, setValue] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onSend(trimmed);
+    setValue("");
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex gap-2 mt-2 px-2">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Steer the research (e.g., 'focus on solar energy')..."
+        disabled={disabled}
+        className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+      />
+      <button
+        type="submit"
+        disabled={disabled || !value.trim()}
+        aria-label="Send steering message"
+        className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        <Send className="w-4 h-4" />
+      </button>
+    </form>
+  );
 }
 
 export function AIMessageRenderer({ message }: { message: Message }) {
@@ -175,7 +237,11 @@ export function ChatMessagesView({
   pendingPlan,
   onApprovePlan,
   onRejectPlan,
+  adapterFeatures,
+  onSendSteering,
 }: ChatMessagesViewProps) {
+  const showPlanApproval = adapterFeatures?.planApproval !== false;
+  const showSteering = adapterFeatures?.steering === true && !!onSendSteering;
   const { tagged, untagged } = useMemo(() => {
     const tagged = new Map<string, DeepResearchEvent[]>();
     const untagged: DeepResearchEvent[] = [];
@@ -201,7 +267,7 @@ export function ChatMessagesView({
   return (
     <div className="flex flex-col h-full">
       <ScrollArea className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
-        <div className="p-4 md:p-6 lg:px-10 xl:px-16 space-y-2 w-full pt-16">
+        <div className="p-4 md:p-6 lg:px-10 xl:px-16 space-y-2 w-full pt-16 overflow-hidden">
           {messages.map((message, index) => {
             const msgEvents = message.type === "human"
               ? tagged.get(message.id ?? "") ?? []
@@ -229,8 +295,12 @@ export function ChatMessagesView({
                   <DeepResearchTimeline events={combinedEvents} isLoading={timelineLoading} />
                 )}
 
-                {isLatestHuman && pendingPlan && onApprovePlan && onRejectPlan && (
+                {isLatestHuman && showPlanApproval && pendingPlan && onApprovePlan && onRejectPlan && (
                   <PlanApprovalCard plan={pendingPlan} onApprove={onApprovePlan} onReject={onRejectPlan} />
+                )}
+
+                {isLatestHuman && showSteering && isLoading && (
+                  <SteeringInput onSend={onSendSteering!} disabled={false} />
                 )}
               </React.Fragment>
             );
@@ -245,7 +315,7 @@ export function ChatMessagesView({
           )}
         </div>
         {isLoading && deepResearchEvents.length === 0 && liveActivityEvents.length === 0 && (
-          <div className="flex items-center gap-2 text-xs text-neutral-500 justify-center py-2">
+          <div role="status" aria-live="polite" aria-busy="true" className="flex items-center gap-2 text-xs text-neutral-500 justify-center py-2">
             <Loader2 className="w-3 h-3 animate-spin" />
             Processing...
           </div>
