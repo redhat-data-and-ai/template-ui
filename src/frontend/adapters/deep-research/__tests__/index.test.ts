@@ -111,4 +111,28 @@ describe("adapter discovery", () => {
 
     await expect(getAdapterAsync()).rejects.toThrow("Connection refused");
   });
+
+  it("deduplicates concurrent discovery calls", async () => {
+    let resolveDetect!: (value: typeof mockAdapter | null) => void;
+    vi.mocked(tryLangGraph).mockReturnValueOnce(
+      new Promise((resolve) => { resolveDetect = resolve; }),
+    );
+    vi.mocked(tryApiProbe).mockResolvedValueOnce(null);
+
+    const first = getAdapterAsync();
+    const second = getAdapterAsync();
+
+    resolveDetect(mockAdapter);
+
+    const [a, b] = await Promise.all([first, second]);
+    expect(a).toBe(b);
+    expect(tryLangGraph).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes stringified non-Error rejection reasons", async () => {
+    vi.mocked(tryLangGraph).mockRejectedValueOnce("plain string error");
+    vi.mocked(tryApiProbe).mockResolvedValueOnce(null);
+
+    await expect(getAdapterAsync()).rejects.toThrow("plain string error");
+  });
 });

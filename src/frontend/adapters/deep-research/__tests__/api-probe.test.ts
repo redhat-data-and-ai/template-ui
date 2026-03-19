@@ -100,6 +100,12 @@ describe("isValidConfig", () => {
     delete (cfg.stream as unknown as Record<string, unknown>).mode;
     expect(isValidConfig(cfg)).toBe(false);
   });
+
+  it("rejects endpoint path not starting with /", () => {
+    const cfg = makeConfig();
+    (cfg.endpoints.start as unknown as Record<string, unknown>).path = "api/research";
+    expect(isValidConfig(cfg)).toBe(false);
+  });
 });
 
 describe("ApiProbeAdapter.normalizeChunk (passthrough)", () => {
@@ -345,5 +351,404 @@ describe("detect", () => {
     const result = await detect("http://localhost:5002");
     expect(result).not.toBeNull();
     expect(result!.name).toBe("api-probe");
+  });
+
+  it("returns adapter from well-known config endpoint", async () => {
+    const validConfig = makeConfig({ name: "well-known-backend" });
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(validConfig), { status: 200 }),
+    );
+    vi.spyOn(console, "info").mockImplementation(() => {});
+
+    const result = await detect("http://localhost:5002");
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("well-known-backend");
+  });
+
+  it("falls back to / when /health returns non-ok", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 404 })); // well-known
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 404 })); // openapi
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 500 })); // /health
+    fetchMock.mockResolvedValueOnce(new Response("OK", { status: 200 })); // /
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await detect("http://localhost:5002");
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("api-probe");
+  });
+
+  it("returns null when all health endpoints fail", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 404 })); // well-known
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 404 })); // openapi
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 500 })); // /health
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 500 })); // /
+
+    const result = await detect("http://localhost:5002");
+    expect(result).toBeNull();
+  });
+});
+
+describe("ApiProbeAdapter.startResearch", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns reader in direct stream mode", async () => {
+    const adapter = new ApiProbeAdapter("http://localhost:5002", makeConfig());
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(new Response("stream data", { status: 200 }));
+
+    const handle = await adapter.startResearch({
+      message: "test", threadId: "t1", sessionId: "s1", userId: "u1",
+    });
+    expect(handle.reader).toBeDefined();
+    expect(handle.streamId).toBeUndefined();
+  });
+
+  it("handles two-step mode with relative URL", async () => {
+    const config = makeConfig({ stream: { mode: "two-step", chunkFormat: "passthrough" } });
+    const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+    const fetchMock = vi.mocked(globalThis.fetch);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ stream_url: "/v1/stream/abc123" }), { status: 200 }),
+    );
+    fetchMock.mockResolvedValueOnce(new Response("sse data", { status: 200 }));
+
+    const handle = await adapter.startResearch({
+      message: "test", threadId: "t1", sessionId: "s1", userId: "u1",
+    });
+    expect(handle.reader).toBeDefined();
+    expect(handle.streamId).toBe("abc123");
+  });
+
+  it("handles two-step mode with absolute URL", async () => {
+    const config = makeConfig({ stream: { mode: "two-step", chunkFormat: "passthrough" } });
+    const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+    const fetchMock = vi.mocked(globalThis.fetch);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ stream_url: "https://other.host/stream/xyz" }), { status: 200 }),
+    );
+    fetchMock.mockResolvedValueOnce(new Response("sse data", { status: 200 }));
+
+    const handle = await adapter.startResearch({
+      message: "test", threadId: "t1", sessionId: "s1", userId: "u1",
+    });
+    expect(handle.streamId).toBe("xyz");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "https://other.host/stream/xyz",
+      expect.anything(),
+    );
+  });
+
+  it("uses custom streamUrlField in two-step mode", async () => {
+    const config = makeConfig({
+      stream: { mode: "two-step", chunkFormat: "passthrough", streamUrlField: "custom_url" },
+    });
+    const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+    const fetchMock = vi.mocked(globalThis.fetch);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ custom_url: "/v1/stream/xyz" }), { status: 200 }),
+    );
+    fetchMock.mockResolvedValueOnce(new Response("data", { status: 200 }));
+
+    const handle = await adapter.startResearch({
+      message: "test", threadId: "t1", sessionId: "s1", userId: "u1",
+    });
+    expect(handle.streamId).toBe("xyz");
+  });
+
+  it("throws when two-step response has no stream_url", async () => {
+    const config = makeConfig({ stream: { mode: "two-step", chunkFormat: "passthrough" } });
+    const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+    const fetchMock = vi.mocked(globalThis.fetch);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({}), { status: 200 }),
+    );
+
+    await expect(
+      adapter.startResearch({ message: "test", threadId: "t1", sessionId: "s1", userId: "u1" }),
+    ).rejects.toThrow("No stream_url in response");
+  });
+
+  it("throws when two-step SSE response fails", async () => {
+    const config = makeConfig({ stream: { mode: "two-step", chunkFormat: "passthrough" } });
+    const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+    const fetchMock = vi.mocked(globalThis.fetch);
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ stream_url: "/v1/stream/abc" }), { status: 200 }),
+    );
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 500 }));
+
+    await expect(
+      adapter.startResearch({ message: "test", threadId: "t1", sessionId: "s1", userId: "u1" }),
+    ).rejects.toThrow("stream error: 500");
+  });
+
+  it("throws on HTTP error from endpoint", async () => {
+    const adapter = new ApiProbeAdapter("http://localhost:5002", makeConfig());
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 503 }));
+
+    await expect(
+      adapter.startResearch({ message: "test", threadId: "t1", sessionId: "s1", userId: "u1" }),
+    ).rejects.toThrow("HTTP error: 503");
+  });
+
+  it("passes token and signal to endpoint", async () => {
+    const adapter = new ApiProbeAdapter("http://localhost:5002", makeConfig());
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(new Response("data", { status: 200 }));
+
+    const controller = new AbortController();
+    await adapter.startResearch({
+      message: "test", threadId: "t1", sessionId: "s1", userId: "u1",
+      token: "my-token", signal: controller.signal,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/research"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Token": "my-token" }),
+      }),
+    );
+  });
+
+  it("passes token and signal in two-step SSE fetch", async () => {
+    const config = makeConfig({ stream: { mode: "two-step", chunkFormat: "passthrough" } });
+    const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+    const fetchMock = vi.mocked(globalThis.fetch);
+    const controller = new AbortController();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ stream_url: "/v1/stream/abc" }), { status: 200 }),
+    );
+    fetchMock.mockResolvedValueOnce(new Response("sse data", { status: 200 }));
+
+    await adapter.startResearch({
+      message: "test", threadId: "t1", sessionId: "s1", userId: "u1",
+      token: "tk", signal: controller.signal,
+    });
+
+    const secondCall = fetchMock.mock.calls[1];
+    expect((secondCall[1] as RequestInit).headers).toEqual({ "X-Token": "tk" });
+    expect((secondCall[1] as RequestInit).signal).toBe(controller.signal);
+  });
+});
+
+describe("ApiProbeAdapter.cancelResearch", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends cancel request successfully", async () => {
+    const adapter = new ApiProbeAdapter("http://localhost:5002", makeConfig());
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 200 }));
+
+    await adapter.cancelResearch("thread-123", "my-token");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/cancel/thread-123"),
+      expect.anything(),
+    );
+  });
+
+  it("catches and warns on cancel failure", async () => {
+    const adapter = new ApiProbeAdapter("http://localhost:5002", makeConfig());
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockRejectedValueOnce(new Error("Network error"));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await adapter.cancelResearch("thread-123");
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("cancel failed"),
+      expect.any(Error),
+    );
+  });
+});
+
+describe("ApiProbeAdapter.approvePlan", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("throws when planApproval endpoint is not configured", async () => {
+    const adapter = new ApiProbeAdapter("http://localhost:5002", makeConfig());
+
+    await expect(
+      adapter.approvePlan({
+        message: "test", threadId: "t1", sessionId: "s1", userId: "u1",
+        plan: ["step1"],
+      }),
+    ).rejects.toThrow("does not support plan approval");
+  });
+
+  it("sends plan approval request and returns reader", async () => {
+    const config = makeConfig({
+      endpoints: {
+        start: { path: "/api/research", method: "POST", bodyMapping: { query: "{{message}}" } },
+        cancel: { path: "/api/cancel/{{threadId}}", method: "POST" },
+        planApproval: { path: "/api/approve", method: "POST", bodyMapping: { plan: "{{plan}}" } },
+      },
+    });
+    const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(new Response("stream", { status: 200 }));
+
+    const handle = await adapter.approvePlan({
+      message: "test", threadId: "t1", sessionId: "s1", userId: "u1",
+      plan: ["step1", "step2"],
+    });
+    expect(handle.reader).toBeDefined();
+  });
+});
+
+describe("ApiProbeAdapter.sendSteeringMessage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("throws when steering endpoint is not configured", async () => {
+    const adapter = new ApiProbeAdapter("http://localhost:5002", makeConfig());
+
+    await expect(
+      adapter.sendSteeringMessage("session-1", "go deeper"),
+    ).rejects.toThrow("does not support steering");
+  });
+
+  it("sends steering message and returns response JSON", async () => {
+    const config = makeConfig({
+      endpoints: {
+        start: { path: "/api/research", method: "POST", bodyMapping: { query: "{{message}}" } },
+        cancel: { path: "/api/cancel/{{threadId}}", method: "POST" },
+        steering: { path: "/api/steer", method: "POST", bodyMapping: { message: "{{message}}" } },
+      },
+    });
+    const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+    );
+
+    const result = await adapter.sendSteeringMessage("session-1", "go deeper");
+    expect(result).toEqual({ status: "ok" });
+  });
+});
+
+describe("ApiProbeAdapter.normalizeChunk (SSE with eventMapping)", () => {
+  const config = makeConfig({
+    stream: { mode: "direct", chunkFormat: "sse" },
+    eventMapping: {
+      activity: {
+        stage: "research",
+        eventType: "activity",
+        messageField: "message",
+      },
+      heartbeat: "ignore",
+      error_event: {
+        stage: "research",
+        eventType: "error",
+        messageField: "message",
+      },
+      report_ready: {
+        stage: "complete",
+        eventType: "final_answer",
+        messageField: "message",
+        displayTextField: "display_text",
+        reportField: "report",
+      },
+      hidden: {
+        stage: "research",
+        eventType: "hidden_step",
+        messageField: "message",
+        uiVisible: false,
+      },
+    },
+  });
+  const adapter = new ApiProbeAdapter("http://localhost:5002", config);
+
+  it("maps event via eventMapping", () => {
+    const raw = 'data: {"event_type":"activity","message":"Searching..."}';
+    const result = unwrapSingle(adapter.normalizeChunk(raw));
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("deep_research_status");
+    if (result!.type === "deep_research_status") {
+      expect(result!.content.stage).toBe("research");
+      expect(result!.content.message).toBe("Searching...");
+    }
+  });
+
+  it("returns null for ignored events", () => {
+    const raw = 'data: {"event_type":"heartbeat"}';
+    expect(adapter.normalizeChunk(raw)).toBeNull();
+  });
+
+  it("returns error chunk for error eventType mapping", () => {
+    const raw = 'data: {"event_type":"error_event","message":"Something failed"}';
+    const result = unwrapSingle(adapter.normalizeChunk(raw));
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("error");
+  });
+
+  it("extracts reportField and displayTextField", () => {
+    const raw = 'data: {"event_type":"report_ready","message":"Done","display_text":"Report ready","report":"Full report"}';
+    const result = unwrapSingle(adapter.normalizeChunk(raw));
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("deep_research_status");
+    if (result!.type === "deep_research_status") {
+      expect(result!.content.details.report).toBe("Full report");
+      expect(result!.content.display_text).toBe("Report ready");
+    }
+  });
+
+  it("sets uiVisible to false when mapping specifies it", () => {
+    const raw = 'data: {"event_type":"hidden","message":"Background work"}';
+    const result = unwrapSingle(adapter.normalizeChunk(raw));
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("deep_research_status");
+    if (result!.type === "deep_research_status") {
+      expect(result!.content.ui_visible).toBe(false);
+    }
+  });
+
+  it("falls back to buildDefaultEvent for unmapped events", () => {
+    const raw = 'data: {"event_type":"unmapped_event","message":"Something"}';
+    const result = unwrapSingle(adapter.normalizeChunk(raw));
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("deep_research_status");
+  });
+
+  it("returns null for malformed JSON in SSE data", () => {
+    expect(adapter.normalizeChunk("data: {invalid json}")).toBeNull();
+  });
+
+  it("injects eventType from SSE event line when not in data", () => {
+    const raw = 'event: activity\ndata: {"message":"Searching..."}';
+    const result = unwrapSingle(adapter.normalizeChunk(raw));
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("deep_research_status");
   });
 });

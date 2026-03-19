@@ -1,6 +1,8 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { agentHost } from "../../utils/config.js";
 
+const PROXY_TIMEOUT_MS = 10_000;
+
 interface StreamRequest {
   message: string;
   thread_id: string;
@@ -12,18 +14,20 @@ interface StreamRequest {
   deep_research_model?: string;
   deep_research_max_mode?: boolean;
   deep_research_max_subqueries?: number;
-  [key: string]: unknown;
 }
 
 export async function handleStreamPost(fastify: FastifyInstance, request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) {
-  const { thread_id, user_id } = request.body;
+  const {
+    message, thread_id, session_id, user_id,
+    stream_tokens, deep_research_enabled,
+    deep_research_require_plan_approval, deep_research_model,
+    deep_research_max_mode, deep_research_max_subqueries,
+  } = request.body;
 
-  // Extract SSO access token from session
   const accessToken = request.session?.token?.access_token;
   
-  fastify.log.info(`Stream request - Thread: ${thread_id}, User: ${user_id}, Token: ${accessToken ? 'Present' : 'Missing'}`);
+  fastify.log.info({ thread_id, user_id, hasToken: !!accessToken }, "Stream request");
 
-  // Set SSE headers
   reply.headers({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -35,27 +39,27 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
   });
 
   try {
-    // Prepare headers for agent request
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream'
     };
 
-    // Add SSO token if present
     if (accessToken) {
       headers['X-Token'] = accessToken;
     }
 
-    // Proxy request to agent backend
     const agentUrl = `${agentHost}/v1/stream`;
-    fastify.log.info(`Proxying to agent: ${agentUrl}`);
+    fastify.log.info({ agentUrl }, "Proxying to agent");
 
     const agentResponse = await fetch(agentUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        ...request.body,
-        stream_tokens: true
+        message, thread_id, session_id, user_id,
+        stream_tokens: stream_tokens ?? true,
+        deep_research_enabled, deep_research_require_plan_approval,
+        deep_research_model, deep_research_max_mode,
+        deep_research_max_subqueries,
       })
     });
 
@@ -63,7 +67,6 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
       throw new Error(`Agent responded with status ${agentResponse.status}`);
     }
 
-    // Stream response from agent to client
     const reader = agentResponse.body?.getReader();
     if (!reader) {
       throw new Error('No response body from agent');
@@ -85,9 +88,8 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
     reply.raw.end();
 
   } catch (error) {
-    fastify.log.error(`Error proxying to agent: ${error}`);
+    fastify.log.error({ err: error }, "Error proxying stream to agent");
     
-    // Send error event to client
     const errorEvent = JSON.stringify({
       type: "error",
       content: {
@@ -105,34 +107,33 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
 
 export async function handleHistoryGet(fastify: FastifyInstance, request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) {
   const { threadId } = request.params;
-  
-  // Extract SSO access token from session
   const accessToken = request.session?.token?.access_token;
   
-  fastify.log.info(`History request for thread: ${threadId}, Token: ${accessToken ? 'Present' : 'Missing'}`);
+  fastify.log.info({ threadId, hasToken: !!accessToken }, "History request");
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+
+  if (accessToken) {
+    headers['X-Token'] = accessToken;
+  }
+
+  const agentUrl = `${agentHost}/v1/history/${threadId}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
 
   try {
-    // Prepare headers for agent request
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-
-    // Add SSO token if present
-    if (accessToken) {
-      headers['X-Token'] = accessToken;
-    }
-
-    // Proxy request to agent backend
-    const agentUrl = `${agentHost}/v1/history/${threadId}`;
-    fastify.log.info(`Proxying to agent: ${agentUrl}`);
+    fastify.log.info({ agentUrl }, "Proxying to agent");
 
     const agentResponse = await fetch(agentUrl, {
       method: 'GET',
-      headers
+      headers,
+      signal: controller.signal,
     });
 
     if (!agentResponse.ok) {
-      fastify.log.error(`Agent responded with status ${agentResponse.status}`);
+      fastify.log.error({ threadId, status: agentResponse.status }, "Agent returned error status");
       return reply.status(agentResponse.status).send({
         error: 'Failed to fetch history from agent',
         status: agentResponse.status
@@ -143,33 +144,45 @@ export async function handleHistoryGet(fastify: FastifyInstance, request: Fastif
     reply.send(history);
 
   } catch (error) {
-    fastify.log.error(`Error proxying to agent: ${error}`);
-    reply.status(500).send({
-      error: 'Failed to connect to agent service',
-      message: String(error)
-    });
+    if (error instanceof Error && error.name === 'AbortError') {
+      fastify.log.error({ threadId }, "History request timed out");
+      return reply.status(504).send({ error: 'Agent request timed out' });
+    }
+    fastify.log.error({ err: error }, "Error proxying history to agent");
+    reply.status(500).send({ error: 'Failed to connect to agent service' });
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
+/**
+ * Proxies a cancel request to the backend agent.
+ * Auth is delegated: the BFF forwards the session token via X-Token header;
+ * the backend agent validates token ownership of the thread.
+ */
 export async function handleCancelDelete(fastify: FastifyInstance, request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) {
   const { threadId } = request.params;
   const accessToken = request.session?.token?.access_token;
   
-  fastify.log.info(`Cancel request for thread: ${threadId}`);
+  fastify.log.info({ threadId }, "Cancel request received");
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+
+  if (accessToken) {
+    headers['X-Token'] = accessToken;
+  }
+
+  const agentUrl = `${agentHost}/v1/cancel/${threadId}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
 
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-
-    if (accessToken) {
-      headers['X-Token'] = accessToken;
-    }
-
-    const agentUrl = `${agentHost}/v1/cancel/${threadId}`;
     const agentResponse = await fetch(agentUrl, {
       method: 'DELETE',
-      headers
+      headers,
+      signal: controller.signal,
     });
 
     if (!agentResponse.ok) {
@@ -183,10 +196,13 @@ export async function handleCancelDelete(fastify: FastifyInstance, request: Fast
     reply.send(result);
 
   } catch (error) {
-    fastify.log.error(`Error proxying cancel to agent: ${error}`);
-    reply.status(500).send({
-      error: 'Failed to connect to agent service',
-      message: String(error)
-    });
+    if (error instanceof Error && error.name === 'AbortError') {
+      fastify.log.error({ threadId }, "Cancel request timed out");
+      return reply.status(504).send({ error: 'Agent request timed out' });
+    }
+    fastify.log.error({ err: error }, "Error proxying cancel to agent");
+    reply.status(500).send({ error: 'Failed to connect to agent service' });
+  } finally {
+    clearTimeout(timeout);
   }
 }

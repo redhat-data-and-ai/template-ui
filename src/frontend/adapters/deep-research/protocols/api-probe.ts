@@ -102,7 +102,7 @@ function mapEventWithConfig(
 function isValidEndpoint(raw: unknown): raw is EndpointConfig {
   if (raw == null || typeof raw !== "object") return false;
   const ep = raw as Record<string, unknown>;
-  if (typeof ep.path !== "string") return false;
+  if (typeof ep.path !== "string" || !ep.path.startsWith('/')) return false;
   if (!ep.method || !VALID_METHODS.has(ep.method as string)) return false;
   return true;
 }

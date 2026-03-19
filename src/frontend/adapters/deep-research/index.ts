@@ -9,6 +9,12 @@ export type { DRRequestParams, DRStreamHandle, PlanApprovalParams } from "./type
 type Detector = (url: string) => Promise<DeepResearchAdapter | null>;
 const detectors: Detector[] = [tryLangGraph, tryApiProbe];
 
+/**
+ * Module-level singleton state for adapter discovery.
+ * Intentional for a client-only SPA (no SSR) -- the cached adapter must
+ * survive React re-renders and StrictMode double-invocations.
+ * Use {@link resetAdapterCache} for test isolation.
+ */
 let cachedAdapter: DeepResearchAdapter | null = null;
 let cachedUrl = "";
 let discoveryInFlight: Promise<DeepResearchAdapter> | null = null;

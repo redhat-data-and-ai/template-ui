@@ -30,14 +30,14 @@ const htmlSanitizeSchema = {
   ...defaultSchema,
   tagNames: [
     ...(defaultSchema.tagNames ?? []),
-    "div", "span", "style", "section", "article", "header", "footer", "nav", "figure", "figcaption",
+    "div", "span", "section", "article", "header", "footer", "nav", "figure", "figcaption",
   ],
   attributes: {
     ...defaultSchema.attributes,
-    div: [...(defaultSchema.attributes?.div ?? []), "className", "class", "style"],
-    span: [...(defaultSchema.attributes?.span ?? []), "className", "class", "style"],
-    img: [...(defaultSchema.attributes?.img ?? []), "src", "alt", "width", "height", "style", "class"],
-    "*": [...(defaultSchema.attributes?.["*"] ?? []), "className", "class", "style"],
+    div: [...(defaultSchema.attributes?.div ?? []), "className", "class"],
+    span: [...(defaultSchema.attributes?.span ?? []), "className", "class"],
+    img: [...(defaultSchema.attributes?.img ?? []), "src", "alt", "width", "height", "class"],
+    "*": [...(defaultSchema.attributes?.["*"] ?? []), "className", "class"],
   },
 };
 

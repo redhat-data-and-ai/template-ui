@@ -42,7 +42,7 @@ export function ChatPage({ threadId }: Readonly<{ threadId: string }>) {
     if (currentChat && currentChat.messages.length > 0 && thread.messages.length === 0) {
       thread.setMessages(currentChat.messages);
     }
-  }, [currentChat?.messages, currentChat?.messages?.length]);
+  }, [currentChat?.messages]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {

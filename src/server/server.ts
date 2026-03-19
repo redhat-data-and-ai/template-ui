@@ -39,6 +39,7 @@ const fastify = Fastify({
 });
 
 const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
+fastify.log.info({ corsOrigin }, "CORS origin configured");
 
 await fastify.register(import("@fastify/cors"), {
   origin: corsOrigin,

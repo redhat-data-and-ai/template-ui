@@ -141,7 +141,10 @@ export function useDataStream({
   useEffect(() => {
     return () => {
       const entry = activeStreams.get(threadId);
-      if (entry) entry.controller.abort();
+      if (entry) {
+        entry.controller.abort();
+        activeStreams.delete(threadId);
+      }
     };
   }, [threadId]);
 
