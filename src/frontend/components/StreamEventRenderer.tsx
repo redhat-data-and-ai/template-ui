@@ -2,7 +2,6 @@ import { useState } from "react";
 import { StreamEvent, ToolCall } from "../hooks/useDataStream";
 import {
   Brain,
-  Settings,
   CheckCircle,
   ChevronDown,
   ChevronRight,
@@ -10,6 +9,7 @@ import {
   Play,
   Zap,
 } from "lucide-react";
+import { getToolIcon, getToolLabel } from "../lib/toolIcons";
 import ReactMarkdown from "react-markdown";
 
 interface StreamEventRendererProps {
@@ -114,21 +114,19 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
       case 'tool_call':
         const isExpanded = expandedItems.has(event.id);
         return (
-          event.tool_calls?.map((toolCall: ToolCall) => (
+          event.tool_calls?.map((toolCall: ToolCall) => {
+            const ToolIcon = getToolIcon(toolCall.name);
+            return (
             <div key={event.id} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden">
             <button
               onClick={() => toggleExpand(event.id)}
               className="w-full flex items-center justify-between p-4 hover:bg-blue-800/20 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <Settings className="w-5 h-5 text-blue-400" />
-                <div className="text-left">
-                  <div className="text-sm font-medium text-blue-100">
-                    {toolCall.name}
-                  </div>
-                  <div className="text-xs text-blue-200/60">
-                    Tool execution
-                  </div>
+                <ToolIcon className="w-5 h-5 text-blue-400" />
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-blue-100">{toolCall.name}</span>
+                  <span className="text-xs text-blue-200/60">• {getToolLabel(toolCall.name)}</span>
                 </div>
               </div>
               {isExpanded ? (
@@ -141,13 +139,14 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
             {isExpanded && (
               <div className="px-4 pb-4 border-t border-blue-700/20">
                 <div className="text-xs text-blue-200/60 mb-2">Arguments:</div>
-                <pre className="text-xs text-blue-100 bg-blue-950/30 p-2 rounded overflow-auto">
+                <pre className="text-xs text-blue-100 bg-blue-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
                   {JSON.stringify(toolCall.args, null, 2)}
                 </pre>
               </div>
             )}
           </div>
-          ))
+          );
+          })
         );
 
       case 'tool_result':
@@ -179,7 +178,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
             {resultExpanded && (
               <div className="px-3 pb-3 border-t border-green-700/20">
                 <div className="text-xs text-green-200/60 mb-2">Result:</div>
-                <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-auto max-h-40">
+                <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
                   {typeof event.content === 'string' ? event.content : JSON.stringify(event.content, null, 2)}
                 </pre>
               </div>

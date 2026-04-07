@@ -1,7 +1,8 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { ScrollArea } from "./ui/scroll-area";
-import { CheckCircle, ChevronDown, ChevronRight, Copy, CopyCheck, Loader2, Settings } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronRight, Copy, CopyCheck, Loader2 } from "lucide-react";
+import { getToolIcon, getToolLabel } from "../lib/toolIcons";
 import { InputForm } from "./InputForm";
 import { useState, ReactNode, useMemo } from "react";
 import { cn } from "../lib/utils";
@@ -11,6 +12,8 @@ import {
 } from "./ActivityTimeline";
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
+import { TodoListRenderer, isWriteTodosCall, extractTodos } from "./TodoListRenderer";
+import type { TodoItem } from "./TodoListRenderer";
 
 // Markdown component props type from former ReportView
 type MdComponentProps = {
@@ -218,11 +221,16 @@ interface ChatMessagesViewProps {
   historicalActivities: Record<string, ProcessedEvent[]>;
 }
 
-export function AIMessageRenderer({ message }: { message: Message }) {
+interface AIMessageRendererProps {
+  message: Message;
+  latestTodos?: TodoItem[];
+  skipWriteTodos?: boolean;
+}
+
+export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleExpand = (itemId: string) => {
-    console.log('toggleExpand : ', itemId);
     setExpandedItems(prev => {
       const newSet = new Set(prev);
       if (newSet.has(itemId)) {
@@ -241,63 +249,70 @@ export function AIMessageRenderer({ message }: { message: Message }) {
     const isNormalMessage = message.type === 'ai' && (!Array.isArray(message?.tool_calls) || message?.tool_calls?.length === 0);
 
     if (isToolCallStart) {
-      // const color = (toolCall as any).content ? 'green' : 'blue';
-      return (
-        <>
-          {
-            message.tool_calls?.map((toolCall, idx) => (
-              <div key={`${message.id}-${idx}`} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden w-full">
-                <button
-                  onClick={() => toggleExpand(`${message.id}-${idx}`)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-blue-800/20 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <Settings className="w-5 h-5 text-blue-400" />
-                    <div className="text-left">
-                      <div className="text-sm font-medium text-blue-100 flex items-center gap-2">
-                        {toolCall.name}
-                        {
-                          (toolCall as any).content ? (
-                            <CheckCircle className="w-4 h-4 text-green-400" />
-                          ) : (
-                            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                          )
-                        }
-                      </div>
+      const toolCalls = message.tool_calls ?? [];
+      const nonTodoToolCalls = toolCalls.filter(tc => !isWriteTodosCall(tc));
+      const hasTodoCall = toolCalls.some(tc => isWriteTodosCall(tc));
 
-                      <div className="text-xs text-blue-200/60">
-                        Tool execution
-                      </div>
-                    </div>
-                  </div>
-                  {expandedItems.has(`${message.id}-${idx}`) ? (
-                    <ChevronDown className="w-4 h-4 text-blue-400" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-blue-400" />
-                  )}
-                </button>
+      const elements: React.ReactNode[] = [];
 
-                {expandedItems.has(`${message.id}-${idx}`) && (
-                  <div className="px-4 pb-4 border-t border-blue-700/20">
-                    <div className="text-xs text-blue-200/60 mb-2">Arguments:</div>
-                    <pre className="text-xs text-blue-100 bg-blue-950/30 p-2 rounded overflow-auto">
-                      {JSON.stringify(toolCall.args, null, 2)}
-                    </pre>
-                    <div className="text-xs text-blue-200/60 mb-2">
-                      {
-                        (toolCall as any).content ? 'Result:' : 'Running...:'
-                      }
-                    </div>
-                    <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-auto">
-                      {JSON.stringify((toolCall as any).content, null, 2)}
-                    </pre>
-                  </div>
-                )}
+      if (hasTodoCall && latestTodos && !skipWriteTodos) {
+        elements.push(
+          <TodoListRenderer key="aggregated-todos" todos={latestTodos} />
+        );
+      }
+
+      for (let idx = 0; idx < nonTodoToolCalls.length; idx++) {
+        const toolCall = nonTodoToolCalls[idx];
+        const ToolIcon = getToolIcon(toolCall.name);
+        elements.push(
+          <div key={`${message.id || 'tc'}-${idx}`} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden w-full">
+            <button
+              onClick={() => toggleExpand(`${message.id}-${idx}`)}
+              className="w-full flex items-center justify-between p-4 hover:bg-blue-800/20 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <ToolIcon className="w-5 h-5 text-blue-400" />
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-blue-100">{toolCall.name}</span>
+                  <span className="text-xs text-blue-200/60">• {getToolLabel(toolCall.name)}</span>
+                  {
+                    (toolCall as any).content ? (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                    )
+                  }
+                </div>
               </div>
-            ))
-          }
-        </>
-      );
+              {expandedItems.has(`${message.id}-${idx}`) ? (
+                <ChevronDown className="w-4 h-4 text-blue-400" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-blue-400" />
+              )}
+            </button>
+
+            {expandedItems.has(`${message.id}-${idx}`) && (
+              <div className="px-4 pb-4 border-t border-blue-700/20">
+                <div className="text-xs text-blue-200/60 mb-2">Arguments:</div>
+                <pre className="text-xs text-blue-100 bg-blue-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
+                  {JSON.stringify(toolCall.args, null, 2)}
+                </pre>
+                <div className="text-xs text-blue-200/60 mb-2">
+                  {
+                    (toolCall as any).content ? 'Result:' : 'Running...:'
+                  }
+                </div>
+                <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
+                  {JSON.stringify((toolCall as any).content, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (elements.length === 0) return null;
+      return <>{elements}</>;
     }
 
 
@@ -330,7 +345,7 @@ export function AIMessageRenderer({ message }: { message: Message }) {
             {expandedItems.has(message.id || '') && (
               <div className="px-3 pb-3 border-t border-green-700/20">
                 <div className="text-xs text-green-200/60 mb-2">Result:</div>
-                <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-auto max-h-40">
+                <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
                   {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
                 </pre>
               </div>
@@ -346,19 +361,12 @@ export function AIMessageRenderer({ message }: { message: Message }) {
       );
     }
 
-  }, [JSON.stringify(message), expandedItems]);
+  }, [JSON.stringify(message), expandedItems, latestTodos, skipWriteTodos]);
 
 
   return (
     <div className="space-y-2 mb-4 w-full">
       {renderMessage}
-
-      {/* {isLoading && (
-        <div className="flex items-center gap-2 text-xs text-neutral-500 justify-center py-2">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Processing...
-        </div>
-      )} */}
     </div>
   );
 }
@@ -378,16 +386,44 @@ export function ChatMessagesView({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedMessageId(messageId);
-      setTimeout(() => setCopiedMessageId(null), 2000); // Reset after 2 seconds
+      setTimeout(() => setCopiedMessageId(null), 2000);
     } catch (err) {
       console.error("Failed to copy text: ", err);
     }
   };
+
+  const todoMeta = useMemo(() => {
+    let firstTodoIndex = -1;
+    let latestTodos: TodoItem[] = [];
+    const writeTodosMsgIndices = new Set<number>();
+
+    messages.forEach((msg, idx) => {
+      if (msg.type === 'ai' && Array.isArray(msg.tool_calls)) {
+        for (const tc of msg.tool_calls) {
+          if (isWriteTodosCall(tc)) {
+            if (firstTodoIndex === -1) firstTodoIndex = idx;
+            writeTodosMsgIndices.add(idx);
+            latestTodos = extractTodos(tc);
+          }
+        }
+      }
+    });
+
+    return { firstTodoIndex, latestTodos, writeTodosMsgIndices };
+  }, [messages]);
+
   return (
     <div className="flex flex-col h-full">
       <ScrollArea className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
         <div className="p-4 md:p-6 space-y-2 max-w-4xl mx-auto pt-16">
           {messages.map((message, index) => {
+            if (message.type === 'tool' && message.name === 'write_todos') {
+              return null;
+            }
+
+            const isFirstTodo = index === todoMeta.firstTodoIndex;
+            const isLaterTodo = todoMeta.writeTodosMsgIndices.has(index) && !isFirstTodo;
+
             return (
               <div key={message.id || `msg-${index}`} className="space-y-3">
                 <div
@@ -403,6 +439,8 @@ export function ChatMessagesView({
                     <div className="w-full max-w-[85%] md:max-w-[80%]">
                       <AIMessageRenderer
                         message={message}
+                        latestTodos={isFirstTodo ? todoMeta.latestTodos : undefined}
+                        skipWriteTodos={isLaterTodo}
                       />
                     </div>
                   )}
