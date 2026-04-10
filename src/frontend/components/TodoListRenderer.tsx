@@ -12,6 +12,10 @@ export function isWriteTodosCall(toolCall: { name: string }): boolean {
   return toolCall.name === TOOL_NAME;
 }
 
+export function isWriteTodosResult(message: { type: string; name?: string }): boolean {
+  return message.type === 'tool' && message.name === TOOL_NAME;
+}
+
 export function extractTodos(toolCall: { args: Record<string, unknown> }): TodoItem[] {
   const args = toolCall.args as Record<string, unknown>;
   if (Array.isArray(args?.todos)) {

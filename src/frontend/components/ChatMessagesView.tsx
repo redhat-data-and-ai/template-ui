@@ -12,7 +12,7 @@ import {
 } from "./ActivityTimeline";
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
-import { TodoListRenderer, isWriteTodosCall, extractTodos } from "./TodoListRenderer";
+import { TodoListRenderer, isWriteTodosCall, isWriteTodosResult, extractTodos } from "./TodoListRenderer";
 import type { TodoItem } from "./TodoListRenderer";
 
 // Markdown component props type from former ReportView
@@ -418,7 +418,7 @@ export function ChatMessagesView({
       <ScrollArea className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
         <div className="p-4 md:p-6 space-y-2 max-w-4xl mx-auto pt-16">
           {messages.map((message, index) => {
-            if (message.type === 'tool' && message.name === 'write_todos') {
+            if (isWriteTodosResult(message)) {
               return null;
             }
 
