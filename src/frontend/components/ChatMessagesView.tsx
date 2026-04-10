@@ -2,7 +2,7 @@ import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { ScrollArea } from "./ui/scroll-area";
 import { CheckCircle, ChevronDown, ChevronRight, Copy, CopyCheck, Loader2 } from "lucide-react";
-import { getToolIcon, getToolLabel } from "../lib/toolIcons";
+import { getToolIcon } from "../lib/toolIcons";
 import { InputForm } from "./InputForm";
 import { useState, ReactNode, useMemo } from "react";
 import { cn } from "../lib/utils";
@@ -264,7 +264,6 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
       for (let idx = 0; idx < nonTodoToolCalls.length; idx++) {
         const toolCall = nonTodoToolCalls[idx];
         const ToolIcon = getToolIcon(toolCall.name);
-        const toolKindLabel = getToolLabel(toolCall.name);
         const stableId = message.id || 'tc';
         elements.push(
           <div key={`${stableId}-${idx}`} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden w-full">
@@ -276,9 +275,6 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
                 <ToolIcon className="w-5 h-5 text-blue-400" />
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-blue-100">{toolCall.name}</span>
-                  {toolKindLabel ? (
-                    <span className="text-xs text-blue-200/60">• {toolKindLabel}</span>
-                  ) : null}
                   {
                     (toolCall as any).content ? (
                       <CheckCircle className="w-4 h-4 text-green-400" />

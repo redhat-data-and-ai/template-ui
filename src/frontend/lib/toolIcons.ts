@@ -15,11 +15,3 @@ const toolIconMap: Record<string, LucideIcon> = {
 export function getToolIcon(toolName: string): LucideIcon {
   return toolIconMap[toolName] ?? Settings;
 }
-
-const subagentNames = new Set<string>([
-  // Add your subagent names here
-]);
-
-export function getToolLabel(toolName: string): string {
-  return subagentNames.has(toolName) ? "Subagent" : "";
-}
