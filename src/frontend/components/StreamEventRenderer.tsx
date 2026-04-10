@@ -111,10 +111,11 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
           </div>
         );
 
-      case 'tool_call':
+      case 'tool_call': {
         const isExpanded = expandedItems.has(event.id);
+        if (!event.tool_calls || event.tool_calls.length === 0) return null;
         return (
-          event.tool_calls?.map((toolCall: ToolCall) => {
+          event.tool_calls.map((toolCall: ToolCall) => {
             const ToolIcon = getToolIcon(toolCall.name);
             const toolKindLabel = getToolLabel(toolCall.name);
             return (
@@ -151,8 +152,9 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
           );
           })
         );
+      }
 
-      case 'tool_result':
+      case 'tool_result': {
         const resultExpanded = expandedItems.has(event.id);
         return (
           <div key={event.id} className="bg-green-900/20 border border-green-700/30 rounded-lg overflow-hidden ml-6">
@@ -188,6 +190,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
             )}
           </div>
         );
+      }
 
       case 'token_group':
         return (
@@ -270,9 +273,13 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
 
   if (events.length === 0 && !isLoading) return null;
 
+  const renderedEvents = processedEvents.map(renderEvent).filter(Boolean);
+
+  if (renderedEvents.length === 0 && !isLoading) return null;
+
   return (
     <div className="space-y-2 mb-4">
-      {processedEvents.map(renderEvent)}
+      {renderedEvents}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-xs text-neutral-500 justify-center py-2">

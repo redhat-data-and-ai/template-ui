@@ -365,12 +365,17 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
       );
     }
 
+    return null;
+
   }, [JSON.stringify(message), expandedItems, latestTodos, skipWriteTodos]);
 
+  if (!renderMessage) return null;
 
   return (
-    <div className="space-y-2 mb-4 w-full">
-      {renderMessage}
+    <div className="w-full max-w-[85%] md:max-w-[80%]">
+      <div className="space-y-2 mb-4 w-full">
+        {renderMessage}
+      </div>
     </div>
   );
 }
@@ -432,26 +437,28 @@ export function ChatMessagesView({
             const isFirstTodo = index === todoMeta.firstTodoIndex;
             const isLaterTodo = todoMeta.writeTodosMsgIndices.has(index) && !isFirstTodo;
 
+            const content = message.type === "human" ? (
+              <HumanMessageBubble
+                message={message}
+                mdComponents={mdComponents}
+              />
+            ) : (
+              <AIMessageRenderer
+                message={message}
+                latestTodos={isFirstTodo ? todoMeta.latestTodos : undefined}
+                skipWriteTodos={isLaterTodo}
+              />
+            );
+
+            if (!content) return null;
+
             return (
               <div key={message.id || `msg-${index}`} className="space-y-3">
                 <div
                   className={`flex items-start gap-3 ${message.type === "human" ? "justify-end" : ""
                     }`}
                 >
-                  {message.type === "human" ? (
-                    <HumanMessageBubble
-                      message={message}
-                      mdComponents={mdComponents}
-                    />
-                  ) : (
-                    <div className="w-full max-w-[85%] md:max-w-[80%]">
-                      <AIMessageRenderer
-                        message={message}
-                        latestTodos={isFirstTodo ? todoMeta.latestTodos : undefined}
-                        skipWriteTodos={isLaterTodo}
-                      />
-                    </div>
-                  )}
+                  {content}
                 </div>
               </div>
             );
