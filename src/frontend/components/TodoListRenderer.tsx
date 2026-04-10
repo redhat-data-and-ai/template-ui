@@ -16,10 +16,19 @@ export function isWriteTodosResult(message: { type: string; name?: string }): bo
   return message.type === 'tool' && message.name === TOOL_NAME;
 }
 
+function isValidTodoItem(item: unknown): item is TodoItem {
+  return (
+    typeof item === 'object' &&
+    item !== null &&
+    typeof (item as any).content === 'string' &&
+    typeof (item as any).status === 'string'
+  );
+}
+
 export function extractTodos(toolCall: { args: Record<string, unknown> }): TodoItem[] {
   const args = toolCall.args as Record<string, unknown>;
   if (Array.isArray(args?.todos)) {
-    return args.todos as TodoItem[];
+    return args.todos.filter(isValidTodoItem);
   }
   return [];
 }
