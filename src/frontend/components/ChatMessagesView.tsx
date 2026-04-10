@@ -393,6 +393,10 @@ export function ChatMessagesView({
     }
   };
 
+  // Aggregation strategy for write_todos calls:
+  // - Show the LATEST todo state at the FIRST write_todos position
+  // - Hide all intermediate updates to avoid multiple todo lists in conversation
+  // - UX: User sees a single, live-updating todo list rather than scattered snapshots
   const todoMeta = useMemo(() => {
     let firstTodoIndex = -1;
     let latestTodos: TodoItem[] = [];
