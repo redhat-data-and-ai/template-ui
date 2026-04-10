@@ -21,5 +21,5 @@ const subagentNames = new Set<string>([
 ]);
 
 export function getToolLabel(toolName: string): string {
-  return subagentNames.has(toolName) ? "Subagent" : "Tool";
+  return subagentNames.has(toolName) ? "Subagent" : "";
 }

@@ -264,6 +264,7 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
       for (let idx = 0; idx < nonTodoToolCalls.length; idx++) {
         const toolCall = nonTodoToolCalls[idx];
         const ToolIcon = getToolIcon(toolCall.name);
+        const toolKindLabel = getToolLabel(toolCall.name);
         const stableId = message.id || 'tc';
         elements.push(
           <div key={`${stableId}-${idx}`} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden w-full">
@@ -275,7 +276,9 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
                 <ToolIcon className="w-5 h-5 text-blue-400" />
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-blue-100">{toolCall.name}</span>
-                  <span className="text-xs text-blue-200/60">• {getToolLabel(toolCall.name)}</span>
+                  {toolKindLabel ? (
+                    <span className="text-xs text-blue-200/60">• {toolKindLabel}</span>
+                  ) : null}
                   {
                     (toolCall as any).content ? (
                       <CheckCircle className="w-4 h-4 text-green-400" />

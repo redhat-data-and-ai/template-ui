@@ -116,6 +116,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
         return (
           event.tool_calls?.map((toolCall: ToolCall) => {
             const ToolIcon = getToolIcon(toolCall.name);
+            const toolKindLabel = getToolLabel(toolCall.name);
             return (
             <div key={event.id} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden">
             <button
@@ -126,7 +127,9 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
                 <ToolIcon className="w-5 h-5 text-blue-400" />
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-blue-100">{toolCall.name}</span>
-                  <span className="text-xs text-blue-200/60">• {getToolLabel(toolCall.name)}</span>
+                  {toolKindLabel ? (
+                    <span className="text-xs text-blue-200/60">• {toolKindLabel}</span>
+                  ) : null}
                 </div>
               </div>
               {isExpanded ? (
