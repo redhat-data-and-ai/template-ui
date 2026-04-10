@@ -264,10 +264,11 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
       for (let idx = 0; idx < nonTodoToolCalls.length; idx++) {
         const toolCall = nonTodoToolCalls[idx];
         const ToolIcon = getToolIcon(toolCall.name);
+        const stableId = message.id || 'tc';
         elements.push(
-          <div key={`${message.id || 'tc'}-${idx}`} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden w-full">
+          <div key={`${stableId}-${idx}`} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden w-full">
             <button
-              onClick={() => toggleExpand(`${message.id}-${idx}`)}
+              onClick={() => toggleExpand(`${stableId}-${idx}`)}
               className="w-full flex items-center justify-between p-4 hover:bg-blue-800/20 transition-colors"
             >
               <div className="flex items-center gap-3">
@@ -284,14 +285,14 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
                   }
                 </div>
               </div>
-              {expandedItems.has(`${message.id}-${idx}`) ? (
+              {expandedItems.has(`${stableId}-${idx}`) ? (
                 <ChevronDown className="w-4 h-4 text-blue-400" />
               ) : (
                 <ChevronRight className="w-4 h-4 text-blue-400" />
               )}
             </button>
 
-            {expandedItems.has(`${message.id}-${idx}`) && (
+            {expandedItems.has(`${stableId}-${idx}`) && (
               <div className="px-4 pb-4 border-t border-blue-700/20">
                 <div className="text-xs text-blue-200/60 mb-2">Arguments:</div>
                 <pre className="text-xs text-blue-100 bg-blue-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
