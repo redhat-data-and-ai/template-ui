@@ -112,15 +112,16 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
         );
 
       case 'tool_call': {
-        const isExpanded = expandedItems.has(event.id);
         if (!event.tool_calls || event.tool_calls.length === 0) return null;
         return (
-          event.tool_calls.map((toolCall: ToolCall) => {
+          event.tool_calls.map((toolCall: ToolCall, index: number) => {
+            const toolCallId = `${event.id}-${index}`;
+            const isExpanded = expandedItems.has(toolCallId);
             const ToolIcon = getToolIcon(toolCall.name);
             return (
-            <div key={event.id} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden">
+            <div key={toolCallId} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden">
             <button
-              onClick={() => toggleExpand(event.id)}
+              onClick={() => toggleExpand(toolCallId)}
               className="w-full flex items-center justify-between p-4 hover:bg-blue-800/20 transition-colors"
             >
               <div className="flex items-center gap-3">
