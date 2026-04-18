@@ -224,10 +224,9 @@ interface ChatMessagesViewProps {
 interface AIMessageRendererProps {
   message: Message;
   latestTodos?: TodoItem[];
-  skipWriteTodos?: boolean;
 }
 
-export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, latestTodos }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleExpand = (itemId: string) => {
@@ -255,7 +254,7 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
 
       const elements: React.ReactNode[] = [];
 
-      if (hasTodoCall && latestTodos && !skipWriteTodos) {
+      if (hasTodoCall && latestTodos) {
         elements.push(
           <TodoListRenderer key="aggregated-todos" todos={latestTodos} />
         );
@@ -363,7 +362,7 @@ export function AIMessageRenderer({ message, latestTodos, skipWriteTodos }: AIMe
 
     return null;
 
-  }, [JSON.stringify(message), expandedItems, latestTodos, skipWriteTodos]);
+  }, [JSON.stringify(message), expandedItems, latestTodos]);
 
   if (!renderMessage) return null;
 
@@ -397,28 +396,52 @@ export function ChatMessagesView({
     }
   };
 
-  // Aggregation strategy for write_todos calls:
-  // - Show the LATEST todo state at the FIRST write_todos position
-  // - Hide all intermediate updates to avoid multiple todo lists in conversation
-  // - UX: User sees a single, live-updating todo list rather than scattered snapshots
+  // Strategy for write_todos calls per user turn:
+  // - Group messages by conversation turn (based on human messages)
+  // - For each turn, show only the LATEST todo state
+  // - Display at the FIRST write_todos position in that turn
+  // - UX: One todo card per user message, always showing the most up-to-date state
   const todoMeta = useMemo(() => {
-    let firstTodoIndex = -1;
-    let latestTodos: TodoItem[] = [];
-    const writeTodosMsgIndices = new Set<number>();
+    let currentTurn = -1;
+    const turnFirstTodoIndex = new Map<number, number>(); // turn -> first message index with todos
+    const turnLatestTodos = new Map<number, TodoItem[]>(); // turn -> latest todos for that turn
+    const skipIndices = new Set<number>(); // message indices to skip (non-first todos in a turn)
 
     messages.forEach((msg, idx) => {
-      if (msg.type === 'ai' && Array.isArray(msg.tool_calls)) {
+      // New turn starts with human message
+      if (msg.type === 'human') {
+        currentTurn++;
+      }
+
+      // Track todos for current turn
+      if (msg.type === 'ai' && Array.isArray(msg.tool_calls) && currentTurn >= 0) {
         for (const tc of msg.tool_calls) {
           if (isWriteTodosCall(tc)) {
-            if (firstTodoIndex === -1) firstTodoIndex = idx;
-            writeTodosMsgIndices.add(idx);
-            latestTodos = extractTodos(tc);
+            // Record first occurrence for this turn
+            if (!turnFirstTodoIndex.has(currentTurn)) {
+              turnFirstTodoIndex.set(currentTurn, idx);
+            } else if (turnFirstTodoIndex.get(currentTurn) !== idx) {
+              // This is not the first occurrence, mark to skip
+              skipIndices.add(idx);
+            }
+
+            // Always update to latest todos for this turn
+            turnLatestTodos.set(currentTurn, extractTodos(tc));
           }
         }
       }
     });
 
-    return { firstTodoIndex, latestTodos, writeTodosMsgIndices };
+    // Build final map: message index -> todos to display
+    const todosByIndex = new Map<number, TodoItem[]>();
+    turnFirstTodoIndex.forEach((msgIdx, turn) => {
+      const todos = turnLatestTodos.get(turn);
+      if (todos) {
+        todosByIndex.set(msgIdx, todos);
+      }
+    });
+
+    return { todosByIndex, skipIndices };
   }, [messages]);
 
   return (
@@ -430,8 +453,10 @@ export function ChatMessagesView({
               return null;
             }
 
-            const isFirstTodo = index === todoMeta.firstTodoIndex;
-            const isLaterTodo = todoMeta.writeTodosMsgIndices.has(index) && !isFirstTodo;
+            // Get todos to display at this index (only if it's the first write_todos in a turn)
+            const todosToDisplay = todoMeta.todosByIndex.get(index);
+            // Skip rendering this message's todos if it's not the first in the turn
+            const shouldSkipTodos = todoMeta.skipIndices.has(index);
 
             const content = message.type === "human" ? (
               <HumanMessageBubble
@@ -441,8 +466,7 @@ export function ChatMessagesView({
             ) : (
               <AIMessageRenderer
                 message={message}
-                latestTodos={isFirstTodo ? todoMeta.latestTodos : undefined}
-                skipWriteTodos={isLaterTodo}
+                latestTodos={shouldSkipTodos ? undefined : todosToDisplay}
               />
             );
 
