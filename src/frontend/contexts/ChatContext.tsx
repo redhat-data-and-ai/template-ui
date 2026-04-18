@@ -118,9 +118,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
         });
 
         dispatch({ type: 'SET_CHATS', payload: chats });
-        console.log(history)
       } catch (error) {
-        console.error(error)
+        console.error('Error loading history:', error);
+        dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to load chat history' });
       } finally {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
