@@ -194,3 +194,57 @@ export async function handleHistoryGet(fastify: FastifyInstance, request: Fastif
     });
   }
 }
+
+export async function handleFeedbackPost(fastify: FastifyInstance, request: FastifyRequest<{ Body: { run_id: string; key: string; score: number; kwargs: Record<string, any> } }>, reply: FastifyReply) {
+  const { run_id, key, score, kwargs } = request.body;
+
+  // Extract SSO access token from session
+  const accessToken = request.session?.token?.access_token;
+
+  fastify.log.info(`Feedback submission - Run ID: ${run_id}, Score: ${score}, Token: ${accessToken ? 'Present' : 'Missing'}`);
+
+  try {
+    // Prepare headers for agent request
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    // Add SSO token if present
+    if (accessToken) {
+      headers['X-Token'] = accessToken;
+    }
+
+    // Proxy request to agent backend
+    const agentUrl = `${agentHost}/v1/feedback`;
+    fastify.log.info(`Proxying feedback to agent: ${agentUrl}`);
+
+    const agentResponse = await fetch(agentUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        run_id,
+        key,
+        score,
+        kwargs
+      })
+    });
+
+    if (!agentResponse.ok) {
+      fastify.log.error(`Agent responded with status ${agentResponse.status}`);
+      return reply.status(agentResponse.status).send({
+        error: 'Failed to submit feedback to agent',
+        status: agentResponse.status
+      });
+    }
+
+    const result = await agentResponse.json();
+    reply.send(result);
+
+  } catch (error) {
+    fastify.log.error(`Error proxying feedback to agent: ${error}`);
+    reply.status(500).send({
+      error: 'Failed to submit feedback',
+      message: String(error)
+    });
+  }
+}

@@ -8,6 +8,7 @@ export interface ChatItem {
   preview: string;
   messages: Message[];
   historicalActivities?: Record<string, ProcessedEvent[]>;
+  sessionId?: string;
 }
 
 export interface ChatState {

@@ -110,10 +110,12 @@ export function ChatProvider({ children }: ChatProviderProps) {
           }
 
           return {
-            id: conversation.id,
+            id: conversation.id, // Already in hex format
             messages: conversation.messages,
             title,
             preview: title,
+            // Generate session_id if not provided by backend (already in hex format if it exists)
+            sessionId: (conversation as any).sessionId || uuidv4().replace(/-/g, ''),
           }
         });
 
@@ -132,7 +134,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
   // Actions
   const createNewChat = useCallback((): string => {
-    const newChatId = uuidv4();
+    // Generate thread_id and session_id as hex without dashes (equivalent to Python's uuid.uuid4().hex)
+    const newChatId = uuidv4().replace(/-/g, '');
+    const newSessionId = uuidv4().replace(/-/g, '');
     const newChat: ChatItem = {
       id: newChatId,
       title: "New Chat",
@@ -140,6 +144,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       preview: "Start a new conversation",
       messages: [],
       historicalActivities: {},
+      sessionId: newSessionId,
     };
 
     dispatch({ type: 'ADD_CHAT', payload: newChat });
