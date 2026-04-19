@@ -82,3 +82,37 @@ export async function getAllThreadsByUserId(userId: string) {
         messages: combineToolCallandResult(thread.messages)
     }));
 }
+
+export async function submitFeedback(traceId: string, value: number, comment?: string) {
+    if (!traceId) {
+        throw new Error("trace_id is required to submit feedback");
+    }
+
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    };
+
+    // Add SSO token if available
+    if (window.USER_DATA?.accessToken) {
+        headers["X-Token"] = window.USER_DATA.accessToken;
+    }
+
+    const response = await fetch(`${apiUrl}/v1/feedback`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+            trace_id: traceId,
+            name: "user-rating",
+            value,
+            kwargs: {
+                comment: comment || ""
+            }
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to submit feedback: ${response.statusText}`);
+    }
+
+    return response.json();
+}

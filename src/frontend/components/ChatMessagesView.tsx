@@ -1,7 +1,7 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { ScrollArea } from "./ui/scroll-area";
-import { CheckCircle, ChevronDown, ChevronRight, Copy, CopyCheck, Loader2 } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronRight, Copy, CopyCheck, Loader2, ThumbsUp, ThumbsDown } from "lucide-react";
 import { getToolIcon } from "../lib/toolIcons";
 import { InputForm } from "./InputForm";
 import { useState, ReactNode, useMemo } from "react";
@@ -14,6 +14,8 @@ import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
 import { TodoListRenderer, isWriteTodosCall, isWriteTodosResult, extractTodos } from "./TodoListRenderer";
 import type { TodoItem } from "./TodoListRenderer";
+import { FeedbackModal } from "./FeedbackModal";
+import { submitFeedback } from "../services/agent-rest";
 
 // Markdown component props type from former ReportView
 type MdComponentProps = {
@@ -189,6 +191,7 @@ interface AiMessageBubbleProps {
   mdComponents?: typeof mdComponents;
   handleCopy?: (text: string, messageId: string) => void;
   copiedMessageId?: string | null;
+  onFeedback?: (messageId: string, traceId: string, feedbackType: "positive" | "negative") => void;
 }
 
 // AiMessageBubble Component
@@ -196,15 +199,51 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({
   message,
   handleCopy = () => { },
   copiedMessageId = '',
+  onFeedback = () => { },
 }) => {
+  const messageContent = typeof message.content === "string"
+    ? message.content
+    : JSON.stringify(message.content);
+
+  const traceId = (message as any).trace_id || '';
+
   return (
-    <div className={`relative break-words flex flex-col w-full`}>
+    <div className={`relative break-words flex flex-col w-full group`}>
       <div className="w-full prose prose-invert max-w-none">
         <ReactMarkdown components={mdComponents}>
-          {typeof message.content === "string"
-            ? message.content
-            : JSON.stringify(message.content)}
+          {messageContent}
         </ReactMarkdown>
+      </div>
+      <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => handleCopy(messageContent, message.id || '')}
+          className="p-1.5 rounded hover:bg-neutral-700/50 transition-colors"
+          title="Copy"
+        >
+          {copiedMessageId === message.id ? (
+            <CopyCheck className="w-4 h-4 text-green-400" />
+          ) : (
+            <Copy className="w-4 h-4 text-neutral-400" />
+          )}
+        </button>
+        {traceId && (
+          <>
+            <button
+              onClick={() => onFeedback(message.id || '', traceId, "positive")}
+              className="p-1.5 rounded hover:bg-neutral-700/50 transition-colors"
+              title="Good response"
+            >
+              <ThumbsUp className="w-4 h-4 text-neutral-400 hover:text-green-400" />
+            </button>
+            <button
+              onClick={() => onFeedback(message.id || '', traceId, "negative")}
+              className="p-1.5 rounded hover:bg-neutral-700/50 transition-colors"
+              title="Bad response"
+            >
+              <ThumbsDown className="w-4 h-4 text-neutral-400 hover:text-red-400" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -224,9 +263,12 @@ interface ChatMessagesViewProps {
 interface AIMessageRendererProps {
   message: Message;
   latestTodos?: TodoItem[];
+  handleCopy?: (text: string, messageId: string) => void;
+  copiedMessageId?: string | null;
+  onFeedback?: (messageId: string, traceId: string, feedbackType: "positive" | "negative") => void;
 }
 
-export function AIMessageRenderer({ message, latestTodos }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, latestTodos, handleCopy, copiedMessageId, onFeedback }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleExpand = (itemId: string) => {
@@ -356,7 +398,12 @@ export function AIMessageRenderer({ message, latestTodos }: AIMessageRendererPro
 
     if (isNormalMessage) {
       return (
-        <AiMessageBubble message={message} />
+        <AiMessageBubble
+          message={message}
+          handleCopy={handleCopy}
+          copiedMessageId={copiedMessageId}
+          onFeedback={onFeedback}
+        />
       );
     }
 
@@ -385,6 +432,17 @@ export function ChatMessagesView({
   onCancel,
 }: ChatMessagesViewProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [feedbackModal, setFeedbackModal] = useState<{
+    isOpen: boolean;
+    messageId: string;
+    traceId: string;
+    feedbackType: "positive" | "negative";
+  }>({
+    isOpen: false,
+    messageId: "",
+    traceId: "",
+    feedbackType: "positive",
+  });
 
   const handleCopy = async (text: string, messageId: string) => {
     try {
@@ -394,6 +452,44 @@ export function ChatMessagesView({
     } catch (err) {
       console.error("Failed to copy text: ", err);
     }
+  };
+
+  const handleFeedback = (messageId: string, traceId: string, feedbackType: "positive" | "negative") => {
+    if (!traceId) {
+      console.error("Cannot submit feedback: trace_id is missing from message");
+      return;
+    }
+
+    setFeedbackModal({
+      isOpen: true,
+      messageId,
+      traceId,
+      feedbackType,
+    });
+  };
+
+  const handleFeedbackSubmit = async (traceId: string, feedbackType: "positive" | "negative", comment: string) => {
+    if (!traceId) {
+      console.error("Cannot submit feedback: trace_id is missing");
+      return;
+    }
+
+    try {
+      const value = feedbackType === "positive" ? 1 : 0;
+      await submitFeedback(traceId, value, comment);
+      console.log("Feedback submitted successfully:", { traceId, feedbackType, comment });
+    } catch (error) {
+      console.error("Failed to submit feedback:", error);
+    }
+  };
+
+  const handleFeedbackClose = () => {
+    setFeedbackModal({
+      isOpen: false,
+      messageId: "",
+      traceId: "",
+      feedbackType: "positive",
+    });
   };
 
   // Strategy for write_todos calls per user turn:
@@ -467,6 +563,9 @@ export function ChatMessagesView({
               <AIMessageRenderer
                 message={message}
                 latestTodos={shouldSkipTodos ? undefined : todosToDisplay}
+                handleCopy={handleCopy}
+                copiedMessageId={copiedMessageId}
+                onFeedback={handleFeedback}
               />
             );
 
@@ -530,6 +629,14 @@ export function ChatMessagesView({
         isLoading={isLoading}
         onCancel={onCancel}
         hasHistory={messages.length > 0}
+      />
+      <FeedbackModal
+        isOpen={feedbackModal.isOpen}
+        onClose={handleFeedbackClose}
+        feedbackType={feedbackModal.feedbackType}
+        messageId={feedbackModal.messageId}
+        traceId={feedbackModal.traceId}
+        onSubmit={handleFeedbackSubmit}
       />
     </div>
   );
