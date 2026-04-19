@@ -263,12 +263,13 @@ interface ChatMessagesViewProps {
 interface AIMessageRendererProps {
   message: Message;
   latestTodos?: TodoItem[];
+  strikeAllTodos?: boolean;
   handleCopy?: (text: string, messageId: string) => void;
   copiedMessageId?: string | null;
   onFeedback?: (messageId: string, traceId: string, feedbackType: "positive" | "negative") => void;
 }
 
-export function AIMessageRenderer({ message, latestTodos, handleCopy, copiedMessageId, onFeedback }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, latestTodos, strikeAllTodos = false, handleCopy, copiedMessageId, onFeedback }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleExpand = (itemId: string) => {
@@ -298,7 +299,7 @@ export function AIMessageRenderer({ message, latestTodos, handleCopy, copiedMess
 
       if (hasTodoCall && latestTodos) {
         elements.push(
-          <TodoListRenderer key="aggregated-todos" todos={latestTodos} />
+          <TodoListRenderer key="aggregated-todos" todos={latestTodos} strikeAll={strikeAllTodos} />
         );
       }
 
@@ -497,11 +498,23 @@ export function ChatMessagesView({
   // - For each turn, show only the LATEST todo state
   // - Display at the FIRST write_todos position in that turn
   // - UX: One todo card per user message, always showing the most up-to-date state
+  // - Strike out all todos from previous turns (before the latest human message)
   const todoMeta = useMemo(() => {
     let currentTurn = -1;
+    let latestHumanTurn = -1;
     const turnFirstTodoIndex = new Map<number, number>(); // turn -> first message index with todos
     const turnLatestTodos = new Map<number, TodoItem[]>(); // turn -> latest todos for that turn
     const skipIndices = new Set<number>(); // message indices to skip (non-first todos in a turn)
+
+    // First pass: find the latest human message turn
+    messages.forEach((msg) => {
+      if (msg.type === 'human') {
+        latestHumanTurn++;
+      }
+    });
+
+    // Reset for second pass
+    currentTurn = -1;
 
     messages.forEach((msg, idx) => {
       // New turn starts with human message
@@ -530,14 +543,17 @@ export function ChatMessagesView({
 
     // Build final map: message index -> todos to display
     const todosByIndex = new Map<number, TodoItem[]>();
+    const strikeAllByIndex = new Map<number, boolean>();
     turnFirstTodoIndex.forEach((msgIdx, turn) => {
       const todos = turnLatestTodos.get(turn);
       if (todos) {
         todosByIndex.set(msgIdx, todos);
+        // Strike all todos from turns before the latest human turn
+        strikeAllByIndex.set(msgIdx, turn < latestHumanTurn);
       }
     });
 
-    return { todosByIndex, skipIndices };
+    return { todosByIndex, skipIndices, strikeAllByIndex };
   }, [messages]);
 
   return (
@@ -553,6 +569,8 @@ export function ChatMessagesView({
             const todosToDisplay = todoMeta.todosByIndex.get(index);
             // Skip rendering this message's todos if it's not the first in the turn
             const shouldSkipTodos = todoMeta.skipIndices.has(index);
+            // Check if this todo should be struck out (from a previous turn)
+            const shouldStrikeAll = todoMeta.strikeAllByIndex.get(index) ?? false;
 
             const content = message.type === "human" ? (
               <HumanMessageBubble
@@ -563,6 +581,7 @@ export function ChatMessagesView({
               <AIMessageRenderer
                 message={message}
                 latestTodos={shouldSkipTodos ? undefined : todosToDisplay}
+                strikeAllTodos={shouldStrikeAll}
                 handleCopy={handleCopy}
                 copiedMessageId={copiedMessageId}
                 onFeedback={handleFeedback}

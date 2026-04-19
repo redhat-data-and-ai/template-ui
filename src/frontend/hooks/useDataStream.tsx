@@ -177,6 +177,7 @@ export function useDataStream({
               isStreamingTokensRef.current = false;
               const toolCallStart = content.type === 'ai' && Array.isArray(content?.tool_calls) && content?.tool_calls?.length > 0;
               const toolCallResult = content.type === 'tool';
+              const finalAIMessage = content.type === 'ai' && (!Array.isArray(content?.tool_calls) || content?.tool_calls?.length === 0);
 
               if (toolCallStart) {
 
@@ -200,6 +201,20 @@ export function useDataStream({
                     })
                   }
 
+                  return newMessages;
+                });
+              } else if (finalAIMessage) {
+                // Final AI message after token streaming - update last message with complete data including trace_id
+                setMessages(prev => {
+                  const newMessages = [...prev];
+                  if (newMessages.length > 0 && newMessages[newMessages.length - 1].type === 'ai') {
+                    const existingMessage = newMessages[newMessages.length - 1];
+                    // Merge the final message data (trace_id, id, etc.) with the streamed content
+                    newMessages[newMessages.length - 1] = {
+                      ...content, // Start with the complete message from backend (has trace_id, proper id, etc.)
+                      content: existingMessage.content || content.content, // Preserve the streamed content
+                    };
+                  }
                   return newMessages;
                 });
               }

@@ -42,9 +42,10 @@ const statusIcon: Record<TodoItem["status"], React.ReactNode> = {
 
 interface TodoListRendererProps {
   todos: TodoItem[];
+  strikeAll?: boolean;
 }
 
-export function TodoListRenderer({ todos }: TodoListRendererProps) {
+export function TodoListRenderer({ todos, strikeAll = false }: TodoListRendererProps) {
   if (todos.length === 0) return null;
 
   const completed = todos.filter(t => t.status === "completed").length;
@@ -61,28 +62,38 @@ export function TodoListRenderer({ todos }: TodoListRendererProps) {
         </span>
       </div>
       <ul className="divide-y divide-neutral-700/20">
-        {todos.map((todo, idx) => (
-          <li
-            key={`${idx}-${todo.content}`}
-            className={cn(
-              "flex items-start gap-2.5 px-3 py-2 text-sm transition-opacity",
-              (todo.status === "completed" || todo.status === "cancelled") && "opacity-60",
-            )}
-          >
-            {statusIcon[todo.status] ?? <Circle className="w-4 h-4 text-neutral-500 shrink-0" />}
-            <span
+        {todos.map((todo, idx) => {
+          // When strikeAll is true, only show icons for completed/cancelled items
+          const showIcon = !strikeAll || todo.status === "completed" || todo.status === "cancelled";
+
+          return (
+            <li
+              key={`${idx}-${todo.content}`}
               className={cn(
-                "leading-5",
-                todo.status === "completed" && "line-through text-neutral-500",
-                todo.status === "cancelled" && "line-through text-neutral-600",
-                todo.status === "in_progress" && "text-blue-100",
-                todo.status === "pending" && "text-neutral-300",
+                "flex items-start gap-2.5 px-3 py-2 text-sm transition-opacity",
+                (strikeAll || todo.status === "completed" || todo.status === "cancelled") && "opacity-60",
               )}
             >
-              {todo.content}
-            </span>
-          </li>
-        ))}
+              {showIcon ? (
+                statusIcon[todo.status] ?? <Circle className="w-4 h-4 text-neutral-500 shrink-0" />
+              ) : (
+                <span className="w-4 h-4 shrink-0" />
+              )}
+              <span
+                className={cn(
+                  "leading-5",
+                  strikeAll && "line-through text-neutral-500",
+                  !strikeAll && todo.status === "completed" && "line-through text-neutral-500",
+                  !strikeAll && todo.status === "cancelled" && "line-through text-neutral-600",
+                  !strikeAll && todo.status === "in_progress" && "text-blue-100",
+                  !strikeAll && todo.status === "pending" && "text-neutral-300",
+                )}
+              >
+                {todo.content}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
