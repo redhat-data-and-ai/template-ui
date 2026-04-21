@@ -7,7 +7,7 @@ services:
       dockerfile: Containerfile
     container_name: template-ui-app
     ports:
-      - "8080:8080"
+      - "5003:5003"
     environment:
       - NODE_ENV=production
     env_file:

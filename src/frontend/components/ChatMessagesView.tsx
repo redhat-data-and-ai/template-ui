@@ -1,7 +1,8 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { ScrollArea } from "./ui/scroll-area";
-import { CheckCircle, ChevronDown, ChevronRight, Copy, CopyCheck, Loader2, Settings } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronRight, Copy, CopyCheck, Loader2, ThumbsUp, ThumbsDown } from "lucide-react";
+import { getToolIcon } from "../lib/toolIcons";
 import { InputForm } from "./InputForm";
 import { useState, ReactNode, useMemo } from "react";
 import { cn } from "../lib/utils";
@@ -11,6 +12,10 @@ import {
 } from "./ActivityTimeline";
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
+import { TodoListRenderer, isWriteTodosCall, isWriteTodosResult, extractTodos } from "./TodoListRenderer";
+import type { TodoItem } from "./TodoListRenderer";
+import { FeedbackModal } from "./FeedbackModal";
+import { submitFeedback } from "../services/agent-rest";
 
 // Markdown component props type from former ReportView
 type MdComponentProps = {
@@ -186,6 +191,7 @@ interface AiMessageBubbleProps {
   mdComponents?: typeof mdComponents;
   handleCopy?: (text: string, messageId: string) => void;
   copiedMessageId?: string | null;
+  onFeedback?: (messageId: string, traceId: string, feedbackType: "positive" | "negative") => void;
 }
 
 // AiMessageBubble Component
@@ -193,15 +199,51 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({
   message,
   handleCopy = () => { },
   copiedMessageId = '',
+  onFeedback = () => { },
 }) => {
+  const messageContent = typeof message.content === "string"
+    ? message.content
+    : JSON.stringify(message.content);
+
+  const traceId = (message as any).trace_id || '';
+
   return (
-    <div className={`relative break-words flex flex-col w-full`}>
+    <div className={`relative break-words flex flex-col w-full group`}>
       <div className="w-full prose prose-invert max-w-none">
         <ReactMarkdown components={mdComponents}>
-          {typeof message.content === "string"
-            ? message.content
-            : JSON.stringify(message.content)}
+          {messageContent}
         </ReactMarkdown>
+      </div>
+      <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => handleCopy(messageContent, message.id || '')}
+          className="p-1.5 rounded hover:bg-neutral-700/50 transition-colors"
+          title="Copy"
+        >
+          {copiedMessageId === message.id ? (
+            <CopyCheck className="w-4 h-4 text-green-400" />
+          ) : (
+            <Copy className="w-4 h-4 text-neutral-400" />
+          )}
+        </button>
+        {traceId && (
+          <>
+            <button
+              onClick={() => onFeedback(message.id || '', traceId, "positive")}
+              className="p-1.5 rounded hover:bg-neutral-700/50 transition-colors"
+              title="Good response"
+            >
+              <ThumbsUp className="w-4 h-4 text-neutral-400 hover:text-green-400" />
+            </button>
+            <button
+              onClick={() => onFeedback(message.id || '', traceId, "negative")}
+              className="p-1.5 rounded hover:bg-neutral-700/50 transition-colors"
+              title="Bad response"
+            >
+              <ThumbsDown className="w-4 h-4 text-neutral-400 hover:text-red-400" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -218,11 +260,19 @@ interface ChatMessagesViewProps {
   historicalActivities: Record<string, ProcessedEvent[]>;
 }
 
-export function AIMessageRenderer({ message }: { message: Message }) {
+interface AIMessageRendererProps {
+  message: Message;
+  latestTodos?: TodoItem[];
+  strikeAllTodos?: boolean;
+  handleCopy?: (text: string, messageId: string) => void;
+  copiedMessageId?: string | null;
+  onFeedback?: (messageId: string, traceId: string, feedbackType: "positive" | "negative") => void;
+}
+
+export function AIMessageRenderer({ message, latestTodos, strikeAllTodos = false, handleCopy, copiedMessageId, onFeedback }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleExpand = (itemId: string) => {
-    console.log('toggleExpand : ', itemId);
     setExpandedItems(prev => {
       const newSet = new Set(prev);
       if (newSet.has(itemId)) {
@@ -241,63 +291,70 @@ export function AIMessageRenderer({ message }: { message: Message }) {
     const isNormalMessage = message.type === 'ai' && (!Array.isArray(message?.tool_calls) || message?.tool_calls?.length === 0);
 
     if (isToolCallStart) {
-      // const color = (toolCall as any).content ? 'green' : 'blue';
-      return (
-        <>
-          {
-            message.tool_calls?.map((toolCall, idx) => (
-              <div key={`${message.id}-${idx}`} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden w-full">
-                <button
-                  onClick={() => toggleExpand(`${message.id}-${idx}`)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-blue-800/20 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <Settings className="w-5 h-5 text-blue-400" />
-                    <div className="text-left">
-                      <div className="text-sm font-medium text-blue-100 flex items-center gap-2">
-                        {toolCall.name}
-                        {
-                          (toolCall as any).content ? (
-                            <CheckCircle className="w-4 h-4 text-green-400" />
-                          ) : (
-                            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                          )
-                        }
-                      </div>
+      const toolCalls = message.tool_calls ?? [];
+      const nonTodoToolCalls = toolCalls.filter(tc => !isWriteTodosCall(tc));
+      const hasTodoCall = toolCalls.some(tc => isWriteTodosCall(tc));
 
-                      <div className="text-xs text-blue-200/60">
-                        Tool execution
-                      </div>
-                    </div>
-                  </div>
-                  {expandedItems.has(`${message.id}-${idx}`) ? (
-                    <ChevronDown className="w-4 h-4 text-blue-400" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-blue-400" />
-                  )}
-                </button>
+      const elements: React.ReactNode[] = [];
 
-                {expandedItems.has(`${message.id}-${idx}`) && (
-                  <div className="px-4 pb-4 border-t border-blue-700/20">
-                    <div className="text-xs text-blue-200/60 mb-2">Arguments:</div>
-                    <pre className="text-xs text-blue-100 bg-blue-950/30 p-2 rounded overflow-auto">
-                      {JSON.stringify(toolCall.args, null, 2)}
-                    </pre>
-                    <div className="text-xs text-blue-200/60 mb-2">
-                      {
-                        (toolCall as any).content ? 'Result:' : 'Running...:'
-                      }
-                    </div>
-                    <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-auto">
-                      {JSON.stringify((toolCall as any).content, null, 2)}
-                    </pre>
-                  </div>
-                )}
+      if (hasTodoCall && latestTodos) {
+        elements.push(
+          <TodoListRenderer key="aggregated-todos" todos={latestTodos} strikeAll={strikeAllTodos} />
+        );
+      }
+
+      for (let idx = 0; idx < nonTodoToolCalls.length; idx++) {
+        const toolCall = nonTodoToolCalls[idx];
+        const ToolIcon = getToolIcon(toolCall.name);
+        const stableId = message.id || 'tc';
+        elements.push(
+          <div key={`${stableId}-${idx}`} className="bg-blue-900/20 border border-blue-700/30 rounded-lg overflow-hidden w-full">
+            <button
+              onClick={() => toggleExpand(`${stableId}-${idx}`)}
+              className="w-full flex items-center justify-between p-4 hover:bg-blue-800/20 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <ToolIcon className="w-5 h-5 text-blue-400" />
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-blue-100">{toolCall.name}</span>
+                  {
+                    (toolCall as any).content ? (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                    )
+                  }
+                </div>
               </div>
-            ))
-          }
-        </>
-      );
+              {expandedItems.has(`${stableId}-${idx}`) ? (
+                <ChevronDown className="w-4 h-4 text-blue-400" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-blue-400" />
+              )}
+            </button>
+
+            {expandedItems.has(`${stableId}-${idx}`) && (
+              <div className="px-4 pb-4 border-t border-blue-700/20">
+                <div className="text-xs text-blue-200/60 mb-2">Arguments:</div>
+                <pre className="text-xs text-blue-100 bg-blue-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
+                  {JSON.stringify(toolCall.args, null, 2)}
+                </pre>
+                <div className="text-xs text-blue-200/60 mb-2">
+                  {
+                    (toolCall as any).content ? 'Result:' : 'Running...:'
+                  }
+                </div>
+                <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
+                  {JSON.stringify((toolCall as any).content, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (elements.length === 0) return null;
+      return <>{elements}</>;
     }
 
 
@@ -330,7 +387,7 @@ export function AIMessageRenderer({ message }: { message: Message }) {
             {expandedItems.has(message.id || '') && (
               <div className="px-3 pb-3 border-t border-green-700/20">
                 <div className="text-xs text-green-200/60 mb-2">Result:</div>
-                <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-auto max-h-40">
+                <pre className="text-xs text-green-100 bg-green-950/30 p-2 rounded overflow-y-auto max-h-60 whitespace-pre-wrap break-words">
                   {typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
                 </pre>
               </div>
@@ -342,23 +399,26 @@ export function AIMessageRenderer({ message }: { message: Message }) {
 
     if (isNormalMessage) {
       return (
-        <AiMessageBubble message={message} />
+        <AiMessageBubble
+          message={message}
+          handleCopy={handleCopy}
+          copiedMessageId={copiedMessageId}
+          onFeedback={onFeedback}
+        />
       );
     }
 
-  }, [JSON.stringify(message), expandedItems]);
+    return null;
 
+  }, [JSON.stringify(message), expandedItems, latestTodos]);
+
+  if (!renderMessage) return null;
 
   return (
-    <div className="space-y-2 mb-4 w-full">
-      {renderMessage}
-
-      {/* {isLoading && (
-        <div className="flex items-center gap-2 text-xs text-neutral-500 justify-center py-2">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Processing...
-        </div>
-      )} */}
+    <div className="w-full max-w-[85%] md:max-w-[80%]">
+      <div className="space-y-2 mb-4 w-full">
+        {renderMessage}
+      </div>
     </div>
   );
 }
@@ -373,39 +433,170 @@ export function ChatMessagesView({
   onCancel,
 }: ChatMessagesViewProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [feedbackModal, setFeedbackModal] = useState<{
+    isOpen: boolean;
+    messageId: string;
+    traceId: string;
+    feedbackType: "positive" | "negative";
+  }>({
+    isOpen: false,
+    messageId: "",
+    traceId: "",
+    feedbackType: "positive",
+  });
 
   const handleCopy = async (text: string, messageId: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedMessageId(messageId);
-      setTimeout(() => setCopiedMessageId(null), 2000); // Reset after 2 seconds
+      setTimeout(() => setCopiedMessageId(null), 2000);
     } catch (err) {
       console.error("Failed to copy text: ", err);
     }
   };
+
+  const handleFeedback = (messageId: string, traceId: string, feedbackType: "positive" | "negative") => {
+    if (!traceId) {
+      console.error("Cannot submit feedback: trace_id is missing from message");
+      return;
+    }
+
+    setFeedbackModal({
+      isOpen: true,
+      messageId,
+      traceId,
+      feedbackType,
+    });
+  };
+
+  const handleFeedbackSubmit = async (traceId: string, feedbackType: "positive" | "negative", comment: string) => {
+    if (!traceId) {
+      console.error("Cannot submit feedback: trace_id is missing");
+      return;
+    }
+
+    try {
+      const value = feedbackType === "positive" ? 1 : 0;
+      await submitFeedback(traceId, value, comment);
+      console.log("Feedback submitted successfully:", { traceId, feedbackType, comment });
+    } catch (error) {
+      console.error("Failed to submit feedback:", error);
+    }
+  };
+
+  const handleFeedbackClose = () => {
+    setFeedbackModal({
+      isOpen: false,
+      messageId: "",
+      traceId: "",
+      feedbackType: "positive",
+    });
+  };
+
+  // Strategy for write_todos calls per user turn:
+  // - Group messages by conversation turn (based on human messages)
+  // - For each turn, show only the LATEST todo state
+  // - Display at the FIRST write_todos position in that turn
+  // - UX: One todo card per user message, always showing the most up-to-date state
+  // - Strike out all todos from previous turns (before the latest human message)
+  const todoMeta = useMemo(() => {
+    let currentTurn = -1;
+    let latestHumanTurn = -1;
+    const turnFirstTodoIndex = new Map<number, number>(); // turn -> first message index with todos
+    const turnLatestTodos = new Map<number, TodoItem[]>(); // turn -> latest todos for that turn
+    const skipIndices = new Set<number>(); // message indices to skip (non-first todos in a turn)
+
+    // First pass: find the latest human message turn
+    messages.forEach((msg) => {
+      if (msg.type === 'human') {
+        latestHumanTurn++;
+      }
+    });
+
+    // Reset for second pass
+    currentTurn = -1;
+
+    messages.forEach((msg, idx) => {
+      // New turn starts with human message
+      if (msg.type === 'human') {
+        currentTurn++;
+      }
+
+      // Track todos for current turn
+      if (msg.type === 'ai' && Array.isArray(msg.tool_calls) && currentTurn >= 0) {
+        for (const tc of msg.tool_calls) {
+          if (isWriteTodosCall(tc)) {
+            // Record first occurrence for this turn
+            if (!turnFirstTodoIndex.has(currentTurn)) {
+              turnFirstTodoIndex.set(currentTurn, idx);
+            } else if (turnFirstTodoIndex.get(currentTurn) !== idx) {
+              // This is not the first occurrence, mark to skip
+              skipIndices.add(idx);
+            }
+
+            // Always update to latest todos for this turn
+            turnLatestTodos.set(currentTurn, extractTodos(tc));
+          }
+        }
+      }
+    });
+
+    // Build final map: message index -> todos to display
+    const todosByIndex = new Map<number, TodoItem[]>();
+    const strikeAllByIndex = new Map<number, boolean>();
+    turnFirstTodoIndex.forEach((msgIdx, turn) => {
+      const todos = turnLatestTodos.get(turn);
+      if (todos) {
+        todosByIndex.set(msgIdx, todos);
+        // Strike all todos from turns before the latest human turn
+        strikeAllByIndex.set(msgIdx, turn < latestHumanTurn);
+      }
+    });
+
+    return { todosByIndex, skipIndices, strikeAllByIndex };
+  }, [messages]);
+
   return (
     <div className="flex flex-col h-full">
       <ScrollArea className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
         <div className="p-4 md:p-6 space-y-2 max-w-4xl mx-auto pt-16">
           {messages.map((message, index) => {
+            if (isWriteTodosResult(message)) {
+              return null;
+            }
+
+            // Get todos to display at this index (only if it's the first write_todos in a turn)
+            const todosToDisplay = todoMeta.todosByIndex.get(index);
+            // Skip rendering this message's todos if it's not the first in the turn
+            const shouldSkipTodos = todoMeta.skipIndices.has(index);
+            // Check if this todo should be struck out (from a previous turn)
+            const shouldStrikeAll = todoMeta.strikeAllByIndex.get(index) ?? false;
+
+            const content = message.type === "human" ? (
+              <HumanMessageBubble
+                message={message}
+                mdComponents={mdComponents}
+              />
+            ) : (
+              <AIMessageRenderer
+                message={message}
+                latestTodos={shouldSkipTodos ? undefined : todosToDisplay}
+                strikeAllTodos={shouldStrikeAll}
+                handleCopy={handleCopy}
+                copiedMessageId={copiedMessageId}
+                onFeedback={handleFeedback}
+              />
+            );
+
+            if (!content) return null;
+
             return (
               <div key={message.id || `msg-${index}`} className="space-y-3">
                 <div
                   className={`flex items-start gap-3 ${message.type === "human" ? "justify-end" : ""
                     }`}
                 >
-                  {message.type === "human" ? (
-                    <HumanMessageBubble
-                      message={message}
-                      mdComponents={mdComponents}
-                    />
-                  ) : (
-                    <div className="w-full max-w-[85%] md:max-w-[80%]">
-                      <AIMessageRenderer
-                        message={message}
-                      />
-                    </div>
-                  )}
+                  {content}
                 </div>
               </div>
             );
@@ -457,6 +648,14 @@ export function ChatMessagesView({
         isLoading={isLoading}
         onCancel={onCancel}
         hasHistory={messages.length > 0}
+      />
+      <FeedbackModal
+        isOpen={feedbackModal.isOpen}
+        onClose={handleFeedbackClose}
+        feedbackType={feedbackModal.feedbackType}
+        messageId={feedbackModal.messageId}
+        traceId={feedbackModal.traceId}
+        onSubmit={handleFeedbackSubmit}
       />
     </div>
   );

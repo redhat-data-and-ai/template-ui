@@ -46,7 +46,7 @@ export async function getThreadIdsByUserId(userId: string) {
         headers["X-Token"] = window.USER_DATA.accessToken;
     }
 
-    const threadIds = await fetch(`${apiUrl}/v1/threads/${userId}`, {
+    const threadIds = await fetch(`${apiUrl}/v1/users/${userId}/threads`, {
         method: "GET",
         headers,
     });
@@ -54,7 +54,7 @@ export async function getThreadIdsByUserId(userId: string) {
     return threadIds.json();
 }
 
-export async function gethistoryByThreadId(threadId: string) {
+export async function gethistoryByThreadId(threadId: string, userId: string) {
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
     };
@@ -64,12 +64,11 @@ export async function gethistoryByThreadId(threadId: string) {
         headers["X-Token"] = window.USER_DATA.accessToken;
     }
 
-    const history = await fetch(`${apiUrl}/v1/history/${threadId}`, {
+    const history = await fetch(`${apiUrl}/v1/users/${userId}/history/${threadId}`, {
         method: "GET",
         headers,
     });
     return history.json().then(history => {
-        console.log(history);
         history.id = threadId;
         return history;
     });
@@ -77,14 +76,43 @@ export async function gethistoryByThreadId(threadId: string) {
 
 export async function getAllThreadsByUserId(userId: string) {
     const threadIds = await getThreadIdsByUserId(userId);
-    console.log('threadIds: ', threadIds);
-    const threads = await Promise.all(threadIds.map(gethistoryByThreadId)) as Thread[];
-    console.log('threads: ', threads);
-    const transformed = threads.map(thread => {
-        return {
-            ...thread,
-            messages: combineToolCallandResult(thread.messages)
-        }
-    })
-    return transformed;
+    const threads = await Promise.all(threadIds.map((threadId: string) => gethistoryByThreadId(threadId, userId))) as Thread[];
+    return threads.map(thread => ({
+        ...thread,
+        messages: combineToolCallandResult(thread.messages)
+    }));
+}
+
+export async function submitFeedback(traceId: string, value: number, comment?: string) {
+    if (!traceId) {
+        throw new Error("trace_id is required to submit feedback");
+    }
+
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    };
+
+    // Add SSO token if available
+    if (window.USER_DATA?.accessToken) {
+        headers["X-Token"] = window.USER_DATA.accessToken;
+    }
+
+    const response = await fetch(`${apiUrl}/v1/feedback`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+            trace_id: traceId,
+            name: "user-rating",
+            value,
+            kwargs: {
+                comment: comment || ""
+            }
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to submit feedback: ${response.statusText}`);
+    }
+
+    return response.json();
 }

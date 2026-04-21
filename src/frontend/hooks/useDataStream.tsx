@@ -78,25 +78,41 @@ export function useDataStream({
 
     setIsLoading(true);
     setMessages(messages);
-    chatStorage.saveChatByThreadId(threadId, messages);
+
+    // Get or generate session_id for this thread
+    const chat = chatStorage.loadChats().find(c => c.id === threadId);
+    let sessionId = chat?.sessionId;
+
+    // Generate new sessionId if it doesn't exist
+    if (!sessionId) {
+      sessionId = crypto.randomUUID().replace(/-/g, '');
+    }
+
+    // Save chat with sessionId
+    chatStorage.saveChatByThreadId(threadId, messages, sessionId);
     setStreamEvents([]);
 
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      
+
       if (refreshableToken) {
         headers["X-Token"] = refreshableToken;
       }
+
+      // thread_id is already in hex format (no dashes)
+      // session_id is also in hex format (no dashes)
+      const threadIdHex = threadId;
+      const sessionIdHex = sessionId;
 
       const response = await fetch(`${apiUrl}/v1/stream`, {
         method: "POST",
         headers,
         body: JSON.stringify({
           message: messages[messages.length - 1].content,
-          thread_id: threadId || "default-thread",
-          session_id: threadId || "default-session",
+          thread_id: threadIdHex,
+          session_id: sessionIdHex,
           user_id: window.USER_DATA.preferred_username,
           stream_tokens: true,
         }),
@@ -161,6 +177,7 @@ export function useDataStream({
               isStreamingTokensRef.current = false;
               const toolCallStart = content.type === 'ai' && Array.isArray(content?.tool_calls) && content?.tool_calls?.length > 0;
               const toolCallResult = content.type === 'tool';
+              const finalAIMessage = content.type === 'ai' && (!Array.isArray(content?.tool_calls) || content?.tool_calls?.length === 0);
 
               if (toolCallStart) {
 
@@ -184,6 +201,20 @@ export function useDataStream({
                     })
                   }
 
+                  return newMessages;
+                });
+              } else if (finalAIMessage) {
+                // Final AI message after token streaming - update last message with complete data including trace_id
+                setMessages(prev => {
+                  const newMessages = [...prev];
+                  if (newMessages.length > 0 && newMessages[newMessages.length - 1].type === 'ai') {
+                    const existingMessage = newMessages[newMessages.length - 1];
+                    // Merge the final message data (trace_id, id, etc.) with the streamed content
+                    newMessages[newMessages.length - 1] = {
+                      ...content, // Start with the complete message from backend (has trace_id, proper id, etc.)
+                      content: existingMessage.content || content.content, // Preserve the streamed content
+                    };
+                  }
                   return newMessages;
                 });
               }
