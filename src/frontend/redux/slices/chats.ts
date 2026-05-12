@@ -46,12 +46,16 @@ const initialState: ChatsState = {
 
 type ToolCallRecord = { id?: string; content?: unknown };
 
+function deepClone<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 const chatsSlice = createSlice({
   name: 'chats',
   initialState,
   reducers: {
     setChats(state, action: PayloadAction<ChatItem[]>) {
-      state.chats = action.payload;
+      state.chats = deepClone(action.payload);
     },
     addChat(state, action: PayloadAction<ChatItem>) {
       state.chats.unshift(action.payload);
@@ -71,7 +75,7 @@ const chatsSlice = createSlice({
       const { chatId, message } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
       if (chat) {
-        chat.messages.push(message);
+        chat.messages.push(deepClone(message));
       }
     },
     updateLastMessageInChat(state, action: PayloadAction<{ chatId: string; content: string }>) {
