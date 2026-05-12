@@ -45,40 +45,30 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-export async function getThreadIdsByUserId(userId: string) {
+export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
   const targetUrl = apiUrl
-    ? `${apiUrl}/v1/threads/${userId}`
-    : `/api/proxy/agent/v1/threads/${userId}`;
+    ? `${apiUrl}/threads/search`
+    : `/api/proxy/agent/threads/search`;
 
   const response = await fetch(targetUrl, {
-    method: 'GET',
+    method: 'POST',
     headers: getAuthHeaders(),
     credentials: 'include',
+    body: JSON.stringify({
+      metadata: { user_identity: userId },
+      limit: 50,
+    }),
   });
-  return response.json();
-}
 
-export async function gethistoryByThreadId(threadId: string) {
-  const targetUrl = apiUrl
-    ? `${apiUrl}/v1/history/${threadId}`
-    : `/api/proxy/agent/v1/history/${threadId}`;
+  if (!response.ok) return [];
 
-  const response = await fetch(targetUrl, {
-    method: 'GET',
-    headers: getAuthHeaders(),
-    credentials: 'include',
-  });
-  return response.json().then((history) => {
-    history.id = threadId;
-    return history;
-  });
-}
+  const results = await response.json();
+  if (!Array.isArray(results)) return [];
 
-export async function getAllThreadsByUserId(userId: string) {
-  const threadIds = await getThreadIdsByUserId(userId);
-  const threads = (await Promise.all(threadIds.map(gethistoryByThreadId))) as Thread[];
-  return threads.map((thread) => ({
-    ...thread,
-    messages: combineToolCallandResult(thread.messages),
-  }));
+  return results
+    .filter((t: any) => t.values?.messages?.length > 0)
+    .map((t: any) => ({
+      id: t.thread_id,
+      messages: combineToolCallandResult(t.values.messages),
+    }));
 }

@@ -100,9 +100,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
         const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
+        if (!history.length) return;
 
         const chats: ChatItem[] = history.map((conversation) => {
-
           let title = 'New Chat';
 
           if (Array.isArray(conversation.messages) && conversation.messages.length > 0) {
@@ -118,9 +118,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
         });
 
         dispatch({ type: 'SET_CHATS', payload: chats });
-        console.log(history)
       } catch (error) {
-        console.error(error)
+        console.error('Failed to load user history:', error);
       } finally {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
