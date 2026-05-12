@@ -46,11 +46,11 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
-  const targetUrl = apiUrl
+  const searchUrl = apiUrl
     ? `${apiUrl}/threads/search`
     : `/api/proxy/agent/threads/search`;
 
-  const response = await fetch(targetUrl, {
+  const response = await fetch(searchUrl, {
     method: 'POST',
     headers: getAuthHeaders(),
     credentials: 'include',
@@ -65,10 +65,35 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
   const results = await response.json();
   if (!Array.isArray(results)) return [];
 
-  return results
-    .filter((t: any) => t.values?.messages?.length > 0)
-    .map((t: any) => ({
-      id: t.thread_id,
-      messages: combineToolCallandResult(t.values.messages),
-    }));
+  const threads: Thread[] = [];
+
+  for (const t of results) {
+    const id = t.thread_id;
+    if (!id) continue;
+
+    const stateUrl = apiUrl
+      ? `${apiUrl}/threads/${id}/state`
+      : `/api/proxy/agent/threads/${id}/state`;
+
+    try {
+      const stateResp = await fetch(stateUrl, {
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
+      if (!stateResp.ok) continue;
+
+      const state = await stateResp.json();
+      const msgs = state?.values?.messages;
+      if (Array.isArray(msgs) && msgs.length > 0) {
+        threads.push({
+          id,
+          messages: combineToolCallandResult(msgs),
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return threads;
 }
