@@ -15,6 +15,21 @@ interface ProxyRequestBody {
 }
 
 /**
+ * Extract text from a LangGraph message content field, which may be
+ * a plain string OR an array of typed blocks [{type:"text", text:"..."}].
+ */
+function extractText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+      .map((b: any) => b.text)
+      .join('');
+  }
+  return '';
+}
+
+/**
  * Translate a LangGraph messages-mode SSE event into the UI chunk format
  * the frontend useDataStream hook expects.
  *
@@ -30,9 +45,9 @@ function translateMessageEvent(
   if (!msg || typeof msg !== 'object') return null;
 
   if (sseType === 'messages/partial') {
-    const content = (msg as any).content;
-    if (typeof content === 'string' && content.length > 0) {
-      return { type: 'token', content, chunk_id: chunkId };
+    const text = extractText((msg as any).content);
+    if (text.length > 0) {
+      return { type: 'token', content: text, chunk_id: chunkId };
     }
     return null;
   }
@@ -46,7 +61,7 @@ function translateMessageEvent(
         type: 'message',
         content: {
           type: 'ai',
-          content: raw.content ?? '',
+          content: extractText(raw.content),
           tool_calls: (raw.tool_calls as any[]).map((tc) => ({
             name: tc.name,
             args: tc.args ?? {},
@@ -63,10 +78,7 @@ function translateMessageEvent(
         type: 'message',
         content: {
           type: 'tool',
-          content:
-            typeof raw.content === 'string'
-              ? raw.content
-              : JSON.stringify(raw.content),
+          content: extractText(raw.content) || JSON.stringify(raw.content),
           tool_call_id: raw.tool_call_id ?? '',
           name: raw.name ?? 'unknown',
         },
@@ -76,6 +88,38 @@ function translateMessageEvent(
   }
 
   return null;
+}
+
+/**
+ * Return a valid access token, refreshing via the SSO plugin if the
+ * current one is expired or about to expire (30 s buffer).
+ * Saves the refreshed token set back into the session automatically.
+ */
+async function ensureFreshToken(
+  fastify: FastifyInstance,
+  request: any,
+): Promise<string | null> {
+  const session = request.session;
+  const token = session?.token;
+  if (!token?.access_token) return null;
+
+  const expiresAt = token.expires_at ? new Date(token.expires_at).getTime() : 0;
+  if (expiresAt - Date.now() > 30_000) {
+    return token.access_token;
+  }
+
+  try {
+    const sso = (fastify as any).redhatSSO;
+    if (!sso) return token.access_token;
+
+    const refreshed = await sso.getNewAccessTokenUsingRefreshToken(token, {});
+    session.token = refreshed.token;
+    fastify.log.info('Access token refreshed before agent call');
+    return refreshed.token.access_token;
+  } catch (err) {
+    fastify.log.error({ err }, 'Token refresh failed, using existing token');
+    return token.access_token;
+  }
 }
 
 async function proxyRoutes(fastify: FastifyInstance) {
@@ -88,8 +132,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
     '/proxy/agent/v1/stream',
     async (request, reply) => {
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
-      const session = request.session;
-      const accessToken = session?.token?.access_token;
+      const accessToken = await ensureFreshToken(fastify, request);
 
       if (!accessToken && process.env.AUTH_ENABLED === 'true') {
         return reply.status(401).send({ error: 'Not authenticated' });
@@ -239,8 +282,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const path = (request.params as any)['*'];
-      const session = request.session;
-      const accessToken = session?.token?.access_token;
+      const accessToken = await ensureFreshToken(fastify, request);
 
       if (!accessToken && process.env.AUTH_ENABLED === 'true') {
         return reply.status(401).send({ error: 'Not authenticated' });
@@ -289,8 +331,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
   fastify.post('/proxy/agent/feedback', async (request, reply) => {
     const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
-    const session = request.session;
-    const accessToken = session?.token?.access_token;
+    const accessToken = await ensureFreshToken(fastify, request);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -338,8 +379,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/auth/generate-one-time-token', async (request, reply) => {
-    const session = request.session;
-    const accessToken = session?.token?.access_token;
+    const accessToken = await ensureFreshToken(fastify, request);
 
     if (!accessToken && process.env.AUTH_ENABLED === 'true') {
       return reply.status(401).send({ error: 'Not authenticated' });
