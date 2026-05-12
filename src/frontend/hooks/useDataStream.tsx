@@ -204,9 +204,9 @@ export function useDataStream({
                 isStreamingTokensRef.current = true;
               } else {
                 setMessages(prev => {
-                  const newMessages = [...prev];
-                  newMessages[newMessages.length - 1].content += content;
-                  return newMessages;
+                  const last = prev[prev.length - 1];
+                  const updated = { ...last, content: ((last.content as string) || '') + content };
+                  return [...prev.slice(0, -1), updated];
                 });
               }
 

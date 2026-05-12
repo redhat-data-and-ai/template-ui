@@ -38,7 +38,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     if (currentChat) {
-      thread.setMessages(currentChat.messages);
+      thread.setMessages(currentChat.messages.map(m => JSON.parse(JSON.stringify(m))));
     }
   }, [currentChat?.messages?.length]);
 
@@ -57,7 +57,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
   useEffect(() => {
     if (threadId && thread.messages.length > 0 && thread.messages.length !== previousMessagesLength.current) {
       const updates: Record<string, unknown> = {
-        messages: [...thread.messages],
+        messages: thread.messages.map(m => JSON.parse(JSON.stringify(m))),
         timestamp: new Date().toISOString(),
       };
 
