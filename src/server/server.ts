@@ -3,6 +3,7 @@ import { clientRoutes } from "./router/client.router.js";
 import { apiRoutes } from "./router/api.router.js";
 import { proxyRoutes } from "./router/proxy.router.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
+import { buildSessionStore } from "./utils/redis.js";
 
 interface LoggerConfig {
   development: {
@@ -46,6 +47,13 @@ await fastify.register(import("@fastify/cors"), {
 });
 
 export async function setupServer() {
+  const store = buildSessionStore();
+  if (store) {
+    console.log('[Session] Using Redis-backed session store');
+  } else {
+    console.log('[Session] Using in-memory session store (no REDIS_HOST)');
+  }
+
   await fastify.register(import("@fastify/cookie"));
   await fastify.register(import("@fastify/session"), {
     secret:
@@ -55,6 +63,7 @@ export async function setupServer() {
       secure: process.env.ENVIRONMENT === "production",
       maxAge: 1000 * 60 * 60 * 24 * 30,
     },
+    ...(store ? { store } : {}),
   });
 
   if (process.env.AUTH_ENABLED === "true") {
