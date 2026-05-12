@@ -7,25 +7,45 @@ export interface Thread {
 
 const apiUrl = window.APP_DATA?.apiUrl || '';
 
+/**
+ * Gemini-style models return content as [{type:"text", text:"..."}] arrays.
+ * Normalize to a plain string so the UI can render it directly.
+ */
+function normalizeContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+      .map((b: any) => b.text)
+      .join('');
+  }
+  return typeof content === 'object' ? JSON.stringify(content) : String(content ?? '');
+}
+
+function normalizeMessages(messages: any[]): Message[] {
+  return messages.map((m) => ({
+    ...m,
+    content: normalizeContent(m.content),
+  }));
+}
+
 function combineToolCallandResult(messages: Message[]) {
   const newMessages: Message[] = [];
   messages.forEach((message) => {
     if (message.type !== 'tool') {
-      newMessages.push(message);
+      newMessages.push({ ...message });
     } else {
       const toolCallId = message.tool_call_id;
       for (let i = 0; i < newMessages.length; i++) {
         if (newMessages[i].type === 'ai') {
-          if (
-            Array.isArray((newMessages[i] as AIMessage)?.tool_calls) &&
-            ((newMessages[i] as AIMessage)?.tool_calls?.length ?? 0) > 0 &&
-            toolCallId
-          ) {
-            const toolCall = (newMessages[i] as AIMessage)?.tool_calls?.find(
-              (tc) => tc.id === toolCallId
-            );
-            if (toolCall) {
-              (toolCall as any).content = message.content;
+          const aiMsg = newMessages[i] as AIMessage;
+          if (Array.isArray(aiMsg.tool_calls) && aiMsg.tool_calls.length > 0 && toolCallId) {
+            const idx = aiMsg.tool_calls.findIndex((tc) => tc.id === toolCallId);
+            if (idx !== -1) {
+              const updated = aiMsg.tool_calls.map((tc, j) =>
+                j === idx ? { ...tc, content: normalizeContent(message.content) } : { ...tc },
+              );
+              newMessages[i] = { ...aiMsg, tool_calls: updated } as any;
             }
           }
         }
@@ -87,7 +107,7 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
       if (Array.isArray(msgs) && msgs.length > 0) {
         threads.push({
           id,
-          messages: combineToolCallandResult(msgs),
+          messages: combineToolCallandResult(normalizeMessages(msgs)),
         });
       }
     } catch {

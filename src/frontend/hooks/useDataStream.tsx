@@ -174,22 +174,21 @@ export function useDataStream({
               } else if (toolCallResult) {
 
                 setMessages(prev => {
-                  const newMessages = [...prev];
-
                   const toolCallId = content.tool_call_id;
+                  if (!toolCallId) return [...prev];
 
-                  if (toolCallId) {
-                    newMessages.forEach((message) => {
-                      if (message.type === 'ai' && Array.isArray(message?.tool_calls) && message?.tool_calls?.length > 0) {
-                        const toolCall = message.tool_calls?.find((toolCall) => toolCall.id === toolCallId);
-                        if (toolCall) {
-                          (toolCall as any).content = content.content;
-                        }
-                      }
-                    })
-                  }
+                  return prev.map((message) => {
+                    if (message.type !== 'ai' || !Array.isArray(message?.tool_calls) || message.tool_calls.length === 0) {
+                      return message;
+                    }
+                    const idx = message.tool_calls.findIndex((tc) => tc.id === toolCallId);
+                    if (idx === -1) return message;
 
-                  return newMessages;
+                    const updatedCalls = message.tool_calls.map((tc, j) =>
+                      j === idx ? { ...tc, content: content.content } : tc,
+                    );
+                    return { ...message, tool_calls: updatedCalls };
+                  });
                 });
               }
             } else if (isStreamingTokens) {
