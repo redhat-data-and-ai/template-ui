@@ -69,7 +69,7 @@ function translateMessageEvent(
         type: 'message',
         content: {
           type: 'ai',
-          content: extractText(raw.content),
+          content: '',
           tool_calls: (raw.tool_calls as any[]).map((tc) => ({
             name: tc.name,
             args: tc.args ?? {},
