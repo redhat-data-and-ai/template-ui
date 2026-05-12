@@ -53,11 +53,7 @@ function translateMessageEvent(
 
   if (sseType === 'messages/partial') {
     const fullText = extractText((msg as any).content);
-    const delta = fullText.slice(prevPartial.length);
-    if (delta.length > 0) {
-      return [{ type: 'token', content: delta, chunk_id: chunkId }, fullText];
-    }
-    return [null, prevPartial];
+    return [null, fullText];
   }
 
   if (sseType === 'messages/complete') {
@@ -96,9 +92,8 @@ function translateMessageEvent(
 
     if (msgType === 'ai' || msgType === 'aimessage') {
       const fullText = extractText(raw.content);
-      const delta = fullText.slice(prevPartial.length);
-      if (delta.length > 0) {
-        return [{ type: 'token', content: delta, chunk_id: chunkId }, fullText];
+      if (fullText.length > 0) {
+        return [{ type: 'token', content: fullText, chunk_id: chunkId }, ''];
       }
     }
   }
