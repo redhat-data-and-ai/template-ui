@@ -295,6 +295,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
         }
 
         if (!clientGone) {
+          if (prevPartial.length > 0) {
+            const flush = { type: 'token', content: prevPartial, chunk_id: chunkId };
+            reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
+            chunkId++;
+            prevPartial = '';
+          }
           fastify.log.info({ traceId, chunkId }, 'Stream complete');
           reply.raw.end('data: [DONE]\n\n');
         }
