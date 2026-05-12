@@ -90,9 +90,14 @@ export function useDataStream({
         headers["X-Token"] = refreshableToken;
       }
 
-      const response = await fetch(`${apiUrl}/v1/stream`, {
+      const streamUrl = apiUrl
+        ? `${apiUrl}/v1/stream`
+        : `/api/proxy/agent/v1/stream`;
+
+      const response = await fetch(streamUrl, {
         method: "POST",
         headers,
+        credentials: "include",
         body: JSON.stringify({
           message: messages[messages.length - 1].content,
           thread_id: threadId || "default-thread",

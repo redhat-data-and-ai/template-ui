@@ -1,11 +1,10 @@
 import * as path from "node:path";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
-import { agentHost } from "../utils/config.js";
 
 const appData = {
-  apiUrl: agentHost, // Agent backend URL - frontend calls agent directly
-  refreshableToken: "", // Unused - token comes from USER_DATA.accessToken
+  apiUrl: "", // Empty — frontend uses relative /api/proxy/agent/* paths via BFF
+  refreshableToken: "",
 };
 
 async function routes(fastify: FastifyInstance) {
@@ -19,15 +18,13 @@ async function routes(fastify: FastifyInstance) {
 
   await fastify.register(import("@fastify/url-data"));
 
-  fastify.get("/_health", (request: FastifyRequest, reply: FastifyReply) => {
-    fastify.log.info("Health check request" + request.url);
+  fastify.get("/_health", (_request: FastifyRequest, reply: FastifyReply) => {
     reply.send("OK");
   });
 
   fastify.get("/*", (request: FastifyRequest, reply: FastifyReply) => {
     const session = request.session;
     const { user, token } = session;
-    console.log(token);
 
     const userData = {
       ...user,
@@ -37,24 +34,22 @@ async function routes(fastify: FastifyInstance) {
 
     reply.type("text/html");
     reply.send(`<!DOCTYPE html>
-                    <html lang="en">
-                    <head>
-                        <meta charset="UTF-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>Template UI</title>
-                        <link rel="stylesheet" href="/dist/frontend/template-ui.css">
-                    </head>
-                    <body>
-                        <div id="root"></div>
-                        <script>
-                        window.USER_DATA = ${JSON.stringify(userData || {})}
-                        window.APP_DATA = ${JSON.stringify(appData)}
-                        </script>
-                        <script src="/dist/frontend/main.umd.js"></script>
-                        
-                    </body>
-                    </html>
-                    `);
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template UI</title>
+    <link rel="stylesheet" href="/dist/frontend/template-ui.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+    window.USER_DATA = ${JSON.stringify(userData || {})}
+    window.APP_DATA = ${JSON.stringify(appData)}
+    </script>
+    <script src="/dist/frontend/main.umd.js"></script>
+</body>
+</html>`);
   });
 }
 

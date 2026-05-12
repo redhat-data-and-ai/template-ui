@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { clientRoutes } from "./router/client.router.js";
 import { apiRoutes } from "./router/api.router.js";
+import { proxyRoutes } from "./router/proxy.router.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
 
 interface LoggerConfig {
@@ -39,20 +40,19 @@ const fastify = Fastify({
 });
 
 await fastify.register(import("@fastify/cors"), {
-  origin: 'http://localhost:5173', // Or your specific origin
+  origin: process.env.CORS_ORIGIN || "http://localhost:5173",
   optionsSuccessStatus: 200,
-  credentials: true
+  credentials: true,
 });
-export async function setupServer() {
-  // Register CORS to allow cross-origin requests
 
+export async function setupServer() {
   await fastify.register(import("@fastify/cookie"));
   await fastify.register(import("@fastify/session"), {
     secret:
       process.env.COOKIE_SIGN ||
       "a secret with minimum length of 32 characters",
     cookie: {
-      secure: false,
+      secure: process.env.ENVIRONMENT === "production",
       maxAge: 1000 * 60 * 60 * 24 * 30,
     },
   });
@@ -62,7 +62,8 @@ export async function setupServer() {
   }
 
   await fastify.register(apiRoutes, { prefix: "/api" });
-  
+  await fastify.register(proxyRoutes, { prefix: "/api" });
+
   await fastify.register(clientRoutes);
 
   return fastify;

@@ -34,12 +34,10 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
       'Accept': 'text/event-stream'
     };
 
-    // Add SSO token if present
     if (accessToken) {
-      headers['X-Token'] = accessToken;
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    // Proxy request to agent backend
     const agentUrl = `${agentHost}/v1/stream`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
@@ -113,12 +111,10 @@ export async function handleHistoryGet(fastify: FastifyInstance, request: Fastif
       'Content-Type': 'application/json'
     };
 
-    // Add SSO token if present
     if (accessToken) {
-      headers['X-Token'] = accessToken;
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    // Proxy request to agent backend
     const agentUrl = `${agentHost}/v1/history/${threadId}`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
