@@ -105,11 +105,9 @@ async function proxyRoutes(fastify: FastifyInstance) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
 
-      const abortController = new AbortController();
-      request.raw.on('close', () => abortController.abort());
-
       try {
         // ── 1. Ensure the thread exists (idempotent) ──
+        fastify.log.info({ traceId, thread_id }, 'Creating thread');
         const threadResp = await fetch(`${agentHost}/threads`, {
           method: 'POST',
           headers,
@@ -118,7 +116,6 @@ async function proxyRoutes(fastify: FastifyInstance) {
             metadata: { user_identity: user_id ?? 'anonymous' },
             ifExists: 'do_nothing',
           }),
-          signal: abortController.signal,
         });
 
         if (!threadResp.ok) {
@@ -129,6 +126,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           );
           return reply.status(threadResp.status).send({ error: 'Thread creation failed' });
         }
+        fastify.log.info({ traceId }, 'Thread ready');
 
         // ── 2. Start a streaming run on that thread ──
         const runUrl = `${agentHost}/threads/${thread_id}/runs/stream`;
@@ -143,7 +141,6 @@ async function proxyRoutes(fastify: FastifyInstance) {
             stream_mode: ['messages'],
             stream_subgraphs: true,
           }),
-          signal: abortController.signal,
         });
 
         if (!runResp.ok) {
@@ -170,9 +167,15 @@ async function proxyRoutes(fastify: FastifyInstance) {
         const decoder = new TextDecoder();
         let buffer = '';
         let chunkId = 0;
+        let clientGone = false;
+
+        reply.raw.on('close', () => {
+          clientGone = true;
+          reader.cancel().catch(() => {});
+        });
 
         try {
-          while (true) {
+          while (!clientGone) {
             const { done, value } = await reader.read();
             if (done) break;
 
@@ -182,6 +185,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
             buffer = segments.pop() ?? '';
 
             for (const segment of segments) {
+              if (clientGone) break;
               const trimmed = segment.trim();
               if (!trimmed) continue;
 
@@ -210,8 +214,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
           reader.releaseLock();
         }
 
-        reply.raw.write('data: [DONE]\n\n');
-        reply.raw.end();
+        if (!clientGone) {
+          fastify.log.info({ traceId, chunkId }, 'Stream complete');
+          reply.raw.write('data: [DONE]\n\n');
+          reply.raw.end();
+        }
       } catch (error: unknown) {
         if ((error as Error).name === 'AbortError') {
           fastify.log.info({ traceId }, 'Client disconnected, stream aborted');
