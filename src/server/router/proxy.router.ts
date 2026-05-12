@@ -33,23 +33,28 @@ function extractText(content: unknown): string {
  * Translate a LangGraph messages-mode SSE event into the UI chunk format
  * the frontend useDataStream hook expects.
  *
- * Returns null when the event should be silently skipped.
+ * `messages/partial` events contain CUMULATIVE content (the full text so far),
+ * so we compute the delta against `prevPartial` and return only the new text.
+ *
+ * Returns [uiChunk | null, updatedPrevPartial].
  */
 function translateMessageEvent(
   sseType: string,
   payload: unknown,
   chunkId: number,
-): { type: string; content: unknown; chunk_id: number } | null {
-  if (!Array.isArray(payload) || payload.length === 0) return null;
+  prevPartial: string,
+): [{ type: string; content: unknown; chunk_id: number } | null, string] {
+  if (!Array.isArray(payload) || payload.length === 0) return [null, prevPartial];
   const [msg] = payload;
-  if (!msg || typeof msg !== 'object') return null;
+  if (!msg || typeof msg !== 'object') return [null, prevPartial];
 
   if (sseType === 'messages/partial') {
-    const text = extractText((msg as any).content);
-    if (text.length > 0) {
-      return { type: 'token', content: text, chunk_id: chunkId };
+    const fullText = extractText((msg as any).content);
+    const delta = fullText.slice(prevPartial.length);
+    if (delta.length > 0) {
+      return [{ type: 'token', content: delta, chunk_id: chunkId }, fullText];
     }
-    return null;
+    return [null, prevPartial];
   }
 
   if (sseType === 'messages/complete') {
@@ -57,7 +62,7 @@ function translateMessageEvent(
     const msgType = (raw.type ?? '').toString().toLowerCase();
 
     if ((msgType === 'ai' || msgType === 'aimessage') && raw.tool_calls?.length) {
-      return {
+      return [{
         type: 'message',
         content: {
           type: 'ai',
@@ -70,11 +75,11 @@ function translateMessageEvent(
           id: raw.id ?? `ai-${chunkId}`,
         },
         chunk_id: chunkId,
-      };
+      }, ''];
     }
 
     if (msgType === 'tool' || msgType === 'toolmessage') {
-      return {
+      return [{
         type: 'message',
         content: {
           type: 'tool',
@@ -83,11 +88,11 @@ function translateMessageEvent(
           name: raw.name ?? 'unknown',
         },
         chunk_id: chunkId,
-      };
+      }, ''];
     }
   }
 
-  return null;
+  return [null, prevPartial];
 }
 
 /**
@@ -211,6 +216,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         let buffer = '';
         let chunkId = 0;
         let clientGone = false;
+        let prevPartial = '';
 
         reply.raw.on('close', () => {
           clientGone = true;
@@ -243,7 +249,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
               try {
                 const parsed = JSON.parse(sseData);
-                const uiChunk = translateMessageEvent(sseType, parsed, chunkId);
+                const [uiChunk, nextPartial] = translateMessageEvent(sseType, parsed, chunkId, prevPartial);
+                prevPartial = nextPartial;
                 if (uiChunk) {
                   reply.raw.write(`data: ${JSON.stringify(uiChunk)}\n\n`);
                   chunkId++;
