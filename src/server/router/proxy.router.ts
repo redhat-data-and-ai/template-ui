@@ -187,7 +187,6 @@ async function proxyRoutes(fastify: FastifyInstance) {
             assistant_id: 'agent',
             input: { messages: [{ role: 'human', content: message }] },
             stream_mode: ['messages'],
-            stream_subgraphs: true,
           }),
         });
 
