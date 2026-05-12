@@ -22,8 +22,11 @@ function extractText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content
-      .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
-      .map((b: any) => b.text)
+      .map((b: any) => {
+        if (typeof b === 'string') return b;
+        if (b?.type === 'text' && typeof b.text === 'string') return b.text;
+        return '';
+      })
       .join('');
   }
   return '';
@@ -90,41 +93,68 @@ function translateMessageEvent(
         chunk_id: chunkId,
       }, ''];
     }
+
+    if (msgType === 'ai' || msgType === 'aimessage') {
+      const fullText = extractText(raw.content);
+      const delta = fullText.slice(prevPartial.length);
+      if (delta.length > 0) {
+        return [{ type: 'token', content: delta, chunk_id: chunkId }, fullText];
+      }
+    }
   }
 
   return [null, prevPartial];
 }
 
+interface TokenPair {
+  accessToken: string | null;
+  refreshToken: string | null;
+}
+
 /**
- * Return a valid access token, refreshing via the SSO plugin if the
- * current one is expired or about to expire (30 s buffer).
- * Saves the refreshed token set back into the session automatically.
+ * Return a valid access + refresh token pair, refreshing via the SSO
+ * plugin if the current access token is expired or about to expire
+ * (30 s buffer).  Saves the refreshed token set back into the session.
+ *
+ * The refresh_token is forwarded so the agent can do its own refresh
+ * if the token expires while queued in the worker pipeline.
  */
-async function ensureFreshToken(
+async function ensureFreshTokens(
   fastify: FastifyInstance,
   request: any,
-): Promise<string | null> {
+): Promise<TokenPair> {
   const session = request.session;
   const token = session?.token;
-  if (!token?.access_token) return null;
+  if (!token?.access_token) return { accessToken: null, refreshToken: null };
 
   const expiresAt = token.expires_at ? new Date(token.expires_at).getTime() : 0;
   if (expiresAt - Date.now() > 30_000) {
-    return token.access_token;
+    return { accessToken: token.access_token, refreshToken: token.refresh_token ?? null };
   }
 
   try {
     const sso = (fastify as any).redhatSSO;
-    if (!sso) return token.access_token;
+    if (!sso) return { accessToken: token.access_token, refreshToken: token.refresh_token ?? null };
 
     const refreshed = await sso.getNewAccessTokenUsingRefreshToken(token, {});
     session.token = refreshed.token;
     fastify.log.info('Access token refreshed before agent call');
-    return refreshed.token.access_token;
+    return {
+      accessToken: refreshed.token.access_token,
+      refreshToken: refreshed.token.refresh_token ?? null,
+    };
   } catch (err) {
     fastify.log.error({ err }, 'Token refresh failed, using existing token');
-    return token.access_token;
+    return { accessToken: token.access_token, refreshToken: token.refresh_token ?? null };
   }
+}
+
+/** Backwards-compatible wrapper that returns only the access token. */
+async function ensureFreshToken(
+  fastify: FastifyInstance,
+  request: any,
+): Promise<string | null> {
+  return (await ensureFreshTokens(fastify, request)).accessToken;
 }
 
 async function proxyRoutes(fastify: FastifyInstance) {
@@ -137,7 +167,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
     '/proxy/agent/v1/stream',
     async (request, reply) => {
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
-      const accessToken = await ensureFreshToken(fastify, request);
+      const { accessToken, refreshToken } = await ensureFreshTokens(fastify, request);
 
       if (!accessToken && process.env.AUTH_ENABLED === 'true') {
         return reply.status(401).send({ error: 'Not authenticated' });
@@ -151,6 +181,9 @@ async function proxyRoutes(fastify: FastifyInstance) {
       };
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      if (refreshToken) {
+        headers['X-Refresh-Token'] = refreshToken;
       }
 
       try {
@@ -203,12 +236,15 @@ async function proxyRoutes(fastify: FastifyInstance) {
         }
 
         // ── 3. Translate Aegra SSE → UI chunk format ──
+        await reply.hijack();
         reply.raw.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
           'X-Trace-ID': traceId,
+          'X-Accel-Buffering': 'no',
         });
+        reply.raw.flushHeaders();
 
         const reader = (runResp.body as ReadableStream<Uint8Array>).getReader();
         const decoder = new TextDecoder();
@@ -265,8 +301,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         if (!clientGone) {
           fastify.log.info({ traceId, chunkId }, 'Stream complete');
-          reply.raw.write('data: [DONE]\n\n');
-          reply.raw.end();
+          reply.raw.end('data: [DONE]\n\n');
         }
       } catch (error: unknown) {
         if ((error as Error).name === 'AbortError') {
@@ -288,7 +323,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const path = (request.params as any)['*'];
-      const accessToken = await ensureFreshToken(fastify, request);
+      const { accessToken, refreshToken } = await ensureFreshTokens(fastify, request);
 
       if (!accessToken && process.env.AUTH_ENABLED === 'true') {
         return reply.status(401).send({ error: 'Not authenticated' });
@@ -301,6 +336,9 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      if (refreshToken) {
+        headers['X-Refresh-Token'] = refreshToken;
       }
 
       try {

@@ -37,10 +37,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
   });
 
   useEffect(() => {
-    if (currentChat) {
+    if (currentChat && !thread.isLoading) {
       thread.setMessages(currentChat.messages.map(m => JSON.parse(JSON.stringify(m))));
     }
-  }, [currentChat?.messages?.length]);
+  }, [currentChat?.id]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {

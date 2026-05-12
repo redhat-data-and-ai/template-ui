@@ -119,8 +119,9 @@ export function useDataStream({
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let streamDone = false;
 
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
 
         if (done) break;
@@ -142,6 +143,7 @@ export function useDataStream({
           }
 
           if (jsonData === '[DONE]' || jsonData === 'DONE') {
+            streamDone = true;
             break;
           }
 
@@ -149,12 +151,11 @@ export function useDataStream({
             const parsedResult = JSON.parse(jsonData) as AgentSteamChunk;
             const { type, content, chunk_id, } = parsedResult;
 
-            if (processedChunkIdsRef.current.has(chunk_id)) {
-              console.log(`DEBUG: Skipping duplicate chunk_id: ${chunk_id}`);
+            if (chunk_id != null && processedChunkIdsRef.current.has(chunk_id)) {
               continue;
             }
 
-            if (chunk_id) {
+            if (chunk_id != null) {
               processedChunkIdsRef.current.add(chunk_id);
             }
 
