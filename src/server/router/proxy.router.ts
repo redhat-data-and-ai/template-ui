@@ -1,15 +1,90 @@
 import { FastifyInstance } from 'fastify';
-import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { agentHost } from '../utils/config.js';
+
+interface StreamRequestBody {
+  message: string;
+  thread_id: string;
+  user_id?: string;
+  session_id?: string;
+  stream_tokens?: boolean;
+}
 
 interface ProxyRequestBody {
   [key: string]: unknown;
 }
 
+/**
+ * Translate a LangGraph messages-mode SSE event into the UI chunk format
+ * the frontend useDataStream hook expects.
+ *
+ * Returns null when the event should be silently skipped.
+ */
+function translateMessageEvent(
+  sseType: string,
+  payload: unknown,
+  chunkId: number,
+): { type: string; content: unknown; chunk_id: number } | null {
+  if (!Array.isArray(payload) || payload.length === 0) return null;
+  const [msg] = payload;
+  if (!msg || typeof msg !== 'object') return null;
+
+  if (sseType === 'messages/partial') {
+    const content = (msg as any).content;
+    if (typeof content === 'string' && content.length > 0) {
+      return { type: 'token', content, chunk_id: chunkId };
+    }
+    return null;
+  }
+
+  if (sseType === 'messages/complete') {
+    const raw = msg as Record<string, any>;
+    const msgType = (raw.type ?? '').toString().toLowerCase();
+
+    if ((msgType === 'ai' || msgType === 'aimessage') && raw.tool_calls?.length) {
+      return {
+        type: 'message',
+        content: {
+          type: 'ai',
+          content: raw.content ?? '',
+          tool_calls: (raw.tool_calls as any[]).map((tc) => ({
+            name: tc.name,
+            args: tc.args ?? {},
+            id: tc.id,
+          })),
+          id: raw.id ?? `ai-${chunkId}`,
+        },
+        chunk_id: chunkId,
+      };
+    }
+
+    if (msgType === 'tool' || msgType === 'toolmessage') {
+      return {
+        type: 'message',
+        content: {
+          type: 'tool',
+          content:
+            typeof raw.content === 'string'
+              ? raw.content
+              : JSON.stringify(raw.content),
+          tool_call_id: raw.tool_call_id ?? '',
+          name: raw.name ?? 'unknown',
+        },
+        chunk_id: chunkId,
+      };
+    }
+  }
+
+  return null;
+}
+
 async function proxyRoutes(fastify: FastifyInstance) {
-  fastify.post<{ Body: ProxyRequestBody }>(
+  /**
+   * Streaming endpoint — translates between the UI's simple
+   * {message, thread_id, user_id} payload and Aegra's LangGraph
+   * Platform API (POST /threads/{id}/runs/stream).
+   */
+  fastify.post<{ Body: StreamRequestBody }>(
     '/proxy/agent/v1/stream',
     async (request, reply) => {
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
@@ -20,41 +95,70 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
+      const { message, thread_id, user_id } = request.body;
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
         'X-Trace-ID': traceId,
       };
-
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
 
       const abortController = new AbortController();
-
-      request.raw.on('close', () => {
-        abortController.abort();
-      });
+      request.raw.on('close', () => abortController.abort());
 
       try {
-        const agentUrl = `${agentHost}/v1/stream`;
-        fastify.log.info({ traceId, agentUrl }, 'Proxying stream request to agent');
-
-        const agentResponse = await fetch(agentUrl, {
+        // ── 1. Ensure the thread exists (idempotent) ──
+        const threadResp = await fetch(`${agentHost}/threads`, {
           method: 'POST',
           headers,
-          body: JSON.stringify(request.body),
+          body: JSON.stringify({
+            threadId: thread_id,
+            metadata: { user_identity: user_id ?? 'anonymous' },
+            ifExists: 'do_nothing',
+          }),
           signal: abortController.signal,
         });
 
-        if (!agentResponse.ok) {
-          fastify.log.error({ traceId, status: agentResponse.status }, 'Agent returned error');
-          return reply.status(agentResponse.status).send({
+        if (!threadResp.ok) {
+          const body = await threadResp.text();
+          fastify.log.error(
+            { traceId, status: threadResp.status, body },
+            'Thread creation failed',
+          );
+          return reply.status(threadResp.status).send({ error: 'Thread creation failed' });
+        }
+
+        // ── 2. Start a streaming run on that thread ──
+        const runUrl = `${agentHost}/threads/${thread_id}/runs/stream`;
+        fastify.log.info({ traceId, runUrl }, 'Starting streaming run');
+
+        const runResp = await fetch(runUrl, {
+          method: 'POST',
+          headers: { ...headers, Accept: 'text/event-stream' },
+          body: JSON.stringify({
+            assistant_id: 'agent',
+            input: { messages: [{ role: 'human', content: message }] },
+            stream_mode: ['messages'],
+            stream_subgraphs: true,
+          }),
+          signal: abortController.signal,
+        });
+
+        if (!runResp.ok) {
+          const body = await runResp.text();
+          fastify.log.error(
+            { traceId, status: runResp.status, body },
+            'Agent run/stream failed',
+          );
+          return reply.status(runResp.status).send({
             error: 'Agent request failed',
-            status: agentResponse.status,
+            status: runResp.status,
           });
         }
 
+        // ── 3. Translate Aegra SSE → UI chunk format ──
         reply.raw.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
@@ -62,12 +166,52 @@ async function proxyRoutes(fastify: FastifyInstance) {
           'X-Trace-ID': traceId,
         });
 
-        if (agentResponse.body) {
-          const nodeReadable = Readable.fromWeb(agentResponse.body as any);
-          await pipeline(nodeReadable, reply.raw);
-        } else {
-          reply.raw.end();
+        const reader = (runResp.body as ReadableStream<Uint8Array>).getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let chunkId = 0;
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            const segments = buffer.split('\n\n');
+            buffer = segments.pop() ?? '';
+
+            for (const segment of segments) {
+              const trimmed = segment.trim();
+              if (!trimmed) continue;
+
+              let sseType = '';
+              let sseData = '';
+              for (const line of trimmed.split('\n')) {
+                if (line.startsWith('event:')) sseType = line.slice(6).trim();
+                else if (line.startsWith('data:')) sseData += line.slice(5).trim();
+              }
+
+              if (!sseData || sseType === 'metadata' || sseType === 'end') continue;
+
+              try {
+                const parsed = JSON.parse(sseData);
+                const uiChunk = translateMessageEvent(sseType, parsed, chunkId);
+                if (uiChunk) {
+                  reply.raw.write(`data: ${JSON.stringify(uiChunk)}\n\n`);
+                  chunkId++;
+                }
+              } catch {
+                fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable SSE data');
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock();
         }
+
+        reply.raw.write('data: [DONE]\n\n');
+        reply.raw.end();
       } catch (error: unknown) {
         if ((error as Error).name === 'AbortError') {
           fastify.log.info({ traceId }, 'Client disconnected, stream aborted');
@@ -80,7 +224,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           reply.status(502).send({ error: 'Failed to connect to agent service' });
         }
       }
-    }
+    },
   );
 
   fastify.all<{ Params: { '*': string } }>(
