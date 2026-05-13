@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import type { Message } from '@langchain/langgraph-sdk';
-import { Spinner } from '@patternfly/react-core';
+import { Button, Spinner } from '@patternfly/react-core';
 
 import { useAppSelector, useAppDispatch } from '../redux/hooks';
 import {
@@ -14,7 +14,6 @@ import {
 import { useStreamingAPI } from '../hooks/useStreamingAPI';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
-import { Button } from '../components/ui/button';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadState } from '../services/agent-rest';
 
@@ -213,7 +212,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
         <p className="text-muted-foreground">The requested chat could not be found.</p>
-        <Button onClick={() => navigate('/')}>Go Home</Button>
+        <Button variant="primary" onClick={() => navigate('/')}>Go Home</Button>
       </div>
     );
   }
@@ -223,7 +222,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <h1 className="text-2xl text-destructive font-bold">Error</h1>
         <p className="text-destructive">{error}</p>
-        <Button variant="destructive" onClick={() => window.location.reload()}>
+        <Button variant="danger" onClick={() => window.location.reload()}>
           Retry
         </Button>
       </div>

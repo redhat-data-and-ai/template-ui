@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle, ChevronDown, ChevronRight, Loader2, RotateCcw
 import { InputForm } from "./InputForm";
 import { useState, ReactNode, useMemo, useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
-import { Badge } from "./ui/badge";
+import { Label } from "@patternfly/react-core";
 import {
   ProcessedEvent,
 } from "./ActivityTimeline";
@@ -56,7 +56,7 @@ const mdComponents = {
     </p>
   ),
   a: ({ className, children, href, ...props }: MdComponentProps) => (
-    <Badge className="text-xs mx-0.5">
+    <Label isCompact className="mx-0.5">
       <a
         className={cn("text-primary hover:text-primary/80 text-xs", className)}
         href={href as string}
@@ -66,7 +66,7 @@ const mdComponents = {
       >
         {children}
       </a>
-    </Badge>
+    </Label>
   ),
   ul: ({ className, children, ...props }: MdComponentProps) => (
     <ul className={cn("list-disc pl-6 mb-3 space-y-1", className)} {...props}>

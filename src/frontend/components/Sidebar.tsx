@@ -1,11 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Button,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  ModalVariant,
   SearchInput,
 } from '@patternfly/react-core';
 import { MessageSquare, Trash2, Edit3, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-import { Button } from './ui/button';
 import type { SidebarChatItem } from '../types/chat';
 
 interface SidebarProps {
@@ -33,6 +37,7 @@ function SidebarComponent({
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 
 
   const filteredChats = useMemo(() => {
@@ -59,13 +64,10 @@ function SidebarComponent({
     <div className="flex flex-col h-full min-h-0 bg-sidebar border-r border-sidebar-border text-sidebar-foreground">
       {/* New Chat button */}
       <div className="shrink-0 p-3 pb-2">
-        <button
-          onClick={onNewChat}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
+        <Button variant="primary" isBlock onClick={onNewChat}>
           <Plus className="w-4 h-4" />
           New Chat
-        </button>
+        </Button>
       </div>
 
       {/* Search */}
@@ -133,28 +135,26 @@ function SidebarComponent({
                   {editingChat !== chat.id && (
                     <div className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 text-muted-foreground hover:text-foreground rounded-md"
-                        onClick={(e) => {
+                        variant="plain"
+                        size="sm"
+                        className="h-6 w-6 !p-0 text-muted-foreground hover:text-foreground"
+                        onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           handleRename(chat.id, chat.title);
                         }}
-                        title="Rename chat"
+                        aria-label="Rename chat"
                       >
                         <Edit3 className="w-3 h-3" />
                       </Button>
                       <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive rounded-md"
-                        onClick={(e) => {
+                        variant="plain"
+                        size="sm"
+                        className="h-6 w-6 !p-0 text-muted-foreground hover:text-destructive"
+                        onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
-                          onDeleteChat(chat.id);
+                          setDeletingChatId(chat.id);
                         }}
-                        title="Delete chat"
+                        aria-label="Delete chat"
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
@@ -178,6 +178,34 @@ function SidebarComponent({
           </div>
         </div>
       </div>
+
+      <Modal
+        variant={ModalVariant.small}
+        isOpen={deletingChatId !== null}
+        onClose={() => setDeletingChatId(null)}
+        aria-label="Delete chat confirmation"
+      >
+        <ModalHeader title="Delete chat" />
+        <ModalBody>
+          Are you sure you want to delete this chat? This action cannot be undone.
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (deletingChatId) {
+                onDeleteChat(deletingChatId);
+                setDeletingChatId(null);
+              }
+            }}
+          >
+            Delete
+          </Button>
+          <Button variant="link" onClick={() => setDeletingChatId(null)}>
+            Cancel
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }
