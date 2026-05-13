@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import type { Message } from '@langchain/langgraph-sdk';
 import { Spinner } from '@patternfly/react-core';
 
@@ -21,6 +21,7 @@ import { getThreadState } from '../services/agent-rest';
 export function ChatPage({ threadId }: { threadId: string }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const currentChat = useAppSelector((state) => selectChatById(state, threadId));
   const chatsLoading = useAppSelector(selectIsLoadingThreads);
   const error = useAppSelector(selectChatsError);
@@ -67,6 +68,28 @@ export function ChatPage({ threadId }: { threadId: string }) {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
+
+  const initialPromptSent = useRef(false);
+  useEffect(() => {
+    const prompt = (location.state as any)?.initialPrompt;
+    if (!prompt || initialPromptSent.current || hydrating || thread.isLoading) return;
+    if (!currentChat || currentChat.messages.length > 0) return;
+
+    initialPromptSent.current = true;
+    navigate(location.pathname, { replace: true, state: {} });
+
+    const userMessage: Message = {
+      id: `msg-${Date.now()}`,
+      type: 'human',
+      content: prompt,
+    };
+    thread.submit({ messages: [userMessage] }).then(() => {
+      hasFinalizeEventOccurredRef.current = true;
+    }).catch((err) => {
+      console.error('Failed to auto-send initial prompt:', err);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, hydrating, thread.isLoading]);
 
   useEffect(() => {
     if (currentChat && currentChat.messages.length > 0 && !thread.isLoading && !hydrating) {
@@ -159,6 +182,19 @@ export function ChatPage({ threadId }: { threadId: string }) {
     setHistoricalActivities(currentChat?.historicalActivities || {});
   }, [currentChat]);
 
+  const handleStreamRetry = useCallback(async () => {
+    if (!threadId || !currentChat || thread.messages.length === 0) return;
+    try {
+      await thread.submit({ messages: thread.messages });
+      setTimeout(() => {
+        hasFinalizeEventOccurredRef.current = true;
+      }, 100);
+    } catch (err) {
+      console.error('Failed to retry:', err);
+      dispatch(setError('Failed to retry. Please try again.'));
+    }
+  }, [thread, threadId, currentChat, dispatch]);
+
   const handleNewChat = useCallback(() => {
     navigate('/');
   }, [navigate]);
@@ -201,6 +237,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
         messages={thread.messages}
         streamEvents={thread.streamEvents}
         isLoading={thread.isLoading}
+        onRetry={handleStreamRetry}
         scrollAreaRef={scrollAreaRef}
         onSubmit={handleSubmit}
         onCancel={handleCancel}

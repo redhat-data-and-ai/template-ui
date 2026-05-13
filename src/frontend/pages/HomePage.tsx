@@ -32,7 +32,7 @@ export function HomePage() {
         historicalActivities: {},
       };
       dispatch(addChat(newChat));
-      navigate(`/chat/${newChatId}`);
+      navigate(`/chat/${newChatId}`, { state: { initialPrompt: initialPrompt } });
     },
     [dispatch, navigate],
   );

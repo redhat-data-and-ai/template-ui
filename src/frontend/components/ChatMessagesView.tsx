@@ -1,6 +1,6 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { CheckCircle, ChevronDown, ChevronRight, Loader2, Settings, Bot, User } from "lucide-react";
+import { AlertCircle, CheckCircle, ChevronDown, ChevronRight, Loader2, RotateCcw, Settings, Bot, User } from "lucide-react";
 import { InputForm } from "./InputForm";
 import { useState, ReactNode, useMemo, useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
@@ -301,6 +301,7 @@ interface ChatMessagesViewProps {
   isLoading: boolean;
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   onSubmit: (inputValue: string) => void;
+  onRetry?: () => void;
   onCancel: () => void;
   onNewChat?: () => void;
   liveActivityEvents: ProcessedEvent[];
@@ -312,10 +313,14 @@ export function ChatMessagesView({
   isLoading,
   scrollAreaRef,
   onSubmit,
+  onRetry,
   onCancel,
   onNewChat,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const lastMessage = messages[messages.length - 1];
+  const showNoResponse = !isLoading && messages.length > 0 && lastMessage?.type === 'human';
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -358,6 +363,26 @@ export function ChatMessagesView({
                   </span>
                   Thinking...
                 </div>
+              </div>
+            </div>
+          )}
+
+          {showNoResponse && (
+            <div className="flex items-start gap-3 animate-fadeIn">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center">
+                <AlertCircle className="w-4 h-4 text-destructive" />
+              </div>
+              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
+                <p className="text-sm text-muted-foreground mb-2">
+                  The agent didn&apos;t respond. This could be a temporary issue.
+                </p>
+                <button
+                  onClick={() => onRetry?.()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Retry
+                </button>
               </div>
             </div>
           )}
