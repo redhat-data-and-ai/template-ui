@@ -26,12 +26,14 @@ import {
   selectAllChats,
   addChat,
   deleteChat,
+  clearAllChats,
   updateChat,
   setChats,
   setLoadingThreads,
   setThreadsListHydrated,
   ChatItem,
 } from '../../redux/slices/chats';
+import { addToast } from '../../redux/slices/toasts';
 import { SidebarChatItem } from '../../types/chat';
 import { chatStorage } from '../../services/chatStorage';
 import { getAllThreadsByUserId } from '../../services/agent-rest';
@@ -97,6 +99,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         dispatch(setThreadsListHydrated(true));
       } catch (error) {
         console.error('Failed to load user history:', error);
+        dispatch(addToast({ title: 'Failed to load chat history', variant: 'warning' }));
       } finally {
         dispatch(setLoadingThreads(false));
       }
@@ -155,6 +158,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const handleDeleteChat = useCallback(
     (chatId: string) => {
       dispatch(deleteChat(chatId));
+      dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
       if (window.location.pathname === `/chat/${chatId}`) {
         const remaining = chats.filter((c) => c.id !== chatId);
         navigate(remaining.length > 0 ? `/chat/${remaining[0].id}` : '/');
@@ -162,6 +166,13 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     [dispatch, chats, navigate]
   );
+
+  const handleDeleteAllChats = useCallback(() => {
+    dispatch(clearAllChats());
+    chatStorage.clearChats();
+    dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
+    navigate('/');
+  }, [dispatch, navigate]);
 
   const handleRenameChat = useCallback(
     (chatId: string, newTitle: string) => {
@@ -223,6 +234,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             onNewChat={handleNewChat}
             onSelectChat={handleSelectChat}
             onDeleteChat={handleDeleteChat}
+            onDeleteAllChats={handleDeleteAllChats}
             onRenameChat={handleRenameChat}
           />
         </ErrorBoundary>

@@ -71,6 +71,11 @@ const chatsSlice = createSlice({
       const id = action.payload;
       state.chats = state.chats.filter((c) => c.id !== id);
     },
+    clearAllChats(state) {
+      state.chats = [];
+      state.streamingStates = {};
+      state.error = null;
+    },
     appendMessageToChat(state, action: PayloadAction<{ chatId: string; message: Message }>) {
       const { chatId, message } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
@@ -135,6 +140,7 @@ export const {
   addChat,
   updateChat,
   deleteChat,
+  clearAllChats,
   appendMessageToChat,
   updateLastMessageInChat,
   mergeToolResult,

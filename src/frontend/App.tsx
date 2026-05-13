@@ -3,6 +3,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { HomePage } from './pages/HomePage';
 import { ChatRoutePage } from './pages/ChatPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastNotifications } from './components/ToastNotifications';
 import { useThemeSync } from './hooks/useThemeSync';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/chat/:threadId" element={<ChatRoutePage />} />
         </Routes>
       </AppLayout>
+      <ToastNotifications />
     </ErrorBoundary>
   );
 }

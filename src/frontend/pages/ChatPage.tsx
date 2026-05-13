@@ -11,6 +11,7 @@ import {
   updateChat,
   setError,
 } from '../redux/slices/chats';
+import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI } from '../hooks/useStreamingAPI';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
@@ -166,7 +167,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to submit message:', err);
-        dispatch(setError('Failed to send message. Please try again.'));
+        dispatch(addToast({ title: 'Failed to send message', message: 'Please try again.', variant: 'danger' }));
       }
     },
     [thread, threadId, currentChat, dispatch]
@@ -190,7 +191,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
       }, 100);
     } catch (err) {
       console.error('Failed to retry:', err);
-      dispatch(setError('Failed to retry. Please try again.'));
+      dispatch(addToast({ title: 'Failed to retry', message: 'Please try again.', variant: 'danger' }));
     }
   }, [thread, threadId, currentChat, dispatch]);
 
