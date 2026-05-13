@@ -138,7 +138,7 @@ function translateMessageEvent(
     if (msgType === 'ai' || msgType === 'aimessage') {
       const fullText = extractText(raw.content);
       if (fullText.length > 0) {
-        return [{ type: 'token', content: fullText, chunk_id: chunkId }, ''];
+        return [null, fullText];
       }
     }
   }
