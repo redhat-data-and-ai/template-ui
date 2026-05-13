@@ -31,10 +31,10 @@ export function HomePage() {
       <div className="flex flex-col items-center justify-center h-full text-center px-8">
         <div className="max-w-2xl space-y-6">
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold text-neutral-100">
+            <h1 className="text-4xl font-bold text-foreground">
               {userDisplayName ? `How can I help you today, ${userDisplayName}?` : 'How can I help you today?'}
             </h1>
-            <p className="text-lg text-neutral-400">
+            <p className="text-lg text-muted-foreground">
               Ask me anything and I'll help you with AI-powered insights.
             </p>
           </div>

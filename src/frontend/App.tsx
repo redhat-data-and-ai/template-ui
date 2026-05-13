@@ -3,8 +3,11 @@ import { AppLayout } from './components/layout/AppLayout';
 import { HomePage } from './pages/HomePage';
 import { ChatRoutePage } from './pages/ChatPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useThemeSync } from './hooks/useThemeSync';
 
 export default function App() {
+  useThemeSync();
+
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {

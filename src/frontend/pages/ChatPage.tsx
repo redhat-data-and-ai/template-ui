@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Message } from '@langchain/langgraph-sdk';
+import { Spinner } from '@patternfly/react-core';
 
 import { useAppSelector, useAppDispatch } from '../redux/hooks';
 import {
@@ -10,7 +11,7 @@ import {
   updateChat,
   setError,
 } from '../redux/slices/chats';
-import { useDataStream } from '../hooks/useDataStream';
+import { useStreamingAPI } from '../hooks/useStreamingAPI';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { Button } from '../components/ui/button';
@@ -29,46 +30,38 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const hasFinalizeEventOccurredRef = useRef(false);
 
-  const thread = useDataStream({
-    apiUrl: window.APP_DATA?.apiUrl || '',
-    threadId: threadId || '',
-    onError: (err: Error) => {
-      dispatch(setError(err.message));
-    },
-  });
+  const thread = useStreamingAPI(threadId);
 
+  const chatId = currentChat?.id;
   useEffect(() => {
     if (currentChat && !thread.isLoading) {
       thread.setMessages(currentChat.messages.map(m => JSON.parse(JSON.stringify(m))));
     }
-  }, [currentChat?.id]);
+    // Only re-sync when the active chat changes, not on every message update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-      const scrollViewport = scrollAreaRef.current.querySelector(
-        '[data-radix-scroll-area-viewport]'
-      );
-      if (scrollViewport) {
-        scrollViewport.scrollTop = scrollViewport.scrollHeight;
-      }
+      const el = scrollAreaRef.current;
+      el.scrollTop = el.scrollHeight;
     }
   }, [thread.messages]);
 
   const previousMessagesLength = useRef(0);
   useEffect(() => {
     if (threadId && thread.messages.length > 0 && thread.messages.length !== previousMessagesLength.current) {
-      const updates: Record<string, unknown> = {
-        messages: thread.messages.map(m => JSON.parse(JSON.stringify(m))),
-        timestamp: new Date().toISOString(),
-      };
-
       if (currentChat?.title === 'New Chat' && thread.messages.length > 0) {
         const content = thread.messages[0].content as string;
-        updates.title = content.length > 40 ? content.substring(0, 40) + '...' : content || 'New Chat';
-        updates.preview = (content).substring(0, 60) + '...';
+        dispatch(updateChat({
+          id: threadId,
+          updates: {
+            title: content.length > 40 ? content.substring(0, 40) + '...' : content || 'New Chat',
+            preview: content.substring(0, 60) + '...',
+            timestamp: new Date().toISOString(),
+          },
+        }));
       }
-
-      dispatch(updateChat({ id: threadId, updates }));
       previousMessagesLength.current = thread.messages.length;
     }
   }, [threadId, thread.messages, dispatch, currentChat]);
@@ -139,11 +132,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
   if (chatsLoading) {
     return (
       <main className="flex-1 h-full max-w-4xl mx-auto">
-        <div className="flex flex-col items-center justify-center h-full">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-400"></div>
-            <p className="text-neutral-500">Loading chat...</p>
-          </div>
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <Spinner size="lg" aria-label="Loading chat" />
+          <p className="text-muted-foreground">Loading chat...</p>
         </div>
       </main>
     );
@@ -152,12 +143,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
   if (threadId && !currentChat) {
     return (
       <main className="flex-1 h-full max-w-4xl mx-auto">
-        <div className="flex flex-col items-center justify-center h-full">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <h1 className="text-2xl text-neutral-400 font-bold">Chat Not Found</h1>
-            <p className="text-neutral-500">The requested chat could not be found.</p>
-            <Button onClick={() => (window.location.href = '/')}>Go Home</Button>
-          </div>
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
+          <p className="text-muted-foreground">The requested chat could not be found.</p>
+          <Button onClick={() => navigate('/')}>Go Home</Button>
         </div>
       </main>
     );
@@ -166,14 +155,12 @@ export function ChatPage({ threadId }: { threadId: string }) {
   if (error) {
     return (
       <main className="flex-1 h-full max-w-4xl mx-auto">
-        <div className="flex flex-col items-center justify-center h-full">
-          <div className="flex flex-col items-center justify-center gap-4">
-            <h1 className="text-2xl text-red-400 font-bold">Error</h1>
-            <p className="text-red-400">{error}</p>
-            <Button variant="destructive" onClick={() => window.location.reload()}>
-              Retry
-            </Button>
-          </div>
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <h1 className="text-2xl text-destructive font-bold">Error</h1>
+          <p className="text-destructive">{error}</p>
+          <Button variant="destructive" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
         </div>
       </main>
     );

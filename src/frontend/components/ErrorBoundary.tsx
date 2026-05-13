@@ -48,20 +48,20 @@ export class ErrorBoundary extends Component<Props, State> {
 
       // Default error UI
       return (
-        <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8 bg-neutral-900 rounded-lg border border-red-500/20">
+        <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8 bg-card rounded-lg border border-destructive/20">
           <div className="text-center space-y-4 max-w-md">
-            <div className="text-red-400 text-4xl mb-4">⚠️</div>
-            <h2 className="text-xl font-bold text-red-100">Something went wrong</h2>
-            <p className="text-neutral-400 text-sm">
+            <div className="text-destructive text-4xl mb-4">&#x26A0;&#xFE0F;</div>
+            <h2 className="text-xl font-bold text-foreground">Something went wrong</h2>
+            <p className="text-muted-foreground text-sm">
               An unexpected error occurred. You can try reloading the page or going back.
             </p>
             
             {this.state.error && (
-              <details className="mt-4 p-3 bg-red-950/50 rounded border border-red-800/50 text-left">
-                <summary className="text-red-300 text-sm cursor-pointer hover:text-red-200">
+              <details className="mt-4 p-3 bg-destructive/10 rounded border border-destructive/20 text-left">
+                <summary className="text-destructive text-sm cursor-pointer hover:text-destructive/80">
                   Error Details
                 </summary>
-                <pre className="mt-2 text-xs text-red-200 whitespace-pre-wrap overflow-auto max-h-32">
+                <pre className="mt-2 text-xs text-foreground whitespace-pre-wrap overflow-auto max-h-32">
                   {this.state.error.message}
                   {this.state.error.stack && `\n\n${this.state.error.stack}`}
                 </pre>
@@ -73,14 +73,13 @@ export class ErrorBoundary extends Component<Props, State> {
                 onClick={this.handleRetry}
                 variant="outline"
                 size="sm"
-                className="border-red-600 text-red-100 hover:bg-red-900/50"
               >
                 Try Again
               </Button>
               <Button
                 onClick={this.handleReload}
+                variant="destructive"
                 size="sm"
-                className="bg-red-600 hover:bg-red-700 text-white"
               >
                 Reload Page
               </Button>
