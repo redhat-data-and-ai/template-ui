@@ -8,6 +8,7 @@ interface StreamRequestBody {
   user_id?: string;
   session_id?: string;
   stream_tokens?: boolean;
+  resume?: boolean;
 }
 
 interface ProxyRequestBody {
@@ -220,7 +221,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, user_id } = request.body;
+      const { message, thread_id, user_id, resume: isResume } = request.body;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -260,14 +261,20 @@ async function proxyRoutes(fastify: FastifyInstance) {
         const runUrl = `${agentHost}/threads/${thread_id}/runs/stream`;
         fastify.log.info({ traceId, runUrl }, 'Starting streaming run');
 
+        const runBody: Record<string, unknown> = {
+          assistant_id: 'agent',
+          stream_mode: ['messages'],
+        };
+        if (isResume) {
+          runBody.command = { resume: message };
+        } else {
+          runBody.input = { messages: [{ role: 'human', content: message }] };
+        }
+
         const runResp = await fetch(runUrl, {
           method: 'POST',
           headers: { ...headers, Accept: 'text/event-stream' },
-          body: JSON.stringify({
-            assistant_id: 'agent',
-            input: { messages: [{ role: 'human', content: message }] },
-            stream_mode: ['messages'],
-          }),
+          body: JSON.stringify(runBody),
         });
 
         if (!runResp.ok) {
@@ -354,6 +361,36 @@ async function proxyRoutes(fastify: FastifyInstance) {
             chunkId++;
             prevPartial = '';
           }
+
+          try {
+            const stateResp = await fetch(
+              `${agentHost}/threads/${thread_id}/state`,
+              { method: 'GET', headers },
+            );
+            if (stateResp.ok) {
+              const threadState = await stateResp.json() as Record<string, unknown>;
+              const tasks = Array.isArray(threadState.tasks) ? threadState.tasks : [];
+              const interrupted = tasks.find(
+                (t: any) => Array.isArray(t?.interrupts) && t.interrupts.length > 0,
+              );
+              if (interrupted) {
+                const firstInterrupt = (interrupted as any).interrupts[0];
+                const value = typeof firstInterrupt?.value === 'string'
+                  ? firstInterrupt.value
+                  : JSON.stringify(firstInterrupt?.value ?? 'Action required');
+                const interruptChunk = {
+                  type: 'interrupt',
+                  content: { value, resumable: true },
+                  chunk_id: chunkId,
+                };
+                reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
+                chunkId++;
+              }
+            }
+          } catch (err) {
+            fastify.log.warn({ traceId, err }, 'Failed to check thread state for interrupts');
+          }
+
           fastify.log.info({ traceId, chunkId }, 'Stream complete');
           reply.raw.end('data: [DONE]\n\n');
         }

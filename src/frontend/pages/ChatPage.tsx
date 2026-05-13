@@ -8,13 +8,19 @@ import {
   selectChatById,
   selectIsLoadingThreads,
   selectChatsError,
+  selectStreamingState,
   updateChat,
-  setError,
+  updateStreamingState,
 } from '../redux/slices/chats';
+import { selectDebugMode } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI } from '../hooks/useStreamingAPI';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
+import { InterruptBanner } from '../components/InterruptBanner';
+import { TaskProgressStepper } from '../components/TaskProgressStepper';
+import { TasksSidebar } from '../components/TasksSidebar';
+import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadState } from '../services/agent-rest';
 
@@ -25,6 +31,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const currentChat = useAppSelector((state) => selectChatById(state, threadId));
   const chatsLoading = useAppSelector(selectIsLoadingThreads);
   const error = useAppSelector(selectChatsError);
+  const debugMode = useAppSelector(selectDebugMode);
+  const streamingState = useAppSelector((state) => selectStreamingState(state, threadId));
 
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({});
@@ -195,6 +203,39 @@ export function ChatPage({ threadId }: { threadId: string }) {
     }
   }, [thread, threadId, currentChat, dispatch]);
 
+  const handleInterruptResume = useCallback(
+    async (response: string) => {
+      if (!threadId || !currentChat) return;
+      dispatch(
+        updateStreamingState({
+          chatId: threadId,
+          state: { pendingInterrupt: null },
+        }),
+      );
+      const resumeMessage: Message = {
+        id: `msg-${Date.now()}`,
+        type: 'human',
+        content: response,
+      };
+      try {
+        await thread.submit({ messages: [...thread.messages, resumeMessage] });
+      } catch (err) {
+        console.error('Failed to resume:', err);
+        dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+      }
+    },
+    [thread, threadId, currentChat, dispatch],
+  );
+
+  const handleInterruptDismiss = useCallback(() => {
+    dispatch(
+      updateStreamingState({
+        chatId: threadId,
+        state: { pendingInterrupt: null },
+      }),
+    );
+  }, [dispatch, threadId]);
+
   const handleNewChat = useCallback(() => {
     navigate('/');
   }, [navigate]);
@@ -230,21 +271,49 @@ export function ChatPage({ threadId }: { threadId: string }) {
     );
   }
 
+  const hasToolCalls = thread.messages.some(
+    (m) => m.type === 'ai' && Array.isArray((m as any).tool_calls) && (m as any).tool_calls.length > 0,
+  );
+
   return (
     <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
-      <ChatMessagesView
-        key={threadId}
-        messages={thread.messages}
-        streamEvents={thread.streamEvents}
-        isLoading={thread.isLoading}
-        onRetry={handleStreamRetry}
-        scrollAreaRef={scrollAreaRef}
-        onSubmit={handleSubmit}
-        onCancel={handleCancel}
-        onNewChat={handleNewChat}
-        liveActivityEvents={processedEventsTimeline}
-        historicalActivities={historicalActivities}
-      />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0">
+          {hasToolCalls && (
+            <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
+          )}
+          {thread.pendingInterrupt && (
+            <InterruptBanner
+              interrupt={thread.pendingInterrupt}
+              onResume={handleInterruptResume}
+              onDismiss={handleInterruptDismiss}
+            />
+          )}
+          <ChatMessagesView
+            key={threadId}
+            messages={thread.messages}
+            streamEvents={thread.streamEvents}
+            isLoading={thread.isLoading}
+            onRetry={handleStreamRetry}
+            scrollAreaRef={scrollAreaRef}
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+            onNewChat={handleNewChat}
+            liveActivityEvents={processedEventsTimeline}
+            historicalActivities={historicalActivities}
+          />
+        </div>
+        {(hasToolCalls || debugMode) && (
+          <div className="w-64 shrink-0 border-l border-border overflow-y-auto hidden lg:block p-2 space-y-2">
+            {hasToolCalls && (
+              <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
+            )}
+            {debugMode && (
+              <DebugPanel messages={thread.messages} streamingState={streamingState} />
+            )}
+          </div>
+        )}
+      </div>
     </ChatErrorBoundary>
   );
 }

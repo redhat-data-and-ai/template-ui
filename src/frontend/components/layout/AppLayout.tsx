@@ -21,6 +21,7 @@ import { RedHatLogo } from '../RedHatLogo';
 import { Sidebar } from '../Sidebar';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ThemeToggle } from './ThemeToggle';
+import { DebugToggle } from '../DebugToggle';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import {
   selectAllChats,
@@ -214,6 +215,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         <Toolbar id="masthead-toolbar" isFullHeight>
           <ToolbarContent>
             <ToolbarGroup align={{ default: 'alignEnd' }}>
+              <ToolbarItem>
+                <DebugToggle />
+              </ToolbarItem>
               <ToolbarItem>
                 <ThemeToggle />
               </ToolbarItem>

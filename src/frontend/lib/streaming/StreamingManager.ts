@@ -13,9 +13,15 @@ export interface StreamRequest {
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error' | 'cancelled';
 
+export interface InterruptPayload {
+  value: string;
+  resumable: boolean;
+}
+
 export type StreamCallback = {
   onToken: (content: string) => void;
   onMessage: (message: Message) => void;
+  onInterrupt: (interrupt: InterruptPayload) => void;
   onError: (error: Error) => void;
   onStatusChange: (status: StreamStatus) => void;
   onDone: () => void;
@@ -51,6 +57,8 @@ export class StreamingManager {
 
           if (event.data.type === 'token') {
             callbacks.onToken(event.data.content);
+          } else if (event.data.type === 'interrupt') {
+            callbacks.onInterrupt(event.data.content);
           } else {
             callbacks.onMessage(event.data.content);
           }

@@ -129,6 +129,8 @@ export function useStreamingAPI(threadId: string) {
           state: {
             currentRunId: `run-${Date.now()}`,
             error: null,
+            pendingInterrupt: null,
+            taskSteps: [],
           },
         }),
       );
@@ -196,6 +198,14 @@ export function useStreamingAPI(threadId: string) {
             );
           }
         },
+        onInterrupt(interrupt) {
+          dispatch(
+            updateStreamingState({
+              chatId: threadId,
+              state: { pendingInterrupt: interrupt },
+            }),
+          );
+        },
         onError(error) {
           dispatch(
             updateStreamingState({
@@ -252,6 +262,8 @@ export function useStreamingAPI(threadId: string) {
     messages,
     streamEvents,
     isLoading: streamingState.isLoading,
+    pendingInterrupt: streamingState.pendingInterrupt,
+    taskSteps: streamingState.taskSteps,
     submit,
     stop,
     setMessages,

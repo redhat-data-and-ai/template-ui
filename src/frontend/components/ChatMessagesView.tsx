@@ -10,8 +10,9 @@ import {
 } from "./ActivityTimeline";
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
-import { isSubAgentToolCall } from "../types/deep-agent";
+import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
+import { ArtifactViewer } from "./ArtifactViewer";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -284,9 +285,20 @@ export function AIMessageRenderer({ message }: { message: Message }) {
                         <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
                           {(toolCall as Record<string, unknown>).content ? 'Result' : 'Running...'}
                         </div>
-                        <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                          {JSON.stringify((toolCall as Record<string, unknown>).content, null, 2)}
-                        </pre>
+                        {(() => {
+                          const raw = (toolCall as Record<string, unknown>).content;
+                          if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
+                          const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+                          const kind = detectArtifactKind(text);
+                          if (kind !== 'text' && text.length > 100) {
+                            return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
+                          }
+                          return (
+                            <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                              {text}
+                            </pre>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>

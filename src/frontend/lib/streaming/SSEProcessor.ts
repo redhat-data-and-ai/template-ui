@@ -2,7 +2,8 @@ import type { Message } from '@langchain/langgraph-sdk';
 
 export type SSEChunk =
   | { type: 'token'; content: string; chunk_id: number }
-  | { type: 'message'; content: Message; chunk_id: number };
+  | { type: 'message'; content: Message; chunk_id: number }
+  | { type: 'interrupt'; content: { value: string; resumable: boolean }; chunk_id: number };
 
 export type SSEEvent =
   | { kind: 'chunk'; data: SSEChunk }
@@ -17,7 +18,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
   if (!isRecord(parsed)) return null;
   const type = parsed.type;
-  if (type !== 'token' && type !== 'message') return null;
+  if (type !== 'token' && type !== 'message' && type !== 'interrupt') return null;
   const chunkIdRaw = parsed.chunk_id;
   if (typeof chunkIdRaw !== 'number' || !Number.isFinite(chunkIdRaw)) {
     return null;
@@ -27,6 +28,18 @@ function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
   if (type === 'token') {
     if (typeof contentUnknown !== 'string') return null;
     return { type: 'token', content: contentUnknown, chunk_id: chunkIdRaw };
+  }
+
+  if (type === 'interrupt') {
+    if (!isRecord(contentUnknown)) return null;
+    return {
+      type: 'interrupt',
+      content: {
+        value: typeof contentUnknown.value === 'string' ? contentUnknown.value : '',
+        resumable: contentUnknown.resumable === true,
+      },
+      chunk_id: chunkIdRaw,
+    };
   }
 
   if (typeof contentUnknown !== 'object' || contentUnknown === null) {
