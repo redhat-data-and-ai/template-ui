@@ -10,6 +10,8 @@ import {
 } from "./ActivityTimeline";
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
+import { isSubAgentToolCall } from "../types/deep-agent";
+import { SubAgentIndicator } from "./SubAgentIndicator";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -227,55 +229,71 @@ export function AIMessageRenderer({ message }: { message: Message }) {
     const isNormalMessage = message.type === 'ai' && (!Array.isArray(message?.tool_calls) || message?.tool_calls?.length === 0);
 
     if (isToolCallStart) {
-      return (
-        <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
-            <Settings className="w-4 h-4 text-muted-foreground" />
-          </div>
-          <div className="flex-1 min-w-0 space-y-2">
-            {message.tool_calls?.map((toolCall, idx) => (
-              <div key={`${message.id}-${idx}`} className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
-                <button
-                  onClick={() => toggleExpand(`${message.id}-${idx}`)}
-                  className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="text-left">
-                      <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                        <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
-                        {(toolCall as Record<string, unknown>).content ? (
-                          <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
-                        ) : (
-                          <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">Tool execution</div>
-                    </div>
-                  </div>
-                  {expandedItems.has(`${message.id}-${idx}`) ? (
-                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  )}
-                </button>
+      const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
+      const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc)) ?? [];
 
-                {expandedItems.has(`${message.id}-${idx}`) && (
-                  <div className="px-4 pb-4 border-t border-border">
-                    <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
-                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                      {JSON.stringify(toolCall.args, null, 2)}
-                    </pre>
-                    <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
-                      {(toolCall as Record<string, unknown>).content ? 'Result' : 'Running...'}
-                    </div>
-                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                      {JSON.stringify((toolCall as Record<string, unknown>).content, null, 2)}
-                    </pre>
-                  </div>
-                )}
+      return (
+        <div className="space-y-2 w-full">
+          {subAgentCalls.map((toolCall, idx) => (
+            <SubAgentIndicator
+              key={`${message.id}-sa-${idx}`}
+              toolCall={toolCall as any}
+              messageId={message.id ?? ''}
+              index={idx}
+            />
+          ))}
+
+          {regularCalls.length > 0 && (
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
+                <Settings className="w-4 h-4 text-muted-foreground" />
               </div>
-            ))}
-          </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                {regularCalls.map((toolCall, idx) => (
+                  <div key={`${message.id}-${idx}`} className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
+                    <button
+                      onClick={() => toggleExpand(`${message.id}-${idx}`)}
+                      className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                            <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
+                            {(toolCall as Record<string, unknown>).content ? (
+                              <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
+                            ) : (
+                              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">Tool execution</div>
+                        </div>
+                      </div>
+                      {expandedItems.has(`${message.id}-${idx}`) ? (
+                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </button>
+
+                    {expandedItems.has(`${message.id}-${idx}`) && (
+                      <div className="px-4 pb-4 border-t border-border">
+                        <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
+                        <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                          {JSON.stringify(toolCall.args, null, 2)}
+                        </pre>
+                        <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
+                          {(toolCall as Record<string, unknown>).content ? 'Result' : 'Running...'}
+                        </div>
+                        <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                          {JSON.stringify((toolCall as Record<string, unknown>).content, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       );
     }

@@ -15,6 +15,7 @@ import {
   type StreamingState,
 } from '@/redux/slices/chats';
 import { chatStorage } from '@/services/chatStorage';
+import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 
 function cloneMessages(messages: Message[]): Message[] {
   return messages.map((m) => JSON.parse(JSON.stringify(m)) as Message);
@@ -157,6 +158,25 @@ export function useStreamingAPI(threadId: string) {
             m.type === 'ai' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
           if (isToolCallingAi) {
             dispatch(appendMessageToChat({ chatId: threadId, message: m }));
+
+            const subAgentTc = m.tool_calls?.find((tc: { name: string; args?: Record<string, unknown> }) =>
+              isSubAgentToolCall(tc),
+            );
+            if (subAgentTc) {
+              dispatch(
+                updateStreamingState({
+                  chatId: threadId,
+                  state: {
+                    activeSubAgent: {
+                      name: extractSubAgentName(subAgentTc),
+                      toolCallId: subAgentTc.id ?? '',
+                      status: 'delegating',
+                      startedAt: Date.now(),
+                    },
+                  },
+                }),
+              );
+            }
             return;
           }
 
@@ -166,6 +186,12 @@ export function useStreamingAPI(threadId: string) {
                 chatId: threadId,
                 toolCallId: m.tool_call_id,
                 content: m.content,
+              }),
+            );
+            dispatch(
+              updateStreamingState({
+                chatId: threadId,
+                state: { activeSubAgent: null },
               }),
             );
           }

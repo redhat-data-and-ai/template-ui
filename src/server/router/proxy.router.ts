@@ -45,10 +45,17 @@ function extractText(content: unknown): string {
  * Extract tool_calls from a raw message. LangGraph streaming uses
  * `additional_kwargs.function_call` (single) or `tool_calls` (array).
  */
+function rewriteSubAgentName(tc: { name: string; args?: Record<string, any> }): string {
+  if (tc.name === 'task' && typeof tc.args?.subagent_type === 'string') {
+    return tc.args.subagent_type;
+  }
+  return tc.name;
+}
+
 function extractToolCalls(raw: Record<string, any>): { name: string; args: any; id: string }[] {
   if (Array.isArray(raw.tool_calls) && raw.tool_calls.length > 0) {
     return raw.tool_calls.map((tc: any) => ({
-      name: tc.name,
+      name: rewriteSubAgentName(tc),
       args: tc.args ?? {},
       id: tc.id ?? '',
     }));

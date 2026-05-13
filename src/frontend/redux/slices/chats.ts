@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
+import type { SubAgentInfo } from '../../types/deep-agent';
 
 export interface StreamingState {
   isLoading: boolean;
@@ -7,6 +8,7 @@ export interface StreamingState {
   isConnected: boolean;
   error: string | null;
   currentRunId: string | null;
+  activeSubAgent: SubAgentInfo | null;
 }
 
 export interface ChatItem {
@@ -33,6 +35,7 @@ const DEFAULT_STREAMING_STATE: StreamingState = {
   isConnected: false,
   error: null,
   currentRunId: null,
+  activeSubAgent: null,
 };
 
 const initialState: ChatsState = {

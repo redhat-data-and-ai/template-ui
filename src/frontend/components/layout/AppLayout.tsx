@@ -24,6 +24,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import {
   selectAllChats,
+  selectStreamingState,
   addChat,
   deleteChat,
   clearAllChats,
@@ -56,6 +57,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     const match = /^\/chat\/([^/]+)/.exec(location.pathname);
     return match?.[1];
   }, [location.pathname]);
+
+  const streamingState = useAppSelector((state) =>
+    currentChatId ? selectStreamingState(state, currentChatId) : null,
+  );
+  const activeSubAgent = streamingState?.activeSubAgent ?? null;
 
   useEffect(() => {
     const loadedChats = chatStorage.loadChats();
@@ -231,6 +237,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             currentChatId={currentChatId}
             chatHistory={sidebarChats}
             tokenExpiry={tokenExpiry}
+            activeSubAgent={activeSubAgent}
             onNewChat={handleNewChat}
             onSelectChat={handleSelectChat}
             onDeleteChat={handleDeleteChat}

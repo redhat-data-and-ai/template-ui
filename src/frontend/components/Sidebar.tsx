@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Button,
+  Label,
   Modal,
   ModalBody,
   ModalFooter,
@@ -8,15 +9,17 @@ import {
   ModalVariant,
   SearchInput,
 } from '@patternfly/react-core';
-import { MessageSquare, Trash2, Edit3, Plus, Trash } from 'lucide-react';
+import { Loader2, MessageSquare, Trash2, Edit3, Plus, Trash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SidebarChatItem } from '../types/chat';
+import type { SubAgentInfo } from '../types/deep-agent';
 
 interface SidebarProps {
   userName?: string;
   currentChatId?: string;
   chatHistory: SidebarChatItem[];
   tokenExpiry?: Date;
+  activeSubAgent?: SubAgentInfo | null;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
@@ -30,6 +33,7 @@ function SidebarComponent({
   chatHistory,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tokenExpiry,
+  activeSubAgent,
   onNewChat,
   onSelectChat,
   onDeleteChat,
@@ -132,7 +136,20 @@ function SidebarComponent({
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <p className="flex-1 text-sm truncate min-w-0">{chat.title}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{chat.title}</p>
+                      {isActive && activeSubAgent && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Label
+                            isCompact
+                            color="blue"
+                            icon={<Loader2 className="w-2.5 h-2.5 animate-spin" />}
+                          >
+                            <span className="capitalize">{activeSubAgent.name}</span>
+                          </Label>
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {editingChat !== chat.id && (
