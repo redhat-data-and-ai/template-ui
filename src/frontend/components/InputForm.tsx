@@ -8,6 +8,7 @@ import { Textarea } from "./ui/textarea";
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
   onCancel: () => void;
+  onNewChat?: () => void;
   isLoading: boolean;
   hasHistory: boolean;
 }
@@ -15,6 +16,7 @@ interface InputFormProps {
 export const InputForm: React.FC<InputFormProps> = ({
   onSubmit,
   onCancel,
+  onNewChat,
   isLoading,
   hasHistory,
 }) => {
@@ -161,7 +163,7 @@ export const InputForm: React.FC<InputFormProps> = ({
           <Button
             className="bg-neutral-700 border-neutral-600 text-neutral-300 cursor-pointer rounded-xl rounded-t-sm pl-2 "
             variant="default"
-            onClick={() => window.location.reload()}
+            onClick={() => onNewChat ? onNewChat() : (window.location.href = '/')}
           >
             <SquarePen size={16} />
              New Chat

@@ -15,8 +15,11 @@ function normalizeContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content
-      .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
-      .map((b: any) => b.text)
+      .map((b: any) => {
+        if (typeof b === 'string') return b;
+        if (b?.type === 'text' && typeof b.text === 'string') return b.text;
+        return '';
+      })
       .join('');
   }
   return typeof content === 'object' ? JSON.stringify(content) : String(content ?? '');

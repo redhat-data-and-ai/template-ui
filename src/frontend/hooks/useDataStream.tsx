@@ -75,6 +75,7 @@ export function useDataStream({
     abortControllerRef.current = new AbortController();
 
     processedChunkIdsRef.current.clear();
+    isStreamingTokensRef.current = false;
 
     setIsLoading(true);
     setMessages(messages);

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { Message } from '@langchain/langgraph-sdk';
 
 import { useAppSelector, useAppDispatch } from '../redux/hooks';
@@ -18,6 +18,7 @@ import { ProcessedEvent } from '../components/ActivityTimeline';
 
 export function ChatPage({ threadId }: { threadId: string }) {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const currentChat = useAppSelector((state) => selectChatById(state, threadId));
   const chatsLoading = useAppSelector(selectIsLoadingThreads);
   const error = useAppSelector(selectChatsError);
@@ -131,6 +132,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
     setHistoricalActivities(currentChat?.historicalActivities || {});
   }, [currentChat]);
 
+  const handleNewChat = useCallback(() => {
+    navigate('/');
+  }, [navigate]);
+
   if (chatsLoading) {
     return (
       <main className="flex-1 h-full max-w-4xl mx-auto">
@@ -185,6 +190,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
           scrollAreaRef={scrollAreaRef}
           onSubmit={handleSubmit}
           onCancel={handleCancel}
+          onNewChat={handleNewChat}
           liveActivityEvents={processedEventsTimeline}
           historicalActivities={historicalActivities}
         />

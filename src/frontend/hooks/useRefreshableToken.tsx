@@ -52,6 +52,10 @@ export function useRefreshableToken() {
         console.log("Refreshing token");
         try {
           const response = await fetch("/auth/refresh?forceRefresh=true");
+          if (response.status === 401) {
+            window.location.href = "/login";
+            return;
+          }
           const data = await response.json();
           if (data.message === "RefreshedToken") {
             setToken(data.token.access_token);

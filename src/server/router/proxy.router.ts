@@ -41,18 +41,61 @@ function extractText(content: unknown): string {
  *
  * Returns [uiChunk | null, updatedPrevPartial].
  */
+/**
+ * Extract tool_calls from a raw message. LangGraph streaming uses
+ * `additional_kwargs.function_call` (single) or `tool_calls` (array).
+ */
+function extractToolCalls(raw: Record<string, any>): { name: string; args: any; id: string }[] {
+  if (Array.isArray(raw.tool_calls) && raw.tool_calls.length > 0) {
+    return raw.tool_calls.map((tc: any) => ({
+      name: tc.name,
+      args: tc.args ?? {},
+      id: tc.id ?? '',
+    }));
+  }
+  const fc = raw.additional_kwargs?.function_call;
+  if (fc && fc.name) {
+    let args = {};
+    try { args = typeof fc.arguments === 'string' ? JSON.parse(fc.arguments) : fc.arguments ?? {}; } catch { /* ignore */ }
+    return [{ name: fc.name, args, id: raw.id ?? '' }];
+  }
+  return [];
+}
+
 function translateMessageEvent(
   sseType: string,
   payload: unknown,
   chunkId: number,
   prevPartial: string,
+  sentMsgIds: Set<string>,
 ): [{ type: string; content: unknown; chunk_id: number } | null, string] {
   if (!Array.isArray(payload) || payload.length === 0) return [null, prevPartial];
   const [msg] = payload;
   if (!msg || typeof msg !== 'object') return [null, prevPartial];
 
   if (sseType === 'messages/partial') {
-    const fullText = extractText((msg as any).content);
+    const raw = msg as Record<string, any>;
+    const toolCalls = extractToolCalls(raw);
+
+    if (toolCalls.length > 0) {
+      const msgId = raw.id ?? `ai-tc-${chunkId}`;
+      if (!sentMsgIds.has(msgId)) {
+        sentMsgIds.add(msgId);
+        return [{
+          type: 'message',
+          content: {
+            type: 'ai',
+            content: '',
+            tool_calls: toolCalls,
+            id: msgId,
+          },
+          chunk_id: chunkId,
+        }, ''];
+      }
+      return [null, prevPartial];
+    }
+
+    const fullText = extractText(raw.content);
     return [null, fullText];
   }
 
@@ -60,21 +103,23 @@ function translateMessageEvent(
     const raw = msg as Record<string, any>;
     const msgType = (raw.type ?? '').toString().toLowerCase();
 
-    if ((msgType === 'ai' || msgType === 'aimessage') && raw.tool_calls?.length) {
-      return [{
-        type: 'message',
-        content: {
-          type: 'ai',
-          content: '',
-          tool_calls: (raw.tool_calls as any[]).map((tc) => ({
-            name: tc.name,
-            args: tc.args ?? {},
-            id: tc.id,
-          })),
-          id: raw.id ?? `ai-${chunkId}`,
-        },
-        chunk_id: chunkId,
-      }, ''];
+    const toolCalls = extractToolCalls(raw);
+    if ((msgType === 'ai' || msgType === 'aimessage' || !msgType) && toolCalls.length > 0) {
+      const msgId = raw.id ?? `ai-${chunkId}`;
+      if (!sentMsgIds.has(msgId)) {
+        sentMsgIds.add(msgId);
+        return [{
+          type: 'message',
+          content: {
+            type: 'ai',
+            content: '',
+            tool_calls: toolCalls,
+            id: msgId,
+          },
+          chunk_id: chunkId,
+        }, ''];
+      }
+      return [null, ''];
     }
 
     if (msgType === 'tool' || msgType === 'toolmessage') {
@@ -247,6 +292,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         let chunkId = 0;
         let clientGone = false;
         let prevPartial = '';
+        const sentMsgIds = new Set<string>();
 
         reply.raw.on('close', () => {
           clientGone = true;
@@ -279,7 +325,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
               try {
                 const parsed = JSON.parse(sseData);
-                const [uiChunk, nextPartial] = translateMessageEvent(sseType, parsed, chunkId, prevPartial);
+                const [uiChunk, nextPartial] = translateMessageEvent(sseType, parsed, chunkId, prevPartial, sentMsgIds);
                 prevPartial = nextPartial;
                 if (uiChunk) {
                   reply.raw.write(`data: ${JSON.stringify(uiChunk)}\n\n`);

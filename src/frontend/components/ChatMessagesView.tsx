@@ -12,7 +12,20 @@ import {
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
 
-// Markdown component props type from former ReportView
+function extractMessageText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((b: any) => {
+        if (typeof b === 'string') return b;
+        if (b?.type === 'text' && typeof b.text === 'string') return b.text;
+        return '';
+      })
+      .join('');
+  }
+  return '';
+}
+
 type MdComponentProps = {
   className?: string;
   children?: ReactNode;
@@ -172,9 +185,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
       className={`text-white rounded-3xl break-words min-h-7 bg-neutral-700 max-w-[100%] sm:max-w-[90%] p-3 rounded-br-xs`}
     >
       <ReactMarkdown components={mdComponents}>
-        {typeof message.content === "string"
-          ? message.content
-          : JSON.stringify(message.content)}
+        {extractMessageText(message.content)}
       </ReactMarkdown>
     </div>
   );
@@ -198,9 +209,7 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({
     <div className={`relative break-words flex flex-col w-full`}>
       <div className="w-full prose prose-invert max-w-none">
         <ReactMarkdown components={mdComponents}>
-          {typeof message.content === "string"
-            ? message.content
-            : JSON.stringify(message.content)}
+          {extractMessageText(message.content)}
         </ReactMarkdown>
       </div>
     </div>
@@ -214,6 +223,7 @@ interface ChatMessagesViewProps {
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   onSubmit: (inputValue: string) => void;
   onCancel: () => void;
+  onNewChat?: () => void;
   liveActivityEvents: ProcessedEvent[];
   historicalActivities: Record<string, ProcessedEvent[]>;
 }
@@ -222,7 +232,6 @@ export function AIMessageRenderer({ message }: { message: Message }) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const toggleExpand = (itemId: string) => {
-    console.log('toggleExpand : ', itemId);
     setExpandedItems(prev => {
       const newSet = new Set(prev);
       if (newSet.has(itemId)) {
@@ -371,6 +380,7 @@ export function ChatMessagesView({
   scrollAreaRef,
   onSubmit,
   onCancel,
+  onNewChat,
 }: ChatMessagesViewProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
@@ -387,7 +397,12 @@ export function ChatMessagesView({
     <div className="flex flex-col h-full">
       <ScrollArea className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
         <div className="p-4 md:p-6 space-y-2 max-w-4xl mx-auto pt-16">
-          {messages.map((message, index) => {
+          {messages.filter(m => {
+            if (m.type === 'human') return true;
+            if (m.type === 'tool') return false;
+            if (m.type === 'ai') return true;
+            return true;
+          }).map((message, index) => {
             return (
               <div key={message.id || `msg-${index}`} className="space-y-3">
                 <div
@@ -456,6 +471,7 @@ export function ChatMessagesView({
         onSubmit={onSubmit}
         isLoading={isLoading}
         onCancel={onCancel}
+        onNewChat={onNewChat}
         hasHistory={messages.length > 0}
       />
     </div>
