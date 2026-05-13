@@ -1,16 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import type { NavSelectClickHandler } from '@patternfly/react-core';
 import {
-  Nav,
-  NavList,
-  NavItem,
-  Button as PFButton,
   SearchInput,
-  Divider,
 } from '@patternfly/react-core';
-import { MessageSquare, Trash2, Edit3, User } from 'lucide-react';
+import { MessageSquare, Trash2, Edit3, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useRefreshableToken } from '@/hooks/useRefreshableToken';
+
 import { Button } from './ui/button';
 import type { SidebarChatItem } from '../types/chat';
 
@@ -40,7 +34,6 @@ function SidebarComponent({
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
 
-  const { tokenStatus } = useRefreshableToken();
 
   const filteredChats = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -62,153 +55,128 @@ function SidebarComponent({
     setEditTitle('');
   };
 
-  const selectChatNavHandler = (chatId: string): NavSelectClickHandler => () => {
-    onSelectChat(chatId);
-  };
-
   return (
-    <div
-      className={cn(
-        'flex flex-col h-full min-h-0 bg-card border-r border-border text-card-foreground'
-      )}
-    >
-      <div className="flex shrink-0 items-center gap-3 p-4 border-b border-border">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
-          <User className="w-4 h-4 text-primary-foreground" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{userName}</p>
-          <p className={cn('text-xs', tokenStatus.color)}>{tokenStatus.text}</p>
-        </div>
-      </div>
-
-      <div className="shrink-0 p-4 border-b border-border">
-        <PFButton variant="primary" isBlock onClick={onNewChat}>
+    <div className="flex flex-col h-full min-h-0 bg-sidebar border-r border-sidebar-border text-sidebar-foreground">
+      {/* New Chat button */}
+      <div className="shrink-0 p-3 pb-2">
+        <button
+          onClick={onNewChat}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
           New Chat
-        </PFButton>
+        </button>
       </div>
 
-      <div className="shrink-0 px-4 py-3">
-        <SearchInput
-          placeholder="Search threads"
-          aria-label="Search chat threads"
-          value={searchQuery}
-          onChange={(_e, value) => setSearchQuery(value)}
-        />
+      {/* Search */}
+      {chatHistory.length > 3 && (
+        <div className="shrink-0 px-3 py-1.5">
+          <SearchInput
+            placeholder="Search threads"
+            aria-label="Search chat threads"
+            value={searchQuery}
+            onChange={(_e, value) => setSearchQuery(value)}
+          />
+        </div>
+      )}
+
+      {/* Separator + label */}
+      <div className="shrink-0 px-3 pt-3 pb-1.5">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent chats</p>
       </div>
 
-      <Divider className="shrink-0" />
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* Chat list */}
+      <div className="flex-1 min-h-0 overflow-y-auto chat-scroll px-1.5">
         {filteredChats.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-            <MessageSquare className="w-8 h-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+            <MessageSquare className="w-6 h-6 text-muted-foreground/40 mb-2" />
+            <p className="text-sm text-muted-foreground/60">
               {chatHistory.length === 0 ? 'No chats yet' : 'No matching threads'}
             </p>
-            {chatHistory.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">Start a conversation!</p>
-            )}
           </div>
         ) : (
-          <Nav aria-label="Chat threads">
-            <NavList className="!pt-2 !pb-2">
-              {filteredChats.map((chat) => {
-                const isActive = currentChatId === chat.id;
+          <div className="space-y-0.5">
+            {filteredChats.map((chat) => {
+              const isActive = currentChatId === chat.id;
 
-                return (
-                  <NavItem
-                    key={chat.id}
-                    isActive={isActive}
-                    className={cn(
-                      '!mt-1 group [&_.pf-v6-c-nav__link]:!rounded-md',
-                      editingChat === chat.id && '[&_.pf-v6-c-nav__link]:!py-2'
-                    )}
-                    onClick={selectChatNavHandler(chat.id)}
-                  >
-                    <div className="flex items-center justify-between w-full gap-2 min-w-0">
-                      <div className="flex min-w-0 flex-1 items-start gap-2">
-                        <MessageSquare
-                          className={cn(
-                            'w-4 h-4 shrink-0 mt-0.5',
-                            isActive ? 'text-primary' : 'text-muted-foreground'
-                          )}
-                        />
-                        <div className="min-w-0 flex-1">
-                          {editingChat === chat.id ? (
-                            <input
-                              value={editTitle}
-                              onChange={(e) => setEditTitle(e.target.value)}
-                              onBlur={() => handleSaveRename(chat.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSaveRename(chat.id);
-                                }
-                                if (e.key === 'Escape') {
-                                  setEditingChat(null);
-                                  setEditTitle('');
-                                }
-                              }}
-                              className="w-full bg-transparent text-sm font-medium text-foreground border border-border rounded px-1 py-0.5 outline-none focus:border-primary"
-                              autoFocus
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          ) : (
-                            <>
-                              <span className="block truncate text-sm font-medium">
-                                {chat.title}
-                              </span>
-                              <span className="block truncate text-xs text-muted-foreground mt-0.5">
-                                {chat.preview}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
+              return (
+                <div
+                  key={chat.id}
+                  className={cn(
+                    'group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors',
+                    isActive
+                      ? 'bg-secondary text-foreground'
+                      : 'text-foreground/70 hover:bg-secondary/50 hover:text-foreground'
+                  )}
+                  onClick={() => onSelectChat(chat.id)}
+                >
+                  {editingChat === chat.id ? (
+                    <input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onBlur={() => handleSaveRename(chat.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveRename(chat.id);
+                        if (e.key === 'Escape') {
+                          setEditingChat(null);
+                          setEditTitle('');
+                        }
+                      }}
+                      className="flex-1 bg-transparent text-sm text-foreground border border-border rounded px-1.5 py-0.5 outline-none focus:border-primary"
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <p className="flex-1 text-sm truncate min-w-0">{chat.title}</p>
+                  )}
 
-                      {editingChat !== chat.id && (
-                        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              handleRename(chat.id, chat.title);
-                            }}
-                            title="Rename chat"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              onDeleteChat(chat.id);
-                            }}
-                            title="Delete chat"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      )}
+                  {editingChat !== chat.id && (
+                    <div className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground rounded-md"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRename(chat.id, chat.title);
+                        }}
+                        title="Rename chat"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive rounded-md"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteChat(chat.id);
+                        }}
+                        title="Delete chat"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
                     </div>
-                  </NavItem>
-                );
-              })}
-            </NavList>
-          </Nav>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      <div className="shrink-0 p-4 border-t border-border">
-        <p className="text-xs text-muted-foreground text-center">Dataverse AI Chat</p>
+      {/* User at bottom */}
+      <div className="shrink-0 p-3 border-t border-sidebar-border">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-sm font-semibold text-primary">
+            {userName.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{userName}</p>
+          </div>
+        </div>
       </div>
     </div>
   );

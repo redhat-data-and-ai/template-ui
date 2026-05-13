@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { Button } from "./ui/button";
-import { SquarePen, Send, StopCircle } from "lucide-react";
-import { Textarea } from "./ui/textarea";
+import { SquarePen, ArrowUp, StopCircle } from "lucide-react";
 
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
@@ -41,60 +39,51 @@ export const InputForm: React.FC<InputFormProps> = ({
       onSubmit={handleInternalSubmit}
       className="flex flex-col gap-2 p-3 pb-4"
     >
-      <div
-        className={`flex flex-row items-center justify-between rounded-3xl rounded-bl-sm ${
-          hasHistory ? "rounded-br-sm" : ""
-        } break-words min-h-7 bg-card border border-border px-4 pt-3`}
-      >
-        <Textarea
+      <div className="relative bg-card border border-border rounded-2xl shadow-elevated focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all duration-200">
+        <textarea
           value={internalInputValue}
           onChange={(e) => setInternalInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask me anything about the data"
-          className="w-full text-foreground placeholder-muted-foreground resize-none border-0 focus:outline-none focus:ring-0 outline-none focus-visible:ring-0 shadow-none md:text-base min-h-[56px] max-h-[200px] bg-transparent"
+          placeholder="Ask me anything about the data..."
+          className="w-full text-foreground placeholder-muted-foreground resize-none border-0 focus:outline-none focus:ring-0 outline-none bg-transparent px-4 pt-3.5 pb-12 md:text-[15px] min-h-[56px] max-h-[200px] rounded-2xl"
           rows={1}
         />
-        <div className="-mt-3">
+        <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
           {isLoading ? (
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              size="icon"
-              className="text-destructive hover:text-destructive/80 hover:bg-destructive/10 p-2 cursor-pointer rounded-full transition-all duration-200"
+              className="flex items-center justify-center w-9 h-9 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
               onClick={onCancel}
             >
-              <StopCircle className="h-5 w-5" />
-            </Button>
+              <StopCircle className="h-4.5 w-4.5" />
+            </button>
           ) : (
-            <Button
+            <button
               type="submit"
-              variant="ghost"
-              className={`${
-                isSubmitDisabled
-                  ? "text-muted-foreground"
-                  : "text-primary hover:text-primary/80 hover:bg-primary/10"
-              } p-2 cursor-pointer rounded-full transition-all duration-200 text-base`}
               disabled={isSubmitDisabled}
+              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 ${
+                isSubmitDisabled
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "gradient-brand text-white shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
+              }`}
             >
-              Ask
-              <Send className="h-5 w-5" />
-            </Button>
+              <ArrowUp className="h-4.5 w-4.5" />
+            </button>
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between">
-        <div className="flex flex-row gap-2" />
-        {hasHistory && (
-          <Button
-            className="bg-card border border-border text-muted-foreground hover:text-foreground cursor-pointer rounded-xl rounded-t-sm pl-2"
-            variant="default"
+      {hasHistory && (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
             onClick={() => onNewChat ? onNewChat() : (window.location.href = '/')}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted"
           >
-            <SquarePen size={16} />
+            <SquarePen size={12} />
             New Chat
-          </Button>
-        )}
-      </div>
+          </button>
+        </div>
+      )}
     </form>
   );
 };

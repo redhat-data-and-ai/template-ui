@@ -1,6 +1,6 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { CheckCircle, ChevronDown, ChevronRight, Loader2, Settings } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronRight, Loader2, Settings, Bot, User } from "lucide-react";
 import { InputForm } from "./InputForm";
 import { useState, ReactNode, useMemo, useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
@@ -41,17 +41,17 @@ const mdComponents = {
     </h1>
   ),
   h2: ({ className, children, ...props }: MdComponentProps) => (
-    <h2 className={cn("text-xl font-bold mt-3 mb-2 text-foreground", className)} {...props}>
+    <h2 className={cn("text-xl font-semibold mt-3 mb-2 text-foreground", className)} {...props}>
       {children}
     </h2>
   ),
   h3: ({ className, children, ...props }: MdComponentProps) => (
-    <h3 className={cn("text-lg font-bold mt-3 mb-1 text-foreground", className)} {...props}>
+    <h3 className={cn("text-lg font-semibold mt-3 mb-1 text-foreground", className)} {...props}>
       {children}
     </h3>
   ),
   p: ({ className, children, ...props }: MdComponentProps) => (
-    <p className={cn("mb-3 leading-7 text-foreground", className)} {...props}>
+    <p className={cn("mb-3 leading-7 text-foreground/90", className)} {...props}>
       {children}
     </p>
   ),
@@ -69,24 +69,24 @@ const mdComponents = {
     </Badge>
   ),
   ul: ({ className, children, ...props }: MdComponentProps) => (
-    <ul className={cn("list-disc pl-6 mb-3", className)} {...props}>
+    <ul className={cn("list-disc pl-6 mb-3 space-y-1", className)} {...props}>
       {children}
     </ul>
   ),
   ol: ({ className, children, ...props }: MdComponentProps) => (
-    <ol className={cn("list-decimal pl-6 mb-3", className)} {...props}>
+    <ol className={cn("list-decimal pl-6 mb-3 space-y-1", className)} {...props}>
       {children}
     </ol>
   ),
   li: ({ className, children, ...props }: MdComponentProps) => (
-    <li className={cn("mb-1", className)} {...props}>
+    <li className={cn("mb-1 text-foreground/90", className)} {...props}>
       {children}
     </li>
   ),
   blockquote: ({ className, children, ...props }: MdComponentProps) => (
     <blockquote
       className={cn(
-        "border-l-4 border-border pl-4 italic my-3 text-sm text-muted-foreground",
+        "border-l-3 border-primary/40 pl-4 italic my-3 text-sm text-muted-foreground",
         className
       )}
       {...props}
@@ -97,7 +97,7 @@ const mdComponents = {
   code: ({ className, children, ...props }: MdComponentProps) => (
     <code
       className={cn(
-        "bg-muted rounded px-1.5 py-0.5 font-mono text-xs text-foreground",
+        "bg-muted rounded-md px-1.5 py-0.5 font-mono text-[13px] text-foreground",
         className
       )}
       {...props}
@@ -108,7 +108,7 @@ const mdComponents = {
   pre: ({ className, children, ...props }: MdComponentProps) => (
     <pre
       className={cn(
-        "bg-muted p-3 rounded-lg overflow-x-auto font-mono text-xs my-3",
+        "bg-muted border border-border p-4 rounded-xl overflow-x-auto font-mono text-[13px] my-3",
         className
       )}
       {...props}
@@ -120,14 +120,14 @@ const mdComponents = {
     <hr className={cn("border-border my-4", className)} {...props} />
   ),
   table: ({ className, children, ...props }: MdComponentProps) => (
-    <div className="my-3 overflow-x-auto">
+    <div className="my-3 overflow-x-auto rounded-lg border border-border">
       <table className={cn("border-collapse w-full", className)} {...props}>
         {children}
       </table>
     </div>
   ),
   thead: ({ className, children, ...props }: MdComponentProps) => (
-    <thead className={cn("bg-muted", className)} {...props}>
+    <thead className={cn("bg-muted/70", className)} {...props}>
       {children}
     </thead>
   ),
@@ -137,17 +137,14 @@ const mdComponents = {
     </tbody>
   ),
   tr: ({ className, children, ...props }: MdComponentProps) => (
-    <tr
-      className={cn("border-b border-border even:bg-muted/50", className)}
-      {...props}
-    >
+    <tr className={cn("border-b border-border", className)} {...props}>
       {children}
     </tr>
   ),
   th: ({ className, children, ...props }: MdComponentProps) => (
     <th
       className={cn(
-        "border border-border px-3 py-2 text-left font-bold bg-muted",
+        "px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground",
         className
       )}
       {...props}
@@ -156,10 +153,7 @@ const mdComponents = {
     </th>
   ),
   td: ({ className, children, ...props }: MdComponentProps) => (
-    <td
-      className={cn("border border-border px-3 py-2", className)}
-      {...props}
-    >
+    <td className={cn("px-4 py-2.5 text-sm", className)} {...props}>
       {children}
     </td>
   ),
@@ -174,10 +168,17 @@ interface HumanMessageBubbleProps {
 
 const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({ message }) => {
   return (
-    <div className="rounded-3xl rounded-br-xs break-words min-h-7 bg-primary/10 dark:bg-primary/20 text-foreground max-w-[100%] sm:max-w-[90%] p-3 border border-primary/20">
-      <ReactMarkdown components={mdComponents}>
-        {extractMessageText(message.content)}
-      </ReactMarkdown>
+    <div className="flex items-end gap-3 justify-end">
+      <div className="rounded-2xl rounded-br-sm break-words max-w-[85%] sm:max-w-[75%] px-4 py-3 bg-primary text-primary-foreground shadow-card">
+        <div className="text-sm leading-relaxed [&_p]:!text-primary-foreground [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
+          <ReactMarkdown components={mdComponents}>
+            {extractMessageText(message.content)}
+          </ReactMarkdown>
+        </div>
+      </div>
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+        <User className="w-4 h-4 text-primary" />
+      </div>
     </div>
   );
 };
@@ -188,11 +189,18 @@ interface AiMessageBubbleProps {
 
 const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
   return (
-    <div className="relative break-words flex flex-col w-full">
-      <div className="w-full prose prose-invert max-w-none dark:prose-invert">
-        <ReactMarkdown components={mdComponents}>
-          {extractMessageText(message.content)}
-        </ReactMarkdown>
+    <div className="flex items-start gap-3">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+        <Bot className="w-4 h-4 text-white" />
+      </div>
+      <div className="flex-1 min-w-0 max-w-[85%] sm:max-w-[80%]">
+        <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
+          <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
+            <ReactMarkdown components={mdComponents}>
+              {extractMessageText(message.content)}
+            </ReactMarkdown>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -220,51 +228,55 @@ export function AIMessageRenderer({ message }: { message: Message }) {
 
     if (isToolCallStart) {
       return (
-        <>
-          {message.tool_calls?.map((toolCall, idx) => (
-            <div key={`${message.id}-${idx}`} className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-lg overflow-hidden w-full">
-              <button
-                onClick={() => toggleExpand(`${message.id}-${idx}`)}
-                className="w-full flex items-center justify-between p-4 hover:bg-primary/10 dark:hover:bg-primary/15 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Settings className="w-5 h-5 text-primary" />
-                  <div className="text-left">
-                    <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                      {toolCall.name}
-                      {(toolCall as Record<string, unknown>).content ? (
-                        <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
-                      ) : (
-                        <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                      )}
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
+            <Settings className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-2">
+            {message.tool_calls?.map((toolCall, idx) => (
+              <div key={`${message.id}-${idx}`} className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
+                <button
+                  onClick={() => toggleExpand(`${message.id}-${idx}`)}
+                  className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                        <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
+                        {(toolCall as Record<string, unknown>).content ? (
+                          <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
+                        ) : (
+                          <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">Tool execution</div>
                     </div>
-                    <div className="text-xs text-muted-foreground">Tool execution</div>
                   </div>
-                </div>
-                {expandedItems.has(`${message.id}-${idx}`) ? (
-                  <ChevronDown className="w-4 h-4 text-primary" />
-                ) : (
-                  <ChevronRight className="w-4 h-4 text-primary" />
-                )}
-              </button>
+                  {expandedItems.has(`${message.id}-${idx}`) ? (
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
 
-              {expandedItems.has(`${message.id}-${idx}`) && (
-                <div className="px-4 pb-4 border-t border-primary/10">
-                  <div className="text-xs text-muted-foreground mb-2 mt-3">Arguments:</div>
-                  <pre className="text-xs text-foreground bg-muted p-2 rounded overflow-auto">
-                    {JSON.stringify(toolCall.args, null, 2)}
-                  </pre>
-                  <div className="text-xs text-muted-foreground mb-2 mt-3">
-                    {(toolCall as Record<string, unknown>).content ? 'Result:' : 'Running...'}
+                {expandedItems.has(`${message.id}-${idx}`) && (
+                  <div className="px-4 pb-4 border-t border-border">
+                    <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
+                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                      {JSON.stringify(toolCall.args, null, 2)}
+                    </pre>
+                    <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
+                      {(toolCall as Record<string, unknown>).content ? 'Result' : 'Running...'}
+                    </div>
+                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                      {JSON.stringify((toolCall as Record<string, unknown>).content, null, 2)}
+                    </pre>
                   </div>
-                  <pre className="text-xs text-foreground bg-muted p-2 rounded overflow-auto">
-                    {JSON.stringify((toolCall as Record<string, unknown>).content, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          ))}
-        </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       );
     }
 
@@ -277,7 +289,7 @@ export function AIMessageRenderer({ message }: { message: Message }) {
   }, [messageKey, expandedItems]);
 
   return (
-    <div className="space-y-2 mb-4 w-full">
+    <div className="space-y-2 w-full">
       {renderMessage}
     </div>
   );
@@ -310,49 +322,59 @@ export function ChatMessagesView({
   }, [messages]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
-        <div className="p-4 md:p-6 space-y-2 max-w-4xl mx-auto pt-8">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto chat-scroll" ref={scrollAreaRef}>
+        <div className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
           {messages.filter(m => {
             if (m.type === 'human') return true;
             if (m.type === 'tool') return false;
             if (m.type === 'ai') return true;
             return true;
           }).map((message, index) => (
-            <div key={message.id || `msg-${index}`} className="space-y-3">
-              <div
-                className={cn(
-                  "flex items-start gap-3",
-                  message.type === "human" ? "justify-end" : ""
-                )}
-              >
-                {message.type === "human" ? (
-                  <HumanMessageBubble message={message} />
-                ) : (
-                  <div className="w-full max-w-[85%] md:max-w-[80%]">
-                    <AIMessageRenderer message={message} />
-                  </div>
-                )}
-              </div>
+            <div
+              key={message.id || `msg-${index}`}
+              className="animate-fadeInUpSmooth"
+              style={{ animationDelay: `${Math.min(index * 30, 150)}ms`, opacity: 0 }}
+            >
+              {message.type === "human" ? (
+                <HumanMessageBubble message={message} />
+              ) : (
+                <AIMessageRenderer message={message} />
+              )}
             </div>
           ))}
 
           {isLoading && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center py-2">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Processing...
+            <div className="flex items-start gap-3 animate-fadeIn">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+                <Bot className="w-4 h-4 text-white" />
+              </div>
+              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="flex gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-200" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-400" />
+                  </span>
+                  Thinking...
+                </div>
+              </div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
       </div>
-      <InputForm
-        onSubmit={onSubmit}
-        isLoading={isLoading}
-        onCancel={onCancel}
-        onNewChat={onNewChat}
-        hasHistory={messages.length > 0}
-      />
+      <div className="border-t border-border bg-background/80 glass">
+        <div className="max-w-3xl mx-auto">
+          <InputForm
+            onSubmit={onSubmit}
+            isLoading={isLoading}
+            onCancel={onCancel}
+            onNewChat={onNewChat}
+            hasHistory={messages.length > 0}
+          />
+        </div>
+      </div>
     </div>
   );
 }

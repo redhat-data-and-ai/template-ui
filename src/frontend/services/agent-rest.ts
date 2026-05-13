@@ -68,6 +68,10 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+/**
+ * Lightweight thread listing — returns thread IDs and metadata only.
+ * Does NOT fetch full state (which is extremely slow per-thread).
+ */
 export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
   const searchUrl = apiUrl
     ? `${apiUrl}/threads/search`
@@ -88,35 +92,37 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
   const results = await response.json();
   if (!Array.isArray(results)) return [];
 
-  const threads: Thread[] = [];
+  return results
+    .filter((t: any) => t.thread_id)
+    .map((t: any) => ({
+      id: t.thread_id,
+      messages: [],
+    }));
+}
 
-  for (const t of results) {
-    const id = t.thread_id;
-    if (!id) continue;
+/**
+ * Fetch full state for a single thread (lazy, on-demand).
+ * Called only when a user navigates into a specific chat.
+ */
+export async function getThreadState(threadId: string): Promise<Message[]> {
+  const stateUrl = apiUrl
+    ? `${apiUrl}/threads/${threadId}/state`
+    : `/api/proxy/agent/threads/${threadId}/state`;
 
-    const stateUrl = apiUrl
-      ? `${apiUrl}/threads/${id}/state`
-      : `/api/proxy/agent/threads/${id}/state`;
+  try {
+    const resp = await fetch(stateUrl, {
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+    if (!resp.ok) return [];
 
-    try {
-      const stateResp = await fetch(stateUrl, {
-        headers: getAuthHeaders(),
-        credentials: 'include',
-      });
-      if (!stateResp.ok) continue;
-
-      const state = await stateResp.json();
-      const msgs = state?.values?.messages;
-      if (Array.isArray(msgs) && msgs.length > 0) {
-        threads.push({
-          id,
-          messages: combineToolCallandResult(normalizeMessages(msgs)),
-        });
-      }
-    } catch {
-      continue;
+    const state = await resp.json();
+    const msgs = state?.values?.messages;
+    if (Array.isArray(msgs) && msgs.length > 0) {
+      return combineToolCallandResult(normalizeMessages(msgs));
     }
+  } catch {
+    // Fall through
   }
-
-  return threads;
+  return [];
 }

@@ -1,5 +1,6 @@
 import oauthPlugin from "@fastify/oauth2";
 import { FastifyInstance } from "fastify";
+import fp from "fastify-plugin";
 
 const SSO_CLIENT_ID = process.env.SSO_CLIENT_ID;
 const SSO_CLIENT_SECRET = process.env.SSO_CLIENT_SECRET;
@@ -129,4 +130,4 @@ async function routes(fastify: FastifyInstance) {
   });
 }
 
-export { routes as authPlugin };
+export const authPlugin = fp(routes, { name: "auth-plugin" });

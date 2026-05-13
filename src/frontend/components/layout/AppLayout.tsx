@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -17,6 +17,7 @@ import {
   ToolbarGroup,
 } from '@patternfly/react-core';
 import { BarsIcon } from '@patternfly/react-icons';
+import { RedHatLogo } from '../RedHatLogo';
 import { Sidebar } from '../Sidebar';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ThemeToggle } from './ThemeToggle';
@@ -46,6 +47,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const chatsRef = useRef(chats);
+  useEffect(() => { chatsRef.current = chats; }, [chats]);
+
   const currentChatId = useMemo(() => {
     const match = /^\/chat\/([^/]+)/.exec(location.pathname);
     return match?.[1];
@@ -73,23 +77,23 @@ export function AppLayout({ children }: AppLayoutProps) {
         dispatch(setLoadingThreads(true));
         const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
 
-        const mapped: ChatItem[] = history.map((conversation) => {
-          let title = 'New Chat';
-          if (Array.isArray(conversation.messages) && conversation.messages.length > 0) {
-            title =
-              (conversation.messages.find((m) => m.type === 'human')?.content as string) || 'New Chat';
-          }
-          return {
-            id: conversation.id,
-            messages: conversation.messages,
-            title,
-            preview: title,
-            timestamp: new Date().toISOString(),
-            historicalActivities: {},
-          };
-        });
+        if (history.length > 0) {
+          const existingIds = new Set(chatsRef.current.map((c) => c.id));
+          const newThreads: ChatItem[] = history
+            .filter((t) => !existingIds.has(t.id))
+            .map((t) => ({
+              id: t.id,
+              messages: [],
+              title: 'Chat',
+              preview: 'Chat',
+              timestamp: new Date().toISOString(),
+              historicalActivities: {},
+            }));
 
-        dispatch(setChats(mapped));
+          if (newThreads.length > 0) {
+            dispatch(setChats([...chatsRef.current, ...newThreads]));
+          }
+        }
         dispatch(setThreadsListHydrated(true));
       } catch (error) {
         console.error('Failed to load user history:', error);
@@ -167,7 +171,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 
   const masthead = (
-    <Masthead>
+    <Masthead display={{ default: 'inline' }} className="!bg-card !border-b !border-border">
       <MastheadToggle>
         <PageToggleButton
           variant="plain"
@@ -181,7 +185,12 @@ export function AppLayout({ children }: AppLayoutProps) {
       </MastheadToggle>
       <MastheadMain>
         <MastheadBrand>
-          <span className="text-lg font-semibold text-foreground">Dataverse AI</span>
+          <div className="flex items-center gap-2">
+            <RedHatLogo className="h-5 w-auto" style={{ color: '#ee0000' }} />
+            <span className="text-base font-semibold text-foreground">
+              Deep Agent
+            </span>
+          </div>
         </MastheadBrand>
       </MastheadMain>
       <MastheadContent>
@@ -190,9 +199,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             <ToolbarGroup align={{ default: 'alignEnd' }}>
               <ToolbarItem>
                 <ThemeToggle />
-              </ToolbarItem>
-              <ToolbarItem>
-                <span className="text-sm text-muted-foreground">{userName}</span>
               </ToolbarItem>
             </ToolbarGroup>
           </ToolbarContent>
@@ -231,7 +237,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           console.error('Main content error:', error, errorInfo);
         }}
       >
-        <main className="flex-1 h-full overflow-hidden">{children}</main>
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">{children}</div>
       </ErrorBoundary>
     </Page>
   );

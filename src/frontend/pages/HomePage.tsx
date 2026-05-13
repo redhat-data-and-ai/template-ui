@@ -1,55 +1,121 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { Button } from '../components/ui/button';
+import { Send } from 'lucide-react';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
+
+const QUICK_PROMPTS = [
+  'What can Deep Agent do for me?',
+  'Help me analyze a dataset',
+  'Write a query to find anomalies',
+  'Summarize the key findings from this data',
+];
 
 export function HomePage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [inputValue, setInputValue] = useState('');
 
   const userData = useMemo(() => window.USER_DATA, []);
   const userDisplayName = userData?.displayName || userData?.given_name;
 
-  const handleNewChat = useCallback(() => {
-    const newChatId = uuidv4();
-    const newChat: ChatItem = {
-      id: newChatId,
-      title: 'New Chat',
-      timestamp: new Date().toISOString(),
-      preview: 'Start a new conversation',
-      messages: [],
-      historicalActivities: {},
-    };
-    dispatch(addChat(newChat));
-    navigate(`/chat/${newChatId}`);
-  }, [dispatch, navigate]);
+  const startChat = useCallback(
+    (initialPrompt?: string) => {
+      const newChatId = uuidv4();
+      const newChat: ChatItem = {
+        id: newChatId,
+        title: initialPrompt?.substring(0, 40) || 'New Chat',
+        timestamp: new Date().toISOString(),
+        preview: initialPrompt || 'Start a new conversation',
+        messages: [],
+        historicalActivities: {},
+      };
+      dispatch(addChat(newChat));
+      navigate(`/chat/${newChatId}`);
+    },
+    [dispatch, navigate],
+  );
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!inputValue.trim()) return;
+    startChat(inputValue.trim());
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
 
   return (
-    <main className="flex-1 h-full max-w-4xl mx-auto">
-      <div className="flex flex-col items-center justify-center h-full text-center px-8">
-        <div className="max-w-2xl space-y-6">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-bold text-foreground">
-              {userDisplayName ? `How can I help you today, ${userDisplayName}?` : 'How can I help you today?'}
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Center content area */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6">
+        <div className="max-w-2xl w-full text-center">
+          {/* Greeting */}
+          <div className="mb-8">
+            <h1 className="text-foreground font-bold mb-3" style={{ fontSize: 'clamp(2rem, 5vw, 3rem)' }}>
+              {userDisplayName ? `Hey ${userDisplayName}! 👋` : 'Hey there! 👋'}
             </h1>
-            <p className="text-lg text-muted-foreground">
-              Ask me anything and I'll help you with AI-powered insights.
+            <p className="text-muted-foreground text-base">
+              <span className="font-medium text-foreground">Deep Agent</span> is ready to help. What would you like to explore today?
             </p>
           </div>
 
-          <div className="pt-6">
-            <Button
-              onClick={handleNewChat}
-              size="lg"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
-            >
-              Start New Chat
-            </Button>
+          {/* Quick prompts */}
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold text-muted-foreground mb-3">
+              Let&apos;s try some quick prompts 🚀
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {QUICK_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => startChat(prompt)}
+                  className="text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer"
+                >
+                  <p className="text-sm text-foreground/90">{prompt}</p>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </main>
+
+      {/* Bottom input bar */}
+      <div className="border-t border-border bg-background px-6 pb-4 pt-3">
+        <div className="max-w-2xl mx-auto">
+          <form onSubmit={handleSubmit}>
+            <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2 focus-within:border-primary/50 transition-colors">
+              <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter a prompt for Deep Agent"
+                className="flex-1 bg-transparent text-foreground placeholder-muted-foreground resize-none border-0 focus:outline-none text-sm min-h-[40px] max-h-[120px] py-1.5"
+                rows={1}
+              />
+              <button
+                type="submit"
+                disabled={!inputValue.trim()}
+                className={`flex-shrink-0 p-2 rounded-lg transition-colors ${
+                  inputValue.trim()
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                    : 'text-muted-foreground cursor-not-allowed'
+                }`}
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
+          <p className="text-xs text-muted-foreground/50 text-center mt-2">
+            AI can make mistakes. Please review AI-generated content prior to use.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

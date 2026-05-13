@@ -16,6 +16,7 @@ import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { Button } from '../components/ui/button';
 import { ProcessedEvent } from '../components/ActivityTimeline';
+import { getThreadState } from '../services/agent-rest';
 
 export function ChatPage({ threadId }: { threadId: string }) {
   const dispatch = useAppDispatch();
@@ -26,6 +27,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({});
+  const [hydrating, setHydrating] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const hasFinalizeEventOccurredRef = useRef(false);
@@ -33,13 +35,45 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const thread = useStreamingAPI(threadId);
 
   const chatId = currentChat?.id;
+  const hasMessages = currentChat && currentChat.messages.length > 0;
+
   useEffect(() => {
-    if (currentChat && !thread.isLoading) {
-      thread.setMessages(currentChat.messages.map(m => JSON.parse(JSON.stringify(m))));
-    }
-    // Only re-sync when the active chat changes, not on every message update
+    if (!chatId || hasMessages || hydrating) return;
+
+    let cancelled = false;
+    setHydrating(true);
+
+    getThreadState(chatId).then((msgs) => {
+      if (cancelled) return;
+      if (msgs.length > 0) {
+        dispatch(updateChat({
+          id: chatId,
+          updates: {
+            messages: msgs,
+            title: (() => {
+              const first = msgs.find(m => m.type === 'human');
+              const content = first ? String(first.content) : '';
+              return content.length > 40 ? content.substring(0, 40) + '...' : content || 'Chat';
+            })(),
+          },
+        }));
+        thread.setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
+      }
+      setHydrating(false);
+    }).catch(() => {
+      if (!cancelled) setHydrating(false);
+    });
+
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
+
+  useEffect(() => {
+    if (currentChat && currentChat.messages.length > 0 && !thread.isLoading && !hydrating) {
+      thread.setMessages(currentChat.messages.map(m => JSON.parse(JSON.stringify(m))));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, hasMessages]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -129,60 +163,52 @@ export function ChatPage({ threadId }: { threadId: string }) {
     navigate('/');
   }, [navigate]);
 
-  if (chatsLoading) {
+  if (chatsLoading || hydrating) {
     return (
-      <main className="flex-1 h-full max-w-4xl mx-auto">
-        <div className="flex flex-col items-center justify-center h-full gap-4">
-          <Spinner size="lg" aria-label="Loading chat" />
-          <p className="text-muted-foreground">Loading chat...</p>
-        </div>
-      </main>
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        <Spinner size="lg" aria-label="Loading chat" />
+        <p className="text-muted-foreground">{hydrating ? 'Loading messages...' : 'Loading chat...'}</p>
+      </div>
     );
   }
 
   if (threadId && !currentChat) {
     return (
-      <main className="flex-1 h-full max-w-4xl mx-auto">
-        <div className="flex flex-col items-center justify-center h-full gap-4">
-          <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
-          <p className="text-muted-foreground">The requested chat could not be found.</p>
-          <Button onClick={() => navigate('/')}>Go Home</Button>
-        </div>
-      </main>
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
+        <p className="text-muted-foreground">The requested chat could not be found.</p>
+        <Button onClick={() => navigate('/')}>Go Home</Button>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <main className="flex-1 h-full max-w-4xl mx-auto">
-        <div className="flex flex-col items-center justify-center h-full gap-4">
-          <h1 className="text-2xl text-destructive font-bold">Error</h1>
-          <p className="text-destructive">{error}</p>
-          <Button variant="destructive" onClick={() => window.location.reload()}>
-            Retry
-          </Button>
-        </div>
-      </main>
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        <h1 className="text-2xl text-destructive font-bold">Error</h1>
+        <p className="text-destructive">{error}</p>
+        <Button variant="destructive" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="flex-1 h-full max-w-4xl mx-auto">
-      <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
-        <ChatMessagesView
-          key={threadId}
-          messages={thread.messages}
-          streamEvents={thread.streamEvents}
-          isLoading={thread.isLoading}
-          scrollAreaRef={scrollAreaRef}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-          onNewChat={handleNewChat}
-          liveActivityEvents={processedEventsTimeline}
-          historicalActivities={historicalActivities}
-        />
-      </ChatErrorBoundary>
-    </main>
+    <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
+      <ChatMessagesView
+        key={threadId}
+        messages={thread.messages}
+        streamEvents={thread.streamEvents}
+        isLoading={thread.isLoading}
+        scrollAreaRef={scrollAreaRef}
+        onSubmit={handleSubmit}
+        onCancel={handleCancel}
+        onNewChat={handleNewChat}
+        liveActivityEvents={processedEventsTimeline}
+        historicalActivities={historicalActivities}
+      />
+    </ChatErrorBoundary>
   );
 }
 
