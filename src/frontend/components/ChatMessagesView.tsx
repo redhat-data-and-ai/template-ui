@@ -13,6 +13,7 @@ import ReactMarkdown from "react-markdown";
 import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
+import { TodoStrip } from "./TodoStrip";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -419,6 +420,7 @@ export function ChatMessagesView({
           <div ref={bottomRef} />
         </div>
       </div>
+      <TodoStrip messages={messages} />
       <div className="border-t border-border bg-background/80 glass">
         <div className="max-w-3xl mx-auto">
           <InputForm

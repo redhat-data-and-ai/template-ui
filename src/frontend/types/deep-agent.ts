@@ -42,6 +42,36 @@ export function extractSubAgentName(toolCall: { name: string; args?: Record<stri
   return toolCall.name;
 }
 
+export interface TodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+export function extractTodosFromMessages(messages: { type: string; tool_calls?: { name: string; args?: Record<string, unknown> }[] }[]): TodoItem[] {
+  let latest: TodoItem[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.type !== 'ai') continue;
+    const toolCalls = msg.tool_calls;
+    if (!Array.isArray(toolCalls)) continue;
+    for (const tc of toolCalls) {
+      if (tc.name !== 'write_todos') continue;
+      const raw = tc.args?.todos;
+      if (!Array.isArray(raw)) continue;
+      latest = raw
+        .filter((t): t is { content: string; status: string } =>
+          t != null && typeof t === 'object' && typeof (t as Record<string, unknown>).content === 'string',
+        )
+        .map((t) => ({
+          content: t.content,
+          status: (['pending', 'in_progress', 'completed'].includes(t.status) ? t.status : 'pending') as TodoItem['status'],
+        }));
+      return latest;
+    }
+  }
+  return latest;
+}
+
 const CODE_FENCE_RE = /```[\s\S]*?```/;
 const JSON_START_RE = /^\s*[{\[]/;
 
