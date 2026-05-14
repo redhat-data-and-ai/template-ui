@@ -8,7 +8,7 @@ interface TodoStripProps {
 }
 
 const STATUS_CONFIG: Record<TodoItem['status'], { icon: typeof CheckCircle; className: string; iconClass: string }> = {
-  completed: { icon: CheckCircle, className: 'text-green-600 dark:text-green-400 line-through opacity-70', iconClass: 'text-green-500 dark:text-green-400' },
+  completed: { icon: CheckCircle, className: 'text-green-600 dark:text-green-400', iconClass: 'text-green-500 dark:text-green-400' },
   in_progress: { icon: Loader2, className: 'text-foreground font-medium', iconClass: 'text-primary animate-spin' },
   pending: { icon: Circle, className: 'text-muted-foreground', iconClass: 'text-muted-foreground/50' },
 };
