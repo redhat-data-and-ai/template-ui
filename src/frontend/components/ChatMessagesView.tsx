@@ -1,11 +1,11 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, CheckCircle, ChevronDown, ChevronRight, Loader2, RotateCcw, Settings, Bot, User } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Loader2, Pencil, RotateCcw, Settings, Bot, User } from "lucide-react";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
 import { cn } from "../lib/utils";
-import { Label } from "@patternfly/react-core";
+import { ExpandableSection, Label } from "@patternfly/react-core";
 import {
   ProcessedEvent,
 } from "./ActivityTimeline";
@@ -15,6 +15,8 @@ import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
 import { TodoStrip } from "./TodoStrip";
+import { FeedbackButtons } from "./FeedbackButtons";
+import { CustomDataRenderer } from "./CustomDataRenderer";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -33,11 +35,151 @@ function extractMessageText(content: unknown): string {
   return '';
 }
 
+function stripThinkingFromPlainText(text: string): { thinking: string; display: string } {
+  const thinkingParts: string[] = [];
+  let display = text;
+  const patterns: RegExp[] = [
+    /<think>([\s\S]*?)<\/redacted_thinking>/gi,
+    /<thinking>([\s\S]*?)<\/thinking>/gi,
+  ];
+  for (const re of patterns) {
+    display = display.replace(re, (_full, inner: string) => {
+      thinkingParts.push(String(inner).trim());
+      return '';
+    });
+  }
+  return {
+    thinking: thinkingParts.filter(Boolean).join('\n\n'),
+    display: display.replace(/\n{3,}/g, '\n\n').trim(),
+  };
+}
+
+function partitionMessageContent(content: unknown): { thinkingText: string; markdownForDisplay: string } {
+  if (typeof content === 'string') {
+    const { thinking, display } = stripThinkingFromPlainText(content);
+    return { thinkingText: thinking, markdownForDisplay: display };
+  }
+  if (Array.isArray(content)) {
+    const thinkingFromBlocks: string[] = [];
+    const restBlocks: unknown[] = [];
+    for (const b of content) {
+      if (
+        b &&
+        typeof b === 'object' &&
+        'type' in b &&
+        (b as { type: string }).type === 'thinking'
+      ) {
+        const block = b as { type: string; text?: string; reasoning?: string };
+        const piece =
+          typeof block.text === 'string'
+            ? block.text
+            : typeof block.reasoning === 'string'
+              ? block.reasoning
+              : JSON.stringify(block);
+        thinkingFromBlocks.push(piece);
+        continue;
+      }
+      restBlocks.push(b);
+    }
+    const restJoined = restBlocks
+      .map((b: unknown) => {
+        if (typeof b === 'string') return b;
+        if (b && typeof b === 'object' && 'type' in b && 'text' in b) {
+          const block = b as { type: string; text: string };
+          if (block.type === 'text' && typeof block.text === 'string') return block.text;
+        }
+        return '';
+      })
+      .join('');
+    const { thinking: thinkingInText, display: afterTags } = stripThinkingFromPlainText(restJoined);
+    const thinkingText = [thinkingFromBlocks.join('\n\n'), thinkingInText].filter(Boolean).join('\n\n');
+    return { thinkingText, markdownForDisplay: afterTags };
+  }
+  return { thinkingText: '', markdownForDisplay: '' };
+}
+
+function getCopyableAiMessageText(content: unknown): string {
+  const { thinkingText, markdownForDisplay } = partitionMessageContent(content);
+  const main =
+    markdownForDisplay.length > 0 ? markdownForDisplay : extractMessageText(content);
+  if (!thinkingText) return main;
+  return [thinkingText, main].filter((s) => s.length > 0).join('\n\n');
+}
+
 type MdComponentProps = {
   className?: string;
   children?: ReactNode;
   [key: string]: unknown;
 };
+
+function getPlainTextFromReactNode(node: React.ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(getPlainTextFromReactNode).join('');
+  if (typeof node === 'object' && 'props' in node) {
+    const el = node as { props?: { children?: React.ReactNode } };
+    return getPlainTextFromReactNode(el.props?.children);
+  }
+  return '';
+}
+
+function MarkdownPre({ className, children, ...props }: MdComponentProps) {
+  const [copied, setCopied] = useState(false);
+  const codeText = useMemo(() => getPlainTextFromReactNode(children), [children]);
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(codeText).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="relative group/codeblock my-3">
+      <button
+        type="button"
+        onClick={() => handleCopy()}
+        className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card/90 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+        aria-label={copied ? 'Copied' : 'Copy code'}
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+      <pre
+        className={cn(
+          "bg-muted border border-border pt-10 pr-3 pb-4 pl-4 rounded-xl overflow-x-auto font-mono text-[13px]",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </pre>
+    </div>
+  );
+}
+
+function MessageCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const disabled = text.length === 0;
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      className={cn(
+        'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
+      )}
+      aria-label={copied ? 'Copied' : 'Copy message'}
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
 
 const mdComponents = {
   h1: ({ className, children, ...props }: MdComponentProps) => (
@@ -110,17 +252,7 @@ const mdComponents = {
       {children}
     </code>
   ),
-  pre: ({ className, children, ...props }: MdComponentProps) => (
-    <pre
-      className={cn(
-        "bg-muted border border-border p-4 rounded-xl overflow-x-auto font-mono text-[13px] my-3",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </pre>
-  ),
+  pre: MarkdownPre,
   hr: ({ className, ...props }: MdComponentProps) => (
     <hr className={cn("border-border my-4", className)} {...props} />
   ),
@@ -169,17 +301,93 @@ const mdComponents = {
 
 interface HumanMessageBubbleProps {
   message: Message;
+  messageIndex: number;
+  isLastHuman: boolean;
+  isLoading?: boolean;
+  onEditMessage?: (messageIndex: number, newContent: string) => void;
 }
 
-const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({ message }) => {
+const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
+  message,
+  messageIndex,
+  isLastHuman,
+  isLoading = false,
+  onEditMessage,
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const plain = extractMessageText(message.content);
+  const canEdit = Boolean(onEditMessage) && isLastHuman && !isLoading;
+
+  const startEdit = () => {
+    setDraft(plain);
+    setIsEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setDraft('');
+  };
+
+  const saveEdit = () => {
+    const trimmed = draft.trim();
+    if (trimmed === '' || !onEditMessage) return;
+    onEditMessage(messageIndex, trimmed);
+    setIsEditing(false);
+  };
+
   return (
-    <div className="flex items-end gap-3 justify-end">
-      <div className="rounded-2xl rounded-br-sm break-words max-w-[85%] sm:max-w-[75%] px-4 py-3 bg-primary text-primary-foreground shadow-card">
-        <div className="text-sm leading-relaxed [&_p]:!text-primary-foreground [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
-          <ReactMarkdown components={mdComponents}>
-            {extractMessageText(message.content)}
-          </ReactMarkdown>
-        </div>
+    <div className="flex items-end gap-3 justify-end group/msg">
+      <div
+        className={cn(
+          "relative rounded-2xl rounded-br-sm break-words max-w-[85%] sm:max-w-[75%] px-4 py-3 bg-primary text-primary-foreground shadow-card",
+          isEditing && "w-full sm:w-[75%]",
+        )}
+      >
+        {isEditing ? (
+          <div className="space-y-2">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="w-full min-h-[88px] rounded-lg border border-primary-foreground/35 bg-primary-foreground/10 p-2.5 text-sm text-primary-foreground placeholder:text-primary-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary-foreground/40"
+              aria-label="Edit message"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => saveEdit()}
+                className="rounded-md bg-primary-foreground px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-foreground/90"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelEdit()}
+                className="rounded-md border border-primary-foreground/40 px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-foreground/10"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => startEdit()}
+                className="absolute right-3 top-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md text-primary-foreground/80 opacity-0 transition-opacity hover:bg-primary-foreground/15 hover:text-primary-foreground group-hover/msg:opacity-100"
+                aria-label="Edit message"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <div className="text-sm leading-relaxed [&_p]:!text-primary-foreground [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
+              <ReactMarkdown components={mdComponents}>
+                {plain}
+              </ReactMarkdown>
+            </div>
+          </>
+        )}
       </div>
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
         <User className="w-4 h-4 text-primary" />
@@ -193,6 +401,20 @@ interface AiMessageBubbleProps {
 }
 
 const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
+  const { thinkingText, markdownForDisplay } = partitionMessageContent(message.content);
+  const [thinkingExpanded, setThinkingExpanded] = useState(false);
+  const customRaw = (message as Record<string, unknown>).custom_data;
+  const customData =
+    customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
+      ? (customRaw as Record<string, unknown>)
+      : null;
+  const bodyMd =
+    markdownForDisplay.length > 0
+      ? markdownForDisplay
+      : thinkingText.length > 0
+        ? ''
+        : extractMessageText(message.content);
+
   return (
     <div className="flex items-start gap-3">
       <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
@@ -200,11 +422,27 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
       </div>
       <div className="flex-1 min-w-0 max-w-[85%] sm:max-w-[80%]">
         <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-          <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
-            <ReactMarkdown components={mdComponents}>
-              {extractMessageText(message.content)}
-            </ReactMarkdown>
-          </div>
+          {thinkingText.length > 0 && (
+            <div className="mb-3">
+              <ExpandableSection
+                toggleText="Thinking..."
+                isExpanded={thinkingExpanded}
+                onToggle={(_e, expanded) => setThinkingExpanded(expanded)}
+                isIndented
+                className="pf-v6-u-mb-0"
+              >
+                <div className="mt-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
+                  {thinkingText}
+                </div>
+              </ExpandableSection>
+            </div>
+          )}
+          {bodyMd.length > 0 && (
+            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
+              <ReactMarkdown components={mdComponents}>{bodyMd}</ReactMarkdown>
+            </div>
+          )}
+          {customData && <CustomDataRenderer data={customData} />}
         </div>
       </div>
     </div>
@@ -230,6 +468,12 @@ export function AIMessageRenderer({ message }: { message: Message }) {
   const renderMessage = useMemo(() => {
     const isToolCallStart = message.type === 'ai' && Array.isArray(message?.tool_calls) && message?.tool_calls?.length > 0;
     const isNormalMessage = message.type === 'ai' && (!Array.isArray(message?.tool_calls) || message?.tool_calls?.length === 0);
+
+    const customRaw = (message as Record<string, unknown>).custom_data;
+    const customData =
+      customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
+        ? (customRaw as Record<string, unknown>)
+        : null;
 
     if (isToolCallStart) {
       const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
@@ -308,6 +552,11 @@ export function AIMessageRenderer({ message }: { message: Message }) {
               </div>
             </div>
           )}
+          {customData && (
+            <div className="w-full mt-2">
+              <CustomDataRenderer data={customData} />
+            </div>
+          )}
         </div>
       );
     }
@@ -341,6 +590,14 @@ interface ChatMessagesViewProps {
   isRateLimited?: boolean;
   rateLimitRemainingSeconds?: number;
   mcpEvents?: Array<{ tool: string; status: string; timestamp: number }>;
+  chatId: string;
+  traceId: string | null;
+  messageFeedback?: Record<string, 'up' | 'down'>;
+  onEditMessage?: (messageIndex: number, newContent: string) => void;
+  lastResponseTiming?: {
+    timeToFirstTokenMs: number | null;
+    totalDurationMs: number;
+  } | null;
 }
 
 export function ChatMessagesView({
@@ -354,8 +611,23 @@ export function ChatMessagesView({
   isRateLimited = false,
   rateLimitRemainingSeconds = 0,
   mcpEvents = [],
+  chatId,
+  traceId,
+  messageFeedback = {},
+  onEditMessage,
+  lastResponseTiming = null,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const { lastHumanMessageIndex, lastAiMessageIndex } = useMemo(() => {
+    let lastHuman = -1;
+    let lastAi = -1;
+    messages.forEach((m, i) => {
+      if (m.type === 'human') lastHuman = i;
+      if (m.type === 'ai') lastAi = i;
+    });
+    return { lastHumanMessageIndex: lastHuman, lastAiMessageIndex: lastAi };
+  }, [messages]);
 
   const lastMessage = messages[messages.length - 1];
   const rawNoResponse = !isLoading && messages.length > 0 && lastMessage?.type === 'human';
@@ -378,24 +650,60 @@ export function ChatMessagesView({
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto chat-scroll" ref={scrollAreaRef}>
         <div className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
-          {messages.filter(m => {
-            if (m.type === 'human') return true;
-            if (m.type === 'tool') return false;
-            if (m.type === 'ai') return true;
-            return true;
-          }).map((message, index) => (
+          {messages.map((message, messageIndex) => {
+            if (message.type === 'tool') {
+              return <Fragment key={message.id ?? `m-${messageIndex}`} />;
+            }
+            const copyText = getCopyableAiMessageText(message.content);
+            const showResponseTiming =
+              message.type === 'ai' &&
+              messageIndex === lastAiMessageIndex &&
+              lastResponseTiming != null &&
+              !isLoading;
+
+            return (
             <div
-              key={message.id || `msg-${index}`}
-              className="animate-fadeInUpSmooth"
-              style={{ animationDelay: `${Math.min(index * 30, 150)}ms`, opacity: 0 }}
+              key={message.id || `msg-${messageIndex}`}
+              className="animate-fadeInUpSmooth group"
+              style={{ animationDelay: `${Math.min(messageIndex * 30, 150)}ms`, opacity: 0 }}
             >
               {message.type === "human" ? (
-                <HumanMessageBubble message={message} />
+                <HumanMessageBubble
+                  message={message}
+                  messageIndex={messageIndex}
+                  isLastHuman={messageIndex === lastHumanMessageIndex}
+                  isLoading={isLoading}
+                  onEditMessage={onEditMessage}
+                />
               ) : (
-                <AIMessageRenderer message={message} />
+                <div className="w-full space-y-0">
+                  <AIMessageRenderer message={message} />
+                  <div className="pl-11 flex items-center gap-0.5 mt-1">
+                    <MessageCopyButton text={copyText} />
+                    <FeedbackButtons
+                      messageId={message.id ?? `msg-${messageIndex}`}
+                      chatId={chatId}
+                      traceId={traceId}
+                      existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                    />
+                  </div>
+                  {showResponseTiming && (
+                    <div className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
+                      <div className="text-[11px] text-muted-foreground/80">
+                        Response time: {(lastResponseTiming.totalDurationMs / 1000).toFixed(1)}s
+                      </div>
+                      {lastResponseTiming.timeToFirstTokenMs != null && (
+                        <div className="text-[10px] text-muted-foreground/65">
+                          First token: {Math.round(lastResponseTiming.timeToFirstTokenMs)}ms
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          ))}
+          );
+          })}
 
           {isLoading && (
             <div className="flex items-start gap-3 animate-fadeIn">

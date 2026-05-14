@@ -20,6 +20,7 @@ export interface ChatItem {
   preview: string;
   messages: Message[];
   historicalActivities: Record<string, any[]>;
+  feedback: Record<string, 'up' | 'down'>;
 }
 
 export interface ChatsState {
@@ -122,6 +123,24 @@ const chatsSlice = createSlice({
         }
       }
     },
+    setMessageFeedback(
+      state,
+      action: PayloadAction<{ chatId: string; messageId: string; feedback: 'up' | 'down' | null }>
+    ) {
+      const { chatId, messageId, feedback: nextFeedback } = action.payload;
+      const chat = state.chats.find((c) => c.id === chatId);
+      if (!chat) {
+        return;
+      }
+      if (!chat.feedback) {
+        chat.feedback = {};
+      }
+      if (nextFeedback === null) {
+        delete chat.feedback[messageId];
+      } else {
+        chat.feedback[messageId] = nextFeedback;
+      }
+    },
     updateStreamingState(
       state,
       action: PayloadAction<{ chatId: string; state: Partial<StreamingState> }>
@@ -154,6 +173,7 @@ export const {
   appendMessageToChat,
   updateLastMessageInChat,
   mergeToolResult,
+  setMessageFeedback,
   updateStreamingState,
   setError,
   setLoadingThreads,

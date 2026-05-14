@@ -28,6 +28,12 @@ export type McpStreamStatusEvent = {
   timestamp: number;
 };
 
+export type StreamMetadataPayload = {
+  run_id: string;
+  trace_id: string;
+  thread_id: string;
+};
+
 export type StreamCallback = {
   onToken: (content: string) => void;
   onMessage: (message: Message) => void;
@@ -36,6 +42,7 @@ export type StreamCallback = {
   onStatusChange: (status: StreamStatus) => void;
   onDone: () => void;
   onMcpStatus?: (event: McpStreamStatusEvent) => void;
+  onMetadata?: (data: StreamMetadataPayload) => void;
 };
 
 export class StreamingManager {
@@ -65,6 +72,10 @@ export class StreamingManager {
             status: event.data.status,
             timestamp: Date.now(),
           });
+          break;
+        }
+        case 'metadata': {
+          callbacks.onMetadata?.(event.data);
           break;
         }
         case 'chunk': {

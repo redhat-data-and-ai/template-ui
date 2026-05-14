@@ -351,7 +351,24 @@ async function proxyRoutes(fastify: FastifyInstance) {
                 else if (line.startsWith('data:')) sseData += line.slice(5).trim();
               }
 
-              if (!sseData || sseType === 'metadata' || sseType === 'end') continue;
+              if (!sseData || sseType === 'end') continue;
+
+              if (sseType === 'metadata') {
+                try {
+                  const parsed = JSON.parse(sseData) as unknown;
+                  if (
+                    typeof parsed === 'object' &&
+                    parsed !== null &&
+                    !Array.isArray(parsed) &&
+                    (parsed as Record<string, unknown>).type === 'metadata'
+                  ) {
+                    reply.raw.write(`data: ${JSON.stringify(parsed)}\n\n`);
+                  }
+                } catch {
+                  fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
+                }
+                continue;
+              }
 
               try {
                 const parsed = JSON.parse(sseData) as unknown;

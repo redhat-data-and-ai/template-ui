@@ -10,9 +10,16 @@ export type McpStatusData = {
   status: string;
 };
 
+export type SSEMetadataPayload = {
+  run_id: string;
+  trace_id: string;
+  thread_id: string;
+};
+
 export type SSEEvent =
   | { kind: 'chunk'; data: SSEChunk }
   | { kind: 'mcp_status'; data: McpStatusData }
+  | { kind: 'metadata'; data: SSEMetadataPayload }
   | { kind: 'done' }
   | { kind: 'error'; message: string };
 
@@ -98,6 +105,17 @@ function parseMcpStatusPayload(parsed: unknown, eventType: string | null): McpSt
   return { tool, status };
 }
 
+function parseMetadataPayload(parsed: unknown): SSEMetadataPayload | null {
+  if (!isRecord(parsed) || parsed.type !== 'metadata') return null;
+  const content = parsed.content;
+  if (!isRecord(content)) return null;
+  const run_id = typeof content.run_id === 'string' ? content.run_id : '';
+  const trace_id = typeof content.trace_id === 'string' ? content.trace_id : '';
+  const thread_id = typeof content.thread_id === 'string' ? content.thread_id : '';
+  if (!run_id || !trace_id || !thread_id) return null;
+  return { run_id, trace_id, thread_id };
+}
+
 export class SSEProcessor {
   private buffer = '';
 
@@ -139,6 +157,12 @@ export class SSEProcessor {
       const mcpStatus = parseMcpStatusPayload(parsed, sseEventName);
       if (mcpStatus) {
         events.push({ kind: 'mcp_status', data: mcpStatus });
+        continue;
+      }
+
+      const metadata = parseMetadataPayload(parsed);
+      if (metadata) {
+        events.push({ kind: 'metadata', data: metadata });
         continue;
       }
 

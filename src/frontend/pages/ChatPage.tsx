@@ -190,6 +190,33 @@ export function ChatPage({ threadId }: { threadId: string }) {
     thread.stop();
   }, [thread]);
 
+  const handleEditMessage = useCallback(
+    async (messageIndex: number, newContent: string) => {
+      if (!threadId || !currentChat) return;
+      const trimmed = newContent.trim();
+      if (trimmed === '') return;
+
+      const truncated = thread.messages.slice(0, messageIndex);
+      const userMessage: Message = {
+        id: `msg-${Date.now()}`,
+        type: 'human',
+        content: trimmed,
+      };
+      const nextMessages = [...truncated, userMessage];
+
+      try {
+        await thread.submit({ messages: nextMessages });
+        setTimeout(() => {
+          hasFinalizeEventOccurredRef.current = true;
+        }, 100);
+      } catch (err) {
+        console.error('Failed to edit message:', err);
+        dispatch(addToast({ title: 'Failed to send edited message', message: 'Please try again.', variant: 'danger' }));
+      }
+    },
+    [thread, threadId, currentChat, dispatch],
+  );
+
   const handleRetry = useCallback(() => {
     setProcessedEventsTimeline([]);
     setHistoricalActivities(currentChat?.historicalActivities || {});
@@ -302,6 +329,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
             onRetry={handleStreamRetry}
             scrollAreaRef={scrollAreaRef}
             onSubmit={handleSubmit}
+            onEditMessage={handleEditMessage}
             onCancel={handleCancel}
             onNewChat={handleNewChat}
             liveActivityEvents={processedEventsTimeline}
@@ -309,6 +337,17 @@ export function ChatPage({ threadId }: { threadId: string }) {
             isRateLimited={rateLimit.isRateLimited}
             rateLimitRemainingSeconds={rateLimit.retryAfterSeconds}
             mcpEvents={thread.mcpEvents}
+            chatId={threadId}
+            traceId={thread.traceId}
+            messageFeedback={currentChat?.feedback ?? {}}
+            lastResponseTiming={
+              thread.totalDuration != null
+                ? {
+                    timeToFirstTokenMs: thread.timeToFirstToken,
+                    totalDurationMs: thread.totalDuration,
+                  }
+                : null
+            }
           />
         </div>
         {debugMode && (

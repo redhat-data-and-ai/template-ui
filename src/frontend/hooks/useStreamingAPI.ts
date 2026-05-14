@@ -120,8 +120,21 @@ export function useStreamingAPI(threadId: string) {
   const [isStreamStale, setIsStreamStale] = useState(false);
   const [wasInterrupted, setWasInterrupted] = useState(false);
   const [mcpEvents, setMcpEvents] = useState<Array<{ tool: string; status: string; timestamp: number }>>([]);
+  const [traceId, setTraceId] = useState<string | null>(null);
+  const [lastStreamTiming, setLastStreamTiming] = useState<{
+    streamStartTime: number;
+    firstTokenTime: number | null;
+    streamEndTime: number;
+    timeToFirstTokenMs: number | null;
+    totalDurationMs: number;
+  } | null>(null);
 
   const managerRef = useRef<StreamingManager | null>(null);
+  const streamClockRef = useRef<{
+    streamStartTime: number | null;
+    firstTokenTime: number | null;
+    streamEndTime: number | null;
+  }>({ streamStartTime: null, firstTokenTime: null, streamEndTime: null });
   const isStreamingTokensRef = useRef<boolean>(false);
   const isActiveRef = useRef(true);
   const userCancelledRef = useRef(false);
@@ -224,6 +237,13 @@ export function useStreamingAPI(threadId: string) {
       setWasInterrupted(false);
       setIsStreamStale(false);
       setMcpEvents([]);
+      setTraceId(null);
+      setLastStreamTiming(null);
+      streamClockRef.current = {
+        streamStartTime: null,
+        firstTokenTime: null,
+        streamEndTime: null,
+      };
       if (staleIntervalRef.current != null) {
         clearInterval(staleIntervalRef.current);
         staleIntervalRef.current = null;
@@ -287,6 +307,9 @@ export function useStreamingAPI(threadId: string) {
             onToken(content) {
               lastTokenTimeRef.current = Date.now();
               setIsStreamStale(false);
+              if (streamClockRef.current.firstTokenTime == null) {
+                streamClockRef.current.firstTokenTime = Date.now();
+              }
               if (!isStreamingTokensRef.current) {
                 const message: AIMessage = {
                   type: 'ai',
@@ -387,6 +410,27 @@ export function useStreamingAPI(threadId: string) {
               finish('failed');
             },
             onStatusChange(status) {
+              if (status === 'connecting') {
+                setLastStreamTiming(null);
+                streamClockRef.current.streamStartTime = Date.now();
+                streamClockRef.current.firstTokenTime = null;
+                streamClockRef.current.streamEndTime = null;
+              }
+              if (status === 'idle' || status === 'cancelled' || status === 'error') {
+                const end = Date.now();
+                streamClockRef.current.streamEndTime = end;
+                const { streamStartTime, firstTokenTime } = streamClockRef.current;
+                if (streamStartTime != null) {
+                  setLastStreamTiming({
+                    streamStartTime,
+                    firstTokenTime,
+                    streamEndTime: end,
+                    timeToFirstTokenMs:
+                      firstTokenTime != null ? firstTokenTime - streamStartTime : null,
+                    totalDurationMs: end - streamStartTime,
+                  });
+                }
+              }
               if (status === 'cancelled') {
                 finish('cancelled');
               }
@@ -404,6 +448,9 @@ export function useStreamingAPI(threadId: string) {
             },
             onMcpStatus(evt) {
               setMcpEvents((prev) => [...prev, evt]);
+            },
+            onMetadata(data) {
+              setTraceId(data.trace_id);
             },
           };
 
@@ -463,5 +510,15 @@ export function useStreamingAPI(threadId: string) {
     isStreamStale,
     wasInterrupted,
     mcpEvents,
+    traceId,
+    streamStartTime: lastStreamTiming?.streamStartTime ?? null,
+    firstTokenTime: lastStreamTiming?.firstTokenTime ?? null,
+    streamEndTime: lastStreamTiming?.streamEndTime ?? null,
+    timeToFirstToken:
+      lastStreamTiming?.timeToFirstTokenMs != null
+        ? lastStreamTiming.timeToFirstTokenMs
+        : null,
+    totalDuration:
+      lastStreamTiming?.totalDurationMs != null ? lastStreamTiming.totalDurationMs : null,
   };
 }

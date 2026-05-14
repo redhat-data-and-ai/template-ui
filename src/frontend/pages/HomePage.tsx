@@ -30,6 +30,7 @@ export function HomePage() {
         preview: initialPrompt || 'Start a new conversation',
         messages: [],
         historicalActivities: {},
+        feedback: {},
       };
       dispatch(addChat(newChat));
       navigate(`/chat/${newChatId}`, { state: { initialPrompt: initialPrompt } });

@@ -139,6 +139,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       preview: "Start a new conversation",
       messages: [],
       historicalActivities: {},
+      feedback: {},
     };
 
     dispatch({ type: 'ADD_CHAT', payload: newChat });

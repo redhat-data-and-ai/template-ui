@@ -85,6 +85,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             ? c.timestamp
             : new Date(c.timestamp ?? Date.now()).toISOString(),
         historicalActivities: c.historicalActivities ?? {},
+        feedback: c.feedback ?? {},
       }));
       dispatch(setChats(mapped));
     }
@@ -114,6 +115,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             preview: 'Chat',
             timestamp: new Date().toISOString(),
             historicalActivities: {},
+            feedback: {},
           }));
 
         const reconciled = [...surviving, ...added];
@@ -177,6 +179,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       preview: 'Start a new conversation',
       messages: [],
       historicalActivities: {},
+      feedback: {},
     };
     dispatch(addChat(newChat));
     navigate(`/chat/${newChatId}`, { state: { newChat: true } });
