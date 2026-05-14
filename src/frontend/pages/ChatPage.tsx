@@ -303,14 +303,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
             historicalActivities={historicalActivities}
           />
         </div>
-        {(hasToolCalls || debugMode) && (
+        {debugMode && (
           <div className="w-64 shrink-0 border-l border-border overflow-y-auto hidden lg:block p-2 space-y-2">
-            {hasToolCalls && (
-              <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
-            )}
-            {debugMode && (
-              <DebugPanel messages={thread.messages} streamingState={streamingState} />
-            )}
+            <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
+            <DebugPanel messages={thread.messages} streamingState={streamingState} />
           </div>
         )}
       </div>
