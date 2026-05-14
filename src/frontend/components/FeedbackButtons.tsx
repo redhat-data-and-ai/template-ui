@@ -11,6 +11,7 @@ export interface FeedbackButtonsProps {
   messageId: string;
   traceId: string | null;
   chatId: string;
+  userId?: string;
   existingFeedback?: 'up' | 'down' | null;
 }
 
@@ -18,6 +19,7 @@ export function FeedbackButtons({
   messageId,
   traceId,
   chatId,
+  userId,
   existingFeedback = null,
 }: FeedbackButtonsProps) {
   const dispatch = useAppDispatch();
@@ -41,6 +43,9 @@ export function FeedbackButtons({
           traceId,
           name: direction === 'up' ? 'thumbs-up' : 'thumbs-down',
           value: direction === 'up' ? 1.0 : 0.0,
+          threadId: chatId,
+          messageId,
+          userId: userId || 'anonymous',
         });
         dispatch(setMessageFeedback({ chatId, messageId, feedback: direction }));
       } catch (e) {
@@ -55,7 +60,7 @@ export function FeedbackButtons({
         setIsSubmitting(false);
       }
     },
-    [traceId, isSubmitting, existingFeedback, dispatch, chatId, messageId],
+    [traceId, isSubmitting, existingFeedback, dispatch, chatId, messageId, userId],
   );
 
   const baseBtn =

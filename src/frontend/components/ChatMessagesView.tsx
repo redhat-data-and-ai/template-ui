@@ -592,6 +592,7 @@ interface ChatMessagesViewProps {
   mcpEvents?: Array<{ tool: string; status: string; timestamp: number }>;
   chatId: string;
   traceId: string | null;
+  userId?: string;
   messageFeedback?: Record<string, 'up' | 'down'>;
   onEditMessage?: (messageIndex: number, newContent: string) => void;
   lastResponseTiming?: {
@@ -613,6 +614,7 @@ export function ChatMessagesView({
   mcpEvents = [],
   chatId,
   traceId,
+  userId,
   messageFeedback = {},
   onEditMessage,
   lastResponseTiming = null,
@@ -684,6 +686,7 @@ export function ChatMessagesView({
                       messageId={message.id ?? `msg-${messageIndex}`}
                       chatId={chatId}
                       traceId={traceId}
+                      userId={userId}
                       existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
                     />
                   </div>

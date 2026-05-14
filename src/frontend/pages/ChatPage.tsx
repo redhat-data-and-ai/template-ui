@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import type { Message } from '@langchain/langgraph-sdk';
 import { Button, Spinner } from '@patternfly/react-core';
@@ -9,6 +9,7 @@ import {
   selectIsLoadingThreads,
   selectChatsError,
   selectStreamingState,
+  setMessageFeedback,
   updateChat,
   updateStreamingState,
 } from '../redux/slices/chats';
@@ -24,6 +25,7 @@ import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadState } from '../services/agent-rest';
+import { getThreadFeedback } from '../services/feedback-api';
 
 export function ChatPage({ threadId }: { threadId: string }) {
   const dispatch = useAppDispatch();
@@ -48,6 +50,12 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const chatId = currentChat?.id;
   const hasMessages = currentChat && currentChat.messages.length > 0;
 
+  const feedbackUserId = useMemo(() => {
+    if (typeof window === 'undefined') return 'anonymous';
+    const u = window.USER_DATA?.preferred_username;
+    return typeof u === 'string' && u.length > 0 ? u : 'anonymous';
+  }, []);
+
   useEffect(() => {
     if (!chatId || hasMessages || hydrating) return;
 
@@ -57,30 +65,42 @@ export function ChatPage({ threadId }: { threadId: string }) {
     let cancelled = false;
     setHydrating(true);
 
-    getThreadState(chatId).then((msgs) => {
-      if (cancelled) return;
-      if (msgs.length > 0) {
-        dispatch(updateChat({
-          id: chatId,
-          updates: {
-            messages: msgs,
-            title: (() => {
-              const first = msgs.find(m => m.type === 'human');
-              const content = first ? String(first.content) : '';
-              return content.length > 40 ? content.substring(0, 40) + '...' : content || 'Chat';
-            })(),
-          },
-        }));
-        thread.setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
-      }
-      setHydrating(false);
-    }).catch(() => {
-      if (!cancelled) setHydrating(false);
-    });
+    getThreadState(chatId)
+      .then(async (msgs) => {
+        if (cancelled) return;
+        if (msgs.length > 0) {
+          dispatch(updateChat({
+            id: chatId,
+            updates: {
+              messages: msgs,
+              title: (() => {
+                const first = msgs.find(m => m.type === 'human');
+                const content = first ? String(first.content) : '';
+                return content.length > 40 ? content.substring(0, 40) + '...' : content || 'Chat';
+              })(),
+            },
+          }));
+          thread.setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
+        }
+        try {
+          const feedbackMap = await getThreadFeedback(chatId, feedbackUserId);
+          if (!cancelled && Object.keys(feedbackMap).length > 0) {
+            for (const [msgId, fb] of Object.entries(feedbackMap)) {
+              dispatch(setMessageFeedback({ chatId, messageId: msgId, feedback: fb }));
+            }
+          }
+        } catch {
+          // Silently ignore — local persisted feedback in Redux may still apply
+        }
+        if (!cancelled) setHydrating(false);
+      })
+      .catch(() => {
+        if (!cancelled) setHydrating(false);
+      });
 
     return () => { cancelled = true; setHydrating(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId]);
+  }, [chatId, feedbackUserId]);
 
   const initialPromptSent = useRef(false);
   useEffect(() => {
@@ -339,6 +359,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
             mcpEvents={thread.mcpEvents}
             chatId={threadId}
             traceId={thread.traceId}
+            userId={feedbackUserId}
             messageFeedback={currentChat?.feedback ?? {}}
             lastResponseTiming={
               thread.totalDuration != null

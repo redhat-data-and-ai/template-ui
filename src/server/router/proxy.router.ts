@@ -207,6 +207,23 @@ function sessionExpiredReply(reply: FastifyReply) {
   });
 }
 
+/** Forward client query string to the agent (e.g. GET /feedback/:id?user_id=...). */
+function buildForwardedQueryString(query: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        if (v !== undefined) params.append(key, String(v));
+      }
+    } else {
+      params.append(key, String(value));
+    }
+  }
+  const s = params.toString();
+  return s ? `?${s}` : '';
+}
+
 async function proxyRoutes(fastify: FastifyInstance) {
   /**
    * Streaming endpoint — translates between the UI's simple
@@ -508,7 +525,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        const agentUrl = `${agentHost}/${path}`;
+        const queryString = buildForwardedQueryString(request.query as Record<string, unknown>);
+        const agentUrl = `${agentHost}/${path}${queryString}`;
         fastify.log.info({ traceId, method: request.method, agentUrl }, 'Proxying request to agent');
 
         const fetchOptions: RequestInit = {
