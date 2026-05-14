@@ -316,6 +316,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         let clientGone = false;
         let prevPartial = '';
         const sentMsgIds = new Set<string>();
+        const completedTexts: string[] = [];
 
         reply.raw.on('close', () => {
           clientGone = true;
@@ -353,10 +354,19 @@ async function proxyRoutes(fastify: FastifyInstance) {
                 const [uiChunk, nextPartial] = translateMessageEvent(sseType, parsed, chunkId, prevPartial, sentMsgIds);
 
                 if (nextPartial.length > prevPartial.length && !uiChunk) {
-                  const delta = nextPartial.slice(prevPartial.length);
-                  reply.raw.write(`data: ${JSON.stringify({ type: 'token', content: delta, chunk_id: chunkId })}\n\n`);
-                  chunkId++;
-                  hasEmittedTextTokens = true;
+                  const isEchoOfPrior = completedTexts.some(
+                    (ct) => nextPartial.length <= ct.length && ct.startsWith(nextPartial),
+                  );
+                  if (!isEchoOfPrior) {
+                    const delta = nextPartial.slice(prevPartial.length);
+                    reply.raw.write(`data: ${JSON.stringify({ type: 'token', content: delta, chunk_id: chunkId })}\n\n`);
+                    chunkId++;
+                    hasEmittedTextTokens = true;
+                  }
+                }
+
+                if (sseType === 'messages/complete' && !uiChunk && nextPartial.length > 0) {
+                  completedTexts.push(nextPartial);
                 }
 
                 prevPartial = nextPartial;
@@ -375,9 +385,14 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         if (!clientGone) {
           if (prevPartial.length > 0 && !hasEmittedTextTokens) {
-            const flush = { type: 'token', content: prevPartial, chunk_id: chunkId };
-            reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
-            chunkId++;
+            const isEcho = completedTexts.some(
+              (ct) => prevPartial.length <= ct.length && ct.startsWith(prevPartial),
+            );
+            if (!isEcho) {
+              const flush = { type: 'token', content: prevPartial, chunk_id: chunkId };
+              reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
+              chunkId++;
+            }
           }
 
           try {
