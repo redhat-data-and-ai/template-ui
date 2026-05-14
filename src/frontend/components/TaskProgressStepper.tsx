@@ -31,6 +31,7 @@ function deriveSteps(messages: Message[]): DerivedStep[] {
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) continue;
 
     for (const tc of toolCalls) {
+      if (tc.name === 'write_todos') continue;
       const subAgent = isSubAgentToolCall(tc);
       steps.push({
         id: tc.id ?? `step-${steps.length}`,

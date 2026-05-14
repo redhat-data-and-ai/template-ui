@@ -42,6 +42,7 @@ function extractEntries(messages: Message[]): ToolCallEntry[] {
     if (!Array.isArray(toolCalls)) continue;
 
     for (const tc of toolCalls) {
+      if (tc.name === 'write_todos') continue;
       const result = resultMap.get(tc.id) ?? (tc.content != null ? String(tc.content) : undefined);
       const subAgent = isSubAgentToolCall(tc);
       entries.push({

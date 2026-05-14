@@ -232,7 +232,7 @@ export function AIMessageRenderer({ message }: { message: Message }) {
 
     if (isToolCallStart) {
       const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
-      const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc)) ?? [];
+      const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
 
       return (
         <div className="space-y-2 w-full">
