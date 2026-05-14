@@ -9,6 +9,8 @@ interface StreamRequestBody {
   session_id?: string;
   stream_tokens?: boolean;
   resume?: boolean;
+  memories?: string[];
+  rules?: string[];
 }
 
 interface ProxyRequestBody {
@@ -221,7 +223,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, user_id, resume: isResume } = request.body;
+      const { message, thread_id, user_id, resume: isResume, memories, rules } = request.body;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -269,6 +271,13 @@ async function proxyRoutes(fastify: FastifyInstance) {
           runBody.command = { resume: message };
         } else {
           runBody.input = { messages: [{ role: 'human', content: message }] };
+        }
+
+        const configurable: Record<string, unknown> = {};
+        if (Array.isArray(memories) && memories.length > 0) configurable.user_memories = memories;
+        if (Array.isArray(rules) && rules.length > 0) configurable.user_rules = rules;
+        if (Object.keys(configurable).length > 0) {
+          runBody.config = { configurable };
         }
 
         const runResp = await fetch(runUrl, {

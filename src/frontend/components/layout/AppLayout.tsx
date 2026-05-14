@@ -20,7 +20,6 @@ import { BarsIcon } from '@patternfly/react-icons';
 import { RedHatLogo } from '../RedHatLogo';
 import { Sidebar } from '../Sidebar';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { ThemeToggle } from './ThemeToggle';
 import { DebugToggle } from '../DebugToggle';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import {
@@ -217,9 +216,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             <ToolbarGroup align={{ default: 'alignEnd' }}>
               <ToolbarItem>
                 <DebugToggle />
-              </ToolbarItem>
-              <ToolbarItem>
-                <ThemeToggle />
               </ToolbarItem>
             </ToolbarGroup>
           </ToolbarContent>

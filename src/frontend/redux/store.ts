@@ -1,11 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import chatsReducer from './slices/chats';
+import personalizationReducer from './slices/personalization';
 import toastsReducer from './slices/toasts';
 import userSettingsReducer from './slices/userSettings';
 
 export const store = configureStore({
   reducer: {
     chats: chatsReducer,
+    personalization: personalizationReducer,
     toasts: toastsReducer,
     userSettings: userSettingsReducer,
   },

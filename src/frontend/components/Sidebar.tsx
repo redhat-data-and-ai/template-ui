@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Button,
   Label,
@@ -9,7 +10,7 @@ import {
   ModalVariant,
   SearchInput,
 } from '@patternfly/react-core';
-import { Loader2, MessageSquare, Trash2, Edit3, Plus, Trash } from 'lucide-react';
+import { Loader2, MessageSquare, Trash2, Edit3, Plus, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SidebarChatItem } from '../types/chat';
 import type { SubAgentInfo } from '../types/deep-agent';
@@ -40,11 +41,11 @@ function SidebarComponent({
   onDeleteAllChats,
   onRenameChat,
 }: SidebarProps) {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
-  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
 
   const filteredChats = useMemo(() => {
@@ -189,18 +190,13 @@ function SidebarComponent({
 
       {/* Footer */}
       <div className="shrink-0 p-3 border-t border-sidebar-border space-y-2.5">
-        {chatHistory.length > 1 && (
-          <Button
-            variant="plain"
-            isBlock
-            isDanger
-            size="sm"
-            onClick={() => setIsDeletingAll(true)}
-          >
-            <Trash className="w-3.5 h-3.5" />
-            Delete all chats
-          </Button>
-        )}
+        <button
+          onClick={() => navigate('/settings')}
+          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
+        >
+          <Settings className="w-4 h-4" />
+          Settings
+        </button>
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-sm font-semibold text-primary">
             {userName.charAt(0).toUpperCase()}
@@ -239,31 +235,6 @@ function SidebarComponent({
         </ModalFooter>
       </Modal>
 
-      <Modal
-        variant={ModalVariant.small}
-        isOpen={isDeletingAll}
-        onClose={() => setIsDeletingAll(false)}
-        aria-label="Delete all chats confirmation"
-      >
-        <ModalHeader title="Delete all chats" />
-        <ModalBody>
-          This will permanently delete all {chatHistory.length} conversations. This action cannot be undone.
-        </ModalBody>
-        <ModalFooter>
-          <Button
-            variant="danger"
-            onClick={() => {
-              onDeleteAllChats();
-              setIsDeletingAll(false);
-            }}
-          >
-            Delete all
-          </Button>
-          <Button variant="link" onClick={() => setIsDeletingAll(false)}>
-            Cancel
-          </Button>
-        </ModalFooter>
-      </Modal>
     </div>
   );
 }

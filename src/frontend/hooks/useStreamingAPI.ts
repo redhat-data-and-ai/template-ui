@@ -15,6 +15,7 @@ import {
   type StreamingState,
 } from '@/redux/slices/chats';
 import { chatStorage } from '@/services/chatStorage';
+import { selectActiveRules, selectMemories } from '@/redux/slices/personalization';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 
 function cloneMessages(messages: Message[]): Message[] {
@@ -68,6 +69,9 @@ export function useStreamingAPI(threadId: string) {
   const dispatch = useAppDispatch();
   const chat = useAppSelector((state) => selectChatById(state, threadId));
   const streamingState = useAppSelector((state) => selectStreamingState(state, threadId));
+
+  const memories = useAppSelector(selectMemories);
+  const activeRules = useAppSelector(selectActiveRules);
 
   const messages = useMemo(() => chat?.messages ?? EMPTY_MESSAGES, [chat?.messages]);
 
@@ -237,6 +241,8 @@ export function useStreamingAPI(threadId: string) {
           userId,
           apiUrl,
           token,
+          memories: memories.map((m) => m.content),
+          rules: activeRules.map((r) => r.content),
         },
         callbacks,
       );

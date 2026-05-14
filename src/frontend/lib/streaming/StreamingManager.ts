@@ -9,6 +9,8 @@ export interface StreamRequest {
   userId: string;
   apiUrl: string;
   token?: string;
+  memories?: string[];
+  rules?: string[];
 }
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error' | 'cancelled';
@@ -93,17 +95,21 @@ export class StreamingManager {
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
     try {
+      const body: Record<string, unknown> = {
+        message: request.message,
+        thread_id: request.threadId || 'default-thread',
+        session_id: request.threadId || 'default-session',
+        user_id: request.userId,
+        stream_tokens: true,
+      };
+      if (request.memories?.length) body.memories = request.memories;
+      if (request.rules?.length) body.rules = request.rules;
+
       const response = await fetch(streamUrl, {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({
-          message: request.message,
-          thread_id: request.threadId || 'default-thread',
-          session_id: request.threadId || 'default-session',
-          user_id: request.userId,
-          stream_tokens: true,
-        }),
+        body: JSON.stringify(body),
         signal,
       });
 
