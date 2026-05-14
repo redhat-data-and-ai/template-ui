@@ -304,7 +304,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
           />
         </div>
         {debugMode && (
-          <div className="w-64 shrink-0 border-l border-border hidden lg:block p-2 space-y-2">
+          <div className="w-64 shrink-0 self-stretch border-l border-border hidden lg:block p-2 space-y-2 overflow-y-auto">
             <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
             <DebugPanel messages={thread.messages} streamingState={streamingState} />
           </div>
