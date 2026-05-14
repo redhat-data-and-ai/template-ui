@@ -1,11 +1,19 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Loader2, Pencil, RotateCcw, Settings, Bot, User } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User } from "lucide-react";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
 import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
 import { cn } from "../lib/utils";
-import { ExpandableSection, Label } from "@patternfly/react-core";
+import {
+  Dropdown,
+  DropdownItem,
+  DropdownList,
+  ExpandableSection,
+  Label,
+  MenuToggle,
+  type MenuToggleElement,
+} from "@patternfly/react-core";
 import {
   ProcessedEvent,
 } from "./ActivityTimeline";
@@ -599,6 +607,9 @@ interface ChatMessagesViewProps {
     timeToFirstTokenMs: number | null;
     totalDurationMs: number;
   } | null;
+  chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  onExportMarkdown?: () => void;
+  onExportJson?: () => void;
 }
 
 export function ChatMessagesView({
@@ -618,8 +629,12 @@ export function ChatMessagesView({
   messageFeedback = {},
   onEditMessage,
   lastResponseTiming = null,
+  chatInputRef,
+  onExportMarkdown,
+  onExportJson,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   const { lastHumanMessageIndex, lastAiMessageIndex } = useMemo(() => {
     let lastHuman = -1;
@@ -648,10 +663,45 @@ export function ChatMessagesView({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const showExport = Boolean(onExportMarkdown && onExportJson && messages.length > 0);
+
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      {showExport && (
+        <div className="shrink-0 flex justify-end items-center px-4 md:px-6 py-2 border-b border-border bg-background/90">
+          <Dropdown
+            isOpen={exportMenuOpen}
+            onOpenChange={(open) => setExportMenuOpen(open)}
+            onSelect={(_event, value) => {
+              if (value === 'md') onExportMarkdown?.();
+              if (value === 'json') onExportJson?.();
+              setExportMenuOpen(false);
+            }}
+            shouldFocusToggleOnSelect
+            toggle={(toggleRef: React.Ref<MenuToggleElement>) => (
+              <MenuToggle
+                ref={toggleRef}
+                variant="plain"
+                onClick={() => setExportMenuOpen((o) => !o)}
+                isExpanded={exportMenuOpen}
+                aria-label="Export conversation"
+                icon={<Download className="w-4 h-4" />}
+              />
+            )}
+          >
+            <DropdownList>
+              <DropdownItem value="md" key="md">
+                Export as Markdown
+              </DropdownItem>
+              <DropdownItem value="json" key="json">
+                Export as JSON
+              </DropdownItem>
+            </DropdownList>
+          </Dropdown>
+        </div>
+      )}
       <div className="flex-1 min-h-0 overflow-y-auto chat-scroll" ref={scrollAreaRef}>
-        <div className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
+        <div role="log" aria-label="Chat messages" aria-live="polite" className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
           {messages.map((message, messageIndex) => {
             if (message.type === 'tool') {
               return <Fragment key={message.id ?? `m-${messageIndex}`} />;
@@ -666,6 +716,8 @@ export function ChatMessagesView({
             return (
             <div
               key={message.id || `msg-${messageIndex}`}
+              role="article"
+              aria-label={`Message from ${message.type === 'human' ? 'human' : 'assistant'}`}
               className="animate-fadeInUpSmooth group"
               style={{ animationDelay: `${Math.min(messageIndex * 30, 150)}ms`, opacity: 0 }}
             >
@@ -709,7 +761,11 @@ export function ChatMessagesView({
           })}
 
           {isLoading && (
-            <div className="flex items-start gap-3 animate-fadeIn">
+            <div
+              className="flex items-start gap-3 animate-fadeIn"
+              aria-live="assertive"
+              aria-label="Agent is thinking"
+            >
               <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
                 <Bot className="w-4 h-4 text-white" />
               </div>
@@ -736,8 +792,10 @@ export function ChatMessagesView({
                   The agent didn&apos;t respond. This could be a temporary issue.
                 </p>
                 <button
+                  type="button"
                   onClick={() => onRetry?.()}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  aria-label="Retry operation"
                 >
                   <RotateCcw className="w-3 h-3" />
                   Retry
@@ -753,6 +811,7 @@ export function ChatMessagesView({
       <div className="border-t border-border bg-background/80 glass">
         <div className="max-w-3xl mx-auto">
           <InputForm
+            ref={chatInputRef}
             onSubmit={onSubmit}
             isLoading={isLoading}
             onCancel={onCancel}

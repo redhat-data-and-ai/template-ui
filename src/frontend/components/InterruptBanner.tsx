@@ -26,7 +26,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
 
   if (approval) {
     return (
-      <div className="mx-4 mb-3">
+      <div className="mx-4 mb-3" role="alert">
         <Alert
           variant="warning"
           title="Action Required"
@@ -58,9 +58,8 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
   }
 
   return (
-    <div className="mx-4 mb-3">
+    <div className="mx-4 mb-3" role="alert">
       <Alert
-        variant="info"
         title="Input Required"
         isInline
         actionClose={<AlertActionCloseButton onClose={onDismiss} />}

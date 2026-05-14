@@ -26,6 +26,13 @@ import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadState } from '../services/agent-rest';
 import { getThreadFeedback } from '../services/feedback-api';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import {
+  downloadFile,
+  exportAsJSON,
+  exportAsMarkdown,
+  slugifyExportBase,
+} from '../services/export-chat';
 
 export function ChatPage({ threadId }: { threadId: string }) {
   const dispatch = useAppDispatch();
@@ -42,10 +49,34 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const [hydrating, setHydrating] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const hasFinalizeEventOccurredRef = useRef(false);
 
   const thread = useStreamingAPI(threadId);
   const rateLimit = useRateLimitState();
+
+  const [streamAnnouncement, setStreamAnnouncement] = useState('');
+  const prevIsLoadingForAnnounce = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    if (chatsLoading || hydrating) return;
+    const t = requestAnimationFrame(() => {
+      chatInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(t);
+  }, [threadId, chatsLoading, hydrating]);
+
+  useEffect(() => {
+    if (chatsLoading || hydrating) return;
+    const prev = prevIsLoadingForAnnounce.current;
+    prevIsLoadingForAnnounce.current = thread.isLoading;
+    if (prev === null) return;
+    if (thread.isLoading && !prev) {
+      setStreamAnnouncement('Agent is thinking');
+    } else if (!thread.isLoading && prev) {
+      setStreamAnnouncement(streamingState.error ? 'Stream error' : 'Response complete');
+    }
+  }, [thread.isLoading, streamingState.error, chatsLoading, hydrating]);
 
   const chatId = currentChat?.id;
   const hasMessages = currentChat && currentChat.messages.length > 0;
@@ -292,6 +323,32 @@ export function ChatPage({ threadId }: { threadId: string }) {
     navigate('/');
   }, [navigate]);
 
+  const handleExportMarkdown = useCallback(() => {
+    if (!currentChat || thread.messages.length === 0) return;
+    const title = currentChat.title || 'Chat';
+    const md = exportAsMarkdown(thread.messages, title);
+    downloadFile(md, `${slugifyExportBase(title)}.md`, 'text/markdown;charset=utf-8');
+  }, [currentChat, thread.messages]);
+
+  const handleExportJson = useCallback(() => {
+    if (!currentChat || thread.messages.length === 0) return;
+    const title = currentChat.title || 'Chat';
+    const json = exportAsJSON(thread.messages, title);
+    downloadFile(json, `${slugifyExportBase(title)}.json`, 'application/json;charset=utf-8');
+  }, [currentChat, thread.messages]);
+
+  const handleExportShortcut = useCallback(() => {
+    handleExportMarkdown();
+  }, [handleExportMarkdown]);
+
+  useKeyboardShortcuts({
+    onFocusInput: () => chatInputRef.current?.focus(),
+    onCancelStream: handleCancel,
+    getIsStreaming: () => thread.isLoading,
+    onBlurChatInput: () => chatInputRef.current?.blur(),
+    onExportChat: handleExportShortcut,
+  });
+
   if (chatsLoading || hydrating) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
@@ -329,6 +386,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   return (
     <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
+      <div aria-live="polite" className="sr-only">
+        {streamAnnouncement}
+      </div>
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0">
           {hasToolCalls && (
@@ -369,6 +429,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
                   }
                 : null
             }
+            chatInputRef={chatInputRef}
+            onExportMarkdown={handleExportMarkdown}
+            onExportJson={handleExportJson}
           />
         </div>
         {debugMode && (

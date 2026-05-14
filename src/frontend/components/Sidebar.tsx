@@ -9,12 +9,14 @@ import {
   ModalHeader,
   ModalVariant,
   SearchInput,
+  Tooltip,
 } from '@patternfly/react-core';
 import { Loader2, MessageSquare, Trash2, Edit3, Plus, Settings, LogOut } from 'lucide-react';
 import { logout } from '../services/logout';
 import { cn } from '@/lib/utils';
 import type { SidebarChatItem } from '../types/chat';
 import type { SubAgentInfo } from '../types/deep-agent';
+import { useAgentHealth } from '../hooks/useAgentHealth';
 
 interface SidebarProps {
   userName?: string;
@@ -43,6 +45,7 @@ function SidebarComponent({
   onRenameChat,
 }: SidebarProps) {
   const navigate = useNavigate();
+  const agentHealth = useAgentHealth();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -73,7 +76,7 @@ function SidebarComponent({
     <div className="flex flex-col h-full min-h-0 bg-sidebar border-r border-sidebar-border text-sidebar-foreground">
       {/* New Chat button */}
       <div className="shrink-0 p-3 pb-2">
-        <Button variant="primary" isBlock onClick={onNewChat}>
+        <Button variant="primary" isBlock onClick={onNewChat} aria-label="Start new chat">
           <Plus className="w-4 h-4" />
           New Chat
         </Button>
@@ -97,7 +100,11 @@ function SidebarComponent({
       </div>
 
       {/* Chat list */}
-      <div className="flex-1 min-h-0 overflow-y-auto chat-scroll px-1.5">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto chat-scroll px-1.5"
+        role="listbox"
+        aria-label="Chat history"
+      >
         {filteredChats.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
             <MessageSquare className="w-6 h-6 text-muted-foreground/40 mb-2" />
@@ -110,16 +117,45 @@ function SidebarComponent({
             {filteredChats.map((chat) => {
               const isActive = currentChatId === chat.id;
 
+              const focusNeighbor = (delta: number) => {
+                const idx = filteredChats.findIndex((c) => c.id === chat.id);
+                const next = filteredChats[idx + delta];
+                if (!next) return;
+                document.getElementById(`sidebar-chat-option-${next.id}`)?.focus();
+              };
+
+              const onOptionKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectChat(chat.id);
+                  return;
+                }
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  focusNeighbor(1);
+                  return;
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  focusNeighbor(-1);
+                }
+              };
+
               return (
                 <div
                   key={chat.id}
+                  id={`sidebar-chat-option-${chat.id}`}
+                  role="option"
+                  tabIndex={editingChat === chat.id ? -1 : 0}
+                  aria-selected={isActive}
                   className={cn(
-                    'group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors',
+                    'group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                     isActive
                       ? 'bg-secondary text-foreground'
                       : 'text-foreground/70 hover:bg-secondary/50 hover:text-foreground'
                   )}
                   onClick={() => onSelectChat(chat.id)}
+                  onKeyDown={onOptionKeyDown}
                 >
                   {editingChat === chat.id ? (
                     <input
@@ -176,7 +212,7 @@ function SidebarComponent({
                           e.stopPropagation();
                           setDeletingChatId(chat.id);
                         }}
-                        aria-label="Delete chat"
+                        aria-label={`Delete chat: ${chat.title}`}
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
@@ -187,6 +223,37 @@ function SidebarComponent({
             })}
           </div>
         )}
+      </div>
+
+      <div className="shrink-0 px-3 py-2 border-t border-sidebar-border">
+        <Tooltip
+          content={
+            agentHealth.status === 'healthy'
+              ? 'Agent: healthy'
+              : agentHealth.status === 'unhealthy'
+                ? 'Agent: offline'
+                : 'Agent: status unknown'
+          }
+        >
+          <div className="flex items-center gap-2 text-xs text-muted-foreground cursor-default">
+            <span
+              className={cn(
+                'h-2 w-2 rounded-full shrink-0',
+                agentHealth.status === 'healthy' && 'bg-green-500',
+                agentHealth.status === 'unhealthy' && 'bg-red-500',
+                agentHealth.status === 'unknown' && 'bg-gray-400',
+              )}
+              aria-hidden
+            />
+            <span className="truncate">
+              {agentHealth.status === 'healthy'
+                ? 'Agent: healthy'
+                : agentHealth.status === 'unhealthy'
+                  ? 'Agent: offline'
+                  : 'Agent: unknown'}
+            </span>
+          </div>
+        </Tooltip>
       </div>
 
       {/* Footer */}
@@ -202,7 +269,7 @@ function SidebarComponent({
             type="button"
             onClick={() => navigate('/settings')}
             className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
-            aria-label="Settings"
+            aria-label="Open settings"
           >
             <Settings className="w-4 h-4" />
           </button>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { SquarePen, ArrowUp, StopCircle } from "lucide-react";
 import { Alert } from "@patternfly/react-core";
 
@@ -12,7 +12,8 @@ interface InputFormProps {
   rateLimitRemainingSeconds?: number;
 }
 
-export const InputForm: React.FC<InputFormProps> = ({
+export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(function InputForm(
+  {
   onSubmit,
   onCancel,
   onNewChat,
@@ -20,17 +21,19 @@ export const InputForm: React.FC<InputFormProps> = ({
   hasHistory,
   isRateLimited = false,
   rateLimitRemainingSeconds = 0,
-}) => {
+  },
+  ref,
+) {
   const [internalInputValue, setInternalInputValue] = useState("");
 
-  const handleInternalSubmit = (e?: React.FormEvent) => {
+  const handleInternalSubmit = (e?: FormEvent) => {
     if (e) e.preventDefault();
     if (!internalInputValue.trim()) return;
     onSubmit(internalInputValue);
     setInternalInputValue("");
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleInternalSubmit();
@@ -54,10 +57,12 @@ export const InputForm: React.FC<InputFormProps> = ({
       )}
       <div className="relative bg-card border border-border rounded-2xl shadow-elevated focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all duration-200">
         <textarea
+          ref={ref}
           value={internalInputValue}
           onChange={(e) => setInternalInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask me anything about the data..."
+          aria-label="Type a message"
           className="w-full text-foreground placeholder-muted-foreground resize-none border-0 focus:outline-none focus:ring-0 outline-none bg-transparent px-4 pt-3.5 pb-12 md:text-[15px] min-h-[56px] max-h-[200px] rounded-2xl"
           rows={1}
         />
@@ -67,6 +72,7 @@ export const InputForm: React.FC<InputFormProps> = ({
               type="button"
               className="flex items-center justify-center w-9 h-9 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
               onClick={onCancel}
+              aria-label="Cancel streaming"
             >
               <StopCircle className="h-4.5 w-4.5" />
             </button>
@@ -112,4 +118,4 @@ export const InputForm: React.FC<InputFormProps> = ({
       )}
     </form>
   );
-};
+});

@@ -80,8 +80,8 @@ export function FeedbackButtons({
         )}
         disabled={disabled}
         title={!traceId ? unavailableTitle : undefined}
-        aria-pressed={existingFeedback === 'up'}
-        aria-label="Thumbs up"
+        aria-pressed={existingFeedback === 'up' ? true : false}
+        aria-label="Rate response as helpful"
         onClick={() => void handleVote('up')}
       >
         <ThumbsUp className={cn('h-3.5 w-3.5', existingFeedback === 'up' && 'fill-current')} strokeWidth={2} />
@@ -94,8 +94,8 @@ export function FeedbackButtons({
         )}
         disabled={disabled}
         title={!traceId ? unavailableTitle : undefined}
-        aria-pressed={existingFeedback === 'down'}
-        aria-label="Thumbs down"
+        aria-pressed={existingFeedback === 'down' ? true : false}
+        aria-label="Rate response as not helpful"
         onClick={() => void handleVote('down')}
       >
         <ThumbsDown className={cn('h-3.5 w-3.5', existingFeedback === 'down' && 'fill-current')} strokeWidth={2} />

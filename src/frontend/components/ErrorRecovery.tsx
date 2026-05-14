@@ -85,13 +85,14 @@ export function ErrorRecovery({
           variant={status === 'warning' ? 'warning' : 'danger'}
           title="Error"
           isInline
+          role="alert"
           className="pf-v6-u-mb-md"
         >
           {errorMessage}
         </Alert>
 
         {maxRetriesReached && (
-          <Alert variant="info" isInline title="Maximum retries reached" className="pf-v6-u-mb-md" />
+          <Alert variant="info" isInline title="Maximum retries reached" role="alert" className="pf-v6-u-mb-md" />
         )}
 
         {showTechnicalDetails && (
@@ -136,6 +137,7 @@ export function ErrorRecovery({
             isDisabled={maxRetriesReached || isRetrying}
             isLoading={isRetrying}
             spinnerAriaValueText="Retrying"
+            aria-label="Retry operation"
           >
             {retryLabel}
           </Button>

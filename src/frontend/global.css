@@ -320,3 +320,46 @@
 .chat-scroll:hover::-webkit-scrollbar-thumb {
   background: rgb(115 115 115 / 0.3);
 }
+/* Skip navigation: visually hidden until keyboard focus (MR-79) */
+.skip-to-main:focus,
+.skip-to-main:focus-visible {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 9999;
+  width: auto;
+  height: auto;
+  padding: 1rem;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  border-width: 0;
+  background: var(--background);
+  color: var(--foreground);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated, 0 4px 12px rgb(0 0 0 / 0.12));
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ── WCAG 2.1 AA focus visibility (MR-79) ───────────────── */
+:focus-visible {
+  outline: 2px solid var(--pf-t--global--color--brand--default, var(--primary, #0066cc));
+  outline-offset: 2px;
+}
+
+/* Screen reader only — skip link and live regions (MR-79, MR-80) */
+@layer utilities {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}

@@ -19,6 +19,7 @@ import {
 import { BarsIcon } from '@patternfly/react-icons';
 import { RedHatLogo } from '../RedHatLogo';
 import { Sidebar } from '../Sidebar';
+import { KeyboardShortcutsDialog } from '../KeyboardShortcutsDialog';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { SessionExpiredModal } from '../SessionExpiredModal';
 import { DebugToggle } from '../DebugToggle';
@@ -40,6 +41,7 @@ import { SidebarChatItem } from '../../types/chat';
 import { chatStorage } from '../../services/chatStorage';
 import { getAllThreadsByUserId } from '../../services/agent-rest';
 import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -50,6 +52,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const chats = useAppSelector(selectAllChats);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -211,6 +214,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     [dispatch]
   );
 
+  useKeyboardShortcuts({
+    onNewChat: () => navigate('/'),
+    onOpenSettings: () => navigate('/settings'),
+    onToggleHelp: () => setIsHelpOpen((v) => !v),
+  });
+
   const masthead = (
     <Masthead display={{ default: 'inline' }} className="!bg-card !border-b !border-border">
       <MastheadToggle>
@@ -249,6 +258,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 
   const sidebar = (
+    <nav aria-label="Sidebar navigation">
     <PageSidebar isSidebarOpen={!sidebarCollapsed}>
       <PageSidebarBody isFilled className="min-h-0">
         <ErrorBoundary
@@ -271,17 +281,25 @@ export function AppLayout({ children }: AppLayoutProps) {
         </ErrorBoundary>
       </PageSidebarBody>
     </PageSidebar>
+    </nav>
   );
 
   return (
     <Page masthead={masthead} sidebar={sidebar} className="h-screen bg-background text-foreground">
+      <a href="#main-content" className="skip-to-main sr-only">
+        Skip to main content
+      </a>
+      <KeyboardShortcutsDialog isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      {/* PatternFly Modal traps focus and restores focus on close. */}
       <SessionExpiredModal isOpen={sessionExpired} />
       <ErrorBoundary
         onError={(error, errorInfo) => {
           console.error('Main content error:', error, errorInfo);
         }}
       >
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">{children}</div>
+        <main id="main-content" role="main" aria-label="Chat content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          {children}
+        </main>
       </ErrorBoundary>
     </Page>
   );
