@@ -85,23 +85,32 @@ export function AppLayout({ children }: AppLayoutProps) {
         dispatch(setLoadingThreads(true));
         const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
 
-        if (history.length > 0) {
-          const existingIds = new Set(chatsRef.current.map((c) => c.id));
-          const newThreads: ChatItem[] = history
-            .filter((t) => !existingIds.has(t.id))
-            .map((t) => ({
-              id: t.id,
-              messages: [],
-              title: 'Chat',
-              preview: 'Chat',
-              timestamp: new Date().toISOString(),
-              historicalActivities: {},
-            }));
+        const backendIds = new Set(history.map((t) => t.id));
+        const local = chatsRef.current;
 
-          if (newThreads.length > 0) {
-            dispatch(setChats([...chatsRef.current, ...newThreads]));
-          }
+        const surviving = local.filter(
+          (c) => backendIds.has(c.id) || c.messages.length === 0,
+        );
+
+        const survivingIds = new Set(surviving.map((c) => c.id));
+        const added: ChatItem[] = history
+          .filter((t) => !survivingIds.has(t.id))
+          .map((t) => ({
+            id: t.id,
+            messages: [],
+            title: 'Chat',
+            preview: 'Chat',
+            timestamp: new Date().toISOString(),
+            historicalActivities: {},
+          }));
+
+        const reconciled = [...surviving, ...added];
+        dispatch(setChats(reconciled));
+
+        if (reconciled.length === 0) {
+          chatStorage.clearChats();
         }
+
         dispatch(setThreadsListHydrated(true));
       } catch (error) {
         console.error('Failed to load user history:', error);
