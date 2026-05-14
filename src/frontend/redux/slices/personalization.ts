@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface MemoryItem {
@@ -105,7 +105,9 @@ export const selectMemories = (state: { personalization: PersonalizationState })
   state.personalization.memories;
 export const selectRules = (state: { personalization: PersonalizationState }) =>
   state.personalization.rules;
-export const selectActiveRules = (state: { personalization: PersonalizationState }) =>
-  state.personalization.rules.filter((r) => r.isActive);
+export const selectActiveRules = createSelector(
+  selectRules,
+  (rules) => rules.filter((r) => r.isActive),
+);
 
 export default personalizationSlice.reducer;

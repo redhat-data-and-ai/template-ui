@@ -322,6 +322,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
           reader.cancel().catch(() => {});
         });
 
+        let hasEmittedTextTokens = false;
+
         try {
           while (!clientGone) {
             const { done, value } = await reader.read();
@@ -349,6 +351,14 @@ async function proxyRoutes(fastify: FastifyInstance) {
               try {
                 const parsed = JSON.parse(sseData);
                 const [uiChunk, nextPartial] = translateMessageEvent(sseType, parsed, chunkId, prevPartial, sentMsgIds);
+
+                if (nextPartial.length > prevPartial.length && !uiChunk) {
+                  const delta = nextPartial.slice(prevPartial.length);
+                  reply.raw.write(`data: ${JSON.stringify({ type: 'token', content: delta, chunk_id: chunkId })}\n\n`);
+                  chunkId++;
+                  hasEmittedTextTokens = true;
+                }
+
                 prevPartial = nextPartial;
                 if (uiChunk) {
                   reply.raw.write(`data: ${JSON.stringify(uiChunk)}\n\n`);
@@ -364,11 +374,10 @@ async function proxyRoutes(fastify: FastifyInstance) {
         }
 
         if (!clientGone) {
-          if (prevPartial.length > 0) {
+          if (prevPartial.length > 0 && !hasEmittedTextTokens) {
             const flush = { type: 'token', content: prevPartial, chunk_id: chunkId };
             reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
             chunkId++;
-            prevPartial = '';
           }
 
           try {

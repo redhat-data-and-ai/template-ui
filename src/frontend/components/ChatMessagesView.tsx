@@ -351,7 +351,17 @@ export function ChatMessagesView({
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const lastMessage = messages[messages.length - 1];
-  const showNoResponse = !isLoading && messages.length > 0 && lastMessage?.type === 'human';
+  const rawNoResponse = !isLoading && messages.length > 0 && lastMessage?.type === 'human';
+  const [showNoResponse, setShowNoResponse] = useState(false);
+
+  useEffect(() => {
+    if (!rawNoResponse) {
+      setShowNoResponse(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowNoResponse(true), 1500);
+    return () => clearTimeout(timer);
+  }, [rawNoResponse]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

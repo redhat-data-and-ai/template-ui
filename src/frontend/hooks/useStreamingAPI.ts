@@ -247,7 +247,7 @@ export function useStreamingAPI(threadId: string) {
         callbacks,
       );
     },
-    [dispatch, threadId],
+    [dispatch, threadId, memories, activeRules],
   );
 
   const stop = useCallback(() => {
