@@ -189,14 +189,7 @@ function SidebarComponent({
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 p-3 border-t border-sidebar-border space-y-2.5">
-        <button
-          onClick={() => navigate('/settings')}
-          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
-        >
-          <Settings className="w-4 h-4" />
-          Settings
-        </button>
+      <div className="shrink-0 p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-sm font-semibold text-primary">
             {userName.charAt(0).toUpperCase()}
@@ -204,6 +197,13 @@ function SidebarComponent({
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{userName}</p>
           </div>
+          <button
+            onClick={() => navigate('/settings')}
+            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
+            aria-label="Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
