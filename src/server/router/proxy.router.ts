@@ -594,11 +594,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
   fastify.get('/health/agent', async (request, reply) => {
     try {
-      const agentResponse = await fetch(`${agentHost}/ok`, {
+      const agentResponse = await fetch(`${agentHost}/health`, {
         signal: AbortSignal.timeout(5000),
       });
+      const body = agentResponse.ok ? await agentResponse.json().catch(() => ({})) as Record<string, unknown> : {};
       return reply.send({
-        status: agentResponse.ok ? 'healthy' : 'unhealthy',
+        status: agentResponse.ok ? ((body as Record<string, unknown>).status || 'healthy') : 'unhealthy',
         statusCode: agentResponse.status,
         timestamp: new Date().toISOString(),
       });
