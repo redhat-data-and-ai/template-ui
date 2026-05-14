@@ -8,19 +8,56 @@ export interface Thread {
 const apiUrl = window.APP_DATA?.apiUrl || '';
 
 /**
+ * When a supervisor agent echoes a sub-agent's response, the stored
+ * content array contains both the original structured text block and
+ * a raw-string echo that partially repeats it.  After joining the
+ * parts into a single string, this function finds and strips the
+ * longest repeated region (≥ 80 chars, ≥ 15 % of total length).
+ */
+function deduplicateEcho(text: string): string {
+  const MIN_OVERLAP = 80;
+  if (text.length < MIN_OVERLAP * 2) return text;
+
+  for (let i = 0; i < text.length - MIN_OVERLAP; i++) {
+    const pattern = text.substring(i, i + MIN_OVERLAP);
+    const secondPos = text.indexOf(pattern, i + MIN_OVERLAP);
+    if (secondPos === -1) continue;
+
+    let matchEnd = MIN_OVERLAP;
+    while (
+      i + matchEnd < secondPos &&
+      secondPos + matchEnd < text.length &&
+      text[i + matchEnd] === text[secondPos + matchEnd]
+    ) {
+      matchEnd++;
+    }
+
+    if (matchEnd < text.length * 0.15) continue;
+
+    return text.substring(0, secondPos) + text.substring(secondPos + matchEnd);
+  }
+  return text;
+}
+
+/**
  * Gemini-style models return content as [{type:"text", text:"..."}] arrays.
  * Normalize to a plain string so the UI can render it directly.
+ * When mixed structured + raw-string blocks are detected (supervisor echo
+ * pattern), applies deduplication.
  */
 function normalizeContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    return content
+    const hasStructured = content.some((b: any) => b?.type === 'text');
+    const hasRaw = content.some((b: any) => typeof b === 'string');
+    const joined = content
       .map((b: any) => {
         if (typeof b === 'string') return b;
         if (b?.type === 'text' && typeof b.text === 'string') return b.text;
         return '';
       })
       .join('');
+    return hasStructured && hasRaw ? deduplicateEcho(joined) : joined;
   }
   return typeof content === 'object' ? JSON.stringify(content) : String(content ?? '');
 }

@@ -50,7 +50,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     if (!chatId || hasMessages || hydrating) return;
 
     const locState = location.state as Record<string, unknown> | null;
-    if (locState?.initialPrompt != null || locState?.newChat === true) return;
+    if (locState?.initialPrompt != null) return;
 
     let cancelled = false;
     setHydrating(true);
@@ -76,7 +76,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
       if (!cancelled) setHydrating(false);
     });
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; setHydrating(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
