@@ -158,7 +158,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       historicalActivities: {},
     };
     dispatch(addChat(newChat));
-    navigate(`/chat/${newChatId}`);
+    navigate(`/chat/${newChatId}`, { state: { newChat: true } });
   }, [dispatch, navigate]);
 
   const handleDeleteChat = useCallback(

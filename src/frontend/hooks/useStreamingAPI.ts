@@ -79,15 +79,20 @@ export function useStreamingAPI(threadId: string) {
 
   const managerRef = useRef<StreamingManager | null>(null);
   const isStreamingTokensRef = useRef<boolean>(false);
+  const isActiveRef = useRef(true);
 
   if (!managerRef.current) {
     managerRef.current = new StreamingManager();
   }
 
   useEffect(() => {
+    isActiveRef.current = true;
     const manager = managerRef.current;
     return () => {
-      manager?.cancel();
+      isActiveRef.current = false;
+      setTimeout(() => {
+        if (!isActiveRef.current) manager?.cancel();
+      }, 50);
     };
   }, []);
 

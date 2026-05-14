@@ -49,8 +49,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
   useEffect(() => {
     if (!chatId || hasMessages || hydrating) return;
 
-    const isNewLocalChat = (location.state as Record<string, unknown>)?.initialPrompt != null;
-    if (isNewLocalChat) return;
+    const locState = location.state as Record<string, unknown> | null;
+    if (locState?.initialPrompt != null || locState?.newChat === true) return;
 
     let cancelled = false;
     setHydrating(true);
