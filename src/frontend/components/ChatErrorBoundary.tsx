@@ -1,5 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { Alert, Button } from '@patternfly/react-core';
+import { ErrorRecovery } from './ErrorRecovery';
 
 interface Props {
   children: ReactNode;
@@ -35,30 +35,25 @@ export class ChatErrorBoundary extends Component<Props, State> {
     window.location.href = '/';
   };
 
+  private handleRefreshChat = () => {
+    window.location.reload();
+  };
+
   render() {
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center h-full p-8">
-          <div className="max-w-lg w-full space-y-4">
-            <Alert variant="warning" title="Chat Error" isInline>
-              <p className="text-sm mt-1">
-                There was a problem with this chat session. This might be due to a network issue
-                or a problem with the message processing.
-              </p>
-              {this.state.error && (
-                <div className="mt-3 p-2 rounded bg-black/20 text-left">
-                  <p className="text-xs">{this.state.error.message}</p>
-                </div>
-              )}
-            </Alert>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button variant="warning" size="sm" onClick={this.handleRetry}>
-                Try Again
-              </Button>
-              <Button variant="secondary" size="sm" onClick={this.handleGoHome}>
-                Go to Home
-              </Button>
-            </div>
+          <div className="max-w-lg w-full">
+            <ErrorRecovery
+              title="Chat Error"
+              status="warning"
+              errorMessage="There was a problem with this chat session. This might be due to a network issue or a problem with the message processing."
+              errorDetails={this.state.error?.message}
+              onRetry={this.handleRetry}
+              onGoHome={this.handleGoHome}
+              onRefresh={this.handleRefreshChat}
+              refreshButtonLabel="Refresh Chat"
+            />
           </div>
         </div>
       );

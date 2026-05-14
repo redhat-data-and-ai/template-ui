@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SquarePen, ArrowUp, StopCircle } from "lucide-react";
+import { Alert } from "@patternfly/react-core";
 
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
@@ -7,6 +8,8 @@ interface InputFormProps {
   onNewChat?: () => void;
   isLoading: boolean;
   hasHistory: boolean;
+  isRateLimited?: boolean;
+  rateLimitRemainingSeconds?: number;
 }
 
 export const InputForm: React.FC<InputFormProps> = ({
@@ -15,6 +18,8 @@ export const InputForm: React.FC<InputFormProps> = ({
   onNewChat,
   isLoading,
   hasHistory,
+  isRateLimited = false,
+  rateLimitRemainingSeconds = 0,
 }) => {
   const [internalInputValue, setInternalInputValue] = useState("");
 
@@ -32,13 +37,21 @@ export const InputForm: React.FC<InputFormProps> = ({
     }
   };
 
-  const isSubmitDisabled = !internalInputValue.trim() || isLoading;
+  const isSubmitDisabled = !internalInputValue.trim() || isLoading || isRateLimited;
 
   return (
     <form
       onSubmit={handleInternalSubmit}
       className="flex flex-col gap-2 p-3 pb-4"
     >
+      {isRateLimited && rateLimitRemainingSeconds > 0 && (
+        <Alert
+          variant="warning"
+          isInline
+          title={`Rate limited. Try again in ${rateLimitRemainingSeconds}s`}
+          className="mb-1"
+        />
+      )}
       <div className="relative bg-card border border-border rounded-2xl shadow-elevated focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all duration-200">
         <textarea
           value={internalInputValue}
@@ -61,13 +74,26 @@ export const InputForm: React.FC<InputFormProps> = ({
             <button
               type="submit"
               disabled={isSubmitDisabled}
-              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 ${
+              aria-label={
+                isRateLimited
+                  ? `Wait ${rateLimitRemainingSeconds} seconds`
+                  : "Send message"
+              }
+              className={`flex items-center justify-center rounded-xl transition-all duration-200 ${
+                isRateLimited ? "min-w-[88px] h-9 px-2" : "w-9 h-9"
+              } ${
                 isSubmitDisabled
                   ? "bg-muted text-muted-foreground cursor-not-allowed"
                   : "gradient-brand text-white shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
               }`}
             >
-              <ArrowUp className="h-4.5 w-4.5" />
+              {isRateLimited ? (
+                <span className="text-xs font-medium tabular-nums">
+                  Wait ({rateLimitRemainingSeconds}s)
+                </span>
+              ) : (
+                <ArrowUp className="h-4.5 w-4.5" />
+              )}
             </button>
           )}
         </div>

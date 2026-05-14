@@ -139,6 +139,9 @@ const chatsSlice = createSlice({
     setThreadsListHydrated(state, action: PayloadAction<boolean>) {
       state.threadsListHydrated = action.payload;
     },
+    resetChatsState() {
+      return initialState;
+    },
   },
 });
 
@@ -155,6 +158,7 @@ export const {
   setError,
   setLoadingThreads,
   setThreadsListHydrated,
+  resetChatsState,
 } = chatsSlice.actions;
 
 export function selectAllChats(state: { chats: ChatsState }) {

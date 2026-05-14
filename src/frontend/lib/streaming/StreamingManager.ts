@@ -1,5 +1,7 @@
 import type { Message } from '@langchain/langgraph-sdk';
 
+import { parseRetryAfterSeconds, triggerRateLimit } from '@/services/authenticated-fetch';
+
 import type { SSEEvent } from './SSEProcessor';
 import { SSEProcessor } from './SSEProcessor';
 
@@ -20,6 +22,12 @@ export interface InterruptPayload {
   resumable: boolean;
 }
 
+export type McpStreamStatusEvent = {
+  tool: string;
+  status: string;
+  timestamp: number;
+};
+
 export type StreamCallback = {
   onToken: (content: string) => void;
   onMessage: (message: Message) => void;
@@ -27,6 +35,7 @@ export type StreamCallback = {
   onError: (error: Error) => void;
   onStatusChange: (status: StreamStatus) => void;
   onDone: () => void;
+  onMcpStatus?: (event: McpStreamStatusEvent) => void;
 };
 
 export class StreamingManager {
@@ -50,6 +59,14 @@ export class StreamingManager {
         case 'error':
           callbacks.onError(new Error(event.message));
           break;
+        case 'mcp_status': {
+          callbacks.onMcpStatus?.({
+            tool: event.data.tool,
+            status: event.data.status,
+            timestamp: Date.now(),
+          });
+          break;
+        }
         case 'chunk': {
           const { chunk_id: chunkId } = event.data;
           if (this.processedChunkIds.has(chunkId)) {
@@ -114,6 +131,10 @@ export class StreamingManager {
       });
 
       if (!response.ok) {
+        if (response.status === 429) {
+          const retrySeconds = parseRetryAfterSeconds(response.headers.get('Retry-After'));
+          triggerRateLimit(retrySeconds);
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 

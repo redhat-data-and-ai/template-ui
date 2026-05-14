@@ -1,9 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import {
-  Alert,
-  Button,
-  ExpandableSection,
-} from '@patternfly/react-core';
+import { ErrorRecovery } from './ErrorRecovery';
 
 interface Props {
   children: ReactNode;
@@ -14,6 +10,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error?: Error;
+  errorId?: string;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -23,7 +20,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return {
+      hasError: true,
+      error,
+      errorId: crypto.randomUUID().slice(0, 8),
+    };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -32,11 +33,15 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   private handleRetry = () => {
-    this.setState({ hasError: false, error: undefined });
+    this.setState({ hasError: false, error: undefined, errorId: undefined });
   };
 
   private handleReload = () => {
     window.location.reload();
+  };
+
+  private handleGoHome = () => {
+    window.location.href = '/';
   };
 
   render() {
@@ -45,34 +50,23 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const stackTrace =
+        this.state.error?.stack ?? this.state.error?.message;
+
       return (
         <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8">
-          <div className="max-w-md w-full space-y-4">
-            <Alert
-              variant="danger"
+          <div className="max-w-md w-full">
+            <ErrorRecovery
               title="Something went wrong"
-              isInline
-            >
-              <p className="text-sm mt-1">
-                An unexpected error occurred. You can try reloading the page or going back.
-              </p>
-              {this.state.error && (
-                <ExpandableSection toggleText="Error Details" className="mt-3">
-                  <pre className="text-xs whitespace-pre-wrap overflow-auto max-h-32 p-2 rounded bg-black/20">
-                    {this.state.error.message}
-                    {this.state.error.stack && `\n\n${this.state.error.stack}`}
-                  </pre>
-                </ExpandableSection>
-              )}
-            </Alert>
-            <div className="flex gap-3">
-              <Button variant="secondary" size="sm" onClick={this.handleRetry}>
-                Try Again
-              </Button>
-              <Button variant="danger" size="sm" onClick={this.handleReload}>
-                Reload Page
-              </Button>
-            </div>
+              errorMessage="An unexpected error occurred. You can try reloading the page or going back."
+              errorDetails={stackTrace}
+              errorId={this.state.errorId}
+              onRetry={this.handleRetry}
+              onGoHome={this.handleGoHome}
+              onRefresh={this.handleReload}
+              refreshButtonLabel="Reload Application"
+              isRefreshPrimary
+            />
           </div>
         </div>
       );

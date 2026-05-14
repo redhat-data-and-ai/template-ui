@@ -15,6 +15,7 @@ import {
 import { selectDebugMode } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI } from '../hooks/useStreamingAPI';
+import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { InterruptBanner } from '../components/InterruptBanner';
@@ -42,6 +43,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const hasFinalizeEventOccurredRef = useRef(false);
 
   const thread = useStreamingAPI(threadId);
+  const rateLimit = useRateLimitState();
 
   const chatId = currentChat?.id;
   const hasMessages = currentChat && currentChat.messages.length > 0;
@@ -304,6 +306,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
             onNewChat={handleNewChat}
             liveActivityEvents={processedEventsTimeline}
             historicalActivities={historicalActivities}
+            isRateLimited={rateLimit.isRateLimited}
+            rateLimitRemainingSeconds={rateLimit.retryAfterSeconds}
+            mcpEvents={thread.mcpEvents}
           />
         </div>
         {debugMode && (

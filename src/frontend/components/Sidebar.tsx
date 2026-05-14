@@ -10,7 +10,8 @@ import {
   ModalVariant,
   SearchInput,
 } from '@patternfly/react-core';
-import { Loader2, MessageSquare, Trash2, Edit3, Plus, Settings } from 'lucide-react';
+import { Loader2, MessageSquare, Trash2, Edit3, Plus, Settings, LogOut } from 'lucide-react';
+import { logout } from '../services/logout';
 import { cn } from '@/lib/utils';
 import type { SidebarChatItem } from '../types/chat';
 import type { SubAgentInfo } from '../types/deep-agent';
@@ -198,11 +199,22 @@ function SidebarComponent({
             <p className="text-sm font-medium truncate">{userName}</p>
           </div>
           <button
+            type="button"
             onClick={() => navigate('/settings')}
             className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
             aria-label="Settings"
           >
             <Settings className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void logout();
+            }}
+            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
+            aria-label="Log out"
+          >
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>

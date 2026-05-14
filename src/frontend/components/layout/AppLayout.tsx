@@ -20,6 +20,7 @@ import { BarsIcon } from '@patternfly/react-icons';
 import { RedHatLogo } from '../RedHatLogo';
 import { Sidebar } from '../Sidebar';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { SessionExpiredModal } from '../SessionExpiredModal';
 import { DebugToggle } from '../DebugToggle';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import {
@@ -38,6 +39,7 @@ import { addToast } from '../../redux/slices/toasts';
 import { SidebarChatItem } from '../../types/chat';
 import { chatStorage } from '../../services/chatStorage';
 import { getAllThreadsByUserId } from '../../services/agent-rest';
+import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -47,11 +49,21 @@ export function AppLayout({ children }: AppLayoutProps) {
   const dispatch = useAppDispatch();
   const chats = useAppSelector(selectAllChats);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   const chatsRef = useRef(chats);
   useEffect(() => { chatsRef.current = chats; }, [chats]);
+
+  useEffect(() => {
+    setAuthExpiredCallback(() => {
+      setSessionExpired(true);
+    });
+    return () => {
+      setAuthExpiredCallback(null);
+    };
+  }, []);
 
   const currentChatId = useMemo(() => {
     const match = /^\/chat\/([^/]+)/.exec(location.pathname);
@@ -260,6 +272,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <Page masthead={masthead} sidebar={sidebar} className="h-screen bg-background text-foreground">
+      <SessionExpiredModal isOpen={sessionExpired} />
       <ErrorBoundary
         onError={(error, errorInfo) => {
           console.error('Main content error:', error, errorInfo);

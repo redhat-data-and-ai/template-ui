@@ -5,8 +5,14 @@ export type SSEChunk =
   | { type: 'message'; content: Message; chunk_id: number }
   | { type: 'interrupt'; content: { value: string; resumable: boolean }; chunk_id: number };
 
+export type McpStatusData = {
+  tool: string;
+  status: string;
+};
+
 export type SSEEvent =
   | { kind: 'chunk'; data: SSEChunk }
+  | { kind: 'mcp_status'; data: McpStatusData }
   | { kind: 'done' }
   | { kind: 'error'; message: string };
 
@@ -71,6 +77,27 @@ function extractDataPayload(block: string): string | null {
   return parts.join('\n');
 }
 
+/** First `event:` line in an SSE block, if any. */
+function extractEventType(block: string): string | null {
+  for (const line of block.split('\n')) {
+    if (line.startsWith(':')) continue;
+    const trimmed = line.trim();
+    if (trimmed.startsWith('event:')) {
+      return trimmed.slice('event:'.length).trim();
+    }
+  }
+  return null;
+}
+
+function parseMcpStatusPayload(parsed: unknown, eventType: string | null): McpStatusData | null {
+  if (!isRecord(parsed)) return null;
+  const isMcp = eventType === 'mcp_status' || parsed.type === 'mcp_status';
+  if (!isMcp) return null;
+  const tool = typeof parsed.tool === 'string' ? parsed.tool : 'unknown';
+  const status = typeof parsed.status === 'string' ? parsed.status : 'unknown';
+  return { tool, status };
+}
+
 export class SSEProcessor {
   private buffer = '';
 
@@ -96,6 +123,8 @@ export class SSEProcessor {
         continue;
       }
 
+      const sseEventName = extractEventType(trimmed);
+
       let parsed: unknown;
       try {
         parsed = JSON.parse(normalized) as unknown;
@@ -104,6 +133,12 @@ export class SSEProcessor {
           kind: 'error',
           message: 'Malformed SSE chunk: invalid JSON',
         });
+        continue;
+      }
+
+      const mcpStatus = parseMcpStatusPayload(parsed, sseEventName);
+      if (mcpStatus) {
+        events.push({ kind: 'mcp_status', data: mcpStatus });
         continue;
       }
 

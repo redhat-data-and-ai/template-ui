@@ -87,6 +87,11 @@ const personalizationSlice = createSlice({
       state.rules = [];
       persist(state);
     },
+    resetPersonalization(state) {
+      state.memories = [];
+      state.rules = [];
+      persist(state);
+    },
   },
 });
 
@@ -99,6 +104,7 @@ export const {
   toggleRule,
   removeRule,
   clearRules,
+  resetPersonalization,
 } = personalizationSlice.actions;
 
 export const selectMemories = (state: { personalization: PersonalizationState }) =>

@@ -1,4 +1,5 @@
 import { AIMessage, Message } from "@langchain/langgraph-sdk";
+import { authenticatedFetch } from "./authenticated-fetch";
 
 export interface Thread {
   id: string;
@@ -114,15 +115,19 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
     ? `${apiUrl}/threads/search`
     : `/api/proxy/agent/threads/search`;
 
-  const response = await fetch(searchUrl, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    credentials: 'include',
-    body: JSON.stringify({
-      metadata: { user_identity: userId },
-      limit: 50,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await authenticatedFetch(searchUrl, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        metadata: { user_identity: userId },
+        limit: 50,
+      }),
+    });
+  } catch {
+    return [];
+  }
 
   if (!response.ok) return [];
 
@@ -147,9 +152,8 @@ export async function getThreadState(threadId: string): Promise<Message[]> {
     : `/api/proxy/agent/threads/${threadId}/state`;
 
   try {
-    const resp = await fetch(stateUrl, {
+    const resp = await authenticatedFetch(stateUrl, {
       headers: getAuthHeaders(),
-      credentials: 'include',
     });
     if (!resp.ok) return [];
 

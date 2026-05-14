@@ -2,6 +2,7 @@ import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { AlertCircle, CheckCircle, ChevronDown, ChevronRight, Loader2, RotateCcw, Settings, Bot, User } from "lucide-react";
 import { InputForm } from "./InputForm";
+import { McpStatusPanel } from "./McpStatusPanel";
 import { useState, ReactNode, useMemo, useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
 import { Label } from "@patternfly/react-core";
@@ -337,6 +338,9 @@ interface ChatMessagesViewProps {
   onNewChat?: () => void;
   liveActivityEvents: ProcessedEvent[];
   historicalActivities: Record<string, ProcessedEvent[]>;
+  isRateLimited?: boolean;
+  rateLimitRemainingSeconds?: number;
+  mcpEvents?: Array<{ tool: string; status: string; timestamp: number }>;
 }
 
 export function ChatMessagesView({
@@ -347,6 +351,9 @@ export function ChatMessagesView({
   onRetry,
   onCancel,
   onNewChat,
+  isRateLimited = false,
+  rateLimitRemainingSeconds = 0,
+  mcpEvents = [],
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -431,6 +438,7 @@ export function ChatMessagesView({
         </div>
       </div>
       <TodoStrip messages={messages} />
+      <McpStatusPanel mcpEvents={mcpEvents} />
       <div className="border-t border-border bg-background/80 glass">
         <div className="max-w-3xl mx-auto">
           <InputForm
@@ -439,6 +447,8 @@ export function ChatMessagesView({
             onCancel={onCancel}
             onNewChat={onNewChat}
             hasHistory={messages.length > 0}
+            isRateLimited={isRateLimited}
+            rateLimitRemainingSeconds={rateLimitRemainingSeconds}
           />
         </div>
       </div>

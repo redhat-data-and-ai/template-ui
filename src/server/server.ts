@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { clientRoutes } from "./router/client.router.js";
 import { apiRoutes } from "./router/api.router.js";
 import { proxyRoutes } from "./router/proxy.router.js";
+import logoutPlugin from "./router/logout.router.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
 import { buildSessionStore } from "./utils/redis.js";
 
@@ -69,6 +70,8 @@ export async function setupServer() {
   if (process.env.AUTH_ENABLED === "true") {
     await fastify.register(authPlugin);
   }
+
+  await fastify.register(logoutPlugin);
 
   await fastify.register(apiRoutes, { prefix: "/api" });
   await fastify.register(proxyRoutes, { prefix: "/api" });

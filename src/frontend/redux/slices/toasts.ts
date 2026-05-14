@@ -29,10 +29,13 @@ const toastsSlice = createSlice({
     removeToast(state, action: PayloadAction<string>) {
       state.toasts = state.toasts.filter((t) => t.id !== action.payload);
     },
+    clearAllToasts(state) {
+      state.toasts = [];
+    },
   },
 });
 
-export const { addToast, removeToast } = toastsSlice.actions;
+export const { addToast, removeToast, clearAllToasts } = toastsSlice.actions;
 
 export function selectToasts(state: { toasts: ToastsState }) {
   return state.toasts.toasts;

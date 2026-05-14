@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { agentHost } from '../utils/config.js';
 
@@ -159,6 +159,7 @@ function translateMessageEvent(
 interface TokenPair {
   accessToken: string | null;
   refreshToken: string | null;
+  refreshFailed?: boolean;
 }
 
 /**
@@ -194,17 +195,16 @@ async function ensureFreshTokens(
       refreshToken: refreshed.token.refresh_token ?? null,
     };
   } catch (err) {
-    fastify.log.error({ err }, 'Token refresh failed, using existing token');
-    return { accessToken: token.access_token, refreshToken: token.refresh_token ?? null };
+    fastify.log.error({ err }, 'Token refresh failed');
+    return { accessToken: null, refreshToken: null, refreshFailed: true };
   }
 }
 
-/** Backwards-compatible wrapper that returns only the access token. */
-async function ensureFreshToken(
-  fastify: FastifyInstance,
-  request: any,
-): Promise<string | null> {
-  return (await ensureFreshTokens(fastify, request)).accessToken;
+function sessionExpiredReply(reply: FastifyReply) {
+  return reply.status(401).send({
+    error: 'session_expired',
+    message: 'Token refresh failed. Please log in again.',
+  });
 }
 
 async function proxyRoutes(fastify: FastifyInstance) {
@@ -217,7 +217,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
     '/proxy/agent/v1/stream',
     async (request, reply) => {
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
-      const { accessToken, refreshToken } = await ensureFreshTokens(fastify, request);
+      const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
+
+      if (refreshFailed) {
+        return sessionExpiredReply(reply);
+      }
 
       if (!accessToken && process.env.AUTH_ENABLED === 'true') {
         return reply.status(401).send({ error: 'Not authenticated' });
@@ -350,8 +354,25 @@ async function proxyRoutes(fastify: FastifyInstance) {
               if (!sseData || sseType === 'metadata' || sseType === 'end') continue;
 
               try {
-                const parsed = JSON.parse(sseData);
-                const [uiChunk, nextPartial] = translateMessageEvent(sseType, parsed, chunkId, prevPartial, sentMsgIds);
+                const parsed = JSON.parse(sseData) as unknown;
+                const isMcpStatus =
+                  sseType === 'mcp_status' ||
+                  (typeof parsed === 'object' &&
+                    parsed !== null &&
+                    !Array.isArray(parsed) &&
+                    (parsed as Record<string, unknown>).type === 'mcp_status');
+                if (isMcpStatus) {
+                  reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
+                  continue;
+                }
+
+                const [uiChunk, nextPartial] = translateMessageEvent(
+                  sseType,
+                  parsed,
+                  chunkId,
+                  prevPartial,
+                  sentMsgIds,
+                );
 
                 if (nextPartial.length > prevPartial.length && !uiChunk) {
                   const isEchoOfPrior = completedTexts.some(
@@ -447,7 +468,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const path = (request.params as any)['*'];
-      const { accessToken, refreshToken } = await ensureFreshTokens(fastify, request);
+      const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
+
+      if (refreshFailed) {
+        return sessionExpiredReply(reply);
+      }
 
       if (!accessToken && process.env.AUTH_ENABLED === 'true') {
         return reply.status(401).send({ error: 'Not authenticated' });
@@ -499,7 +524,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
   fastify.post('/proxy/agent/feedback', async (request, reply) => {
     const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
-    const accessToken = await ensureFreshToken(fastify, request);
+    const { accessToken, refreshFailed } = await ensureFreshTokens(fastify, request);
+
+    if (refreshFailed) {
+      return sessionExpiredReply(reply);
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -547,7 +576,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/auth/generate-one-time-token', async (request, reply) => {
-    const accessToken = await ensureFreshToken(fastify, request);
+    const { accessToken, refreshFailed } = await ensureFreshTokens(fastify, request);
+
+    if (refreshFailed) {
+      return sessionExpiredReply(reply);
+    }
 
     if (!accessToken && process.env.AUTH_ENABLED === 'true') {
       return reply.status(401).send({ error: 'Not authenticated' });
