@@ -1,10 +1,16 @@
+import { shutdownTracing, startTracing } from "./tracing.js";
+
+startTracing();
+
 process.on("uncaughtException", (error) => {
   console.error("[Uncaught Exception]", {
     message: error.message,
     stack: error.stack,
     pid: process.pid,
   });
-  process.exit(1);
+  void shutdownTracing().finally(() => {
+    process.exit(1);
+  });
 });
 
 process.on("unhandledRejection", (reason, promise) => {
@@ -16,9 +22,14 @@ process.on("unhandledRejection", (reason, promise) => {
   process.exit(1);
 });
 
-import { setupServer } from "./server.js";
+process.on("SIGTERM", () => {
+  void shutdownTracing().finally(() => {
+    process.exit(0);
+  });
+});
 
 async function start() {
+  const { setupServer } = await import("./server.js");
   const fastify = await setupServer();
   const port = Number(process.env.PORT) || 8080;
 
@@ -30,4 +41,8 @@ async function start() {
   });
 }
 
-start().catch(console.error);
+try {
+  await start();
+} catch (err) {
+  console.error(err);
+}

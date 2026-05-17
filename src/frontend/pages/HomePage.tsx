@@ -90,22 +90,23 @@ export function HomePage() {
       <div className="border-t border-border bg-background px-6 pb-4 pt-3">
         <div className="max-w-2xl mx-auto">
           <form onSubmit={handleSubmit}>
-            <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-4 py-2 focus-within:border-primary/50 transition-colors">
+            <div className="relative rounded-2xl border border-border bg-card shadow-card focus-within:border-primary/40 focus-within:shadow-elevated transition-all duration-200">
               <textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Enter a prompt for Deep Agent"
-                className="flex-1 bg-transparent text-foreground placeholder-muted-foreground resize-none border-0 focus:outline-none text-sm min-h-[40px] max-h-[120px] py-1.5"
+                className="w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
+                style={{ boxShadow: 'none' }}
                 rows={1}
               />
               <button
                 type="submit"
                 disabled={!inputValue.trim()}
-                className={`flex-shrink-0 p-2 rounded-lg transition-colors ${
+                className={`absolute right-2.5 bottom-2.5 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
                   inputValue.trim()
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                    : 'text-muted-foreground cursor-not-allowed'
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
+                    : 'bg-muted text-muted-foreground cursor-not-allowed'
                 }`}
               >
                 <Send className="w-4 h-4" />

@@ -55,7 +55,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           className="mb-1"
         />
       )}
-      <div className="relative bg-card border border-border rounded-2xl shadow-elevated focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all duration-200">
+      <div className="relative rounded-2xl border border-border bg-card shadow-card focus-within:border-primary/40 focus-within:shadow-elevated transition-all duration-200">
         <textarea
           ref={ref}
           value={internalInputValue}
@@ -63,18 +63,19 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           onKeyDown={handleKeyDown}
           placeholder="Ask me anything about the data..."
           aria-label="Type a message"
-          className="w-full text-foreground placeholder-muted-foreground resize-none border-0 focus:outline-none focus:ring-0 outline-none bg-transparent px-4 pt-3.5 pb-12 md:text-[15px] min-h-[56px] max-h-[200px] rounded-2xl"
+          className="w-full resize-none border-0 bg-transparent px-4 pt-3.5 pb-12 text-sm leading-relaxed min-h-[56px] max-h-[200px] rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
+          style={{ boxShadow: 'none' }}
           rows={1}
         />
-        <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+        <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
           {isLoading ? (
             <button
               type="button"
-              className="flex items-center justify-center w-9 h-9 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
               onClick={onCancel}
               aria-label="Cancel streaming"
             >
-              <StopCircle className="h-4.5 w-4.5" />
+              <StopCircle className="h-4 w-4" />
             </button>
           ) : (
             <button
@@ -85,12 +86,12 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
                   ? `Wait ${rateLimitRemainingSeconds} seconds`
                   : "Send message"
               }
-              className={`flex items-center justify-center rounded-xl transition-all duration-200 ${
-                isRateLimited ? "min-w-[88px] h-9 px-2" : "w-9 h-9"
+              className={`flex items-center justify-center rounded-full transition-all duration-200 ${
+                isRateLimited ? "min-w-[88px] h-8 px-2" : "w-8 h-8"
               } ${
                 isSubmitDisabled
                   ? "bg-muted text-muted-foreground cursor-not-allowed"
-                  : "gradient-brand text-white shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md"
               }`}
             >
               {isRateLimited ? (
@@ -98,7 +99,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
                   Wait ({rateLimitRemainingSeconds}s)
                 </span>
               ) : (
-                <ArrowUp className="h-4.5 w-4.5" />
+                <ArrowUp className="h-4 w-4" />
               )}
             </button>
           )}

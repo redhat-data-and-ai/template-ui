@@ -76,8 +76,7 @@ function SidebarComponent({
     <div className="flex flex-col h-full min-h-0 bg-sidebar border-r border-sidebar-border text-sidebar-foreground">
       {/* New Chat button */}
       <div className="shrink-0 p-3 pb-2">
-        <Button variant="primary" isBlock onClick={onNewChat} aria-label="Start new chat">
-          <Plus className="w-4 h-4" />
+        <Button variant="primary" isBlock onClick={onNewChat} aria-label="Start new chat" icon={<Plus className="w-4 h-4" />}>
           New Chat
         </Button>
       </div>

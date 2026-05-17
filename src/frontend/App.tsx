@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
+import { AnnouncementBanner } from '../components/AnnouncementBanner';
 import { AppLayout } from './components/layout/AppLayout';
 import { HomePage } from './pages/HomePage';
 import { ChatRoutePage } from './pages/ChatPage';
@@ -16,6 +17,7 @@ export default function App() {
         console.error('Top-level application error:', error, errorInfo);
       }}
     >
+      <AnnouncementBanner />
       <AppLayout>
         <Routes>
           <Route path="/" element={<HomePage />} />

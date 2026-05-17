@@ -190,7 +190,7 @@ export function selectChatById(state: { chats: ChatsState }, chatId: string) {
 }
 
 export function selectStreamingState(state: { chats: ChatsState }, chatId: string): StreamingState {
-  return { ...DEFAULT_STREAMING_STATE, ...state.chats.streamingStates[chatId] };
+  return state.chats.streamingStates[chatId] ?? DEFAULT_STREAMING_STATE;
 }
 
 export function selectIsLoadingThreads(state: { chats: ChatsState }) {

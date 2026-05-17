@@ -67,8 +67,7 @@ export function ProfileSection() {
                 Permanently remove all {chats.length} chat{chats.length !== 1 ? 's' : ''}
               </p>
             </div>
-            <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
-              <Trash2 className="w-3.5 h-3.5" />
+            <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)} icon={<Trash2 className="w-3.5 h-3.5" />}>
               Delete all
             </Button>
           </div>

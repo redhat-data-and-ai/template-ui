@@ -39,7 +39,8 @@ export function MemoryList() {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="e.g. I prefer metric units for all measurements"
-          className="flex-1 bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground resize-none focus:outline-none focus:border-primary/50 min-h-[40px]"
+          className="flex-1 rounded-xl px-3.5 py-2.5 text-sm resize-none min-h-[40px] border-0 bg-secondary/50 placeholder:opacity-60 focus:bg-card focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
+          style={{ border: '1px solid var(--border)', boxShadow: 'none' }}
           rows={2}
         />
         <Button
@@ -48,8 +49,8 @@ export function MemoryList() {
           isDisabled={!draft.trim()}
           onClick={handleAdd}
           className="self-end"
+          icon={<Plus className="w-4 h-4" />}
         >
-          <Plus className="w-4 h-4" />
           Add
         </Button>
       </div>
