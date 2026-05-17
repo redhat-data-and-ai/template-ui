@@ -87,7 +87,7 @@ const DEFAULTS: UISettings = {
         style_src: ["'self'", "'unsafe-inline'"],
         img_src: ["'self'", "data:", "blob:"],
         connect_src: ["'self'"],
-        font_src: ["'self'"],
+        font_src: ["'self'", "data:"],
         object_src: ["'none'"],
         frame_ancestors: ["'none'"],
       },
