@@ -39,7 +39,7 @@ import {
 import { addToast } from '../../redux/slices/toasts';
 import { SidebarChatItem } from '../../types/chat';
 import { chatStorage } from '../../services/chatStorage';
-import { getAllThreadsByUserId, getThreadState } from '../../services/agent-rest';
+import { getAllThreadsByUserId, getThreadState, deleteThread } from '../../services/agent-rest';
 import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
 import { markChatAsClientCreated, isClientCreatedChat } from '../../services/newChatTracker';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
@@ -241,16 +241,19 @@ export function AppLayout({ children }: AppLayoutProps) {
         const remaining = chats.filter((c) => c.id !== chatId);
         navigate(remaining.length > 0 ? `/chat/${remaining[0].id}` : '/');
       }
+      deleteThread(chatId).catch(() => {});
     },
     [dispatch, chats, navigate]
   );
 
   const handleDeleteAllChats = useCallback(() => {
+    const ids = chats.map((c) => c.id);
     dispatch(clearAllChats());
     chatStorage.clearChats();
     dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     navigate('/');
-  }, [dispatch, navigate]);
+    ids.forEach((id) => deleteThread(id).catch(() => {}));
+  }, [dispatch, chats, navigate]);
 
   const handleRenameChat = useCallback(
     (chatId: string, newTitle: string) => {

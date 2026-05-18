@@ -147,6 +147,26 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
 }
 
 /**
+ * Delete a thread from the backend (LangGraph Platform).
+ * Returns true if the deletion succeeded (or thread was already gone).
+ */
+export async function deleteThread(threadId: string): Promise<boolean> {
+  const deleteUrl = apiUrl
+    ? `${apiUrl}/threads/${threadId}`
+    : `/api/proxy/agent/threads/${threadId}`;
+
+  try {
+    const resp = await authenticatedFetch(deleteUrl, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return resp.ok || resp.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Fetch full state for a single thread (lazy, on-demand).
  * Called only when a user navigates into a specific chat.
  */
