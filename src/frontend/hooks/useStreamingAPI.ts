@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import {
   appendMessageToChat,
   mergeToolResult,
+  resolveAllPendingToolCalls,
   selectChatById,
   selectStreamingState,
   updateChat,
@@ -444,6 +445,7 @@ export function useStreamingAPI(threadId: string) {
               }
             },
             onDone() {
+              dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
               finish('success');
             },
             onMcpStatus(evt) {
@@ -456,6 +458,7 @@ export function useStreamingAPI(threadId: string) {
 
           manager.stream(streamRequest, callbacks).then(() => {
             if (!settled) {
+              dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
               finish('success');
             }
           });

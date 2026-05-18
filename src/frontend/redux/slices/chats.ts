@@ -123,6 +123,19 @@ const chatsSlice = createSlice({
         }
       }
     },
+    resolveAllPendingToolCalls(state, action: PayloadAction<{ chatId: string }>) {
+      const chat = state.chats.find((c) => c.id === action.payload.chatId);
+      if (!chat) return;
+      for (const message of chat.messages) {
+        const msg = message as Message & { tool_calls?: ToolCallRecord[] };
+        if (!Array.isArray(msg.tool_calls)) continue;
+        for (const tc of msg.tool_calls) {
+          if (tc && tc.content == null) {
+            tc.content = '';
+          }
+        }
+      }
+    },
     setMessageFeedback(
       state,
       action: PayloadAction<{ chatId: string; messageId: string; feedback: 'up' | 'down' | null }>
@@ -173,6 +186,7 @@ export const {
   appendMessageToChat,
   updateLastMessageInChat,
   mergeToolResult,
+  resolveAllPendingToolCalls,
   setMessageFeedback,
   updateStreamingState,
   setError,
