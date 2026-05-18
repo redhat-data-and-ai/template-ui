@@ -5,6 +5,7 @@ import { extractTodosFromMessages, type TodoItem } from '../types/deep-agent';
 
 interface TodoStripProps {
   readonly messages: Message[];
+  readonly isLoading?: boolean;
 }
 
 const STATUS_CONFIG: Record<TodoItem['status'], { icon: typeof CheckCircle; className: string; iconClass: string }> = {
@@ -13,8 +14,17 @@ const STATUS_CONFIG: Record<TodoItem['status'], { icon: typeof CheckCircle; clas
   pending: { icon: Circle, className: 'text-muted-foreground', iconClass: 'text-muted-foreground/50' },
 };
 
-export function TodoStrip({ messages }: TodoStripProps) {
-  const todos = useMemo(() => extractTodosFromMessages(messages), [messages]);
+export function TodoStrip({ messages, isLoading = false }: TodoStripProps) {
+  const rawTodos = useMemo(() => extractTodosFromMessages(messages), [messages]);
+
+  const todos = useMemo(() => {
+    if (isLoading) return rawTodos;
+    return rawTodos.map((t) =>
+      t.status === 'in_progress' || t.status === 'pending'
+        ? { ...t, status: 'completed' as const }
+        : t,
+    );
+  }, [rawTodos, isLoading]);
 
   if (todos.length === 0) return null;
 
