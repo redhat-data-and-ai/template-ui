@@ -76,33 +76,28 @@ export function buildSessionStore(prefix = 'sess:'): RedisSessionStore | undefin
 
   const ttl = 60 * 60 * 24 * 30; // 30 days (matches cookie maxAge)
 
+  const safeCb = (cb: (...args: any[]) => void, ...args: any[]) => {
+    try { cb(...args); } catch { /* reply already sent, ignore */ }
+  };
+
   return {
     get(sid, cb) {
       client
         .get(`${prefix}${sid}`)
-        .then((raw) => cb(null, raw ? JSON.parse(raw) : null))
-        .catch((err) => {
-          console.warn('[Redis] Session get failed, treating as empty:', err.message);
-          cb(null, null);
-        });
+        .then((raw) => safeCb(cb, null, raw ? JSON.parse(raw) : null))
+        .catch(() => safeCb(cb, null, null));
     },
     set(sid, session, cb) {
       client
         .setex(`${prefix}${sid}`, ttl, JSON.stringify(session))
-        .then(() => cb())
-        .catch((err) => {
-          console.warn('[Redis] Session set failed:', err.message);
-          cb();
-        });
+        .then(() => safeCb(cb))
+        .catch(() => safeCb(cb));
     },
     destroy(sid, cb) {
       client
         .del(`${prefix}${sid}`)
-        .then(() => cb())
-        .catch((err) => {
-          console.warn('[Redis] Session destroy failed:', err.message);
-          cb();
-        });
+        .then(() => safeCb(cb))
+        .catch(() => safeCb(cb));
     },
   };
 }
