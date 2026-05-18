@@ -19,9 +19,13 @@ export function getRedisClient(): Redis | null {
       password,
       tls,
       maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
       retryStrategy(times) {
-        if (times > 5) return null;
-        return Math.min(times * 200, 2000);
+        if (times > 20) return null;
+        return Math.min(times * 500, 5000);
+      },
+      reconnectOnError(err) {
+        return err.message.includes('READONLY') || err.message.includes('Connection is closed');
       },
       lazyConnect: true,
     });
@@ -77,19 +81,28 @@ export function buildSessionStore(prefix = 'sess:'): RedisSessionStore | undefin
       client
         .get(`${prefix}${sid}`)
         .then((raw) => cb(null, raw ? JSON.parse(raw) : null))
-        .catch((err) => cb(err));
+        .catch((err) => {
+          console.warn('[Redis] Session get failed, treating as empty:', err.message);
+          cb(null, null);
+        });
     },
     set(sid, session, cb) {
       client
         .setex(`${prefix}${sid}`, ttl, JSON.stringify(session))
         .then(() => cb())
-        .catch((err) => cb(err));
+        .catch((err) => {
+          console.warn('[Redis] Session set failed:', err.message);
+          cb();
+        });
     },
     destroy(sid, cb) {
       client
         .del(`${prefix}${sid}`)
         .then(() => cb())
-        .catch((err) => cb(err));
+        .catch((err) => {
+          console.warn('[Redis] Session destroy failed:', err.message);
+          cb();
+        });
     },
   };
 }
