@@ -2,6 +2,34 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { agentHost } from '../utils/config.js';
 
+/** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
+const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
+const CACHE_TTL_MS = 30_000; // 30s
+const CACHE_MAX_ENTRIES = 50;
+
+function getCachedThreadState(threadId: string): string | null {
+  const entry = THREAD_STATE_CACHE.get(threadId);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    THREAD_STATE_CACHE.delete(threadId);
+    return null;
+  }
+  return entry.body;
+}
+
+function setCachedThreadState(threadId: string, body: string): void {
+  if (THREAD_STATE_CACHE.size >= CACHE_MAX_ENTRIES) {
+    const oldest = THREAD_STATE_CACHE.keys().next().value;
+    if (oldest) THREAD_STATE_CACHE.delete(oldest);
+  }
+  THREAD_STATE_CACHE.set(threadId, { body, ts: Date.now() });
+}
+
+/** Invalidate cache when a new run completes on a thread. */
+export function invalidateThreadStateCache(threadId: string): void {
+  THREAD_STATE_CACHE.delete(threadId);
+}
+
 interface StreamRequestBody {
   message: string;
   thread_id: string;
@@ -298,7 +326,9 @@ async function proxyRoutes(fastify: FastifyInstance) {
         if (Array.isArray(memories) && memories.length > 0) configurable.user_memories = memories;
         if (Array.isArray(rules) && rules.length > 0) configurable.user_rules = rules;
         if (Object.keys(configurable).length > 0) {
-          runBody.config = { configurable };
+          runBody.config = { configurable, metadata: { trace_id: traceId } };
+        } else {
+          runBody.config = { metadata: { trace_id: traceId } };
         }
 
         const runResp = await fetch(runUrl, {
@@ -372,14 +402,26 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
               if (sseType === 'metadata') {
                 try {
-                  const parsed = JSON.parse(sseData) as unknown;
+                  const parsed = JSON.parse(sseData) as Record<string, unknown>;
+                  fastify.log.info({ traceId, sseType, parsedKeys: Object.keys(parsed) }, 'Raw metadata SSE from agent');
+
                   if (
                     typeof parsed === 'object' &&
                     parsed !== null &&
-                    !Array.isArray(parsed) &&
-                    (parsed as Record<string, unknown>).type === 'metadata'
+                    !Array.isArray(parsed)
                   ) {
-                    reply.raw.write(`data: ${JSON.stringify(parsed)}\n\n`);
+                    // LangGraph Platform metadata has { run_id } at top level
+                    // Emit in the format the frontend expects: { type: 'metadata', content: { run_id, trace_id, thread_id } }
+                    const runId = (parsed.run_id as string) || '';
+                    const metaPayload = {
+                      type: 'metadata',
+                      content: {
+                        run_id: runId,
+                        trace_id: runId,
+                        thread_id: thread_id,
+                      },
+                    };
+                    reply.raw.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
                   }
                 } catch {
                   fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
@@ -480,6 +522,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           }
 
           fastify.log.info({ traceId, chunkId }, 'Stream complete');
+          invalidateThreadStateCache(thread_id);
           reply.raw.end('data: [DONE]\n\n');
         }
       } catch (error: unknown) {
@@ -529,6 +572,19 @@ async function proxyRoutes(fastify: FastifyInstance) {
         const agentUrl = `${agentHost}/${path}${queryString}`;
         fastify.log.info({ traceId, method: request.method, agentUrl }, 'Proxying request to agent');
 
+        // Check BFF cache for GET /threads/{id}/state
+        const threadStateMatch = request.method === 'GET' && path.match(/^threads\/([^/]+)\/state$/);
+        if (threadStateMatch) {
+          const cached = getCachedThreadState(threadStateMatch[1]);
+          if (cached) {
+            fastify.log.info({ traceId }, 'Thread state cache HIT');
+            reply.header('X-Trace-ID', traceId);
+            reply.header('Content-Type', 'application/json');
+            reply.header('X-Cache', 'HIT');
+            return reply.status(200).send(cached);
+          }
+        }
+
         const fetchOptions: RequestInit = {
           method: request.method,
           headers,
@@ -549,6 +605,13 @@ async function proxyRoutes(fastify: FastifyInstance) {
         }
 
         const responseBody = await agentResponse.text();
+
+        // Cache successful thread state responses
+        if (threadStateMatch && agentResponse.ok) {
+          setCachedThreadState(threadStateMatch[1], responseBody);
+          reply.header('X-Cache', 'MISS');
+        }
+
         return reply.send(responseBody);
       } catch (error) {
         fastify.log.error({ traceId, error }, 'Proxy error');

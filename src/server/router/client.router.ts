@@ -1,11 +1,9 @@
 import * as path from "node:path";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
+import { getAgentName } from "../utils/config.js";
 
-const appData = {
-  apiUrl: "", // Empty — frontend uses relative /api/proxy/agent/* paths via BFF
-  refreshableToken: "",
-};
+const BUILD_VERSION = Date.now().toString(36);
 
 async function routes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);
@@ -22,7 +20,7 @@ async function routes(fastify: FastifyInstance) {
     reply.send("OK");
   });
 
-  fastify.get("/*", (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get("/*", async (request: FastifyRequest, reply: FastifyReply) => {
     const session = request.session;
     const { user, token } = session;
 
@@ -32,13 +30,20 @@ async function routes(fastify: FastifyInstance) {
       expiresAt: token?.expires_at,
     };
 
+    const agentName = await getAgentName();
+    const appData = {
+      apiUrl: "",
+      refreshableToken: "",
+      agentName,
+    };
+
     reply.type("text/html");
     reply.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Template UI</title>
+    <title>${agentName}</title>
     <link rel="stylesheet" href="/dist/frontend/template-ui.css">
     <style>
     /* PF6/Tailwind v4 co-existence: inline to bypass Vite CSS purging */
@@ -59,7 +64,7 @@ async function routes(fastify: FastifyInstance) {
     window.USER_DATA = ${JSON.stringify(userData || {})}
     window.APP_DATA = ${JSON.stringify(appData)}
     </script>
-    <script src="/dist/frontend/main.umd.js"></script>
+    <script src="/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`);
   });

@@ -25,6 +25,7 @@ import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadState } from '../services/agent-rest';
+import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import {
@@ -92,12 +93,16 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
     const locState = location.state as Record<string, unknown> | null;
     if (locState?.initialPrompt != null) return;
+    if (isClientCreatedChat(chatId)) return;
 
     let cancelled = false;
     setHydrating(true);
 
-    getThreadState(chatId)
-      .then(async (msgs) => {
+    const statePromise = getThreadState(chatId);
+    const feedbackPromise = getThreadFeedback(chatId, feedbackUserId);
+
+    Promise.all([statePromise, feedbackPromise])
+      .then(([msgs, feedbackMap]) => {
         if (cancelled) return;
         if (msgs.length > 0) {
           dispatch(updateChat({
@@ -113,23 +118,31 @@ export function ChatPage({ threadId }: { threadId: string }) {
           }));
           thread.setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
         }
-        try {
-          const feedbackMap = await getThreadFeedback(chatId, feedbackUserId);
-          if (!cancelled && Object.keys(feedbackMap).length > 0) {
-            for (const [msgId, fb] of Object.entries(feedbackMap)) {
-              dispatch(setMessageFeedback({ chatId, messageId: msgId, feedback: fb }));
-            }
+        if (Object.keys(feedbackMap).length > 0) {
+          for (const [msgId, fb] of Object.entries(feedbackMap)) {
+            dispatch(setMessageFeedback({ chatId, messageId: msgId, feedback: fb }));
           }
-        } catch {
-          // Silently ignore — local persisted feedback in Redux may still apply
         }
-        if (!cancelled) setHydrating(false);
+        setHydrating(false);
       })
       .catch(() => {
         if (!cancelled) setHydrating(false);
       });
 
     return () => { cancelled = true; setHydrating(false); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, feedbackUserId]);
+
+  useEffect(() => {
+    if (!chatId || isClientCreatedChat(chatId)) return;
+    let cancelled = false;
+    getThreadFeedback(chatId, feedbackUserId).then((feedbackMap) => {
+      if (cancelled) return;
+      for (const [msgId, fb] of Object.entries(feedbackMap)) {
+        dispatch(setMessageFeedback({ chatId, messageId: msgId, feedback: fb }));
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, feedbackUserId]);
 

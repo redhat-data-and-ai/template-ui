@@ -6,7 +6,7 @@ import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
 
 const QUICK_PROMPTS = [
-  'What can Deep Agent do for me?',
+  `What can ${window.APP_DATA?.agentName || 'Agent'} do for me?`,
   'Help me analyze a dataset',
   'Write a query to find anomalies',
   'Summarize the key findings from this data',
@@ -62,7 +62,7 @@ export function HomePage() {
               {userDisplayName ? `Hey ${userDisplayName}! 👋` : 'Hey there! 👋'}
             </h1>
             <p className="text-muted-foreground text-base">
-              <span className="font-medium text-foreground">Deep Agent</span> is ready to help. What would you like to explore today?
+              <span className="font-medium text-foreground">{window.APP_DATA?.agentName || 'Agent'}</span> is ready to help. What would you like to explore today?
             </p>
           </div>
 
@@ -95,7 +95,7 @@ export function HomePage() {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Enter a prompt for Deep Agent"
+                placeholder={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
                 className="w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
                 style={{ boxShadow: 'none' }}
                 rows={1}

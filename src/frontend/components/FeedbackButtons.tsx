@@ -25,12 +25,12 @@ export function FeedbackButtons({
   const dispatch = useAppDispatch();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const disabled = !traceId || isSubmitting;
-  const unavailableTitle = 'Feedback unavailable';
+  const effectiveTraceId = traceId || chatId;
+  const disabled = !effectiveTraceId || isSubmitting;
 
   const handleVote = useCallback(
     async (direction: 'up' | 'down') => {
-      if (!traceId || isSubmitting) {
+      if (!effectiveTraceId || isSubmitting) {
         return;
       }
       if (existingFeedback === direction) {
@@ -40,7 +40,7 @@ export function FeedbackButtons({
       setIsSubmitting(true);
       try {
         await submitFeedback({
-          traceId,
+          traceId: effectiveTraceId,
           name: direction === 'up' ? 'thumbs-up' : 'thumbs-down',
           value: direction === 'up' ? 1.0 : 0.0,
           threadId: chatId,
@@ -60,7 +60,7 @@ export function FeedbackButtons({
         setIsSubmitting(false);
       }
     },
-    [traceId, isSubmitting, existingFeedback, dispatch, chatId, messageId, userId],
+    [effectiveTraceId, isSubmitting, existingFeedback, dispatch, chatId, messageId, userId],
   );
 
   const baseBtn =
@@ -79,7 +79,6 @@ export function FeedbackButtons({
           existingFeedback === 'up' && 'text-primary bg-primary/10 hover:bg-primary/15 hover:text-primary',
         )}
         disabled={disabled}
-        title={!traceId ? unavailableTitle : undefined}
         aria-pressed={existingFeedback === 'up' ? true : false}
         aria-label="Rate response as helpful"
         onClick={() => void handleVote('up')}
@@ -93,7 +92,6 @@ export function FeedbackButtons({
           existingFeedback === 'down' && 'text-primary bg-primary/10 hover:bg-primary/15 hover:text-primary',
         )}
         disabled={disabled}
-        title={!traceId ? unavailableTitle : undefined}
         aria-pressed={existingFeedback === 'down' ? true : false}
         aria-label="Rate response as not helpful"
         onClick={() => void handleVote('down')}

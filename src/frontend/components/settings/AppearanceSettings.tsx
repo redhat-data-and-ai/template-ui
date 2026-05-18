@@ -18,7 +18,7 @@ export function AppearanceSettings() {
       <div>
         <h3 className="text-sm font-medium text-foreground mb-1">Theme</h3>
         <p className="text-xs text-muted-foreground mb-4">
-          Choose how Deep Agent looks for you.
+          Choose how {window.APP_DATA?.agentName || 'Agent'} looks for you.
         </p>
         <div className="grid grid-cols-2 gap-3">
           {THEME_OPTIONS.map((opt) => {

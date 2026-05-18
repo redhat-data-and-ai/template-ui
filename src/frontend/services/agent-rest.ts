@@ -3,7 +3,9 @@ import { authenticatedFetch } from "./authenticated-fetch";
 
 export interface Thread {
   id: string;
+  title?: string;
   messages: Message[];
+  updatedAt?: string;
 }
 
 const apiUrl = window.APP_DATA?.apiUrl || '';
@@ -138,7 +140,9 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
     .filter((t: any) => t.thread_id)
     .map((t: any) => ({
       id: t.thread_id,
+      title: t.metadata?.thread_name,
       messages: [],
+      updatedAt: t.updated_at || t.created_at,
     }));
 }
 

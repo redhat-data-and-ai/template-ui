@@ -39,8 +39,9 @@ import {
 import { addToast } from '../../redux/slices/toasts';
 import { SidebarChatItem } from '../../types/chat';
 import { chatStorage } from '../../services/chatStorage';
-import { getAllThreadsByUserId } from '../../services/agent-rest';
+import { getAllThreadsByUserId, getThreadState } from '../../services/agent-rest';
 import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
+import { markChatAsClientCreated, isClientCreatedChat } from '../../services/newChatTracker';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 interface AppLayoutProps {
@@ -105,27 +106,70 @@ export function AppLayout({ children }: AppLayoutProps) {
         const local = chatsRef.current;
 
         const surviving = local.filter(
-          (c) => backendIds.has(c.id) || c.messages.length === 0,
+          (c) => backendIds.has(c.id) || isClientCreatedChat(c.id),
         );
 
-        const survivingIds = new Set(surviving.map((c) => c.id));
+        const backendTitleMap = new Map(
+          history.filter((t) => t.title).map((t) => [t.id, t.title]),
+        );
+        const backendTimestampMap = new Map(
+          history.map((t) => [t.id, t.updatedAt || '']),
+        );
+
+        const survivingWithTitles = surviving.map((c) => {
+          const backendTitle = backendTitleMap.get(c.id);
+          const ts = backendTimestampMap.get(c.id);
+          const updated = { ...c };
+          if (backendTitle && (c.title === 'Chat' || c.title === 'New Chat')) {
+            updated.title = backendTitle;
+            updated.preview = backendTitle;
+          }
+          if (ts) {
+            updated.timestamp = ts;
+          }
+          return updated;
+        });
+
+        const survivingIds = new Set(survivingWithTitles.map((c) => c.id));
         const added: ChatItem[] = history
           .filter((t) => !survivingIds.has(t.id))
           .map((t) => ({
             id: t.id,
             messages: [],
-            title: 'Chat',
-            preview: 'Chat',
-            timestamp: new Date().toISOString(),
+            title: t.title || 'Chat',
+            preview: t.title || 'Chat',
+            timestamp: t.updatedAt || new Date().toISOString(),
             historicalActivities: {},
             feedback: {},
           }));
 
-        const reconciled = [...surviving, ...added];
+        const reconciled = [...survivingWithTitles, ...added].sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        );
         dispatch(setChats(reconciled));
 
         if (reconciled.length === 0) {
           chatStorage.clearChats();
+        }
+
+        // Pre-fetch most recent thread's messages (warm the cache)
+        const topThread = reconciled.find((c) => c.messages.length === 0);
+        if (topThread) {
+          getThreadState(topThread.id).then((msgs) => {
+            if (msgs.length > 0) {
+              dispatch(updateChat({
+                id: topThread.id,
+                updates: {
+                  messages: msgs,
+                  title: (() => {
+                    const first = msgs.find(m => m.type === 'human');
+                    const content = first ? String(first.content) : '';
+                    return content.length > 40 ? content.substring(0, 40) + '...' : content || topThread.title || 'Chat';
+                  })(),
+                },
+              }));
+            }
+          }).catch(() => { /* pre-fetch is best-effort */ });
         }
 
         dispatch(setThreadsListHydrated(true));
@@ -175,6 +219,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleNewChat = useCallback(() => {
     const newChatId = uuidv4();
+    markChatAsClientCreated(newChatId);
     const newChat: ChatItem = {
       id: newChatId,
       title: 'New Chat',
@@ -238,7 +283,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="flex items-center gap-2">
             <RedHatLogo className="h-5 w-auto" style={{ color: '#ee0000' }} />
             <span className="text-base font-semibold text-foreground">
-              Deep Agent
+              {window.APP_DATA?.agentName || 'Agent'}
             </span>
           </div>
         </MastheadBrand>

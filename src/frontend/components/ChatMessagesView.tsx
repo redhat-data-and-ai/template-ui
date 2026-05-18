@@ -713,6 +713,16 @@ export function ChatMessagesView({
               lastResponseTiming != null &&
               !isLoading;
 
+            const isLastAiInTurn =
+              message.type === 'ai' &&
+              (() => {
+                for (let i = messageIndex + 1; i < messages.length; i++) {
+                  if (messages[i].type === 'human') return true;
+                  if (messages[i].type === 'ai') return false;
+                }
+                return true;
+              })();
+
             return (
             <div
               key={message.id || `msg-${messageIndex}`}
@@ -732,16 +742,18 @@ export function ChatMessagesView({
               ) : (
                 <div className="w-full space-y-0">
                   <AIMessageRenderer message={message} />
-                  <div className="pl-11 flex items-center gap-0.5 mt-1">
-                    <MessageCopyButton text={copyText} />
-                    <FeedbackButtons
-                      messageId={message.id ?? `msg-${messageIndex}`}
-                      chatId={chatId}
-                      traceId={traceId}
-                      userId={userId}
-                      existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
-                    />
-                  </div>
+                  {isLastAiInTurn && (
+                    <div className="pl-11 flex items-center gap-0.5 mt-1">
+                      <MessageCopyButton text={copyText} />
+                      <FeedbackButtons
+                        messageId={message.id ?? `msg-${messageIndex}`}
+                        chatId={chatId}
+                        traceId={traceId}
+                        userId={userId}
+                        existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                      />
+                    </div>
+                  )}
                   {showResponseTiming && (
                     <div className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
                       <div className="text-[11px] text-muted-foreground/80">
