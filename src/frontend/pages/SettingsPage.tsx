@@ -1,0 +1,91 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@patternfly/react-core';
+import { ArrowLeft, User, Brain, ScrollText, Palette } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ProfileSection } from '../components/settings/ProfileSection';
+import { MemoryList } from '../components/settings/MemoryList';
+import { RulesEditor } from '../components/settings/RulesEditor';
+import { AppearanceSettings } from '../components/settings/AppearanceSettings';
+
+type TabId = 'profile' | 'memories' | 'rules' | 'appearance';
+
+const TABS: { id: TabId; label: string; icon: typeof User }[] = [
+  { id: 'profile', label: 'Profile', icon: User },
+  { id: 'memories', label: 'Memories', icon: Brain },
+  { id: 'rules', label: 'Custom Rules', icon: ScrollText },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+];
+
+const TAB_CONTENT: Record<TabId, React.FC> = {
+  profile: ProfileSection,
+  memories: MemoryList,
+  rules: RulesEditor,
+  appearance: AppearanceSettings,
+};
+
+export function SettingsPage() {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabId>('profile');
+  const ActiveContent = TAB_CONTENT[activeTab];
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="shrink-0 border-b border-border bg-card/60 backdrop-blur-sm px-6 py-3">
+        <div className="max-w-4xl mx-auto flex items-center gap-3">
+          <Button
+            variant="plain"
+            size="sm"
+            onClick={() => navigate('/')}
+            className="!p-1.5"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h1 className="text-lg font-semibold text-foreground">Settings</h1>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          <div className="flex flex-col sm:flex-row gap-6">
+            {/* Tab navigation */}
+            <nav className="sm:w-48 shrink-0">
+              <ul className="flex sm:flex-col gap-1">
+                {TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <li key={tab.id}>
+                      <button
+                        onClick={() => setActiveTab(tab.id)}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer',
+                          isActive
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                        )}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {tab.label}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="bg-card border border-border rounded-xl p-6">
+                <h2 className="text-base font-semibold text-foreground mb-4">
+                  {TABS.find((t) => t.id === activeTab)?.label}
+                </h2>
+                <ActiveContent />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

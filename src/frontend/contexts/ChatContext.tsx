@@ -100,9 +100,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
         const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
+        if (!history.length) return;
 
         const chats: ChatItem[] = history.map((conversation) => {
-
           let title = 'New Chat';
 
           if (Array.isArray(conversation.messages) && conversation.messages.length > 0) {
@@ -110,19 +110,16 @@ export function ChatProvider({ children }: ChatProviderProps) {
           }
 
           return {
-            id: conversation.id, // Already in hex format
+            id: conversation.id,
             messages: conversation.messages,
             title,
             preview: title,
-            // Generate session_id if not provided by backend (already in hex format if it exists)
-            sessionId: (conversation as any).sessionId || uuidv4().replace(/-/g, ''),
           }
         });
 
         dispatch({ type: 'SET_CHATS', payload: chats });
       } catch (error) {
-        console.error('Error loading history:', error);
-        dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to load chat history' });
+        console.error('Failed to load user history:', error);
       } finally {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
@@ -134,9 +131,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
   // Actions
   const createNewChat = useCallback((): string => {
-    // Generate thread_id and session_id as hex without dashes (equivalent to Python's uuid.uuid4().hex)
-    const newChatId = uuidv4().replace(/-/g, '');
-    const newSessionId = uuidv4().replace(/-/g, '');
+    const newChatId = uuidv4();
     const newChat: ChatItem = {
       id: newChatId,
       title: "New Chat",
@@ -144,7 +139,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
       preview: "Start a new conversation",
       messages: [],
       historicalActivities: {},
-      sessionId: newSessionId,
+      feedback: {},
     };
 
     dispatch({ type: 'ADD_CHAT', payload: newChat });

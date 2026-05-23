@@ -28,19 +28,15 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // Proxy API requests to the backend server
       "/api": {
-        target: "http://127.0.0.1:8080", // Backend server port (matches env.template)
-        changeOrigin: true,
-        // Optionally rewrite path if needed (e.g., remove /api prefix if backend doesn't expect it)
-        // rewrite: (path) => path.replace(/^\/api/, ''),
-      },
-      // Also proxy the /stream endpoint for Server-Sent Events
-      "/api/v1/stream": {
         target: "http://127.0.0.1:8080",
         changeOrigin: true,
       },
-      "/auth/refresh": {
+      "/auth": {
+        target: "http://127.0.0.1:8080",
+        changeOrigin: true,
+      },
+      "/login": {
         target: "http://127.0.0.1:8080",
         changeOrigin: true,
       },

@@ -75,44 +75,34 @@ export function useDataStream({
     abortControllerRef.current = new AbortController();
 
     processedChunkIdsRef.current.clear();
+    isStreamingTokensRef.current = false;
 
     setIsLoading(true);
     setMessages(messages);
-
-    // Get or generate session_id for this thread
-    const chat = chatStorage.loadChats().find(c => c.id === threadId);
-    let sessionId = chat?.sessionId;
-
-    // Generate new sessionId if it doesn't exist
-    if (!sessionId) {
-      sessionId = crypto.randomUUID().replace(/-/g, '');
-    }
-
-    // Save chat with sessionId
-    chatStorage.saveChatByThreadId(threadId, messages, sessionId);
+    chatStorage.saveChatByThreadId(threadId, messages);
     setStreamEvents([]);
 
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-
+      
       if (refreshableToken) {
         headers["X-Token"] = refreshableToken;
       }
 
-      // thread_id is already in hex format (no dashes)
-      // session_id is also in hex format (no dashes)
-      const threadIdHex = threadId;
-      const sessionIdHex = sessionId;
+      const streamUrl = apiUrl
+        ? `${apiUrl}/v1/stream`
+        : `/api/proxy/agent/v1/stream`;
 
-      const response = await fetch(`${apiUrl}/v1/stream`, {
+      const response = await fetch(streamUrl, {
         method: "POST",
         headers,
+        credentials: "include",
         body: JSON.stringify({
           message: messages[messages.length - 1].content,
-          thread_id: threadIdHex,
-          session_id: sessionIdHex,
+          thread_id: threadId || "default-thread",
+          session_id: threadId || "default-session",
           user_id: window.USER_DATA.preferred_username,
           stream_tokens: true,
         }),
@@ -130,8 +120,9 @@ export function useDataStream({
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let streamDone = false;
 
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
 
         if (done) break;
@@ -153,6 +144,7 @@ export function useDataStream({
           }
 
           if (jsonData === '[DONE]' || jsonData === 'DONE') {
+            streamDone = true;
             break;
           }
 
@@ -160,12 +152,11 @@ export function useDataStream({
             const parsedResult = JSON.parse(jsonData) as AgentSteamChunk;
             const { type, content, chunk_id, } = parsedResult;
 
-            if (processedChunkIdsRef.current.has(chunk_id)) {
-              console.log(`DEBUG: Skipping duplicate chunk_id: ${chunk_id}`);
+            if (chunk_id != null && processedChunkIdsRef.current.has(chunk_id)) {
               continue;
             }
 
-            if (chunk_id) {
+            if (chunk_id != null) {
               processedChunkIdsRef.current.add(chunk_id);
             }
 
@@ -177,7 +168,6 @@ export function useDataStream({
               isStreamingTokensRef.current = false;
               const toolCallStart = content.type === 'ai' && Array.isArray(content?.tool_calls) && content?.tool_calls?.length > 0;
               const toolCallResult = content.type === 'tool';
-              const finalAIMessage = content.type === 'ai' && (!Array.isArray(content?.tool_calls) || content?.tool_calls?.length === 0);
 
               if (toolCallStart) {
 
@@ -186,36 +176,21 @@ export function useDataStream({
               } else if (toolCallResult) {
 
                 setMessages(prev => {
-                  const newMessages = [...prev];
-
                   const toolCallId = content.tool_call_id;
+                  if (!toolCallId) return [...prev];
 
-                  if (toolCallId) {
-                    newMessages.forEach((message) => {
-                      if (message.type === 'ai' && Array.isArray(message?.tool_calls) && message?.tool_calls?.length > 0) {
-                        const toolCall = message.tool_calls?.find((toolCall) => toolCall.id === toolCallId);
-                        if (toolCall) {
-                          (toolCall as any).content = content.content;
-                        }
-                      }
-                    })
-                  }
+                  return prev.map((message) => {
+                    if (message.type !== 'ai' || !Array.isArray(message?.tool_calls) || message.tool_calls.length === 0) {
+                      return message;
+                    }
+                    const idx = message.tool_calls.findIndex((tc) => tc.id === toolCallId);
+                    if (idx === -1) return message;
 
-                  return newMessages;
-                });
-              } else if (finalAIMessage) {
-                // Final AI message after token streaming - update last message with complete data including trace_id
-                setMessages(prev => {
-                  const newMessages = [...prev];
-                  if (newMessages.length > 0 && newMessages[newMessages.length - 1].type === 'ai') {
-                    const existingMessage = newMessages[newMessages.length - 1];
-                    // Merge the final message data (trace_id, id, etc.) with the streamed content
-                    newMessages[newMessages.length - 1] = {
-                      ...content, // Start with the complete message from backend (has trace_id, proper id, etc.)
-                      content: existingMessage.content || content.content, // Preserve the streamed content
-                    };
-                  }
-                  return newMessages;
+                    const updatedCalls = message.tool_calls.map((tc, j) =>
+                      j === idx ? { ...tc, content: content.content } : tc,
+                    );
+                    return { ...message, tool_calls: updatedCalls };
+                  });
                 });
               }
             } else if (isStreamingTokens) {
@@ -231,9 +206,9 @@ export function useDataStream({
                 isStreamingTokensRef.current = true;
               } else {
                 setMessages(prev => {
-                  const newMessages = [...prev];
-                  newMessages[newMessages.length - 1].content += content;
-                  return newMessages;
+                  const last = prev[prev.length - 1];
+                  const updated = { ...last, content: ((last.content as string) || '') + content };
+                  return [...prev.slice(0, -1), updated];
                 });
               }
 

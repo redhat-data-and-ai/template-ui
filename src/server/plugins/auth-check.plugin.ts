@@ -22,7 +22,6 @@ declare module "fastify" {
     redirectUri?: string;
   }
 }
-
 function authCheck(
   instance: FastifyInstance,
   _options: Record<string, unknown>,

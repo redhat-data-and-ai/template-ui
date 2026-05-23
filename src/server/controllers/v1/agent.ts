@@ -34,12 +34,10 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
       'Accept': 'text/event-stream'
     };
 
-    // Add SSO token if present
     if (accessToken) {
-      headers['X-Token'] = accessToken;
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    // Proxy request to agent backend
     const agentUrl = `${agentHost}/v1/stream`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
@@ -99,13 +97,13 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
   }
 }
 
-export async function handleThreadsGet(fastify: FastifyInstance, request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) {
-  const { userId } = request.params;
-
+export async function handleHistoryGet(fastify: FastifyInstance, request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) {
+  const { threadId } = request.params;
+  
   // Extract SSO access token from session
   const accessToken = request.session?.token?.access_token;
-
-  fastify.log.info(`Threads request for user: ${userId}, Token: ${accessToken ? 'Present' : 'Missing'}`);
+  
+  fastify.log.info(`History request for thread: ${threadId}, Token: ${accessToken ? 'Present' : 'Missing'}`);
 
   try {
     // Prepare headers for agent request
@@ -113,61 +111,11 @@ export async function handleThreadsGet(fastify: FastifyInstance, request: Fastif
       'Content-Type': 'application/json'
     };
 
-    // Add SSO token if present
     if (accessToken) {
-      headers['X-Token'] = accessToken;
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    // Proxy request to agent backend
-    const agentUrl = `${agentHost}/v1/users/${userId}/threads`;
-    fastify.log.info(`Proxying to agent: ${agentUrl}`);
-
-    const agentResponse = await fetch(agentUrl, {
-      method: 'GET',
-      headers
-    });
-
-    if (!agentResponse.ok) {
-      fastify.log.error(`Agent responded with status ${agentResponse.status}`);
-      return reply.status(agentResponse.status).send({
-        error: 'Failed to fetch threads from agent',
-        status: agentResponse.status
-      });
-    }
-
-    const threads = await agentResponse.json();
-    reply.send(threads);
-
-  } catch (error) {
-    fastify.log.error(`Error proxying to agent: ${error}`);
-    reply.status(500).send({
-      error: 'Failed to connect to agent service',
-      message: String(error)
-    });
-  }
-}
-
-export async function handleHistoryGet(fastify: FastifyInstance, request: FastifyRequest<{ Params: { userId: string; threadId: string } }>, reply: FastifyReply) {
-  const { userId, threadId } = request.params;
-
-  // Extract SSO access token from session
-  const accessToken = request.session?.token?.access_token;
-
-  fastify.log.info(`History request for user: ${userId}, thread: ${threadId}, Token: ${accessToken ? 'Present' : 'Missing'}`);
-
-  try {
-    // Prepare headers for agent request
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-
-    // Add SSO token if present
-    if (accessToken) {
-      headers['X-Token'] = accessToken;
-    }
-
-    // Proxy request to agent backend
-    const agentUrl = `${agentHost}/v1/users/${userId}/history/${threadId}`;
+    const agentUrl = `${agentHost}/v1/history/${threadId}`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
     const agentResponse = await fetch(agentUrl, {
@@ -190,60 +138,6 @@ export async function handleHistoryGet(fastify: FastifyInstance, request: Fastif
     fastify.log.error(`Error proxying to agent: ${error}`);
     reply.status(500).send({
       error: 'Failed to connect to agent service',
-      message: String(error)
-    });
-  }
-}
-
-export async function handleFeedbackPost(fastify: FastifyInstance, request: FastifyRequest<{ Body: { run_id: string; key: string; score: number; kwargs: Record<string, any> } }>, reply: FastifyReply) {
-  const { run_id, key, score, kwargs } = request.body;
-
-  // Extract SSO access token from session
-  const accessToken = request.session?.token?.access_token;
-
-  fastify.log.info(`Feedback submission - Run ID: ${run_id}, Score: ${score}, Token: ${accessToken ? 'Present' : 'Missing'}`);
-
-  try {
-    // Prepare headers for agent request
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-
-    // Add SSO token if present
-    if (accessToken) {
-      headers['X-Token'] = accessToken;
-    }
-
-    // Proxy request to agent backend
-    const agentUrl = `${agentHost}/v1/feedback`;
-    fastify.log.info(`Proxying feedback to agent: ${agentUrl}`);
-
-    const agentResponse = await fetch(agentUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        run_id,
-        key,
-        score,
-        kwargs
-      })
-    });
-
-    if (!agentResponse.ok) {
-      fastify.log.error(`Agent responded with status ${agentResponse.status}`);
-      return reply.status(agentResponse.status).send({
-        error: 'Failed to submit feedback to agent',
-        status: agentResponse.status
-      });
-    }
-
-    const result = await agentResponse.json();
-    reply.send(result);
-
-  } catch (error) {
-    fastify.log.error(`Error proxying feedback to agent: ${error}`);
-    reply.status(500).send({
-      error: 'Failed to submit feedback',
       message: String(error)
     });
   }

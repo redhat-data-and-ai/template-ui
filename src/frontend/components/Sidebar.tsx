@@ -1,56 +1,65 @@
-import React from "react";
-import { Button } from "./ui/button";
-import { ScrollArea } from "./ui/scroll-area";
-import { 
-  MessageSquarePlus, 
-  User, 
-  MessageSquare, 
-  Trash2,
-  Edit3,
-  PanelLeftClose,
-  PanelLeftOpen
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useRefreshableToken } from "@/hooks/useRefreshableToken";
-
-interface ChatItem {
-  id: string;
-  title: string;
-  timestamp: Date;
-  preview: string;
-}
+import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Button,
+  Label,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  ModalVariant,
+  SearchInput,
+  Tooltip,
+} from '@patternfly/react-core';
+import { Loader2, MessageSquare, Trash2, Edit3, Plus, Settings, LogOut } from 'lucide-react';
+import { logout } from '../services/logout';
+import { cn } from '@/lib/utils';
+import type { SidebarChatItem } from '../types/chat';
+import type { SubAgentInfo } from '../types/deep-agent';
+import { useAgentHealth } from '../hooks/useAgentHealth';
 
 interface SidebarProps {
   userName?: string;
   currentChatId?: string;
-  chatHistory: ChatItem[];
-  isCollapsed?: boolean;
+  chatHistory: SidebarChatItem[];
   tokenExpiry?: Date;
-  onToggleCollapse: () => void;
+  activeSubAgent?: SubAgentInfo | null;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
+  onDeleteAllChats: () => void;
   onRenameChat: (chatId: string, newTitle: string) => void;
 }
 
-function SidebarComponent({ 
-  userName = "User",
+function SidebarComponent({
+  userName = 'User',
   currentChatId,
   chatHistory,
-  isCollapsed = false,
-  onToggleCollapse,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  tokenExpiry,
+  activeSubAgent,
   onNewChat,
   onSelectChat,
   onDeleteChat,
-  onRenameChat
+  onDeleteAllChats,
+  onRenameChat,
 }: SidebarProps) {
+  const navigate = useNavigate();
+  const agentHealth = useAgentHealth();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingChat, setEditingChat] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 
-  
-  const [hoveredChat, setHoveredChat] = React.useState<string | null>(null);
-  const [editingChat, setEditingChat] = React.useState<string | null>(null);
-  const [editTitle, setEditTitle] = React.useState("");
 
-  const { tokenStatus } = useRefreshableToken();
+  const filteredChats = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return chatHistory;
+    return chatHistory.filter(
+      (chat) =>
+        chat.title.toLowerCase().includes(q) || chat.preview.toLowerCase().includes(q)
+    );
+  }, [chatHistory, searchQuery]);
 
   const handleRename = (chatId: string, title: string) => {
     setEditingChat(chatId);
@@ -60,223 +69,149 @@ function SidebarComponent({
   const handleSaveRename = (chatId: string) => {
     onRenameChat(chatId, editTitle);
     setEditingChat(null);
-    setEditTitle("");
+    setEditTitle('');
   };
 
-  // const formatRelativeTime = (date: Date) => {
-  //   const now = new Date();
-  //   const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
-  //   if (diffInMinutes < 60) {
-  //     return diffInMinutes <= 1 ? "Just now" : `${diffInMinutes}m ago`;
-  //   }
-    
-  //   const diffInHours = Math.floor(diffInMinutes / 60);
-  //   if (diffInHours < 24) {
-  //     return `${diffInHours}h ago`;
-  //   }
-    
-  //   const diffInDays = Math.floor(diffInHours / 24);
-  //   if (diffInDays < 7) {
-  //     return `${diffInDays}d ago`;
-  //   }
-    
-  //   return date.toLocaleDateString();
-  // };
-
-  if (isCollapsed) {
-    return (
-      <div className="flex flex-col h-full w-12 bg-neutral-900 border-r border-neutral-700 text-neutral-100">
-        {/* Toggle Button */}
-        <div className="flex items-center justify-center p-2 border-b border-neutral-700">
-          <button
-            onClick={onToggleCollapse}
-            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-neutral-800 hover:shadow-md transform hover:scale-110 active:scale-95 transition-all duration-200"
-            title="Expand Sidebar"
-          >
-            <PanelLeftOpen className="w-4 h-4 text-neutral-400 hover:text-neutral-200" />
-          </button>
-        </div>
-        
-        {/* New Chat Button - Collapsed */}
-        <div className="p-2">
-          <button
-            onClick={onNewChat}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transform hover:scale-110 active:scale-95 transition-all duration-200"
-            title="New Chat"
-          >
-            <MessageSquarePlus className="w-4 h-4 text-primary-foreground" />
-          </button>
-        </div>
-
-        {/* Chat History Dots */}
-        <div className="flex-1 overflow-hidden px-2">
-          <ScrollArea className="h-full">
-            <div className="space-y-2 py-2">
-              {chatHistory.slice(0, 10).map((chat) => (
-                <button
-                  key={chat.id}
-                  onClick={() => onSelectChat(chat.id)}
-                  className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200 transform hover:scale-110 active:scale-95",
-                    "bg-neutral-850 hover:bg-neutral-800 hover:shadow-sm"
-                  )}
-                  title={chat.title}
-                >
-                  <MessageSquare className={cn(
-                    "w-3 h-3 transition-colors duration-200",
-                    "text-neutral-400"
-                  )} />
-                </button>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={cn(
-      "flex flex-col h-full bg-neutral-900 border-r border-neutral-700 text-neutral-100 transition-all duration-300",
-      "w-64"
-    )}>
-      {/* Header with user info and toggle */}
-      <div className="flex items-center gap-3 p-4 border-b border-neutral-700">
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary">
-          <User className="w-4 h-4 text-primary-foreground" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-neutral-100 truncate">
-            {userName}
-          </p>
-          <p className={`text-xs ${tokenStatus.color}`}>
-            {tokenStatus.text}
-          </p>
-        </div>
-        <button
-          onClick={onToggleCollapse}
-          className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-neutral-800 hover:shadow-md transform hover:scale-110 active:scale-95 transition-all duration-200"
-          title="Collapse Sidebar"
-        >
-          <PanelLeftClose className="w-4 h-4 text-neutral-400 hover:text-neutral-200 transition-colors duration-200" />
-        </button>
+    <div className="flex flex-col h-full min-h-0 bg-sidebar border-r border-sidebar-border text-sidebar-foreground">
+      {/* New Chat button */}
+      <div className="shrink-0 p-3 pb-2">
+        <Button variant="primary" isBlock onClick={onNewChat} aria-label="Start new chat" icon={<Plus className="w-4 h-4" />}>
+          New Chat
+        </Button>
       </div>
 
-              {/* New Chat Button */}
-        <div className="p-4 border-b border-neutral-700">
-          <Button
-            onClick={onNewChat}
-            className="w-full justify-start gap-2 bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 font-medium"
-            size="sm"
-          >
-            <MessageSquarePlus className="w-4 h-4" />
-            New Chat
-          </Button>
+      {/* Search */}
+      {chatHistory.length > 3 && (
+        <div className="shrink-0 px-3 py-1.5">
+          <SearchInput
+            placeholder="Search threads"
+            aria-label="Search chat threads"
+            value={searchQuery}
+            onChange={(_e, value) => setSearchQuery(value)}
+          />
         </div>
+      )}
 
-      {/* Chat History */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="px-4 py-2 border-b border-neutral-700 flex-shrink-0">
-          <h3 className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-            Recent Chats
-          </h3>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto px-2">
-          {chatHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <MessageSquare className="w-8 h-8 text-neutral-600 mb-2" />
-              <p className="text-sm text-neutral-500">No chats yet</p>
-              <p className="text-xs text-neutral-600 mt-1">Start a conversation!</p>
-            </div>
-          ) : (
-            <div className="space-y-1 py-2">
-              {chatHistory.map((chat) => {
-                const isActive = currentChatId === chat.id;
+      {/* Separator + label */}
+      <div className="shrink-0 px-3 pt-3 pb-1.5">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent chats</p>
+      </div>
 
-                
-                return (
+      {/* Chat list */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto chat-scroll px-1.5"
+        role="listbox"
+        aria-label="Chat history"
+      >
+        {filteredChats.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+            <MessageSquare className="w-6 h-6 text-muted-foreground/40 mb-2" />
+            <p className="text-sm text-muted-foreground/60">
+              {chatHistory.length === 0 ? 'No chats yet' : 'No matching threads'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {filteredChats.map((chat) => {
+              const isActive = currentChatId === chat.id;
+
+              const focusNeighbor = (delta: number) => {
+                const idx = filteredChats.findIndex((c) => c.id === chat.id);
+                const next = filteredChats[idx + delta];
+                if (!next) return;
+                document.getElementById(`sidebar-chat-option-${next.id}`)?.focus();
+              };
+
+              const onOptionKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectChat(chat.id);
+                  return;
+                }
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  focusNeighbor(1);
+                  return;
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  focusNeighbor(-1);
+                }
+              };
+
+              return (
                 <div
                   key={chat.id}
+                  id={`sidebar-chat-option-${chat.id}`}
+                  role="option"
+                  tabIndex={editingChat === chat.id ? -1 : 0}
+                  aria-selected={isActive}
                   className={cn(
-                    "group relative flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all duration-200",
+                    'group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                     isActive
-                      ? "bg-blue-600/30 border border-blue-500/60 shadow-lg ring-2 ring-blue-400/40"
-                      : "hover:bg-neutral-800 hover:shadow-sm hover:scale-[1.01]"
+                      ? 'bg-secondary text-foreground'
+                      : 'text-foreground/70 hover:bg-secondary/50 hover:text-foreground'
                   )}
-                  onMouseEnter={() => setHoveredChat(chat.id)}
-                  onMouseLeave={() => setHoveredChat(null)}
                   onClick={() => onSelectChat(chat.id)}
+                  onKeyDown={onOptionKeyDown}
                 >
-                  <MessageSquare className={cn(
-                    "w-4 h-4 flex-shrink-0 transition-colors duration-200",
-                    isActive 
-                      ? "text-blue-400" 
-                      : "text-neutral-400 group-hover:text-neutral-300"
-                  )} />
-                  
-                  <div className="flex-1 min-w-0">
-                    {editingChat === chat.id ? (
-                      <input
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        onBlur={() => handleSaveRename(chat.id)}
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter") {
-                            handleSaveRename(chat.id);
-                          }
-                          if (e.key === "Escape") {
-                            setEditingChat(null);
-                            setEditTitle("");
-                          }
-                        }}
-                        className="w-full bg-transparent text-sm font-medium text-neutral-100 border border-neutral-600 rounded px-1 py-0.5 outline-none focus:border-primary"
-                        autoFocus
-                      />
-                    ) : (
-                      <>
-                        <p className={cn(
-                          "text-sm font-medium truncate transition-colors duration-200",
-                          isActive 
-                            ? "text-blue-100 font-bold" 
-                            : "text-neutral-100 group-hover:text-white"
-                        )}>
-                          {chat.title}
-                        </p>
-                        <p className="text-xs text-neutral-400 truncate mt-0.5">
-                          {chat.preview}
-                        </p>
-                        {/* <p className="text-xs text-neutral-500 mt-1">
-                          {formatRelativeTime(chat.timestamp)}
-                        </p> */}
-                      </>
-                    )}
-                  </div>
+                  {editingChat === chat.id ? (
+                    <input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onBlur={() => handleSaveRename(chat.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveRename(chat.id);
+                        if (e.key === 'Escape') {
+                          setEditingChat(null);
+                          setEditTitle('');
+                        }
+                      }}
+                      className="flex-1 bg-transparent text-sm text-foreground border border-border rounded px-1.5 py-0.5 outline-none focus:border-primary"
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{chat.title}</p>
+                      {isActive && activeSubAgent && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Label
+                            isCompact
+                            color="blue"
+                            icon={<Loader2 className="w-2.5 h-2.5 animate-spin" />}
+                          >
+                            <span className="capitalize">{activeSubAgent.name}</span>
+                          </Label>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                  {(hoveredChat === chat.id || isActive) && editingChat !== chat.id && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {editingChat !== chat.id && (
+                    <div className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
-                        size="icon"
-                        variant="ghost"
-                        className="w-6 h-6 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-700 hover:shadow-sm transform hover:scale-110 active:scale-95 transition-all duration-200 rounded-md"
-                        onClick={(e) => {
+                        variant="plain"
+                        size="sm"
+                        className="h-6 w-6 !p-0 text-muted-foreground hover:text-foreground"
+                        onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           handleRename(chat.id, chat.title);
                         }}
-                        title="Rename chat"
+                        aria-label="Rename chat"
                       >
                         <Edit3 className="w-3 h-3" />
                       </Button>
                       <Button
-                        size="icon"
-                        variant="ghost"
-                        className="w-6 h-6 text-neutral-400 hover:text-red-400 hover:bg-red-950/30 hover:shadow-sm transform hover:scale-110 active:scale-95 transition-all duration-200 rounded-md"
-                        onClick={(e) => {
+                        variant="plain"
+                        size="sm"
+                        className="h-6 w-6 !p-0 text-muted-foreground hover:text-destructive"
+                        onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
-                          onDeleteChat(chat.id);
+                          setDeletingChatId(chat.id);
                         }}
-                        title="Delete chat"
+                        aria-label={`Delete chat: ${chat.title}`}
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
@@ -284,18 +219,100 @@ function SidebarComponent({
                   )}
                 </div>
               );
-              })}
-            </div>
-          )}
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="shrink-0 px-3 py-2 border-t border-sidebar-border">
+        <Tooltip
+          content={
+            agentHealth.status === 'healthy'
+              ? 'Agent: healthy'
+              : agentHealth.status === 'unhealthy'
+                ? 'Agent: offline'
+                : 'Agent: status unknown'
+          }
+        >
+          <div className="flex items-center gap-2 text-xs text-muted-foreground cursor-default">
+            <span
+              className={cn(
+                'h-2 w-2 rounded-full shrink-0',
+                agentHealth.status === 'healthy' && 'bg-green-500',
+                agentHealth.status === 'unhealthy' && 'bg-red-500',
+                agentHealth.status === 'unknown' && 'bg-gray-400',
+              )}
+              aria-hidden
+            />
+            <span className="truncate">
+              {agentHealth.status === 'healthy'
+                ? 'Agent: healthy'
+                : agentHealth.status === 'unhealthy'
+                  ? 'Agent: offline'
+                  : 'Agent: unknown'}
+            </span>
+          </div>
+        </Tooltip>
+      </div>
+
+      {/* Footer */}
+      <div className="shrink-0 p-3 border-t border-sidebar-border">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-sm font-semibold text-primary">
+            {userName.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{userName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/settings')}
+            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
+            aria-label="Open settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void logout();
+            }}
+            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
+            aria-label="Log out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Footer/Settings could go here */}
-      <div className="p-4 border-t border-neutral-700">
-        <p className="text-xs text-neutral-500 text-center">
-          Dataverse AI Chat
-        </p>
-      </div>
+      <Modal
+        variant={ModalVariant.small}
+        isOpen={deletingChatId !== null}
+        onClose={() => setDeletingChatId(null)}
+        aria-label="Delete chat confirmation"
+      >
+        <ModalHeader title="Delete chat" />
+        <ModalBody>
+          Are you sure you want to delete this chat? This action cannot be undone.
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (deletingChatId) {
+                onDeleteChat(deletingChatId);
+                setDeletingChatId(null);
+              }
+            }}
+          >
+            Delete
+          </Button>
+          <Button variant="link" onClick={() => setDeletingChatId(null)}>
+            Cancel
+          </Button>
+        </ModalFooter>
+      </Modal>
+
     </div>
   );
 }

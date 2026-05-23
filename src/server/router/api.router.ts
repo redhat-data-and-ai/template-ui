@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { handleHistoryGet, handleStreamPost, handleThreadsGet, handleFeedbackPost } from "../controllers/v1/agent.js";
+import { handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
+import { getSettings } from "../utils/settings.js";
 
 interface StreamRequest {
   message: string;
@@ -13,20 +14,34 @@ async function apiRoutes(fastify: FastifyInstance) {
     return { status: "ok", timestamp: new Date().toISOString() };
   });
 
+  fastify.get("/version", async () => {
+    return {
+      version: process.env.APP_VERSION || "0.0.0",
+      buildHash: process.env.BUILD_HASH || "dev",
+      buildTime: process.env.BUILD_TIME || new Date().toISOString(),
+      environment: process.env.ENVIRONMENT || "production",
+    };
+  });
+
+  fastify.get("/announcement", async () => {
+    const cfg = getSettings();
+    const envMessage = process.env.ANNOUNCEMENT_MESSAGE;
+    const message = envMessage || cfg.announcement.message;
+    const enabled = envMessage ? true : cfg.announcement.enabled;
+    if (!enabled || !message) return { enabled: false };
+    return {
+      enabled: true,
+      message,
+      type: process.env.ANNOUNCEMENT_TYPE || cfg.announcement.type,
+    };
+  });
+
   fastify.post("/v1/stream", async (request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) => {
    handleStreamPost(fastify, request, reply);
   });
 
-  fastify.get("/v1/users/:userId/threads", async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
-    handleThreadsGet(fastify, request, reply);
-  });
-
-  fastify.get("/v1/users/:userId/history/:threadId", async (request: FastifyRequest<{ Params: { userId: string; threadId: string } }>, reply: FastifyReply) => {
+  fastify.get("/v1/history/:threadId", async (request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) => {
     handleHistoryGet(fastify, request, reply);
-  });
-
-  fastify.post("/v1/feedback", async (request: FastifyRequest<{ Body: { run_id: string; key: string; score: number; kwargs: Record<string, any> } }>, reply: FastifyReply) => {
-    handleFeedbackPost(fastify, request, reply);
   });
 }
 

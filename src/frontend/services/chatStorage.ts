@@ -28,16 +28,12 @@ class ChatStorageService {
     }
   }
 
-  saveChatByThreadId(threadId: string, messages: any[], sessionId?: string): boolean {
-
+  saveChatByThreadId(threadId: string, messages: any[]): boolean {
+    
     const chats = this.loadChats();
     const threadIdChat = chats.find((chat) => chat.id === threadId);
     if (threadIdChat) {
       threadIdChat.messages = messages;
-      // Update sessionId if provided and not already set
-      if (sessionId && !threadIdChat.sessionId) {
-        threadIdChat.sessionId = sessionId;
-      }
     } else {
       chats.push({
         id: threadId,
@@ -46,7 +42,7 @@ class ChatStorageService {
         timestamp: new Date(),
         preview: messages[messages.length - 1]?.content,
         historicalActivities: {},
-        sessionId: sessionId || crypto.randomUUID().replace(/-/g, ''),
+        feedback: {},
       });
     }
     return this.saveChats(chats);
@@ -70,7 +66,7 @@ class ChatStorageService {
           timestamp: new Date(chat.timestamp), // Convert string back to Date
           messages: chat.messages || [],
           historicalActivities: chat.historicalActivities || {},
-          sessionId: chat.sessionId
+          feedback: chat.feedback ?? {},
         }));
     } catch (error) {
       console.error('Error loading chats from localStorage:', error);
