@@ -1,3 +1,5 @@
+import { buildAgentApiUrl } from '../lib/app-paths';
+
 export interface FeedbackPayload {
   traceId: string;
   name: string;
@@ -9,7 +11,7 @@ export interface FeedbackPayload {
 }
 
 export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
-  const response = await fetch('/api/proxy/agent/feedback', {
+  const response = await fetch(buildAgentApiUrl('/feedback'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -33,7 +35,7 @@ export async function getThreadFeedback(
   userId: string = 'anonymous',
 ): Promise<Record<string, 'up' | 'down'>> {
   const response = await fetch(
-    `/api/proxy/agent/feedback/${encodeURIComponent(threadId)}?user_id=${encodeURIComponent(userId)}`,
+    `${buildAgentApiUrl(`/feedback/${encodeURIComponent(threadId)}`)}?user_id=${encodeURIComponent(userId)}`,
     {
       credentials: 'include',
     },

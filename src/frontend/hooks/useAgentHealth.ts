@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { buildAppPath } from '../lib/app-paths';
 
 export type AgentHealthStatus = 'healthy' | 'unhealthy' | 'unknown';
 
@@ -28,7 +29,7 @@ export function useAgentHealth(): AgentHealthState {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
     try {
-      const res = await fetch('/api/health/agent', {
+      const res = await fetch(buildAppPath('/api/health/agent'), {
         credentials: 'same-origin',
         signal: controller.signal,
       });
