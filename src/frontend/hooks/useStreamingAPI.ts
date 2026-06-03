@@ -20,6 +20,7 @@ import {
   type StreamingState,
 } from '@/redux/slices/chats';
 import { chatStorage } from '@/services/chatStorage';
+import { buildAgentApiUrl } from '@/lib/app-paths';
 import { selectActiveRules, selectMemories } from '@/redux/slices/personalization';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 
@@ -188,7 +189,7 @@ export function useStreamingAPI(threadId: string) {
         return;
       }
       const apiUrl = typeof window.APP_DATA?.apiUrl === 'string' ? window.APP_DATA.apiUrl : '';
-      const cancelUrl = apiUrl ? `${apiUrl}/v1/stream/cancel` : '/api/proxy/agent/v1/stream/cancel';
+      const cancelUrl = apiUrl ? `${apiUrl}/v1/stream/cancel` : buildAgentApiUrl('/v1/stream/cancel');
       if (typeof navigator.sendBeacon === 'function') {
         const payload = JSON.stringify({
           thread_id: threadIdRef.current,

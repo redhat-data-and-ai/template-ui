@@ -1,6 +1,7 @@
 import { forwardRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { SquarePen, ArrowUp, StopCircle } from "lucide-react";
 import { Alert } from "@patternfly/react-core";
+import { buildAppPath } from '../lib/app-paths';
 
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
@@ -109,7 +110,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
         <div className="flex items-center justify-end">
           <button
             type="button"
-            onClick={() => onNewChat ? onNewChat() : (window.location.href = '/')}
+            onClick={() => onNewChat ? onNewChat() : (globalThis.location.href = buildAppPath('/'))}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted"
           >
             <SquarePen size={12} />

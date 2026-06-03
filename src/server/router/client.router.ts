@@ -4,6 +4,12 @@ import authCheckPlugin from "../plugins/auth-check.plugin.js";
 import { getAgentName } from "../utils/config.js";
 
 const BUILD_VERSION = Date.now().toString(36);
+const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
+
+function headerValue(request: FastifyRequest, name: string): string | undefined {
+  const v = request.headers[name];
+  return Array.isArray(v) ? v[0] : v;
+}
 
 async function routes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);
@@ -24,15 +30,18 @@ async function routes(fastify: FastifyInstance) {
     const session = request.session;
     const { user, token } = session;
 
+    const sessionToken = token?.access_token || headerValue(request, "x-auth-access-token") || headerValue(request, "x-token");
+
     const userData = {
       ...user,
-      accessToken: token?.access_token,
+      accessToken: sessionToken,
       expiresAt: token?.expires_at,
     };
 
     const agentName = await getAgentName();
     const appData = {
-      apiUrl: "",
+      apiUrl: basePath ? `${basePath}/api/proxy/agent` : "",
+      basePath: basePath || "/",
       refreshableToken: "",
       agentName,
     };
@@ -44,7 +53,7 @@ async function routes(fastify: FastifyInstance) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${agentName}</title>
-    <link rel="stylesheet" href="/dist/frontend/template-ui.css">
+    <link rel="stylesheet" href="${basePath}/dist/frontend/template-ui.css">
     <style>
     /* PF6/Tailwind v4 co-existence: inline to bypass Vite CSS purging */
     .pf-v6-c-button{--pf-v6-c-button--AlignItems:center}
@@ -64,7 +73,7 @@ async function routes(fastify: FastifyInstance) {
     window.USER_DATA = ${JSON.stringify(userData || {})}
     window.APP_DATA = ${JSON.stringify(appData)}
     </script>
-    <script src="/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
+    <script src="${basePath}/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`);
   });

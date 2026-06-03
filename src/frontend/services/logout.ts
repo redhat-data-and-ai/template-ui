@@ -6,6 +6,11 @@ import { chatStorage } from './chatStorage';
 
 const AUTH_STORAGE_KEYS = ['access_token', 'refresh_token', 'id_token'] as const;
 
+function buildGatewayLoginUrl(): string {
+  const redirectPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}` || '/';
+  return `/auth/login?redirect=${encodeURIComponent(redirectPath)}`;
+}
+
 export async function logout() {
   try {
     await fetch('/auth/logout', {
@@ -31,5 +36,5 @@ export async function logout() {
   store.dispatch(clearAllToasts());
   store.dispatch(resetPersonalization());
 
-  window.location.assign('/login');
+  globalThis.location.assign(buildGatewayLoginUrl());
 }

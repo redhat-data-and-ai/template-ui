@@ -2,6 +2,7 @@ import { useCallback, useState, useRef, useEffect } from "react";
 import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { useRefreshableToken } from "./useRefreshableToken";
 import { chatStorage } from "@/services/chatStorage";
+import { buildAgentApiUrl } from "../lib/app-paths";
 
 export interface ToolCall {
   name: string;
@@ -93,7 +94,7 @@ export function useDataStream({
 
       const streamUrl = apiUrl
         ? `${apiUrl}/v1/stream`
-        : `/api/proxy/agent/v1/stream`;
+        : buildAgentApiUrl('/v1/stream');
 
       const response = await fetch(streamUrl, {
         method: "POST",

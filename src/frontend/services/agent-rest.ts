@@ -1,5 +1,6 @@
 import { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { authenticatedFetch } from "./authenticated-fetch";
+import { buildAgentApiUrl } from "../lib/app-paths";
 
 export interface Thread {
   id: string;
@@ -7,8 +8,6 @@ export interface Thread {
   messages: Message[];
   updatedAt?: string;
 }
-
-const apiUrl = window.APP_DATA?.apiUrl || '';
 
 /**
  * When a supervisor agent echoes a sub-agent's response, the stored
@@ -113,9 +112,7 @@ function getAuthHeaders(): Record<string, string> {
  * Does NOT fetch full state (which is extremely slow per-thread).
  */
 export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
-  const searchUrl = apiUrl
-    ? `${apiUrl}/threads/search`
-    : `/api/proxy/agent/threads/search`;
+  const searchUrl = buildAgentApiUrl('/threads/search');
 
   let response: Response;
   try {
@@ -151,9 +148,7 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
  * Returns true if the deletion succeeded (or thread was already gone).
  */
 export async function deleteThread(threadId: string): Promise<boolean> {
-  const deleteUrl = apiUrl
-    ? `${apiUrl}/threads/${threadId}`
-    : `/api/proxy/agent/threads/${threadId}`;
+  const deleteUrl = buildAgentApiUrl(`/threads/${threadId}`);
 
   try {
     const resp = await authenticatedFetch(deleteUrl, {
@@ -171,9 +166,7 @@ export async function deleteThread(threadId: string): Promise<boolean> {
  * Called only when a user navigates into a specific chat.
  */
 export async function getThreadState(threadId: string): Promise<Message[]> {
-  const stateUrl = apiUrl
-    ? `${apiUrl}/threads/${threadId}/state`
-    : `/api/proxy/agent/threads/${threadId}/state`;
+  const stateUrl = buildAgentApiUrl(`/threads/${threadId}/state`);
 
   try {
     const resp = await authenticatedFetch(stateUrl, {

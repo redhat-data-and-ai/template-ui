@@ -22,37 +22,84 @@ declare module "fastify" {
     redirectUri?: string;
   }
 }
+function headerValue(request: FastifyRequest, name: string): string | undefined {
+  const v = request.headers[name];
+  return Array.isArray(v) ? v[0] : v;
+}
+
+function buildGatewayLoginUrl(request: FastifyRequest): string {
+  const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
+  const redirectPath = `${basePath}${request.url}` || "/";
+  return `/auth/login?redirect=${encodeURIComponent(redirectPath)}`;
+}
+
+function shouldSkipAuth(request: FastifyRequest): boolean {
+  const path = request.url.split("?")[0];
+  return path === "/_health" || path.startsWith("/auth/") || path === "/login";
+}
+
 function authCheck(
   instance: FastifyInstance,
   _options: Record<string, unknown>,
   done: (err?: Error) => void
 ) {
   instance.addHook("preHandler", (request: FastifyRequest, reply: FastifyReply, next: () => void) => {
-    if (process.env.AUTH_ENABLED === "false") {
-      const dummyUser = {
-        accessToken: "access-token",
-        expiresAt: "2026-10-29T23:20:00.417Z",
-        cn: "John Wick",
-        displayName: "John",
-        email: "johnwick@redhat.com",
-        email_verified: false,
-        family_name: "Wick",
-        givenName: "John",
-        given_name: "John",
-        mail: "johnwick@redhat.com",
-        name: "John Wick",
-        preferred_username: "johnwick",
-        rhatUUID: "asdsadsad-e194-11ef-a0f1-safdsfds",
-        sn: "Wick",
-        sub: "1sdsd1ef7-7e0c-4c45-a250-dssdsd"
-      };
+    if (shouldSkipAuth(request)) {
+      next();
+      return;
+    }
 
-      request.session.user = dummyUser;
+    if (process.env.AUTH_ENABLED === "false") {
+      const gwEmail = headerValue(request, "x-auth-user-email");
+      const gwName = headerValue(request, "x-auth-user-name");
+      const gwSub = headerValue(request, "x-auth-user-sub");
+      const gwToken = headerValue(request, "x-auth-access-token") || headerValue(request, "x-token");
+
+      if (gwEmail) {
+        request.session.user = {
+          email: gwEmail,
+          email_verified: true,
+          family_name: gwName?.split(" ").pop() || "",
+          given_name: gwName?.split(" ")[0] || "",
+          name: gwName || gwEmail,
+          preferred_username: gwEmail.split("@")[0],
+          sub: gwSub || gwEmail,
+        };
+      } else {
+        const dummyUser = {
+          accessToken: "access-token",
+          expiresAt: "2026-10-29T23:20:00.417Z",
+          cn: "John Wick",
+          displayName: "John",
+          email: "johnwick@redhat.com",
+          email_verified: false,
+          family_name: "Wick",
+          givenName: "John",
+          given_name: "John",
+          mail: "johnwick@redhat.com",
+          name: "John Wick",
+          preferred_username: "johnwick",
+          rhatUUID: "asdsadsad-e194-11ef-a0f1-safdsfds",
+          sn: "Wick",
+          sub: "1sdsd1ef7-7e0c-4c45-a250-dssdsd"
+        };
+        request.session.user = dummyUser;
+      }
+
+      if (gwToken) {
+        request.session.token = {
+          access_token: gwToken,
+          expires_at: Date.now() + 3600_000,
+          id_token: "",
+          refresh_token: "",
+          scope: "openid",
+        };
+      }
     }
 
     if (!request.session?.user) {
       request.session.redirectUri = request.url;
-      reply.redirect("/login");
+      reply.redirect(buildGatewayLoginUrl(request));
     } else {
       next();
     }

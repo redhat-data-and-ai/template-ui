@@ -11,9 +11,14 @@ export interface SessionExpiredModalProps {
   isOpen: boolean;
 }
 
-export function SessionExpiredModal({ isOpen }: SessionExpiredModalProps) {
+function buildGatewayLoginUrl(): string {
+  const redirectPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}` || '/';
+  return `/auth/login?redirect=${encodeURIComponent(redirectPath)}`;
+}
+
+export function SessionExpiredModal({ isOpen }: Readonly<SessionExpiredModalProps>) {
   const goToLogin = () => {
-    window.location.assign('/login');
+    globalThis.location.assign(buildGatewayLoginUrl());
   };
 
   return (

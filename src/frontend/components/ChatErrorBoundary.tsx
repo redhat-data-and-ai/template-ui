@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { ErrorRecovery } from './ErrorRecovery';
+import { buildAppPath } from '../lib/app-paths';
 
 interface Props {
   children: ReactNode;
@@ -32,7 +33,7 @@ export class ChatErrorBoundary extends Component<Props, State> {
   };
 
   private handleGoHome = () => {
-    window.location.href = '/';
+    globalThis.location.href = buildAppPath('/');
   };
 
   private handleRefreshChat = () => {

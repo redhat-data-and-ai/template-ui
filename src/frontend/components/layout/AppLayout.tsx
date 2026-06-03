@@ -237,13 +237,13 @@ export function AppLayout({ children }: AppLayoutProps) {
     (chatId: string) => {
       dispatch(deleteChat(chatId));
       dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
-      if (window.location.pathname === `/chat/${chatId}`) {
+      if (location.pathname === `/chat/${chatId}`) {
         const remaining = chats.filter((c) => c.id !== chatId);
         navigate(remaining.length > 0 ? `/chat/${remaining[0].id}` : '/');
       }
       deleteThread(chatId).catch(() => {});
     },
-    [dispatch, chats, navigate]
+    [dispatch, chats, navigate, location.pathname]
   );
 
   const handleDeleteAllChats = useCallback(() => {

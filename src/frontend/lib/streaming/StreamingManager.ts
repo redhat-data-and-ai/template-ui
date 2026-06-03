@@ -1,6 +1,7 @@
 import type { Message } from '@langchain/langgraph-sdk';
 
 import { parseRetryAfterSeconds, triggerRateLimit } from '@/services/authenticated-fetch';
+import { buildAgentApiUrl } from '../app-paths';
 
 import type { SSEEvent } from './SSEProcessor';
 import { SSEProcessor } from './SSEProcessor';
@@ -111,7 +112,7 @@ export class StreamingManager {
 
     const streamUrl = request.apiUrl
       ? `${request.apiUrl}/v1/stream`
-      : '/api/proxy/agent/v1/stream';
+      : buildAgentApiUrl('/v1/stream');
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
