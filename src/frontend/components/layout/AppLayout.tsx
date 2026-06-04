@@ -44,6 +44,23 @@ import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
 import { markChatAsClientCreated, isClientCreatedChat } from '../../services/newChatTracker';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
+function toSafeDate(value: unknown): Date {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === 'string' && value) {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  if (typeof value === 'number') {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
+
+function toSafeISOString(value: unknown): string {
+  return toSafeDate(value).toISOString();
+}
+
 interface AppLayoutProps {
   children: React.ReactNode;
 }
@@ -84,10 +101,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (loadedChats.length > 0) {
       const mapped: ChatItem[] = loadedChats.map((c) => ({
         ...c,
-        timestamp:
-          typeof c.timestamp === 'string'
-            ? c.timestamp
-            : new Date(c.timestamp ?? Date.now()).toISOString(),
+        timestamp: toSafeISOString(c.timestamp),
         historicalActivities: c.historicalActivities ?? {},
         feedback: c.feedback ?? {},
       }));
@@ -113,7 +127,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           history.filter((t) => t.title).map((t) => [t.id, t.title]),
         );
         const backendTimestampMap = new Map(
-          history.map((t) => [t.id, t.updatedAt || '']),
+          history.reduce<[string, string][]>((acc, t) => {
+            if (t.updatedAt) acc.push([t.id, t.updatedAt]);
+            return acc;
+          }, []),
         );
 
         const survivingWithTitles = surviving.map((c) => {
@@ -206,7 +223,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       chats.map((chat) => ({
         id: chat.id,
         title: chat.title,
-        timestamp: new Date(chat.timestamp),
+        timestamp: toSafeDate(chat.timestamp),
         preview:
           chat.messages.length > 0
             ? (chat.messages[0].content as string).substring(0, 60) + '...'
