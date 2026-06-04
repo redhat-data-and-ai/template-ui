@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { agentHost } from '../utils/config.js';
+import authCheckPlugin from '../plugins/auth-check.plugin.js';
 
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
@@ -253,6 +254,8 @@ function buildForwardedQueryString(query: Record<string, unknown>): string {
 }
 
 async function proxyRoutes(fastify: FastifyInstance) {
+  await fastify.register(authCheckPlugin);
+
   /**
    * Streaming endpoint — translates between the UI's simple
    * {message, thread_id, user_id} payload and Aegra's LangGraph
