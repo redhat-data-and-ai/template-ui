@@ -13,7 +13,7 @@ export interface SessionExpiredModalProps {
 
 function buildGatewayLoginUrl(): string {
   const redirectPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}` || '/';
-  return `/auth/login?redirect=${encodeURIComponent(redirectPath)}`;
+  return `/login?redirect=${encodeURIComponent(redirectPath)}`;
 }
 
 export function SessionExpiredModal({ isOpen }: Readonly<SessionExpiredModalProps>) {

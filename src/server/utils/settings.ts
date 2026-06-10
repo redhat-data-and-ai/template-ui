@@ -155,5 +155,17 @@ export function getSettings(): UISettings {
     ? deepMerge(DEFAULTS as unknown as Record<string, unknown>, fromFile) as unknown as UISettings
     : { ...DEFAULTS };
 
+  if (process.env.SSO_ISSUER_HOST) {
+    try {
+      const ssoOrigin = new URL(process.env.SSO_ISSUER_HOST).origin;
+      const connectSrc = _settings.security.helmet.csp.connect_src;
+      if (!connectSrc.includes(ssoOrigin)) {
+        connectSrc.push(ssoOrigin);
+      }
+    } catch {
+      /* invalid URL — skip */
+    }
+  }
+
   return _settings;
 }
