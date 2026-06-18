@@ -1,28 +1,38 @@
 # Template UI Configuration
 
-## Files in this directory
+Drop a `settings.yaml` file in this directory to configure branding, features, and agent settings without code changes.
 
-- **`defaults.yaml`** - Default configuration (shipped with code, DO NOT EDIT)
-- **`settings.yaml`** - Your custom configuration (gitignored, optional)
-- **`examples/`** - Example configurations you can copy
+The file is optional — if absent, the server uses built-in defaults.
 
-## Quick Start
+## Schema
 
-1. Copy an example: `cp examples/production.yaml settings.yaml`
-2. Edit `settings.yaml` with your custom values
-3. Restart the server: `npm start`
+```yaml
+branding:
+  logo_url: "/custom-logo.svg"     # Path or URL to logo image
+  title: "My Agent"                # App title (browser tab + masthead)
+  favicon_url: "/favicon.ico"      # Optional favicon (defaults to logo_url if not set)
+  colors:
+    light:
+      primary: "#0066cc"
+      accent: "#a60000"
+      background: "#ffffff"
+      foreground: "#1a1a1a"
+    dark:
+      primary: "#4dabf7"
+      accent: "#f56e6e"
+      background: "#0a1628"
+      foreground: "#f0f4f8"
 
-## Configuration Files
+features:
+  debug_mode_default: false        # Default for debug mode toggle (users can override)
+  auth_enabled: true               # Enable/disable authentication
 
-- If `settings.yaml` exists, it merges with `defaults.yaml` (your values override defaults)
-- If `settings.yaml` doesn't exist, defaults are used
-- Environment variables can override both (see `env.template`)
+agent:
+  endpoint: ""                     # Agent API URL (empty = use AGENT_HOST env var)
+  timeout_ms: 30000
+  streaming: true
+```
 
-## Examples
+## Alternative: environment variables
 
-See `examples/` directory for:
-- `production.yaml` - Clean production template
-- `blue-theme.yaml` - Blue color scheme variant
-- `minimal.yaml` - Minimal auth-disabled setup
-
-For full documentation, see the main README.md "Customizing Branding & Features" section.
+All values can be set via env vars instead, which take precedence over this file. See `env.template` for the full list.
