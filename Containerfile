@@ -13,6 +13,7 @@ COPY --chown=1001:0 vite.config.ts ./
 COPY --chown=1001:0 vite-env.d.ts ./
 COPY --chown=1001:0 tsconfig.json ./
 COPY --chown=1001:0 tsconfig.node.json ./
+COPY --chown=1001:0 config ./config
 
 USER 1001
 

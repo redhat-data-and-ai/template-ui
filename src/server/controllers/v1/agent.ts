@@ -1,5 +1,10 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { agentHost } from "../../utils/config.js";
+import { getSettings } from "../../utils/settings.js";
+
+function getAgentHost(): string {
+  const cfg = getSettings();
+  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+}
 
 interface StreamRequest {
   message: string;
@@ -50,7 +55,7 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
       headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    const agentUrl = `${agentHost}/v1/stream`;
+    const agentUrl = `${getAgentHost()}/v1/stream`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
     const agentResponse = await fetch(agentUrl, {
@@ -126,7 +131,7 @@ export async function handleHistoryGet(fastify: FastifyInstance, request: Fastif
       headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    const agentUrl = `${agentHost}/v1/history/${threadId}`;
+    const agentUrl = `${getAgentHost()}/v1/history/${threadId}`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
     const agentResponse = await fetch(agentUrl, {

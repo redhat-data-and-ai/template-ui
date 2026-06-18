@@ -43,6 +43,7 @@ import { getAllThreadsByUserId, getThreadState, deleteThread } from '../../servi
 import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
 import { markChatAsClientCreated, isClientCreatedChat } from '../../services/newChatTracker';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import type { RootState } from '../../redux/store';
 
 function toSafeDate(value: unknown): Date {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
@@ -68,6 +69,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const dispatch = useAppDispatch();
   const chats = useAppSelector(selectAllChats);
+  const branding = useAppSelector((state: RootState) => state.config.branding);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -301,9 +303,18 @@ export function AppLayout({ children }: AppLayoutProps) {
       <MastheadMain>
         <MastheadBrand>
           <div className="flex items-center gap-2">
-            <RedHatLogo className="h-5 w-auto" style={{ color: '#ee0000' }} />
+            {branding?.logo_url ? (
+              <img
+                src={branding.logo_url}
+                alt={branding.title || 'Logo'}
+                className="h-5 w-auto"
+                style={{ height: '1.25rem', width: 'auto', maxHeight: '1.25rem' }}
+              />
+            ) : (
+              <RedHatLogo className="h-5 w-auto" style={{ color: '#ee0000' }} />
+            )}
             <span className="text-base font-semibold text-foreground">
-              {window.APP_DATA?.agentName || 'Agent'}
+              {branding?.title || window.APP_DATA?.agentName || 'Agent'}
             </span>
           </div>
         </MastheadBrand>

@@ -36,6 +36,73 @@ A modern React-based frontend application with Fastify backend for interacting w
 
 The application will be available at `http://localhost:5173`
 
+## 🎨 Customizing Branding & Features
+
+Template UI supports runtime configuration for branding (logo, colors, title) and feature flags without code changes. This enables multi-tenancy and per-agent customization.
+
+### Configuration File
+
+Create a `config/ui/settings.yaml` file (optional - defaults are used if not present):
+
+```yaml
+branding:
+  logo_url: "/custom-logo.svg"        # Path to logo image
+  title: "My Custom Agent"            # App title (browser tab + masthead)
+  favicon_url: "/custom-favicon.ico"  # Optional favicon
+  colors:
+    light:                            # Light theme colors
+      primary: "#0066cc"
+      accent: "#a60000"
+      background: "#ffffff"
+      foreground: "#1a1a1a"
+    dark:                             # Dark theme colors
+      primary: "#4dabf7"
+      accent: "#f56e6e"
+      background: "#0a1628"
+      foreground: "#f0f4f8"
+
+features:
+  debug_mode_default: false           # Default for debug mode (users can toggle)
+  memory_enabled_default: true        # Default for memory feature (users can toggle)
+  auth_enabled: true                  # Enable/disable authentication
+
+agent:
+  endpoint: ""                        # Agent API URL (empty = use AGENT_HOST env var)
+  timeout_ms: 30000                   # Request timeout
+  streaming: true                     # Enable SSE streaming
+```
+
+**Example configs** are available in `config/ui/examples/`:
+- `blue-theme.yaml` - Blue color scheme
+- `minimal.yaml` - Minimal configuration with auth disabled
+
+### Environment Variable Overrides
+
+Config values can be overridden via environment variables (takes precedence over YAML):
+
+```bash
+BRANDING_TITLE="Production Agent"
+BRANDING_LOGO_URL="/prod-logo.svg"
+FEATURE_AUTH_ENABLED=true
+AGENT_ENDPOINT=https://prod-agent.example.com
+```
+
+See `env.template` for all available overrides.
+
+### Applying Changes
+
+1. Edit `config/ui/settings.yaml` or set environment variables
+2. Restart the server: `npm start`
+3. Changes are applied immediately (no rebuild needed)
+
+### Validation
+
+The config is validated at startup. Invalid values (e.g., malformed hex colors, missing required fields) will cause the server to fail with a clear error message:
+
+```
+Config validation error: branding.colors.light.primary must be a valid hex color (got 'not-a-color')
+```
+
 ## 📦 Available Scripts
 
 | Command | Description |

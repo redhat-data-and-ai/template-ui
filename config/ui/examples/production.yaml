@@ -1,0 +1,29 @@
+# Template UI Configuration Example
+# Copy this file to settings.yaml and customize for your deployment
+# See README.md "Customizing Branding & Features" for full documentation
+
+branding:
+  logo_url: "/logo.svg"
+  title: "My Custom Agent"
+  favicon_url: "/favicon.ico"
+  colors:
+    light:
+      primary: "#0066cc"        # Blue
+      accent: "#a60000"         # Red
+      background: "#ffffff"
+      foreground: "#1a1a1a"
+    dark:
+      primary: "#4dabf7"        # Light blue
+      accent: "#f56e6e"         # Light red
+      background: "#0a1628"     # Navy slate
+      foreground: "#f0f4f8"     # Off white
+
+features:
+  debug_mode_default: false
+  memory_enabled_default: true
+  auth_enabled: true
+
+agent:
+  endpoint: ""                  # Leave empty to use AGENT_HOST env var
+  timeout_ms: 30000
+  streaming: true
