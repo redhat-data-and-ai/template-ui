@@ -55,16 +55,77 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-      - name: Image summary
+      - name: Extract version for deployment package
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="${GITHUB_REF#refs/heads/}-${GITHUB_SHA::7}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "package_name=template-ui-deployment-${VERSION}.zip" >> $GITHUB_OUTPUT
+
+      - name: Create deployment package metadata
+        run: |
+          cat > deployment/release-info.json <<EOF
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "git_ref": "${{ github.ref }}",
+            "git_sha": "${{ github.sha }}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "container_image": "ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}",
+            "repository": "${{ github.repository }}"
+          }
+          EOF
+          cat deployment/release-info.json
+
+      - name: Create deployment package
+        run: |
+          cd deployment
+          zip -r ../${{ steps.version.outputs.package_name }} . -x "*.git*"
+          cd ..
+          echo "Created package: ${{ steps.version.outputs.package_name }}"
+          ls -lh ${{ steps.version.outputs.package_name }}
+
+      - name: Create GitHub Release (for tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.version.outputs.package_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload deployment package as artifact (for branch builds)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.package_name }}
+          path: ${{ steps.version.outputs.package_name }}
+          retention-days: 30
+
+      - name: Build summary
         run: |
           echo "### Base Image Built Successfully! 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags pushed:**" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Container Image Tags:**" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Pull command:**" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Package:**" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "📦 \`${{ steps.version.outputs.package_name }}\` attached to release" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📦 \`${{ steps.version.outputs.package_name }}\` uploaded as workflow artifact" >> $GITHUB_STEP_SUMMARY
+          fi
