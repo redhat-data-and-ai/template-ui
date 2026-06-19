@@ -1,0 +1,51 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: template-ui
+  annotations:
+    nginx.ingress.kubernetes.io/auth-url: http://ai-gateway.agentforge.svc.cluster.local:8080/auth/check
+    nginx.ingress.kubernetes.io/auth-signin: http://localhost:8080/auth/login?redirect=
+    nginx.ingress.kubernetes.io/auth-response-headers: X-Auth-User-Email,X-Auth-User-Name,X-Auth-User-Sub,X-Auth-Access-Token
+  labels:
+    app: template-ui
+    component: ui
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "{name}-{org}.localhost"  # Runtime substitution
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: template-ui
+                port:
+                  number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: template-ui-path
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/auth-url: http://ai-gateway.agentforge.svc.cluster.local:8080/auth/check
+    nginx.ingress.kubernetes.io/auth-signin: http://localhost:8080/auth/login?redirect=
+    nginx.ingress.kubernetes.io/auth-response-headers: X-Auth-User-Email,X-Auth-User-Name,X-Auth-User-Sub,X-Auth-Access-Token
+  labels:
+    app: template-ui
+    component: ui
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /{org}/{name}(/|$)(.*)  # Runtime substitution
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: template-ui
+                port:
+                  number: 8080
