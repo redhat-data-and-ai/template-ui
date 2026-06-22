@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
-import { getAgentName } from "../utils/config.js";
+import { getAgentName } from "../utils/settings.js";
 
 const BUILD_VERSION = Date.now().toString(36);
 const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
@@ -52,6 +52,7 @@ async function routes(fastify: FastifyInstance) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" id="favicon" href="/favicon.ico" />
     <title>${agentName}</title>
     <link rel="stylesheet" href="${basePath}/dist/frontend/template-ui.css">
     <style>

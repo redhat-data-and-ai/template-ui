@@ -110,7 +110,7 @@ export async function setupServer() {
     ...(store ? { store } : {}),
   });
 
-  if (process.env.AUTH_ENABLED === "true") {
+  if (cfg.features.auth_enabled) {
     await fastify.register(authPlugin);
   }
 

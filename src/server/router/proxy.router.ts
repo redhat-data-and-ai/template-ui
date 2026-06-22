@@ -1,7 +1,12 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { agentHost } from '../utils/config.js';
+import { getSettings } from '../utils/settings.js';
 import authCheckPlugin from '../plugins/auth-check.plugin.js';
+
+function getAgentHost(): string {
+  const cfg = getSettings();
+  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+}
 
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
@@ -291,7 +296,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
       try {
         // ── 1. Ensure the thread exists (idempotent) ──
         fastify.log.info({ traceId, thread_id }, 'Creating thread');
-        const threadResp = await fetch(`${agentHost}/threads`, {
+        const threadResp = await fetch(`${getAgentHost()}/threads`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -312,7 +317,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         fastify.log.info({ traceId }, 'Thread ready');
 
         // ── 2. Start a streaming run on that thread ──
-        const runUrl = `${agentHost}/threads/${thread_id}/runs/stream`;
+        const runUrl = `${getAgentHost()}/threads/${thread_id}/runs/stream`;
         fastify.log.info({ traceId, runUrl }, 'Starting streaming run');
 
         const runBody: Record<string, unknown> = {
@@ -497,7 +502,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
           try {
             const stateResp = await fetch(
-              `${agentHost}/threads/${thread_id}/state`,
+              `${getAgentHost()}/threads/${thread_id}/state`,
               { method: 'GET', headers },
             );
             if (stateResp.ok) {
@@ -572,7 +577,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
       try {
         const queryString = buildForwardedQueryString(request.query as Record<string, unknown>);
-        const agentUrl = `${agentHost}/${path}${queryString}`;
+        const agentUrl = `${getAgentHost()}/${path}${queryString}`;
         fastify.log.info({ traceId, method: request.method, agentUrl }, 'Proxying request to agent');
 
         // Check BFF cache for GET /threads/{id}/state
@@ -641,7 +646,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const agentUrl = `${agentHost}/feedback`;
+      const agentUrl = `${getAgentHost()}/feedback`;
       const agentResponse = await fetch(agentUrl, {
         method: 'POST',
         headers,
@@ -660,7 +665,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
   fastify.get('/health/agent', async (request, reply) => {
     try {
-      const agentResponse = await fetch(`${agentHost}/health`, {
+      const agentResponse = await fetch(`${getAgentHost()}/health`, {
         signal: AbortSignal.timeout(5000),
       });
       const body = agentResponse.ok ? await agentResponse.json().catch(() => ({})) as Record<string, unknown> : {};

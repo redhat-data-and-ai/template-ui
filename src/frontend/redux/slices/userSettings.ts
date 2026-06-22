@@ -4,8 +4,8 @@ type Theme = 'light' | 'dark';
 
 interface UserSettingsState {
   theme: Theme;
-  memoryEnabled: boolean;
   debugMode: boolean;
+  _userOverrides: { debugMode?: boolean };
 }
 
 const STORAGE_KEY = 'template-ui-settings';
@@ -14,15 +14,20 @@ function loadSettings(): UserSettingsState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      return {
+        theme: parsed.theme ?? 'dark',
+        debugMode: parsed.debugMode ?? false,
+        _userOverrides: parsed._userOverrides ?? {},
+      };
     }
   } catch {
     // ignore
   }
   return {
     theme: 'dark',
-    memoryEnabled: true,
     debugMode: false,
+    _userOverrides: {},
   };
 }
 
@@ -46,21 +51,23 @@ const userSettingsSlice = createSlice({
       state.theme = state.theme === 'dark' ? 'light' : 'dark';
       persistSettings(state);
     },
-    setMemoryEnabled(state, action: PayloadAction<boolean>) {
-      state.memoryEnabled = action.payload;
-      persistSettings(state);
-    },
     setDebugMode(state, action: PayloadAction<boolean>) {
       state.debugMode = action.payload;
+      state._userOverrides.debugMode = true;
+      persistSettings(state);
+    },
+    setConfigDefaults(state, action: PayloadAction<{ debug_mode_default: boolean }>) {
+      if (!state._userOverrides.debugMode) {
+        state.debugMode = action.payload.debug_mode_default;
+      }
       persistSettings(state);
     },
   },
 });
 
-export const { setTheme, toggleTheme, setMemoryEnabled, setDebugMode } = userSettingsSlice.actions;
+export const { setTheme, toggleTheme, setDebugMode, setConfigDefaults } = userSettingsSlice.actions;
 
 export const selectTheme = (state: { userSettings: UserSettingsState }) => state.userSettings.theme;
-export const selectMemoryEnabled = (state: { userSettings: UserSettingsState }) => state.userSettings.memoryEnabled;
 export const selectDebugMode = (state: { userSettings: UserSettingsState }) => state.userSettings.debugMode;
 
 export default userSettingsSlice.reducer;

@@ -1,0 +1,24 @@
+branding:
+  title: "Deep Agent"
+  logo_url: "/dist/frontend/redhat-logo.svg"
+  favicon_url: "/dist/frontend/redhat-logo.svg"
+  colors:
+    light:
+      primary: "#0066cc"
+      accent: "#a60000"
+      background: "#ffffff"
+      foreground: "#1a1a1a"
+    dark:
+      primary: "#4dabf7"
+      accent: "#f56e6e"
+      background: "#0a1628"
+      foreground: "#f0f4f8"
+
+features:
+  debug_mode_default: false
+  auth_enabled: true
+
+agent:
+  endpoint: ""
+  timeout_ms: 30000
+  streaming: true

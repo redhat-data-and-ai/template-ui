@@ -65,7 +65,38 @@ interface CorsConfig {
   origin: string;
 }
 
+interface BrandingThemeColors {
+  primary: string;
+  accent: string;
+  background: string;
+  foreground: string;
+}
+
+interface BrandingConfig {
+  logo_url?: string;
+  title: string;
+  favicon_url?: string;
+  colors: {
+    light: BrandingThemeColors;
+    dark: BrandingThemeColors;
+  };
+}
+
+interface FeaturesConfig {
+  debug_mode_default: boolean;
+  auth_enabled: boolean;
+}
+
+interface AgentConfig {
+  endpoint: string;
+  timeout_ms: number;
+  streaming: boolean;
+}
+
 export interface UISettings {
+  branding: BrandingConfig;
+  features: FeaturesConfig;
+  agent: AgentConfig;
   server: ServerConfig;
   logging: LoggingConfig;
   cors: CorsConfig;
@@ -75,6 +106,34 @@ export interface UISettings {
 }
 
 const DEFAULTS: UISettings = {
+  branding: {
+    logo_url: "",
+    title: "Deep Agent",
+    favicon_url: "",
+    colors: {
+      light: {
+        primary: "#0066cc",
+        accent: "#a60000",
+        background: "#ffffff",
+        foreground: "#1a1a1a",
+      },
+      dark: {
+        primary: "#4dabf7",
+        accent: "#f56e6e",
+        background: "#0a1628",
+        foreground: "#f0f4f8",
+      },
+    },
+  },
+  features: {
+    debug_mode_default: false,
+    auth_enabled: true,
+  },
+  agent: {
+    endpoint: "",
+    timeout_ms: 30000,
+    streaming: true,
+  },
   server: { host: "0.0.0.0", port: 8080, body_limit: 1_048_576 },
   logging: { level: "info" },
   cors: { origin: "http://localhost:5173" },
@@ -85,7 +144,7 @@ const DEFAULTS: UISettings = {
         default_src: ["'self'"],
         script_src: ["'self'", "'unsafe-inline'"],
         style_src: ["'self'", "'unsafe-inline'"],
-        img_src: ["'self'", "data:", "blob:"],
+        img_src: ["'self'", "data:", "blob:", "https:"],
         connect_src: ["'self'"],
         font_src: ["'self'", "data:"],
         object_src: ["'none'"],
@@ -141,6 +200,109 @@ function loadYaml(filePath: string): Record<string, unknown> | null {
   }
 }
 
+function isValidUrl(urlString: string): boolean {
+  try {
+    new URL(urlString);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validateConfig(config: UISettings): void {
+  const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
+
+  // Branding validation
+  if (!config.branding.title || config.branding.title.trim() === "") {
+    throw new Error("Config validation error: branding.title is required");
+  }
+
+  // Color validation
+  const validateColor = (path: string, value: string) => {
+    if (!hexColorRegex.test(value)) {
+      throw new Error(
+        `Config validation error: ${path} must be a valid hex color (got '${value}')`,
+      );
+    }
+  };
+
+  validateColor("branding.colors.light.primary", config.branding.colors.light.primary);
+  validateColor("branding.colors.light.accent", config.branding.colors.light.accent);
+  validateColor("branding.colors.light.background", config.branding.colors.light.background);
+  validateColor("branding.colors.light.foreground", config.branding.colors.light.foreground);
+  validateColor("branding.colors.dark.primary", config.branding.colors.dark.primary);
+  validateColor("branding.colors.dark.accent", config.branding.colors.dark.accent);
+  validateColor("branding.colors.dark.background", config.branding.colors.dark.background);
+  validateColor("branding.colors.dark.foreground", config.branding.colors.dark.foreground);
+
+  // Feature flags type validation
+  if (typeof config.features.debug_mode_default !== "boolean") {
+    throw new Error("Config validation error: features.debug_mode_default must be boolean");
+  }
+  if (typeof config.features.auth_enabled !== "boolean") {
+    throw new Error("Config validation error: features.auth_enabled must be boolean");
+  }
+
+  // Agent config validation
+  if (config.agent.endpoint && !isValidUrl(config.agent.endpoint)) {
+    throw new Error(
+      `Config validation error: agent.endpoint must be a valid URL (got '${config.agent.endpoint}')`,
+    );
+  }
+  if (typeof config.agent.timeout_ms !== "number" || config.agent.timeout_ms <= 0) {
+    throw new Error("Config validation error: agent.timeout_ms must be a positive number");
+  }
+  if (typeof config.agent.streaming !== "boolean") {
+    throw new Error("Config validation error: agent.streaming must be boolean");
+  }
+}
+
+function applyEnvOverrides(config: UISettings): void {
+  // Branding overrides
+  if (process.env.BRANDING_TITLE) {
+    config.branding.title = process.env.BRANDING_TITLE;
+  }
+  if (process.env.BRANDING_LOGO_URL) {
+    config.branding.logo_url = process.env.BRANDING_LOGO_URL;
+  }
+  if (process.env.BRANDING_FAVICON_URL) {
+    config.branding.favicon_url = process.env.BRANDING_FAVICON_URL;
+  }
+
+  // Branding color overrides (light theme)
+  if (!config.branding.colors) config.branding.colors = (DEFAULTS.branding.colors as typeof config.branding.colors);
+  if (!config.branding.colors.light) config.branding.colors.light = { ...DEFAULTS.branding.colors.light };
+  if (!config.branding.colors.dark) config.branding.colors.dark = { ...DEFAULTS.branding.colors.dark };
+  if (process.env.BRANDING_PRIMARY_LIGHT) config.branding.colors.light.primary = process.env.BRANDING_PRIMARY_LIGHT;
+  if (process.env.BRANDING_ACCENT_LIGHT) config.branding.colors.light.accent = process.env.BRANDING_ACCENT_LIGHT;
+  if (process.env.BRANDING_BG_LIGHT) config.branding.colors.light.background = process.env.BRANDING_BG_LIGHT;
+  if (process.env.BRANDING_FG_LIGHT) config.branding.colors.light.foreground = process.env.BRANDING_FG_LIGHT;
+  if (process.env.BRANDING_PRIMARY_DARK) config.branding.colors.dark.primary = process.env.BRANDING_PRIMARY_DARK;
+  if (process.env.BRANDING_ACCENT_DARK) config.branding.colors.dark.accent = process.env.BRANDING_ACCENT_DARK;
+  if (process.env.BRANDING_BG_DARK) config.branding.colors.dark.background = process.env.BRANDING_BG_DARK;
+  if (process.env.BRANDING_FG_DARK) config.branding.colors.dark.foreground = process.env.BRANDING_FG_DARK;
+
+  // Feature overrides — support both new FEATURE_AUTH_ENABLED and legacy AUTH_ENABLED
+  if (process.env.FEATURE_AUTH_ENABLED !== undefined) {
+    config.features.auth_enabled = process.env.FEATURE_AUTH_ENABLED === "true";
+  } else if (process.env.AUTH_ENABLED !== undefined) {
+    config.features.auth_enabled = process.env.AUTH_ENABLED === "true";
+  }
+  if (process.env.FEATURE_DEBUG_MODE_DEFAULT !== undefined) {
+    config.features.debug_mode_default = process.env.FEATURE_DEBUG_MODE_DEFAULT === "true";
+  }
+  // Agent overrides
+  if (process.env.AGENT_ENDPOINT) {
+    config.agent.endpoint = process.env.AGENT_ENDPOINT;
+  }
+  if (process.env.AGENT_TIMEOUT_MS) {
+    const timeout = Number.parseInt(process.env.AGENT_TIMEOUT_MS, 10);
+    if (!Number.isNaN(timeout)) {
+      config.agent.timeout_ms = timeout;
+    }
+  }
+}
+
 let _settings: UISettings | undefined;
 
 export function getSettings(): UISettings {
@@ -151,9 +313,44 @@ export function getSettings(): UISettings {
     resolve(__dirname, "../../../config/ui/settings.yaml");
   const fromFile = loadYaml(configPath);
 
+  // Deep merge defaults with file config
   _settings = fromFile
     ? deepMerge(DEFAULTS as unknown as Record<string, unknown>, fromFile) as unknown as UISettings
     : { ...DEFAULTS };
 
+  // Apply environment variable overrides
+  applyEnvOverrides(_settings);
+
+  // Validate the final config
+  validateConfig(_settings);
+
   return _settings;
+}
+
+// For testing only - clears the cached settings
+export function resetSettings(): void {
+  _settings = undefined;
+}
+
+// Agent name fallback (fetches from agent backend /info endpoint)
+let _agentName: string | null = null;
+
+export async function getAgentName(): Promise<string> {
+  if (_agentName !== null) return _agentName;
+
+  const cfg = getSettings();
+  const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+
+  try {
+    const resp = await fetch(`${agentHost}/info`, { signal: AbortSignal.timeout(3000) });
+    if (resp.ok) {
+      const data = await resp.json() as { name?: string };
+      _agentName = data.name || "Agent";
+    } else {
+      _agentName = "Agent";
+    }
+  } catch {
+    _agentName = "Agent";
+  }
+  return _agentName;
 }
