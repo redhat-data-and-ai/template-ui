@@ -1,7 +1,7 @@
 branding:
   title: "Deep Agent"
-  logo_url: ""
-  favicon_url: ""
+  logo_url: "/dist/frontend/redhat-logo.svg"
+  favicon_url: "/dist/frontend/redhat-logo.svg"
   colors:
     light:
       primary: "#0066cc"
