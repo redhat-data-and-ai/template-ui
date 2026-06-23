@@ -47,10 +47,6 @@ interface StreamRequestBody {
   rules?: string[];
 }
 
-interface ProxyRequestBody {
-  [key: string]: unknown;
-}
-
 /**
  * Extract text from a LangGraph message content field, which may be
  * a plain string OR an array of typed blocks [{type:"text", text:"..."}].

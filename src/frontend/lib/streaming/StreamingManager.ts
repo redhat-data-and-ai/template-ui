@@ -14,6 +14,7 @@ export interface StreamRequest {
   token?: string;
   memories?: string[];
   rules?: string[];
+  resume?: boolean;
 }
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error' | 'cancelled';
@@ -131,6 +132,9 @@ export class StreamingManager {
         user_id: request.userId,
         stream_tokens: true,
       };
+      if (request.resume) {
+        body.resume = true;
+      }
       if (request.memories?.length) body.memories = request.memories;
       if (request.rules?.length) body.rules = request.rules;
 

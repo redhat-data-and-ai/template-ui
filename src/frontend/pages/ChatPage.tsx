@@ -20,6 +20,7 @@ import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { InterruptBanner } from '../components/InterruptBanner';
+import { McpOAuthPrecheck } from '../components/McpOAuthPrecheck';
 import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
@@ -302,19 +303,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const handleInterruptResume = useCallback(
     async (response: string) => {
       if (!threadId || !currentChat) return;
-      dispatch(
-        updateStreamingState({
-          chatId: threadId,
-          state: { pendingInterrupt: null },
-        }),
-      );
-      const resumeMessage: Message = {
-        id: `msg-${Date.now()}`,
-        type: 'human',
-        content: response,
-      };
       try {
-        await thread.submit({ messages: [...thread.messages, resumeMessage] });
+        await thread.resumeInterrupt(response);
       } catch (err) {
         console.error('Failed to resume:', err);
         dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
@@ -331,6 +321,16 @@ export function ChatPage({ threadId }: { threadId: string }) {
       }),
     );
   }, [dispatch, threadId]);
+
+  const handleMcpConnected = useCallback(() => {
+    dispatch(
+      addToast({
+        title: 'MCP connected',
+        message: 'Tools are ready. Send a message to use them.',
+        variant: 'success',
+      }),
+    );
+  }, [dispatch]);
 
   const handleNewChat = useCallback(() => {
     navigate('/');
@@ -406,6 +406,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
         <div className="flex-1 flex flex-col min-w-0">
           {hasToolCalls && (
             <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
+          )}
+          {!thread.pendingInterrupt && (
+            <McpOAuthPrecheck onConnected={handleMcpConnected} />
           )}
           {thread.pendingInterrupt && (
             <InterruptBanner

@@ -15,7 +15,7 @@ export function ThemeToggle() {
         id="theme-toggle"
         aria-label="Toggle dark mode"
         isChecked={isDark}
-        onChange={(_event, _checked) => {
+        onChange={() => {
           dispatch(toggleTheme());
         }}
         isReversed

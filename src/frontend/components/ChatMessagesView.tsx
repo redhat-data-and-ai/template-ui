@@ -493,8 +493,6 @@ export function AIMessageRenderer({ message }: { message: Message }) {
             <SubAgentIndicator
               key={`${message.id}-sa-${idx}`}
               toolCall={toolCall as any}
-              messageId={message.id ?? ''}
-              index={idx}
             />
           ))}
 

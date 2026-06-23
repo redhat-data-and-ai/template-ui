@@ -12,8 +12,6 @@ import { extractSubAgentName } from '../types/deep-agent';
 
 interface SubAgentIndicatorProps {
   readonly toolCall: ToolCallWithContent;
-  readonly messageId: string;
-  readonly index: number;
 }
 
 type VisualStatus = 'delegating' | 'complete' | 'error';
@@ -35,7 +33,7 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
   const name = extractSubAgentName(toolCall);
   const status = deriveStatus(toolCall);
