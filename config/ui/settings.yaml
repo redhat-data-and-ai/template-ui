@@ -22,3 +22,36 @@ agent:
   endpoint: ""
   timeout_ms: 30000
   streaming: true
+
+auth:
+  enabled: true
+  sso_client_id: ""
+  sso_client_secret: ""
+  sso_issuer_host: ""
+  sso_callback_url: ""
+
+security:
+  rate_limit:
+    enabled: true
+    max: 100
+    window: "1 minute"
+    exclude_paths:
+      - "/api/health"
+      - "/_health"
+  session:
+    secure_cookie: false
+    max_age_days: 30
+  helmet:
+    enabled: true
+    cross_origin_embedder_policy: false
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  body_limit: 1048576
+
+logging:
+  level: "info"
+
+cors:
+  origin: "http://localhost:5173"

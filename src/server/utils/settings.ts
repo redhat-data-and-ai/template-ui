@@ -93,10 +93,19 @@ interface AgentConfig {
   streaming: boolean;
 }
 
+interface AuthConfig {
+  enabled: boolean;
+  sso_client_id: string;
+  sso_client_secret: string;
+  sso_issuer_host: string;
+  sso_callback_url: string;
+}
+
 export interface UISettings {
   branding: BrandingConfig;
   features: FeaturesConfig;
   agent: AgentConfig;
+  auth: AuthConfig;
   server: ServerConfig;
   logging: LoggingConfig;
   cors: CorsConfig;
@@ -133,6 +142,13 @@ const DEFAULTS: UISettings = {
     endpoint: "",
     timeout_ms: 30000,
     streaming: true,
+  },
+  auth: {
+    enabled: true,
+    sso_client_id: "",
+    sso_client_secret: "",
+    sso_issuer_host: "",
+    sso_callback_url: "",
   },
   server: { host: "0.0.0.0", port: 8080, body_limit: 1_048_576 },
   logging: { level: "info" },
@@ -255,6 +271,38 @@ function validateConfig(config: UISettings): void {
   if (typeof config.agent.streaming !== "boolean") {
     throw new Error("Config validation error: agent.streaming must be boolean");
   }
+
+  // Auth config validation
+  if (config.auth.enabled) {
+    if (config.auth.sso_issuer_host && !isValidUrl(config.auth.sso_issuer_host)) {
+      throw new Error(
+        `Config validation error: auth.sso_issuer_host must be a valid URL (got '${config.auth.sso_issuer_host}')`,
+      );
+    }
+    if (config.auth.sso_callback_url && !isValidUrl(config.auth.sso_callback_url)) {
+      throw new Error(
+        `Config validation error: auth.sso_callback_url must be a valid URL (got '${config.auth.sso_callback_url}')`,
+      );
+    }
+  }
+
+  // Security config validation
+  if (config.security.rate_limit.enabled) {
+    if (typeof config.security.rate_limit.max !== "number" || config.security.rate_limit.max <= 0) {
+      throw new Error("Config validation error: security.rate_limit.max must be a positive number");
+    }
+    if (!config.security.rate_limit.window || config.security.rate_limit.window.trim() === "") {
+      throw new Error("Config validation error: security.rate_limit.window is required");
+    }
+  }
+  if (typeof config.security.session.max_age_days !== "number" || config.security.session.max_age_days <= 0) {
+    throw new Error("Config validation error: security.session.max_age_days must be a positive number");
+  }
+
+  // Server config validation
+  if (typeof config.server.port !== "number" || config.server.port <= 0 || config.server.port > 65535) {
+    throw new Error("Config validation error: server.port must be between 1 and 65535");
+  }
 }
 
 function applyEnvOverrides(config: UISettings): void {
@@ -301,6 +349,55 @@ function applyEnvOverrides(config: UISettings): void {
       config.agent.timeout_ms = timeout;
     }
   }
+
+  // Auth overrides
+  if (process.env.SSO_CLIENT_ID) {
+    config.auth.sso_client_id = process.env.SSO_CLIENT_ID;
+  }
+  if (process.env.SSO_CLIENT_SECRET) {
+    config.auth.sso_client_secret = process.env.SSO_CLIENT_SECRET;
+  }
+  if (process.env.SSO_ISSUER_HOST) {
+    config.auth.sso_issuer_host = process.env.SSO_ISSUER_HOST;
+  }
+  if (process.env.SSO_CALLBACK_URL) {
+    config.auth.sso_callback_url = process.env.SSO_CALLBACK_URL;
+  }
+
+  // Security overrides
+  if (process.env.SECURITY_RATE_LIMIT_MAX) {
+    const max = Number.parseInt(process.env.SECURITY_RATE_LIMIT_MAX, 10);
+    if (!Number.isNaN(max)) {
+      config.security.rate_limit.max = max;
+    }
+  }
+  if (process.env.SECURITY_RATE_LIMIT_WINDOW) {
+    config.security.rate_limit.window = process.env.SECURITY_RATE_LIMIT_WINDOW;
+  }
+  if (process.env.SECURITY_SESSION_MAX_AGE_DAYS) {
+    const days = Number.parseInt(process.env.SECURITY_SESSION_MAX_AGE_DAYS, 10);
+    if (!Number.isNaN(days)) {
+      config.security.session.max_age_days = days;
+    }
+  }
+  if (process.env.SECURITY_SESSION_SECURE_COOKIE !== undefined) {
+    config.security.session.secure_cookie = process.env.SECURITY_SESSION_SECURE_COOKIE === "true";
+  }
+
+  // Server overrides
+  if (process.env.PORT) {
+    const port = Number.parseInt(process.env.PORT, 10);
+    if (!Number.isNaN(port)) {
+      config.server.port = port;
+    }
+  }
+
+  // Logging override
+  if (process.env.LOG_LEVEL) {
+    config.logging.level = process.env.LOG_LEVEL;
+  }
+
+  // CORS override (already exists, keep it)
 }
 
 let _settings: UISettings | undefined;

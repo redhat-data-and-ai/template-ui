@@ -1,11 +1,7 @@
 import oauthPlugin from "@fastify/oauth2";
 import { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
-
-const SSO_CLIENT_ID = process.env.SSO_CLIENT_ID;
-const SSO_CLIENT_SECRET = process.env.SSO_CLIENT_SECRET;
-const SSO_ISSUER_HOST = process.env.SSO_ISSUER_HOST;
-const SSO_CALLBACK_URL = process.env.SSO_CALLBACK_URL;
+import { getSettings } from "../utils/settings.js";
 
 import { OAuth2Namespace } from "@fastify/oauth2";
 
@@ -26,18 +22,20 @@ declare module "fastify" {
 }
 
 async function routes(fastify: FastifyInstance) {
+  const cfg = getSettings();
+
   fastify.register(oauthPlugin as any, {
     name: "redhatSSO",
     scope: ["profile", "email", "session:role-any"],
     credentials: {
       client: {
-        id: SSO_CLIENT_ID,
-        secret: SSO_CLIENT_SECRET,
+        id: cfg.auth.sso_client_id,
+        secret: cfg.auth.sso_client_secret,
       },
     },
-    callbackUri: SSO_CALLBACK_URL,
+    callbackUri: cfg.auth.sso_callback_url,
     discovery: {
-      issuer: SSO_ISSUER_HOST,
+      issuer: cfg.auth.sso_issuer_host,
     },
   });
 
