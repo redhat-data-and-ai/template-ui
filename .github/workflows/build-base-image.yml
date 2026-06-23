@@ -64,7 +64,7 @@ jobs:
             VERSION="${GITHUB_REF#refs/heads/}-${GITHUB_SHA::7}"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "package_name=template-ui-deployment-${VERSION}.zip" >> $GITHUB_OUTPUT
+          echo "package_name=ui-deployment.zip" >> $GITHUB_OUTPUT
 
       - name: Create deployment package metadata
         run: |
