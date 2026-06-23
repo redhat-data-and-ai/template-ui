@@ -6,7 +6,7 @@ on:
       - 'v*.*.*'
     branches:
       - main
-      - deep-agent-conf-ext
+      - deep-agent
   workflow_dispatch:  # Allow manual trigger for testing
 
 permissions:
