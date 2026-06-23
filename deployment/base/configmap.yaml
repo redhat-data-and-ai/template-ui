@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: template-ui-config
+  labels:
+    app: template-ui
+    component: ui
+data:
+  ENVIRONMENT: "production"
+  AUTH_ENABLED: "false"
+  SSO_ISSUER_HOST: ""
+  SSO_CALLBACK_URL: ""
+  AGENT_HOST: "http://template-agent:8081"
+
