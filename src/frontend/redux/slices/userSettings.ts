@@ -5,6 +5,7 @@ type Theme = 'light' | 'dark';
 interface UserSettingsState {
   theme: Theme;
   debugMode: boolean;
+  alwaysAllowedTools: string[];
   _userOverrides: { debugMode?: boolean };
 }
 
@@ -18,6 +19,7 @@ function loadSettings(): UserSettingsState {
       return {
         theme: parsed.theme ?? 'dark',
         debugMode: parsed.debugMode ?? false,
+        alwaysAllowedTools: Array.isArray(parsed.alwaysAllowedTools) ? parsed.alwaysAllowedTools : [],
         _userOverrides: parsed._userOverrides ?? {},
       };
     }
@@ -27,6 +29,7 @@ function loadSettings(): UserSettingsState {
   return {
     theme: 'dark',
     debugMode: false,
+    alwaysAllowedTools: [],
     _userOverrides: {},
   };
 }
@@ -62,12 +65,36 @@ const userSettingsSlice = createSlice({
       }
       persistSettings(state);
     },
+    addAlwaysAllowedTool(state, action: PayloadAction<string>) {
+      if (!state.alwaysAllowedTools.includes(action.payload)) {
+        state.alwaysAllowedTools.push(action.payload);
+        persistSettings(state);
+      }
+    },
+    removeAlwaysAllowedTool(state, action: PayloadAction<string>) {
+      state.alwaysAllowedTools = state.alwaysAllowedTools.filter((t) => t !== action.payload);
+      persistSettings(state);
+    },
+    clearAlwaysAllowedTools(state) {
+      state.alwaysAllowedTools = [];
+      persistSettings(state);
+    },
   },
 });
 
-export const { setTheme, toggleTheme, setDebugMode, setConfigDefaults } = userSettingsSlice.actions;
+export const {
+  setTheme,
+  toggleTheme,
+  setDebugMode,
+  setConfigDefaults,
+  addAlwaysAllowedTool,
+  removeAlwaysAllowedTool,
+  clearAlwaysAllowedTools,
+} = userSettingsSlice.actions;
 
 export const selectTheme = (state: { userSettings: UserSettingsState }) => state.userSettings.theme;
 export const selectDebugMode = (state: { userSettings: UserSettingsState }) => state.userSettings.debugMode;
+export const selectAlwaysAllowedTools = (state: { userSettings: UserSettingsState }) =>
+  state.userSettings.alwaysAllowedTools;
 
 export default userSettingsSlice.reducer;

@@ -14,8 +14,23 @@ export interface ToolCallWithContent {
   content?: unknown;
 }
 
+export interface HITLActionRequest {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface HITLReviewConfig {
+  action_name: string;
+  allowed_decisions: ('approve' | 'edit' | 'reject' | 'respond')[];
+}
+
+export interface HITLInterruptValue {
+  action_requests: HITLActionRequest[];
+  review_configs: HITLReviewConfig[];
+}
+
 export interface InterruptInfo {
-  value: string;
+  value: HITLInterruptValue;
   resumable: boolean;
 }
 

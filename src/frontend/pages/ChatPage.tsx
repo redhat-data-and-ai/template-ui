@@ -13,13 +13,12 @@ import {
   updateChat,
   updateStreamingState,
 } from '../redux/slices/chats';
-import { selectDebugMode } from '../redux/slices/userSettings';
+import { selectDebugMode, addAlwaysAllowedTool } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
-import { InterruptBanner } from '../components/InterruptBanner';
 import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
@@ -300,27 +299,28 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, [thread, threadId, currentChat, dispatch]);
 
   const handleInterruptResume = useCallback(
-    async (response: string) => {
+    async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
       if (!threadId || !currentChat) return;
-      dispatch(
-        updateStreamingState({
-          chatId: threadId,
-          state: { pendingInterrupt: null },
-        }),
-      );
-      const resumeMessage: Message = {
-        id: `msg-${Date.now()}`,
-        type: 'human',
-        content: response,
-      };
       try {
-        await thread.submit({ messages: [...thread.messages, resumeMessage] });
+        await thread.resumeWithDecisions(decisions);
+        setTimeout(() => {
+          hasFinalizeEventOccurredRef.current = true;
+        }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
         dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
       }
     },
     [thread, threadId, currentChat, dispatch],
+  );
+
+  const handleAlwaysAllow = useCallback(
+    (toolNames: string[]) => {
+      for (const name of toolNames) {
+        dispatch(addAlwaysAllowedTool(name));
+      }
+    },
+    [dispatch],
   );
 
   const handleInterruptDismiss = useCallback(() => {
@@ -361,6 +361,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
     onBlurChatInput: () => chatInputRef.current?.blur(),
     onExportChat: handleExportShortcut,
   });
+
+  // Auto-approve interrupts when all tools are in the always-allow list
+  useEffect(() => {
+    const interrupt = thread.pendingInterrupt;
+    if (!interrupt?.value?.action_requests?.length) return;
+    const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
+    if (!allAutoApproved) return;
+    thread.resumeWithDecisions(decisions).catch((err) => {
+      console.error('Auto-approve resume failed:', err);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.pendingInterrupt]);
 
   if (chatsLoading || hydrating) {
     return (
@@ -407,13 +419,6 @@ export function ChatPage({ threadId }: { threadId: string }) {
           {hasToolCalls && (
             <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
           )}
-          {thread.pendingInterrupt && (
-            <InterruptBanner
-              interrupt={thread.pendingInterrupt}
-              onResume={handleInterruptResume}
-              onDismiss={handleInterruptDismiss}
-            />
-          )}
           <ChatMessagesView
             key={threadId}
             messages={thread.messages}
@@ -445,6 +450,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
             chatInputRef={chatInputRef}
             onExportMarkdown={handleExportMarkdown}
             onExportJson={handleExportJson}
+            pendingInterrupt={thread.pendingInterrupt}
+            onInterruptResume={handleInterruptResume}
+            onAlwaysAllow={handleAlwaysAllow}
+            onInterruptDismiss={handleInterruptDismiss}
           />
         </div>
         {debugMode && (

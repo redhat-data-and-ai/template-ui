@@ -79,6 +79,23 @@ function extractText(content: unknown): string {
  * Returns [uiChunk | null, updatedPrevPartial].
  */
 /**
+ * Extract a HITL interrupt payload from a LangGraph `updates` stream event.
+ * LangGraph 1.x surfaces interrupts as:
+ *   { "__interrupt__": [{ value: HITLInterruptValue, resumable: boolean, ... }] }
+ * Returns null when the updates event carries no interrupt.
+ */
+function extractInterruptFromUpdates(
+  payload: unknown,
+): { value: unknown; resumable: boolean } | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const p = payload as Record<string, unknown>;
+  const interrupts = p.__interrupt__;
+  if (!Array.isArray(interrupts) || interrupts.length === 0) return null;
+  const first = interrupts[0] as Record<string, unknown>;
+  return { value: first.value, resumable: first.resumable !== false };
+}
+
+/**
  * Extract tool_calls from a raw message. LangGraph streaming uses
  * `additional_kwargs.function_call` (single) or `tool_calls` (array).
  */
@@ -322,7 +339,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         const runBody: Record<string, unknown> = {
           assistant_id: 'agent',
-          stream_mode: ['messages'],
+          stream_mode: ['messages', 'updates'],
         };
         if (isResume) {
           runBody.command = { resume: message };
@@ -383,6 +400,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         });
 
         let hasEmittedTextTokens = false;
+        let interruptEmittedFromStream = false;
 
         try {
           while (!clientGone) {
@@ -433,6 +451,27 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   }
                 } catch {
                   fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
+                }
+                continue;
+              }
+
+              if (sseType === 'updates') {
+                try {
+                  const updatesPayload = JSON.parse(sseData) as unknown;
+                  const interrupt = extractInterruptFromUpdates(updatesPayload);
+                  if (interrupt) {
+                    const interruptChunk = {
+                      type: 'interrupt',
+                      content: { value: interrupt.value, resumable: interrupt.resumable },
+                      chunk_id: chunkId,
+                    };
+                    reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
+                    chunkId++;
+                    interruptEmittedFromStream = true;
+                    fastify.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
+                  }
+                } catch {
+                  fastify.log.debug({ traceId, sseData }, 'Unparseable updates event');
                 }
                 continue;
               }
@@ -511,18 +550,19 @@ async function proxyRoutes(fastify: FastifyInstance) {
               const interrupted = tasks.find(
                 (t: any) => Array.isArray(t?.interrupts) && t.interrupts.length > 0,
               );
-              if (interrupted) {
+              if (interrupted && !interruptEmittedFromStream) {
                 const firstInterrupt = (interrupted as any).interrupts[0];
-                const value = typeof firstInterrupt?.value === 'string'
-                  ? firstInterrupt.value
-                  : JSON.stringify(firstInterrupt?.value ?? 'Action required');
                 const interruptChunk = {
                   type: 'interrupt',
-                  content: { value, resumable: true },
+                  content: {
+                    value: firstInterrupt?.value ?? null,
+                    resumable: true,
+                  },
                   chunk_id: chunkId,
                 };
                 reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
                 chunkId++;
+                fastify.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
               }
             }
           } catch (err) {

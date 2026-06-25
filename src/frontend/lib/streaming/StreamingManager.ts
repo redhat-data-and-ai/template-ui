@@ -2,6 +2,7 @@ import type { Message } from '@langchain/langgraph-sdk';
 
 import { parseRetryAfterSeconds, triggerRateLimit } from '@/services/authenticated-fetch';
 import { buildAgentApiUrl } from '../app-paths';
+import type { HITLInterruptValue } from '@/types/deep-agent';
 
 import type { SSEEvent } from './SSEProcessor';
 import { SSEProcessor } from './SSEProcessor';
@@ -14,12 +15,14 @@ export interface StreamRequest {
   token?: string;
   memories?: string[];
   rules?: string[];
+  resume?: boolean;
+  resumeDecisions?: Array<{ type: 'approve' | 'reject' | 'edit'; message?: string }>;
 }
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error' | 'cancelled';
 
 export interface InterruptPayload {
-  value: string;
+  value: HITLInterruptValue;
   resumable: boolean;
 }
 
@@ -125,12 +128,15 @@ export class StreamingManager {
 
     try {
       const body: Record<string, unknown> = {
-        message: request.message,
+        message: request.resume
+          ? { decisions: request.resumeDecisions ?? [] }
+          : request.message,
         thread_id: request.threadId || 'default-thread',
         session_id: request.threadId || 'default-session',
         user_id: request.userId,
         stream_tokens: true,
       };
+      if (request.resume) body.resume = true;
       if (request.memories?.length) body.memories = request.memories;
       if (request.rules?.length) body.rules = request.rules;
 
