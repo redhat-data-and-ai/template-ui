@@ -159,7 +159,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     type="button"
                     onClick={() => {
                       setIsApproving(true);
-                      onAlwaysAllow?.([name, 'task']);
+                      onAlwaysAllow?.([name]);
                       onInterruptResume([{ type: 'approve' }]);
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"

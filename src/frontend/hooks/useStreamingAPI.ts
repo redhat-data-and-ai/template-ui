@@ -500,9 +500,11 @@ export function useStreamingAPI(threadId: string) {
   const checkAndAutoApprove = useCallback(
     (interruptValue: HITLInterruptValue): { allAutoApproved: boolean; decisions: Array<{ type: 'approve' | 'reject' }> } => {
       const allowed = new Set(alwaysAllowedTools);
-      const decisions = interruptValue.action_requests.map((req) => ({
-        type: (allowed.has(req.name) ? 'approve' : null) as 'approve' | null,
-      }));
+      const decisions = interruptValue.action_requests.map((req) => {
+        const subagentType = typeof req.args?.subagent_type === 'string' ? req.args.subagent_type : null;
+        const isAllowed = allowed.has(req.name) || (subagentType !== null && allowed.has(subagentType));
+        return { type: (isAllowed ? 'approve' : null) as 'approve' | null };
+      });
       const allAutoApproved = decisions.every((d) => d.type === 'approve');
       return {
         allAutoApproved,
