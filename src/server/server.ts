@@ -145,7 +145,7 @@ export function startConfigWatcher(configPath: string) {
     }
 
     if (restartRequired.length > 0) {
-      fastify.log.warn('[ConfigWatcher] The following settings changed but require server restart:', restartRequired);
+      fastify.log.warn({ settings: restartRequired }, '[ConfigWatcher] The following settings changed but require server restart:');
     }
 
     // Settings that auto-apply without restart
@@ -161,7 +161,7 @@ export function startConfigWatcher(configPath: string) {
     }
 
     if (autoApplied.length > 0) {
-      fastify.log.info('[ConfigWatcher] Settings applied without restart:', autoApplied);
+      fastify.log.info({ settings: autoApplied }, '[ConfigWatcher] Settings applied without restart:');
     }
   });
 
