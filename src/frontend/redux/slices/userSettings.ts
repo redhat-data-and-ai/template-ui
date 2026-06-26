@@ -6,6 +6,7 @@ interface UserSettingsState {
   theme: Theme;
   debugMode: boolean;
   alwaysAllowedTools: string[];
+  autoApproveAllTools: boolean;
   _userOverrides: { debugMode?: boolean };
 }
 
@@ -20,6 +21,7 @@ function loadSettings(): UserSettingsState {
         theme: parsed.theme ?? 'dark',
         debugMode: parsed.debugMode ?? false,
         alwaysAllowedTools: Array.isArray(parsed.alwaysAllowedTools) ? parsed.alwaysAllowedTools : [],
+        autoApproveAllTools: parsed.autoApproveAllTools ?? false,
         _userOverrides: parsed._userOverrides ?? {},
       };
     }
@@ -30,6 +32,7 @@ function loadSettings(): UserSettingsState {
     theme: 'dark',
     debugMode: false,
     alwaysAllowedTools: [],
+    autoApproveAllTools: false,
     _userOverrides: {},
   };
 }
@@ -79,6 +82,14 @@ const userSettingsSlice = createSlice({
       state.alwaysAllowedTools = [];
       persistSettings(state);
     },
+    setAutoApproveAllTools(state, action: PayloadAction<boolean>) {
+      state.autoApproveAllTools = action.payload;
+      persistSettings(state);
+    },
+    toggleAutoApproveAllTools(state) {
+      state.autoApproveAllTools = !state.autoApproveAllTools;
+      persistSettings(state);
+    },
   },
 });
 
@@ -90,11 +101,15 @@ export const {
   addAlwaysAllowedTool,
   removeAlwaysAllowedTool,
   clearAlwaysAllowedTools,
+  setAutoApproveAllTools,
+  toggleAutoApproveAllTools,
 } = userSettingsSlice.actions;
 
 export const selectTheme = (state: { userSettings: UserSettingsState }) => state.userSettings.theme;
 export const selectDebugMode = (state: { userSettings: UserSettingsState }) => state.userSettings.debugMode;
 export const selectAlwaysAllowedTools = (state: { userSettings: UserSettingsState }) =>
   state.userSettings.alwaysAllowedTools;
+export const selectAutoApproveAllTools = (state: { userSettings: UserSettingsState }) =>
+  state.userSettings.autoApproveAllTools;
 
 export default userSettingsSlice.reducer;

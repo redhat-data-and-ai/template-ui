@@ -13,7 +13,7 @@ import {
   updateChat,
   updateStreamingState,
 } from '../redux/slices/chats';
-import { selectDebugMode, addAlwaysAllowedTool } from '../redux/slices/userSettings';
+import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
@@ -362,17 +362,26 @@ export function ChatPage({ threadId }: { threadId: string }) {
     onExportChat: handleExportShortcut,
   });
 
-  // Auto-approve interrupts when all tools are in the always-allow list
+  const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
   useEffect(() => {
     const interrupt = thread.pendingInterrupt;
     if (!interrupt?.value?.action_requests?.length) return;
+
+    if (autoApproveAllTools) {
+      const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
+      thread.resumeWithDecisions(allApproved).catch((err) => {
+        console.error('Auto-approve-all resume failed:', err);
+      });
+      return;
+    }
+
     const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
     if (!allAutoApproved) return;
     thread.resumeWithDecisions(decisions).catch((err) => {
       console.error('Auto-approve resume failed:', err);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.pendingInterrupt]);
+  }, [thread.pendingInterrupt, autoApproveAllTools]);
 
   if (chatsLoading || hydrating) {
     return (
