@@ -71,15 +71,12 @@ agent:
     expect(settings.agent.timeout_ms).toBe(60000);
   });
 
-  it("should use defaults when YAML file not found", () => {
+  it("should throw when UI_CONFIG_PATH points to missing file", () => {
     process.env.UI_CONFIG_PATH = "/nonexistent/path/settings.yaml";
 
-    const settings = getSettings();
-
-    expect(settings.branding.logo_url).toBe("/logo.svg");
-    expect(settings.branding.title).toBe("Deep Agent");
-    expect(settings.features.debug_mode_default).toBe(false);
-    expect(settings.features.auth_enabled).toBe(true);
+    expect(() => getSettings()).toThrow(
+      "Config file not found: /nonexistent/path/settings.yaml",
+    );
   });
 
   it("should throw error for empty logo_url", () => {

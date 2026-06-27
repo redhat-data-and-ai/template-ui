@@ -4,6 +4,9 @@ USER root
 
 WORKDIR /opt/app-root/src
 
+# UI config is NOT baked in — mount config/ui at /opt/app-root/src/config
+# (compose: ./config:/opt/app-root/src/config:ro; K8s: ConfigMap/PVC).
+
 COPY --chown=1001:0 package*.json ./
 COPY --chown=1001:0 src ./src
 COPY --chown=1001:0 public ./public
@@ -13,7 +16,8 @@ COPY --chown=1001:0 vite.config.ts ./
 COPY --chown=1001:0 vite-env.d.ts ./
 COPY --chown=1001:0 tsconfig.json ./
 COPY --chown=1001:0 tsconfig.node.json ./
-COPY --chown=1001:0 config ./config
+
+RUN mkdir -p config/ui && chown -R 1001:0 config
 
 USER 1001
 

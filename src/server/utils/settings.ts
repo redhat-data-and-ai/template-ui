@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
@@ -308,9 +308,17 @@ let _settings: UISettings | undefined;
 export function getSettings(): UISettings {
   if (_settings) return _settings;
 
+  const explicitPath = process.env.UI_CONFIG_PATH;
   const configPath =
-    process.env.UI_CONFIG_PATH ||
+    explicitPath ||
     resolve(__dirname, "../../../config/ui/settings.yaml");
+
+  if (explicitPath && !existsSync(configPath)) {
+    throw new Error(
+      `Config file not found: ${configPath}. Mount config/ui at /opt/app-root/src/config`,
+    );
+  }
+
   const fromFile = loadYaml(configPath);
 
   // Deep merge defaults with file config
