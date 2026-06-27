@@ -3,7 +3,8 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
 
 const require = createRequire(import.meta.url);
-const { version: APP_VERSION } = require("../../../package.json");
+const { version: PKG_VERSION } = require("../../../package.json");
+const APP_VERSION = process.env.APPLICATION_VERSION?.trim() || PKG_VERSION;
 
 interface StreamRequest {
   message: string;
