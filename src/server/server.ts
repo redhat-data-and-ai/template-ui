@@ -4,6 +4,7 @@ import { apiRoutes } from "./router/api.router.js";
 import { proxyRoutes } from "./router/proxy.router.js";
 import logoutPlugin from "./router/logout.router.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
+import opaPlugin from "./plugins/opa.plugin.js";
 import { buildSessionStore, connectRedis } from "./utils/redis.js";
 import tracePlugin from "./plugins/trace.plugin.js";
 import { getSettings } from "./utils/settings.js";
@@ -112,6 +113,10 @@ export async function setupServer() {
 
   if (cfg.features.auth_enabled) {
     await fastify.register(authPlugin);
+  }
+
+  if (cfg.platform.opa.enabled) {
+    await fastify.register(opaPlugin);
   }
 
   await fastify.register(logoutPlugin);

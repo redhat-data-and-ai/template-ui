@@ -45,6 +45,22 @@ interface OtelConfig {
   service_name: string;
 }
 
+interface PlatformOpaConfig {
+  enabled: boolean;
+  policy_path: string;
+  fail_on_violation: boolean;
+  approved_auth_providers: string[];
+  internal_endpoint_suffixes: string[];
+  max_session_ttl_days: number;
+  restrict_debug_mode: boolean;
+  restricted_features: string[];
+  max_rate_limit: number;
+}
+
+interface PlatformConfig {
+  opa: PlatformOpaConfig;
+}
+
 interface AnnouncementConfig {
   enabled: boolean;
   message: string;
@@ -103,6 +119,7 @@ export interface UISettings {
   security: SecurityConfig;
   otel: OtelConfig;
   announcement: AnnouncementConfig;
+  platform: PlatformConfig;
 }
 
 const DEFAULTS: UISettings = {
@@ -162,6 +179,19 @@ const DEFAULTS: UISettings = {
   },
   otel: { enabled: false, service_name: "template-ui" },
   announcement: { enabled: false, message: "", type: "info" },
+  platform: {
+    opa: {
+      enabled: false,
+      policy_path: "",
+      fail_on_violation: false,
+      approved_auth_providers: [],
+      internal_endpoint_suffixes: [],
+      max_session_ttl_days: 0,
+      restrict_debug_mode: false,
+      restricted_features: [],
+      max_rate_limit: 0,
+    },
+  },
 };
 
 function deepMerge<T extends Record<string, unknown>>(
@@ -300,6 +330,17 @@ function applyEnvOverrides(config: UISettings): void {
     if (!Number.isNaN(timeout)) {
       config.agent.timeout_ms = timeout;
     }
+  }
+
+  // Platform OPA overrides
+  if (process.env.PLATFORM_OPA_ENABLED !== undefined) {
+    config.platform.opa.enabled = process.env.PLATFORM_OPA_ENABLED === "true";
+  }
+  if (process.env.PLATFORM_OPA_POLICY_PATH) {
+    config.platform.opa.policy_path = process.env.PLATFORM_OPA_POLICY_PATH;
+  }
+  if (process.env.PLATFORM_OPA_FAIL_ON_VIOLATION !== undefined) {
+    config.platform.opa.fail_on_violation = process.env.PLATFORM_OPA_FAIL_ON_VIOLATION === "true";
   }
 }
 

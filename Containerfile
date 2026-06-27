@@ -2,6 +2,10 @@ FROM registry.access.redhat.com/ubi10/nodejs-24:10.1
 
 USER root
 
+ARG OPA_VERSION=1.4.2
+RUN curl -fsSL "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static" \
+    -o /usr/local/bin/opa && chmod 755 /usr/local/bin/opa
+
 WORKDIR /opt/app-root/src
 
 COPY --chown=1001:0 package*.json ./
