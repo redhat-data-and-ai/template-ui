@@ -1,6 +1,7 @@
 import { Redis } from 'ioredis';
 
 let redisClient: Redis | null = null;
+let redisConnected = false;
 
 export function getRedisClient(): Redis | null {
   if (redisClient) return redisClient;
@@ -51,9 +52,16 @@ export async function connectRedis(): Promise<Redis | null> {
 
   try {
     await client.connect();
+    redisConnected = true;
     return client;
   } catch (err) {
     console.warn('[Redis] Failed to connect, falling back to in-memory sessions:', err);
+    redisConnected = false;
+    try {
+      await client.disconnect();
+    } catch {
+      /* ignore cleanup errors */
+    }
     redisClient = null;
     return null;
   }
@@ -71,8 +79,8 @@ interface RedisSessionStore {
  * fall back to the default in-memory store.
  */
 export function buildSessionStore(prefix = 'sess:'): RedisSessionStore | undefined {
-  const client = getRedisClient();
-  if (!client) return undefined;
+  if (!redisConnected || !redisClient) return undefined;
+  const client = redisClient;
 
   const ttl = 60 * 60 * 24 * 30; // 30 days (matches cookie maxAge)
 

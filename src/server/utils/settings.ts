@@ -136,7 +136,7 @@ const DEFAULTS: UISettings = {
   },
   server: { host: "0.0.0.0", port: 8080, body_limit: 1_048_576 },
   logging: { level: "info" },
-  cors: { origin: "http://localhost:5173" },
+  cors: { origin: "http://localhost:8080" },
   security: {
     helmet: {
       enabled: true,
