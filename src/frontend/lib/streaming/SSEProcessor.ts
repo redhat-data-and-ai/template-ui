@@ -1,9 +1,10 @@
 import type { Message } from '@langchain/langgraph-sdk';
+import type { HITLInterruptValue } from '@/types/deep-agent';
 
 export type SSEChunk =
   | { type: 'token'; content: string; chunk_id: number }
   | { type: 'message'; content: Message; chunk_id: number }
-  | { type: 'interrupt'; content: { value: string; resumable: boolean }; chunk_id: number };
+  | { type: 'interrupt'; content: { value: HITLInterruptValue; resumable: boolean }; chunk_id: number };
 
 export type McpStatusData = {
   tool: string;
@@ -45,10 +46,18 @@ function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
 
   if (type === 'interrupt') {
     if (!isRecord(contentUnknown)) return null;
+    let rawValue: unknown = contentUnknown.value;
+    if (typeof rawValue === 'string') {
+      try {
+        rawValue = JSON.parse(rawValue);
+      } catch {
+        rawValue = {};
+      }
+    }
     return {
       type: 'interrupt',
       content: {
-        value: typeof contentUnknown.value === 'string' ? contentUnknown.value : '',
+        value: (isRecord(rawValue) ? rawValue : {}) as unknown as HITLInterruptValue,
         resumable: contentUnknown.resumable === true,
       },
       chunk_id: chunkIdRaw,
