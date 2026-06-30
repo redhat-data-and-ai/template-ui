@@ -42,6 +42,22 @@ export function extractSubAgentName(toolCall: { name: string; args?: Record<stri
   return toolCall.name;
 }
 
+export function extractDelegationText(
+  toolCall: { args?: Record<string, unknown> | string },
+): string | null {
+  const { args } = toolCall;
+  if (args == null) return null;
+  if (typeof args === 'string') {
+    const trimmed = args.trim();
+    return trimmed || null;
+  }
+  if (typeof args.description === 'string') {
+    const trimmed = args.description.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
 export interface TodoItem {
   content: string;
   status: 'pending' | 'in_progress' | 'completed';

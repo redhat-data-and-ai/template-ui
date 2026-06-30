@@ -8,7 +8,7 @@ import {
 } from '@patternfly/react-core';
 import { Bot, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 import type { ToolCallWithContent } from '../types/deep-agent';
-import { extractSubAgentName } from '../types/deep-agent';
+import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
 
 interface SubAgentIndicatorProps {
   readonly toolCall: ToolCallWithContent;
@@ -38,6 +38,7 @@ const STATUS_CONFIG: Record<VisualStatus, {
 export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
   const name = extractSubAgentName(toolCall);
+  const delegationText = extractDelegationText(toolCall);
   const status = deriveStatus(toolCall);
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
@@ -85,20 +86,14 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
 
           {expanded && (
             <CardBody className="border-t border-border pt-3 space-y-3">
-              {toolCall.args && Object.keys(toolCall.args).length > 0 && (
+              {delegationText && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                     Delegation
                   </p>
-                  <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono max-h-40">
-                    {JSON.stringify(
-                      Object.fromEntries(
-                        Object.entries(toolCall.args).filter(([k]) => k !== 'subagent_type'),
-                      ),
-                      null,
-                      2,
-                    )}
-                  </pre>
+                  <p className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg whitespace-pre-wrap">
+                    {delegationText}
+                  </p>
                 </div>
               )}
               {toolCall.content != null && (
