@@ -146,6 +146,7 @@ export function useStreamingAPI(threadId: string) {
   const isStreamingTokensRef = useRef<boolean>(false);
   const isActiveRef = useRef(true);
   const userCancelledRef = useRef(false);
+  const streamEndedWithInterruptRef = useRef(false);
   const lastStreamErrorRef = useRef<Error | null>(null);
   const lastTokenTimeRef = useRef<number>(0);
   const staleIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -310,6 +311,7 @@ export function useStreamingAPI(threadId: string) {
           };
 
           lastStreamErrorRef.current = null;
+          streamEndedWithInterruptRef.current = false;
 
           const callbacks: StreamCallback = {
             onToken(content) {
@@ -380,6 +382,7 @@ export function useStreamingAPI(threadId: string) {
               }
             },
             onInterrupt(interrupt) {
+              streamEndedWithInterruptRef.current = true;
               dispatch(
                 updateStreamingState({
                   chatId: threadId,
@@ -452,7 +455,9 @@ export function useStreamingAPI(threadId: string) {
               }
             },
             onDone() {
-              dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+              if (!streamEndedWithInterruptRef.current) {
+                dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+              }
               finish('success');
             },
             onMcpStatus(evt) {
@@ -465,7 +470,9 @@ export function useStreamingAPI(threadId: string) {
 
           manager.stream(streamRequest, callbacks).then(() => {
             if (!settled) {
-              dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+              if (!streamEndedWithInterruptRef.current) {
+                dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+              }
               finish('success');
             }
           });
@@ -553,6 +560,8 @@ export function useStreamingAPI(threadId: string) {
         resumeDecisions: decisions,
       };
 
+      let resumeStreamHadInterrupt = false;
+
       const callbacks: StreamCallback = {
         onToken(content) {
           lastTokenTimeRef.current = Date.now();
@@ -582,6 +591,7 @@ export function useStreamingAPI(threadId: string) {
           }
         },
         onInterrupt(interrupt) {
+          resumeStreamHadInterrupt = true;
           dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: interrupt } }));
         },
         onError(error) {
@@ -600,7 +610,9 @@ export function useStreamingAPI(threadId: string) {
           if (partial) dispatch(updateStreamingState({ chatId: threadId, state: partial }));
         },
         onDone() {
-          dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+          if (!resumeStreamHadInterrupt) {
+            dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+          }
         },
         onMcpStatus(evt) {
           setMcpEvents((prev) => [...prev, evt]);
