@@ -69,11 +69,7 @@ async function routes(fastify: FastifyInstance) {
     </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script>
-    window.USER_DATA = ${JSON.stringify(userData || {})}
-    window.APP_DATA = ${JSON.stringify(appData)}
-    </script>
+    <div id="root" data-user="${encodeURIComponent(JSON.stringify(userData || {}))}" data-app="${encodeURIComponent(JSON.stringify(appData))}"></div>
     <script src="${basePath}/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`);
