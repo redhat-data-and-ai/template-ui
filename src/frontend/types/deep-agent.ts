@@ -46,7 +46,7 @@ export interface TaskStep {
 const KNOWN_SUBAGENT_NAMES = new Set(['analyst', 'publisher']);
 
 export function isSubAgentToolCall(toolCall: { name: string; args?: Record<string, unknown> }): boolean {
-  if (toolCall.name === 'task' && toolCall.args?.subagent_type) return true;
+  if (toolCall.args?.subagent_type) return true;
   return KNOWN_SUBAGENT_NAMES.has(toolCall.name);
 }
 
