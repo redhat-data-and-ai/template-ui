@@ -698,6 +698,9 @@ export function useStreamingAPI(threadId: string) {
           isLoading: false,
           isConnected: false,
           isThinking: false,
+          isReconnecting: false,
+          reconnectAttempt: 0,
+          streamDroppedMidResponse: false,
         },
       }),
     );
