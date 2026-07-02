@@ -156,6 +156,8 @@ export function useStreamingAPI(threadId: string) {
   const lastSuccessfulConnectionRef = useRef<number>(Date.now());
   const threadIdRef = useRef(threadId);
   threadIdRef.current = threadId;
+  const chatRef = useRef(chat);
+  chatRef.current = chat;
 
   if (!managerRef.current) {
     managerRef.current = new StreamingManager();
@@ -320,21 +322,7 @@ export function useStreamingAPI(threadId: string) {
 
           // Remove incomplete AI message if stream dropped mid-response
           if (isStreamingTokensRef.current) {
-            const currentMsgs = chat?.messages ?? [];
-            const filtered = currentMsgs.filter((m, idx) => {
-              // Remove last message if it's an incomplete AI message (no tool calls)
-              if (idx === currentMsgs.length - 1 && m.type === 'ai') {
-                const aiMsg = m as AIMessage;
-                const hasToolCalls = Array.isArray(aiMsg.tool_calls) && aiMsg.tool_calls.length > 0;
-                if (!hasToolCalls) {
-                  return false;
-                }
-              }
-              return true;
-            });
-            if (filtered.length !== currentMsgs.length) {
-              dispatch(updateChat({ id: threadId, updates: { messages: filtered } }));
-            }
+            dispatch(updateChat({ id: threadId, updates: { messages: clones } }));
             isStreamingTokensRef.current = false;
           }
         }
@@ -344,7 +332,12 @@ export function useStreamingAPI(threadId: string) {
           try {
             const history = await getThreadState(threadId);
             if (history.length > 0) {
-              dispatch(updateChat({ id: threadId, updates: { messages: history } }));
+              const pendingMsg = clones[clones.length - 1];
+              const serverHasPending =
+                pendingMsg?.type === 'human' &&
+                history.some((m) => m.type === 'human' && m.content === pendingMsg.content);
+              const merged = serverHasPending ? history : [...history, pendingMsg];
+              dispatch(updateChat({ id: threadId, updates: { messages: merged } }));
             }
           } catch (err) {
             console.warn('[useStreamingAPI] Failed to refetch conversation history on reconnect', err);
