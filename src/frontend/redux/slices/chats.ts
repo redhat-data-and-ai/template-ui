@@ -11,6 +11,9 @@ export interface StreamingState {
   activeSubAgent: SubAgentInfo | null;
   pendingInterrupt: InterruptInfo | null;
   taskSteps: TaskStep[];
+  isReconnecting: boolean;
+  reconnectAttempt: number;
+  streamDroppedMidResponse: boolean;
 }
 
 export interface ChatItem {
@@ -41,6 +44,9 @@ const DEFAULT_STREAMING_STATE: StreamingState = {
   activeSubAgent: null,
   pendingInterrupt: null,
   taskSteps: [],
+  isReconnecting: false,
+  reconnectAttempt: 0,
+  streamDroppedMidResponse: false,
 };
 
 const initialState: ChatsState = {

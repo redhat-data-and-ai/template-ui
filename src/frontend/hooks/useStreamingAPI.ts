@@ -25,6 +25,7 @@ import { buildAgentApiUrl } from '@/lib/app-paths';
 import { selectActiveRules, selectMemories } from '@/redux/slices/personalization';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue } from '@/types/deep-agent';
+import { getThreadState } from '@/services/agent-rest';
 
 function cloneMessages(messages: Message[]): Message[] {
   return messages.map((m) => JSON.parse(JSON.stringify(m)) as Message);
@@ -41,11 +42,13 @@ function serializeLastMessage(messages: Message[]): string {
 const EMPTY_MESSAGES: Message[] = [];
 
 /** MR-56: max automatic retries after the first failed stream attempt */
-const MAX_RETRIES = 3;
+export const MAX_RETRIES = 3;
 /** MR-56: base delay for exponential backoff (ms) */
 const BASE_DELAY_MS = 1000;
 /** MR-63: idle threshold before marking stream as stale (ms) */
 const STALE_THRESHOLD_MS = 30000;
+/** Time threshold for refetching history on reconnect (ms) */
+const HISTORY_REFETCH_THRESHOLD_MS = 10000;
 
 function computeRetryDelayMs(retryAttemptNumber: number): number {
   const capped = Math.min(BASE_DELAY_MS * 2 ** retryAttemptNumber, 30000);
@@ -150,6 +153,7 @@ export function useStreamingAPI(threadId: string) {
   const lastStreamErrorRef = useRef<Error | null>(null);
   const lastTokenTimeRef = useRef<number>(0);
   const staleIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSuccessfulConnectionRef = useRef<number>(Date.now());
   const threadIdRef = useRef(threadId);
   threadIdRef.current = threadId;
 
@@ -301,6 +305,52 @@ export function useStreamingAPI(threadId: string) {
           break;
         }
 
+        // Update reconnection state on retry
+        if (attempt > 0) {
+          dispatch(
+            updateStreamingState({
+              chatId: threadId,
+              state: {
+                isReconnecting: true,
+                reconnectAttempt: attempt,
+                streamDroppedMidResponse: isStreamingTokensRef.current,
+              },
+            }),
+          );
+
+          // Remove incomplete AI message if stream dropped mid-response
+          if (isStreamingTokensRef.current) {
+            const currentMsgs = chat?.messages ?? [];
+            const filtered = currentMsgs.filter((m, idx) => {
+              // Remove last message if it's an incomplete AI message (no tool calls)
+              if (idx === currentMsgs.length - 1 && m.type === 'ai') {
+                const aiMsg = m as AIMessage;
+                const hasToolCalls = Array.isArray(aiMsg.tool_calls) && aiMsg.tool_calls.length > 0;
+                if (!hasToolCalls) {
+                  return false;
+                }
+              }
+              return true;
+            });
+            if (filtered.length !== currentMsgs.length) {
+              dispatch(updateChat({ id: threadId, updates: { messages: filtered } }));
+            }
+            isStreamingTokensRef.current = false;
+          }
+        }
+
+        // Refetch conversation history on reconnect if connection was lost for > 10s
+        if (attempt > 0 && Date.now() - lastSuccessfulConnectionRef.current > HISTORY_REFETCH_THRESHOLD_MS) {
+          try {
+            const history = await getThreadState(threadId);
+            if (history.length > 0) {
+              dispatch(updateChat({ id: threadId, updates: { messages: history } }));
+            }
+          } catch (err) {
+            console.warn('[useStreamingAPI] Failed to refetch conversation history on reconnect', err);
+          }
+        }
+
         type StreamOutcome = 'success' | 'cancelled' | 'failed';
         const outcome = await new Promise<StreamOutcome>((resolve) => {
           let settled = false;
@@ -316,6 +366,7 @@ export function useStreamingAPI(threadId: string) {
           const callbacks: StreamCallback = {
             onToken(content) {
               lastTokenTimeRef.current = Date.now();
+              lastSuccessfulConnectionRef.current = Date.now();
               setIsStreamStale(false);
               if (streamClockRef.current.firstTokenTime == null) {
                 streamClockRef.current.firstTokenTime = Date.now();
@@ -413,6 +464,9 @@ export function useStreamingAPI(threadId: string) {
                       error: error.message,
                       isLoading: false,
                       isConnected: false,
+                      isReconnecting: false,
+                      reconnectAttempt: 0,
+                      streamDroppedMidResponse: false,
                     },
                   }),
                 );
@@ -458,6 +512,20 @@ export function useStreamingAPI(threadId: string) {
               if (!streamEndedWithInterruptRef.current) {
                 dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
               }
+              lastSuccessfulConnectionRef.current = Date.now();
+              // Clear reconnection state and ensure loading is off
+              dispatch(
+                updateStreamingState({
+                  chatId: threadId,
+                  state: {
+                    isLoading: false,
+                    isConnected: false,
+                    isReconnecting: false,
+                    reconnectAttempt: 0,
+                    streamDroppedMidResponse: false,
+                  },
+                }),
+              );
               finish('success');
             },
             onMcpStatus(evt) {

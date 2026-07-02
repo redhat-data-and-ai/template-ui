@@ -15,10 +15,11 @@ import {
 } from '../redux/slices/chats';
 import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
-import { useStreamingAPI } from '../hooks/useStreamingAPI';
+import { useStreamingAPI, MAX_RETRIES } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
+import { ReconnectingBanner } from '../components/ReconnectingBanner';
 import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
@@ -428,6 +429,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
           {hasToolCalls && (
             <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
           )}
+          <ReconnectingBanner streamingState={streamingState} maxRetries={MAX_RETRIES} />
           <ChatMessagesView
             key={threadId}
             messages={thread.messages}
