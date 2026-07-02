@@ -448,6 +448,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                       },
                     };
                     reply.raw.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
+                    chunkId++;
                   }
                 } catch {
                   fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
@@ -486,6 +487,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     (parsed as Record<string, unknown>).type === 'mcp_status');
                 if (isMcpStatus) {
                   reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
+                  chunkId++;
                   continue;
                 }
 
