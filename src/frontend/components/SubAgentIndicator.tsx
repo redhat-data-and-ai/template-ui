@@ -54,12 +54,13 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
   const StatusIcon = config.icon;
 
   const interruptValue = pendingInterrupt?.value;
-  const needsApproval = !!(
+  const actionRequests = (
     typeof interruptValue === 'object'
     && interruptValue !== null
     && 'action_requests' in interruptValue
-    && interruptValue.action_requests?.some((r) => r.name === 'task' || r.name === name)
-  ) && toolCall.content == null;
+    && Array.isArray(interruptValue.action_requests)
+  ) ? interruptValue.action_requests : [];
+  const needsApproval = actionRequests.length > 0 && toolCall.content == null;
 
   useEffect(() => {
     if (needsApproval) {
@@ -152,7 +153,29 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
               )}
 
               {needsApproval && !isApproving && onInterruptResume && (
-                <div role="alert" aria-live="assertive" aria-label={`Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
+                <div role="alert" aria-live="assertive" aria-label={`Sub-agent ${name} requires approval`} className="py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 rounded-b-lg space-y-2">
+                  {actionRequests.length > 0 && actionRequests[0].name !== 'task' && actionRequests[0].name !== name && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 uppercase tracking-wider">
+                        Tool Approval Required
+                      </p>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Tool:</span>
+                        <code className="font-mono font-semibold text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-1.5 py-0.5 rounded">
+                          {actionRequests[0].name}
+                        </code>
+                      </div>
+                      {actionRequests[0].args && Object.keys(actionRequests[0].args).length > 0 && (
+                        <pre className="text-xs text-muted-foreground font-mono bg-muted/40 rounded px-2 py-1 max-h-20 overflow-y-auto">
+                          {Object.entries(actionRequests[0].args)
+                            .filter(([k]) => k !== 'description')
+                            .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+                            .join('\n')}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     autoFocus
@@ -192,6 +215,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     <ShieldCheck className="w-3 h-3" aria-hidden="true" />
                     Always allow
                   </button>
+                  </div>
                 </div>
               )}
             </CardBody>
