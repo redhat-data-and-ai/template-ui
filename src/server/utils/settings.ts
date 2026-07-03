@@ -96,7 +96,7 @@ interface AgentConfig {
 interface AuthConfig {
   enabled: boolean;
   sso_client_id: string;
-  sso_client_secret: string;
+  sso_client_secret: string;  // SECURITY: Never set in YAML - only via SSO_CLIENT_SECRET env var
   sso_issuer_host: string;
   sso_callback_url: string;
 }
@@ -145,10 +145,10 @@ const DEFAULTS: UISettings = {
   },
   auth: {
     enabled: true,
-    sso_client_id: "",
-    sso_client_secret: "",
-    sso_issuer_host: "",
-    sso_callback_url: "",
+    sso_client_id: "",  // Always from SSO_CLIENT_ID env var
+    sso_client_secret: "",  // Always from SSO_CLIENT_SECRET env var (secret)
+    sso_issuer_host: "",  // Always from SSO_ISSUER_HOST env var
+    sso_callback_url: "",  // Always from SSO_CALLBACK_URL env var
   },
   server: { host: "0.0.0.0", port: 8080, body_limit: 1_048_576 },
   logging: { level: "info" },
@@ -350,7 +350,8 @@ function applyEnvOverrides(config: UISettings): void {
     }
   }
 
-  // Auth overrides
+  // Auth overrides - ALL SSO config comes from environment variables (never from YAML)
+  // These are injected by agent-engine during deployment
   if (process.env.SSO_CLIENT_ID) {
     config.auth.sso_client_id = process.env.SSO_CLIENT_ID;
   }

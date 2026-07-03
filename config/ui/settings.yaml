@@ -16,19 +16,19 @@ branding:
 
 features:
   debug_mode_default: false
-  auth_enabled: true
+  # auth_enabled: Controlled via AUTH_ENABLED environment variable (set by agent-engine during deployment)
 
 agent:
   endpoint: ""
   timeout_ms: 30000
   streaming: true
 
-auth:
-  enabled: true
-  sso_client_id: ""
-  sso_client_secret: ""
-  sso_issuer_host: ""
-  sso_callback_url: ""
+# auth: SSO configuration is managed via environment variables (not in this file)
+#   - SSO_CLIENT_ID
+#   - SSO_CLIENT_SECRET (secret - never in config files)
+#   - SSO_ISSUER_HOST
+#   - SSO_CALLBACK_URL
+# These are injected by agent-engine during deployment
 
 security:
   rate_limit:
