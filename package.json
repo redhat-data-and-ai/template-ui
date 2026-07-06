@@ -53,6 +53,7 @@
     "react-dom": "^19.0.0",
     "react-markdown": "^9.0.3",
     "react-redux": "^9.2.0",
+    "remark-gfm": "^4.0.1",
     "react-router-dom": "^7.5.3",
     "rehype-highlight": "^7.0.2",
     "rehype-sanitize": "^6.0.0",
