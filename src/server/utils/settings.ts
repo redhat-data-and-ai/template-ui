@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { readFileSync, realpathSync } from "node:fs";
+import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 
@@ -32,6 +32,8 @@ interface RateLimitConfig {
 interface SessionConfig {
   secure_cookie: boolean;
   max_age_days: number;
+  http_only: boolean;
+  same_site: 'strict' | 'lax' | 'none';
 }
 
 interface SecurityConfig {
@@ -142,7 +144,7 @@ const DEFAULTS: UISettings = {
       enabled: true,
       csp: {
         default_src: ["'self'"],
-        script_src: ["'self'", "'unsafe-inline'"],
+        script_src: ["'self'"],
         style_src: ["'self'", "'unsafe-inline'"],
         img_src: ["'self'", "data:", "blob:", "https:"],
         connect_src: ["'self'"],
@@ -158,7 +160,12 @@ const DEFAULTS: UISettings = {
       window: "1 minute",
       exclude_paths: ["/api/health", "/_health"],
     },
-    session: { secure_cookie: false, max_age_days: 30 },
+    session: {
+      secure_cookie: false, // false for dev; set to true in production
+      max_age_days: 30,
+      http_only: true,
+      same_site: 'lax', // 'lax' allows OAuth2 callback flows; use 'strict' only if not using SSO
+    },
   },
   otel: { enabled: false, service_name: "template-ui" },
   announcement: { enabled: false, message: "", type: "info" },
@@ -257,6 +264,56 @@ function validateConfig(config: UISettings): void {
   }
 }
 
+/**
+ * Validate that a config path is safe (no path traversal, within allowed directories).
+ * Returns the canonicalized absolute path or throws.
+ */
+function validateConfigPath(userPath: string): string {
+  // Reject paths with parent directory references
+  if (userPath.includes('..')) {
+    throw new Error(
+      `Config path validation error: path contains parent directory references (..): ${userPath}`
+    );
+  }
+
+  const absolutePath = resolve(userPath);
+
+  // Canonicalize (resolve symlinks, remove ..)
+  let canonicalPath: string;
+  try {
+    canonicalPath = realpathSync(absolutePath);
+  } catch {
+    const dir = dirname(absolutePath);
+    try {
+      const canonicalDir = realpathSync(dir);
+      canonicalPath = resolve(canonicalDir, basename(absolutePath));
+    } catch {
+      canonicalPath = absolutePath;
+    }
+  }
+
+  const projectRoot = resolve(__dirname, '../../..');
+  const allowedPrefixes = [
+    projectRoot,
+    '/app',
+    '/etc/template-ui',
+    '/mnt',
+  ];
+
+  const isAllowed = allowedPrefixes.some(prefix =>
+    canonicalPath.startsWith(prefix)
+  );
+
+  if (!isAllowed) {
+    throw new Error(
+      `Config path validation error: path outside allowed directories (${canonicalPath}). ` +
+      `Allowed prefixes: ${allowedPrefixes.join(', ')}`
+    );
+  }
+
+  return canonicalPath;
+}
+
 function applyEnvOverrides(config: UISettings): void {
   // Branding overrides
   if (process.env.BRANDING_TITLE) {
@@ -301,6 +358,36 @@ function applyEnvOverrides(config: UISettings): void {
       config.agent.timeout_ms = timeout;
     }
   }
+
+  // Security overrides
+  if (process.env.SESSION_SECURE_COOKIE !== undefined) {
+    config.security.session.secure_cookie = process.env.SESSION_SECURE_COOKIE === 'true';
+  }
+  if (process.env.SESSION_HTTP_ONLY !== undefined) {
+    config.security.session.http_only = process.env.SESSION_HTTP_ONLY === 'true';
+  }
+  if (process.env.SESSION_SAME_SITE) {
+    const sameSite = process.env.SESSION_SAME_SITE.toLowerCase();
+    if (['strict', 'lax', 'none'].includes(sameSite)) {
+      config.security.session.same_site = sameSite as 'strict' | 'lax' | 'none';
+    }
+  }
+
+  // CSP overrides (for emergency rollback)
+  if (process.env.CSP_SCRIPT_SRC) {
+    config.security.helmet.csp.script_src = process.env.CSP_SCRIPT_SRC.split(' ');
+  }
+  if (process.env.CSP_CONNECT_SRC) {
+    config.security.helmet.csp.connect_src = process.env.CSP_CONNECT_SRC.split(' ');
+  }
+
+  // Rate limit override
+  if (process.env.RATE_LIMIT_MAX) {
+    const max = Number.parseInt(process.env.RATE_LIMIT_MAX, 10);
+    if (!Number.isNaN(max)) {
+      config.security.rate_limit.max = max;
+    }
+  }
 }
 
 let _settings: UISettings | undefined;
@@ -308,9 +395,12 @@ let _settings: UISettings | undefined;
 export function getSettings(): UISettings {
   if (_settings) return _settings;
 
-  const configPath =
+  const rawConfigPath =
     process.env.UI_CONFIG_PATH ||
     resolve(__dirname, "../../../config/ui/settings.yaml");
+
+  // Validate config path to prevent directory traversal
+  const configPath = validateConfigPath(rawConfigPath);
   const fromFile = loadYaml(configPath);
 
   // Deep merge defaults with file config
@@ -323,6 +413,16 @@ export function getSettings(): UISettings {
 
   // Validate the final config
   validateConfig(_settings);
+
+  // Warn if production environment has insecure session cookies
+  const isProd = process.env.ENVIRONMENT === 'production';
+  if (isProd && !_settings.security.session.secure_cookie) {
+    console.warn(
+      'WARNING: Running in production with secure_cookie=false. ' +
+      'Session cookies will be transmitted over HTTP. ' +
+      'Set SESSION_SECURE_COOKIE=true or update config file.'
+    );
+  }
 
   return _settings;
 }
