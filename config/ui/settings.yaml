@@ -23,12 +23,7 @@ agent:
   timeout_ms: 30000
   streaming: true
 
-# auth: SSO configuration is managed via environment variables (not in this file)
-#   - SSO_CLIENT_ID
-#   - SSO_CLIENT_SECRET (secret - never in config files)
-#   - SSO_ISSUER_HOST
-#   - SSO_CALLBACK_URL
-# These are injected by agent-engine during deployment
+
 
 security:
   rate_limit:
