@@ -97,10 +97,11 @@ function combineToolCallandResult(messages: Message[]) {
   return newMessages;
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+function getAuthHeaders(includeContentType = true): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (includeContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (window.USER_DATA?.accessToken) {
     headers['X-Token'] = window.USER_DATA.accessToken;
   }
@@ -153,7 +154,7 @@ export async function deleteThread(threadId: string): Promise<boolean> {
   try {
     const resp = await authenticatedFetch(deleteUrl, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     return resp.ok || resp.status === 404;
   } catch {
@@ -168,7 +169,7 @@ export async function deleteMemory(memoryId: string): Promise<boolean> {
   try {
     const resp = await authenticatedFetch(buildAgentApiUrl(`/memories/${memoryId}`), {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     return resp.ok || resp.status === 404;
   } catch {
@@ -183,7 +184,7 @@ export async function deleteAllMemories(): Promise<boolean> {
   try {
     const resp = await authenticatedFetch(buildAgentApiUrl('/memories'), {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     return resp.ok;
   } catch {
@@ -198,7 +199,7 @@ export async function deleteRule(ruleId: string): Promise<boolean> {
   try {
     const resp = await authenticatedFetch(buildAgentApiUrl(`/rules/${ruleId}`), {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     return resp.ok || resp.status === 404;
   } catch {
@@ -213,7 +214,7 @@ export async function deleteAllRules(): Promise<boolean> {
   try {
     const resp = await authenticatedFetch(buildAgentApiUrl('/rules'), {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     return resp.ok;
   } catch {
