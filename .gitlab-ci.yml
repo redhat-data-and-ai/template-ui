@@ -30,7 +30,7 @@ unit-test:
   stage: test
   <<: *install
   script:
-    - npm run test:run
+    - npm run test:coverage
   coverage: '/All files[^|]*\|[^|]*\s+([\d.]+)/'
   artifacts:
     when: always
@@ -51,17 +51,13 @@ build:
 
 e2e:
   stage: e2e
-  # Use the Playwright image whose bundled browser channel matches @playwright/test ^1.61.x.
-  # If the package version is bumped, update this tag accordingly.
-  image: mcr.microsoft.com/playwright:v1.61.0-noble
+  image: mcr.microsoft.com/playwright:v1.61.1-noble
   needs:
     - build
   variables:
     CI: "true"
   before_script:
     - npm ci
-    # Reinstall browsers so the CLI version always matches the image channel.
-    - npx playwright install chromium --with-deps
   script:
     - npx playwright test
   artifacts:

@@ -48,12 +48,21 @@ export async function mountConfig(page: Page, branding: BrandingOverride = {}): 
     }),
   );
 
-  // Agent health probe — avoids 10 s ECONNREFUSED timeout on every page mount
+  // Agent health probe — avoids ECONNREFUSED timeout on every page mount
   await page.route('**/api/health/agent', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ status: 'healthy' }),
+    }),
+  );
+
+  // AppLayout calls POST /threads/search on every mount to reconcile chat history.
+  await page.route('**/api/proxy/agent/threads/search', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '[]',
     }),
   );
 }
