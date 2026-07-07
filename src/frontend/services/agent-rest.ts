@@ -162,6 +162,66 @@ export async function deleteThread(threadId: string): Promise<boolean> {
 }
 
 /**
+ * Delete a single memory from the backend.
+ */
+export async function deleteMemory(memoryId: string): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/memories/${memoryId}`), {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return resp.ok || resp.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete all memories for the authenticated user.
+ */
+export async function deleteAllMemories(): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/memories'), {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete a single rule from the backend.
+ */
+export async function deleteRule(ruleId: string): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/rules/${ruleId}`), {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return resp.ok || resp.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete all rules for the authenticated user.
+ */
+export async function deleteAllRules(): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/rules'), {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Fetch full state for a single thread (lazy, on-demand).
  * Called only when a user navigates into a specific chat.
  */

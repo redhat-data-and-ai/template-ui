@@ -85,7 +85,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   const feedbackUserId = useMemo(() => {
     if (typeof window === 'undefined') return 'anonymous';
-    const u = window.USER_DATA?.preferred_username;
+    const u = window.USER_DATA?.sub || window.USER_DATA?.preferred_username;
     return typeof u === 'string' && u.length > 0 ? u : 'anonymous';
   }, []);
 

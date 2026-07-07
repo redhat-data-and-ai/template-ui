@@ -9,6 +9,7 @@ import {
   clearRules,
   selectRules,
 } from '../../redux/slices/personalization';
+import { deleteRule, deleteAllRules } from '../../services/agent-rest';
 
 export function RulesEditor() {
   const dispatch = useAppDispatch();
@@ -93,7 +94,7 @@ export function RulesEditor() {
                   {rule.content}
                 </p>
                 <button
-                  onClick={() => dispatch(removeRule(rule.id))}
+                  onClick={() => { dispatch(removeRule(rule.id)); deleteRule(rule.id).catch(() => {}); }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                   aria-label="Remove rule"
                 >
@@ -108,7 +109,7 @@ export function RulesEditor() {
                 variant="plain"
                 isDanger
                 size="sm"
-                onClick={() => dispatch(clearRules())}
+                onClick={() => { dispatch(clearRules()); deleteAllRules().catch(() => {}); }}
               >
                 Clear all rules
               </Button>
