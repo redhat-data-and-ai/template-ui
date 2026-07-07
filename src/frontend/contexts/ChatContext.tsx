@@ -15,7 +15,8 @@ type ChatAction =
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'ADD_CHAT'; payload: ChatItem }
   | { type: 'UPDATE_CHAT'; payload: { id: string; updates: Partial<ChatItem> } }
-  | { type: 'DELETE_CHAT'; payload: string };
+  | { type: 'DELETE_CHAT'; payload: string }
+  | { type: 'CLEAR_CHATS' };
 
 // Initial state
 const initialState: ChatState = {
@@ -55,6 +56,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         chats: state.chats.filter(chat => chat.id !== action.payload),
       };
 
+    case 'CLEAR_CHATS':
+      return {
+        ...state,
+        chats: [],
+      };
+
     default:
       return state;
   }
@@ -83,25 +90,36 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
   // Load chats from storage on mount
   useEffect(() => {
-    const loadedChats = chatStorage.loadChats();
+    const deletedThreadIds = chatStorage.getDeletedThreadIds();
+    const loadedChats = chatStorage
+      .loadChats()
+      .filter(chat => !deletedThreadIds.has(chat.id));
     dispatch({ type: 'SET_CHATS', payload: loadedChats });
-    dispatch({ type: 'SET_LOADING', payload: false }); // Mark loading as complete
+    dispatch({ type: 'SET_LOADING', payload: false });
   }, []);
 
   // Save chats to storage whenever they change
   useEffect(() => {
-    if (state.chats.length > 0) {
-      chatStorage.saveChats(state.chats);
+    if (state.isLoading) return;
+
+    if (state.chats.length === 0) {
+      chatStorage.clearChats();
+      return;
     }
-  }, [state.chats]);
+
+    chatStorage.saveChats(state.chats);
+  }, [state.chats, state.isLoading]);
 
   useEffect(() => {
     async function loadUserHistory() {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
+        const deletedThreadIds = chatStorage.getDeletedThreadIds();
         const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
 
-        const chats: ChatItem[] = history.map((conversation) => {
+        const chats: ChatItem[] = history
+          .filter((conversation) => !deletedThreadIds.has(conversation.id))
+          .map((conversation) => {
 
           let title = 'New Chat';
 
@@ -118,7 +136,6 @@ export function ChatProvider({ children }: ChatProviderProps) {
         });
 
         dispatch({ type: 'SET_CHATS', payload: chats });
-        console.log(history)
       } catch (error) {
         console.error(error)
       } finally {
@@ -132,6 +149,15 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
   // Actions
   const createNewChat = useCallback((): string => {
+    const existingEmptyChat = state.chats.find(
+      chat => chat.title === "New Chat" && chat.messages.length === 0
+    );
+
+    if (existingEmptyChat) {
+      navigate(`/chat/${existingEmptyChat.id}`);
+      return existingEmptyChat.id;
+    }
+
     const newChatId = uuidv4();
     const newChat: ChatItem = {
       id: newChatId,
@@ -149,17 +175,17 @@ export function ChatProvider({ children }: ChatProviderProps) {
     navigate(`/chat/${newChatId}`);
 
     return newChatId;
-  }, [navigate]);
+  }, [navigate, state.chats]);
 
   const deleteChat = useCallback((chatId: string) => {
+    chatStorage.deleteChat(chatId);
     dispatch({ type: 'DELETE_CHAT', payload: chatId });
+  }, []);
 
-    // Clear storage if no chats remain  
-    if (state.chats.filter(chat => chat.id !== chatId).length === 0) {
-      chatStorage.clearChats();
-    }
-
-    // Navigation will be handled by the component that calls this
+  const deleteAllChats = useCallback(() => {
+    const threadIds = state.chats.map(chat => chat.id);
+    chatStorage.deleteAllChats(threadIds);
+    dispatch({ type: 'CLEAR_CHATS' });
   }, [state.chats]);
 
   const renameChat = useCallback((chatId: string, newTitle: string) => {
@@ -230,6 +256,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     // Actions
     createNewChat,
     deleteChat,
+    deleteAllChats,
     renameChat,
     updateChatMessages,
     updateChatActivities,

@@ -19,6 +19,7 @@ export interface ChatState {
 export interface ChatActions {
   createNewChat: () => string;
   deleteChat: (chatId: string) => void;
+  deleteAllChats: () => void;
   renameChat: (chatId: string, newTitle: string) => void;
   updateChatMessages: (chatId: string, messages: Message[]) => void;
   updateChatActivities: (chatId: string, messageId: string, activities: ProcessedEvent[]) => void;

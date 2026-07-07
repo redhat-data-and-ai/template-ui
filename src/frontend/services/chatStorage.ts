@@ -2,6 +2,7 @@ import { ChatItem } from '../types/chat';
 
 class ChatStorageService {
   private readonly CHATS_STORAGE_KEY = 'dataverse-ai-chats';
+  private readonly DELETED_THREADS_KEY = 'dataverse-ai-deleted-threads';
   private readonly MAX_CHATS = 50; // Limit to prevent localStorage bloat
 
   /**
@@ -83,6 +84,85 @@ class ChatStorageService {
       localStorage.removeItem(this.CHATS_STORAGE_KEY);
     } catch (error) {
       console.error('Error clearing chat storage:', error);
+    }
+  }
+
+  /**
+   * Track a deleted thread so it is not restored from server history
+   */
+  markThreadDeleted(threadId: string): void {
+    try {
+      const deleted = this.getDeletedThreadIds();
+      deleted.add(threadId);
+      localStorage.setItem(this.DELETED_THREADS_KEY, JSON.stringify([...deleted]));
+    } catch (error) {
+      console.error('Error marking thread as deleted:', error);
+    }
+  }
+
+  /**
+   * Track multiple deleted threads at once
+   */
+  markThreadsDeleted(threadIds: string[]): void {
+    if (threadIds.length === 0) return;
+
+    try {
+      const deleted = this.getDeletedThreadIds();
+      threadIds.forEach(id => deleted.add(id));
+      localStorage.setItem(this.DELETED_THREADS_KEY, JSON.stringify([...deleted]));
+    } catch (error) {
+      console.error('Error marking threads as deleted:', error);
+    }
+  }
+
+  /**
+   * Get IDs of threads the user has deleted from the UI
+   */
+  getDeletedThreadIds(): Set<string> {
+    try {
+      const stored = localStorage.getItem(this.DELETED_THREADS_KEY);
+      if (!stored) return new Set();
+
+      const parsed: string[] = JSON.parse(stored);
+      return new Set(parsed.filter(Boolean));
+    } catch (error) {
+      console.error('Error loading deleted thread IDs:', error);
+      return new Set();
+    }
+  }
+
+  /**
+   * Remove a single chat from local storage
+   */
+  deleteChat(threadId: string): boolean {
+    try {
+      this.markThreadDeleted(threadId);
+      const chats = this.loadChats().filter(chat => chat.id !== threadId);
+
+      if (chats.length === 0) {
+        this.clearChats();
+      } else {
+        this.saveChats(chats);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting chat from localStorage:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Delete all chats from local storage
+   */
+  deleteAllChats(threadIds: string[]): boolean {
+    try {
+      this.markThreadsDeleted(threadIds);
+      this.clearChats();
+      return true;
+    } catch (error) {
+      console.error('Error deleting all chats from localStorage:', error);
+      return false;
     }
   }
 

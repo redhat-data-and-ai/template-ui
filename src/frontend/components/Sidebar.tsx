@@ -30,6 +30,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
+  onDeleteAllChats: () => void;
   onRenameChat: (chatId: string, newTitle: string) => void;
 }
 
@@ -42,6 +43,7 @@ function SidebarComponent({
   onNewChat,
   onSelectChat,
   onDeleteChat,
+  onDeleteAllChats,
   onRenameChat
 }: SidebarProps) {
 
@@ -178,9 +180,20 @@ function SidebarComponent({
       {/* Chat History */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="px-4 py-2 border-b border-neutral-700 flex-shrink-0">
-          <h3 className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-            Recent Chats
-          </h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+              Recent Chats
+            </h3>
+            {chatHistory.length > 0 && (
+              <button
+                onClick={onDeleteAllChats}
+                className="text-xs text-neutral-500 hover:text-red-400 transition-colors duration-200"
+                title="Delete all chats"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="flex-1 overflow-y-auto px-2">
