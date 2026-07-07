@@ -8,6 +8,7 @@ import {
   clearAlwaysAllowedTools,
   setAutoApproveAllTools,
 } from '@/redux/slices/userSettings';
+import { AgentToolAccessCard } from './AgentToolAccessCard';
 
 export function AlwaysAllowedTools() {
   const dispatch = useAppDispatch();
@@ -99,6 +100,17 @@ export function AlwaysAllowedTools() {
             </Button>
           </div>
         )}
+      </div>
+
+      {/* Agent Tool Access Matrix */}
+      <div className="pt-6 border-t border-border">
+        <h3 className="text-sm font-semibold mb-3">Agent Tool Access</h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Configured tool permissions for the orchestrator and each subagent.
+        </p>
+        <div className="rounded-lg border border-border bg-muted/30 p-4">
+          <AgentToolAccessCard />
+        </div>
       </div>
     </div>
   );
