@@ -94,6 +94,10 @@ const chatsSlice = createSlice({
       const { chatId, message } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
       if (chat) {
+        const msgId = (message as Record<string, unknown>).id;
+        if (msgId && chat.messages.some((m) => (m as Record<string, unknown>).id === msgId)) {
+          return;
+        }
         chat.messages.push(deepClone(message));
       }
     },
