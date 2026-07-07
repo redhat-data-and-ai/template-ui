@@ -29,9 +29,17 @@ export interface HITLInterruptValue {
   review_configs: HITLReviewConfig[];
 }
 
+export interface McpAuthPayload {
+  type: 'mcp_auth_required';
+  mcp_name: string;
+  connect_url: string;
+  message: string;
+}
+
 export interface InterruptInfo {
-  value: HITLInterruptValue;
+  value: string | HITLInterruptValue;
   resumable: boolean;
+  payload?: McpAuthPayload;
 }
 
 export interface TaskStep {

@@ -47,8 +47,12 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
 
-  const needsApproval = !!pendingInterrupt?.value?.action_requests?.some(
-    (r) => r.name === 'task' || r.name === name,
+  const interruptValue = pendingInterrupt?.value;
+  const needsApproval = !!(
+    typeof interruptValue === 'object'
+    && interruptValue !== null
+    && 'action_requests' in interruptValue
+    && interruptValue.action_requests?.some((r) => r.name === 'task' || r.name === name)
   ) && toolCall.content == null;
 
   useEffect(() => {
