@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .env
 ROADMAP.md
+
+# Playwright
+playwright-report/
+test-results/

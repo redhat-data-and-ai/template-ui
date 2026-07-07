@@ -40,6 +40,7 @@ export function SettingsPage() {
             variant="plain"
             size="sm"
             onClick={() => navigate('/')}
+            aria-label="Back"
             className="!p-1.5"
           >
             <ArrowLeft className="w-4 h-4" />
