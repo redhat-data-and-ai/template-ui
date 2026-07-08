@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@patternfly/react-core';
 import { Plus, Trash2, Brain, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
@@ -9,12 +9,18 @@ export function MemoryList() {
   const dispatch = useAppDispatch();
   const memories = useAppSelector(selectMemories);
   const [draft, setDraft] = useState('');
+  const syncedRef = useRef(false);
 
   useEffect(() => {
+    if (syncedRef.current) return;
+    syncedRef.current = true;
     listMemories().then((backendMems) => {
-      const localIds = new Set(memories.map((m) => m.content));
+      const existing = new Set(
+        document.querySelectorAll<HTMLElement>('[data-memory-content]')
+      );
+      const localContents = new Set(memories.map((m) => m.content));
       for (const bm of backendMems) {
-        if (!localIds.has(bm.content)) {
+        if (!localContents.has(bm.content)) {
           dispatch(addMemory(bm.content));
         }
       }
@@ -25,7 +31,10 @@ export function MemoryList() {
   const handleAdd = () => {
     const text = draft.trim();
     if (!text) return;
-    dispatch(addMemory(text));
+    const alreadyExists = memories.some((m) => m.content === text);
+    if (!alreadyExists) {
+      dispatch(addMemory(text));
+    }
     createMemory(text).catch(() => {});
     setDraft('');
   };
