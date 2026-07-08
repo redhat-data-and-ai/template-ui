@@ -252,10 +252,20 @@ export function useStreamingAPI(threadId: string) {
 
   useEffect(() => {
     const manager = managerRef.current;
+    const currentThreadId = threadIdRef.current;
     return () => {
       const st = manager?.getStatus();
       if (st === 'connecting' || st === 'streaming') {
         manager?.cancel();
+        const apiUrl = typeof window.APP_DATA?.apiUrl === 'string' ? window.APP_DATA.apiUrl : '';
+        const cancelUrl = apiUrl ? `${apiUrl}/v1/stream/cancel` : buildAgentApiUrl('/v1/stream/cancel');
+        if (typeof navigator.sendBeacon === 'function') {
+          const payload = JSON.stringify({
+            thread_id: currentThreadId,
+            event: 'client_stream_cancel',
+          });
+          navigator.sendBeacon(cancelUrl, new Blob([payload], { type: 'application/json' }));
+        }
       }
     };
   }, [threadId]);
