@@ -5,15 +5,14 @@ import {
   Button,
   TextInput,
 } from '@patternfly/react-core';
-import { Bot, CheckCircle, Link2, ShieldCheck, XCircle } from 'lucide-react';
+import { Bot, CheckCircle, Link2, XCircle } from 'lucide-react';
 import { buildAgentApiUrl } from '../lib/app-paths';
-import type { HITLInterruptValue, InterruptInfo } from '../types/deep-agent';
+import type { InterruptInfo } from '../types/deep-agent';
 
 interface InterruptBannerProps {
   readonly interrupt: InterruptInfo;
   readonly onResume: (response: string) => void;
   readonly onDismiss: () => void;
-  readonly onAlwaysAllow?: (toolNames: string[]) => void;
 }
 
 function isToolApproval(value: string): boolean {
@@ -75,7 +74,7 @@ async function verifyMcpConnected(mcpName: string): Promise<boolean> {
   return false;
 }
 
-export function InterruptBanner({ interrupt, onResume, onDismiss, onAlwaysAllow }: InterruptBannerProps) {
+export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBannerProps) {
   const [response, setResponse] = useState('');
   const [oauthReady, setOauthReady] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -183,56 +182,6 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, onAlwaysAllow 
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  const isHITL = typeof interrupt.value === 'object' && 'action_requests' in interrupt.value;
-
-  if (isHITL) {
-    const hitlValue = interrupt.value as HITLInterruptValue;
-    const toolNames = hitlValue.action_requests.map((r) => r.name);
-    return (
-      <div className="mx-4 mb-3" role="alert">
-        <Alert
-          variant="warning"
-          title="Action Required"
-          isInline
-          actionClose={<AlertActionCloseButton onClose={onDismiss} />}
-        >
-          <p className="text-sm mb-3 whitespace-pre-wrap">{interruptValueAsString(interrupt.value)}</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<CheckCircle className="w-3.5 h-3.5" />}
-              onClick={() => onResume('approved')}
-            >
-              Approve
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              icon={<XCircle className="w-3.5 h-3.5" />}
-              onClick={() => onResume('rejected')}
-            >
-              Reject
-            </Button>
-            {onAlwaysAllow && (
-              <Button
-                variant="plain"
-                size="sm"
-                icon={<ShieldCheck className="w-3.5 h-3.5" />}
-                onClick={() => {
-                  onAlwaysAllow(toolNames);
-                  onResume('approved');
-                }}
-              >
-                Always allow
-              </Button>
-            )}
-          </div>
-        </Alert>
       </div>
     );
   }

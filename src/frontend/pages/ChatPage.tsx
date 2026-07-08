@@ -301,25 +301,26 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, [thread, threadId, currentChat, dispatch]);
 
   const handleInterruptResume = useCallback(
+    async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
+      if (!threadId || !currentChat) return;
+      try {
+        await thread.resumeWithDecisions(decisions);
+        setTimeout(() => {
+          hasFinalizeEventOccurredRef.current = true;
+        }, 100);
+      } catch (err) {
+        console.error('Failed to resume:', err);
+        dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+      }
+    },
+    [thread, threadId, currentChat, dispatch],
+  );
+
+  const handleMCPOAuthResume = useCallback(
     async (response: string) => {
       if (!threadId || !currentChat) return;
       try {
-        const interrupt = thread.pendingInterrupt;
-        if (interrupt && typeof interrupt.value === 'object' && 'action_requests' in interrupt.value) {
-          // HITL tool interrupt — convert string response to structured decisions
-          const count = interrupt.value.action_requests?.length ?? 1;
-          const isRejected = response === 'rejected' || response === 'reject';
-          const decisions = Array.from(
-            { length: count },
-            (): { type: 'approve' | 'reject'; message?: string } => ({
-              type: isRejected ? 'reject' : 'approve',
-              ...(isRejected ? { message: 'User rejected this action.' } : {}),
-            }),
-          );
-          await thread.resumeWithDecisions(decisions);
-        } else {
-          await thread.resumeInterrupt(response);
-        }
+        await thread.resumeInterrupt(response);
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
@@ -451,15 +452,28 @@ export function ChatPage({ threadId }: { threadId: string }) {
             messages={thread.messages}
             streamEvents={thread.streamEvents}
             isLoading={thread.isLoading}
-            hasPendingInterrupt={!!thread.pendingInterrupt}
-            interruptContent={thread.pendingInterrupt ? (
-              <InterruptBanner
-                interrupt={thread.pendingInterrupt}
-                onResume={handleInterruptResume}
-                onDismiss={handleInterruptDismiss}
-                onAlwaysAllow={handleAlwaysAllow}
-              />
-            ) : undefined}
+            pendingInterrupt={
+              thread.pendingInterrupt &&
+              typeof thread.pendingInterrupt.value === 'object' &&
+              'action_requests' in thread.pendingInterrupt.value
+                ? thread.pendingInterrupt
+                : null
+            }
+            onInterruptResume={handleInterruptResume}
+            onAlwaysAllow={handleAlwaysAllow}
+
+            interruptContent={
+              thread.pendingInterrupt &&
+              !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
+                ? (
+                  <InterruptBanner
+                    interrupt={thread.pendingInterrupt}
+                    onResume={handleMCPOAuthResume}
+                    onDismiss={handleInterruptDismiss}
+                  />
+                )
+                : undefined
+            }
             onRetry={handleStreamRetry}
             scrollAreaRef={scrollAreaRef}
             onSubmit={handleSubmit}
