@@ -14,15 +14,12 @@ export function MemoryList() {
   useEffect(() => {
     if (syncedRef.current) return;
     syncedRef.current = true;
+
     listMemories().then((backendMems) => {
-      const existing = new Set(
-        document.querySelectorAll<HTMLElement>('[data-memory-content]')
-      );
-      const localContents = new Set(memories.map((m) => m.content));
+      if (backendMems.length === 0) return;
+      dispatch(clearMemories());
       for (const bm of backendMems) {
-        if (!localContents.has(bm.content)) {
-          dispatch(addMemory(bm.content));
-        }
+        dispatch(addMemory(bm.content));
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
