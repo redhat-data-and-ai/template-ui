@@ -318,6 +318,14 @@ function buildForwardedQueryString(query: Record<string, unknown>): string {
 async function proxyRoutes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);
 
+  fastify.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 1048576 }, (req, body, done) => {
+    if (!body || (typeof body === 'string' && body.trim() === '')) {
+      done(null, undefined);
+    } else {
+      try { done(null, JSON.parse(body as string)); } catch (err) { done(err as Error, undefined); }
+    }
+  });
+
   /**
    * Streaming endpoint — translates between the UI's simple
    * {message, thread_id, user_id} payload and Aegra's LangGraph
@@ -691,9 +699,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
       }
 
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
         'X-Trace-ID': traceId,
       };
+      if (request.method !== 'DELETE' && request.method !== 'GET') {
+        headers['Content-Type'] = 'application/json';
+      }
 
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
