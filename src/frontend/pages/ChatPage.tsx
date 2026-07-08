@@ -13,7 +13,7 @@ import {
   updateChat,
   updateStreamingState,
 } from '../redux/slices/chats';
-import { selectDebugMode } from '../redux/slices/userSettings';
+import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI, MAX_RETRIES } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
@@ -304,7 +304,25 @@ export function ChatPage({ threadId }: { threadId: string }) {
     async (response: string) => {
       if (!threadId || !currentChat) return;
       try {
-        await thread.resumeInterrupt(response);
+        const interrupt = thread.pendingInterrupt;
+        if (interrupt && typeof interrupt.value === 'object' && 'action_requests' in interrupt.value) {
+          // HITL tool interrupt — convert string response to structured decisions
+          const count = interrupt.value.action_requests?.length ?? 1;
+          const isRejected = response === 'rejected' || response === 'reject';
+          const decisions = Array.from(
+            { length: count },
+            (): { type: 'approve' | 'reject'; message?: string } => ({
+              type: isRejected ? 'reject' : 'approve',
+              ...(isRejected ? { message: 'User rejected this action.' } : {}),
+            }),
+          );
+          await thread.resumeWithDecisions(decisions);
+        } else {
+          await thread.resumeInterrupt(response);
+        }
+        setTimeout(() => {
+          hasFinalizeEventOccurredRef.current = true;
+        }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
         dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
@@ -321,6 +339,36 @@ export function ChatPage({ threadId }: { threadId: string }) {
       }),
     );
   }, [dispatch, threadId]);
+
+  const handleAlwaysAllow = useCallback(
+    (toolNames: string[]) => {
+      for (const name of toolNames) {
+        dispatch(addAlwaysAllowedTool(name));
+      }
+    },
+    [dispatch],
+  );
+
+  const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
+  useEffect(() => {
+    const interrupt = thread.pendingInterrupt;
+    if (typeof interrupt?.value !== 'object' || !interrupt.value.action_requests?.length) return;
+
+    if (autoApproveAllTools) {
+      const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
+      thread.resumeWithDecisions(allApproved).catch((err) => {
+        console.error('Auto-approve-all resume failed:', err);
+      });
+      return;
+    }
+
+    const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
+    if (!allAutoApproved) return;
+    thread.resumeWithDecisions(decisions).catch((err) => {
+      console.error('Auto-approve resume failed:', err);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.pendingInterrupt, autoApproveAllTools]);
 
   const handleNewChat = useCallback(() => {
     navigate('/');
