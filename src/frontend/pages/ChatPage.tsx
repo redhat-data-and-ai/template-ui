@@ -13,7 +13,7 @@ import {
   updateChat,
   updateStreamingState,
 } from '../redux/slices/chats';
-import { selectDebugMode } from '../redux/slices/userSettings';
+import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI, MAX_RETRIES } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
@@ -301,10 +301,29 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, [thread, threadId, currentChat, dispatch]);
 
   const handleInterruptResume = useCallback(
+    async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
+      if (!threadId || !currentChat) return;
+      try {
+        await thread.resumeWithDecisions(decisions);
+        setTimeout(() => {
+          hasFinalizeEventOccurredRef.current = true;
+        }, 100);
+      } catch (err) {
+        console.error('Failed to resume:', err);
+        dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+      }
+    },
+    [thread, threadId, currentChat, dispatch],
+  );
+
+  const handleMCPOAuthResume = useCallback(
     async (response: string) => {
       if (!threadId || !currentChat) return;
       try {
         await thread.resumeInterrupt(response);
+        setTimeout(() => {
+          hasFinalizeEventOccurredRef.current = true;
+        }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
         dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
@@ -321,6 +340,36 @@ export function ChatPage({ threadId }: { threadId: string }) {
       }),
     );
   }, [dispatch, threadId]);
+
+  const handleAlwaysAllow = useCallback(
+    (toolNames: string[]) => {
+      for (const name of toolNames) {
+        dispatch(addAlwaysAllowedTool(name));
+      }
+    },
+    [dispatch],
+  );
+
+  const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
+  useEffect(() => {
+    const interrupt = thread.pendingInterrupt;
+    if (typeof interrupt?.value !== 'object' || !interrupt.value.action_requests?.length) return;
+
+    if (autoApproveAllTools) {
+      const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
+      thread.resumeWithDecisions(allApproved).catch((err) => {
+        console.error('Auto-approve-all resume failed:', err);
+      });
+      return;
+    }
+
+    const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
+    if (!allAutoApproved) return;
+    thread.resumeWithDecisions(decisions).catch((err) => {
+      console.error('Auto-approve resume failed:', err);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.pendingInterrupt, autoApproveAllTools]);
 
   const handleNewChat = useCallback(() => {
     navigate('/');
@@ -403,14 +452,28 @@ export function ChatPage({ threadId }: { threadId: string }) {
             messages={thread.messages}
             streamEvents={thread.streamEvents}
             isLoading={thread.isLoading}
-            hasPendingInterrupt={!!thread.pendingInterrupt}
-            interruptContent={thread.pendingInterrupt ? (
-              <InterruptBanner
-                interrupt={thread.pendingInterrupt}
-                onResume={handleInterruptResume}
-                onDismiss={handleInterruptDismiss}
-              />
-            ) : undefined}
+            pendingInterrupt={
+              thread.pendingInterrupt &&
+              typeof thread.pendingInterrupt.value === 'object' &&
+              'action_requests' in thread.pendingInterrupt.value
+                ? thread.pendingInterrupt
+                : null
+            }
+            onInterruptResume={handleInterruptResume}
+            onAlwaysAllow={handleAlwaysAllow}
+
+            interruptContent={
+              thread.pendingInterrupt &&
+              !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
+                ? (
+                  <InterruptBanner
+                    interrupt={thread.pendingInterrupt}
+                    onResume={handleMCPOAuthResume}
+                    onDismiss={handleInterruptDismiss}
+                  />
+                )
+                : undefined
+            }
             onRetry={handleStreamRetry}
             scrollAreaRef={scrollAreaRef}
             onSubmit={handleSubmit}
