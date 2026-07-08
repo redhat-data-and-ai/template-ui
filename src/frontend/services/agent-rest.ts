@@ -163,6 +163,22 @@ export async function deleteThread(threadId: string): Promise<boolean> {
 }
 
 /**
+ * List all memories from the backend for the authenticated user.
+ */
+export async function listMemories(): Promise<Array<{ id: string; content: string }>> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/memories'), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return data.memories || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Create a persistent memory on the backend for the authenticated user.
  */
 export async function createMemory(content: string): Promise<boolean> {

@@ -1,14 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@patternfly/react-core';
 import { Plus, Trash2, Brain, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { addMemory, removeMemory, clearMemories, selectMemories } from '../../redux/slices/personalization';
-import { createMemory, deleteMemory, deleteAllMemories } from '../../services/agent-rest';
+import { createMemory, deleteMemory, deleteAllMemories, listMemories } from '../../services/agent-rest';
 
 export function MemoryList() {
   const dispatch = useAppDispatch();
   const memories = useAppSelector(selectMemories);
   const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    listMemories().then((backendMems) => {
+      const localIds = new Set(memories.map((m) => m.content));
+      for (const bm of backendMems) {
+        if (!localIds.has(bm.content)) {
+          dispatch(addMemory(bm.content));
+        }
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAdd = () => {
     const text = draft.trim();
