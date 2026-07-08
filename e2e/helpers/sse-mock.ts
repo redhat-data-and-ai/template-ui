@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 /** Serialise one `data:` line for a token chunk the SSEProcessor accepts. */
-function tokenChunk(text: string, chunkId: number): string {
+export function tokenChunk(text: string, chunkId: number): string {
   return `data: ${JSON.stringify({ type: 'token', content: text, chunk_id: chunkId })}\n\n`;
 }
 

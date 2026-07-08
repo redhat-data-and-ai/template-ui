@@ -36,6 +36,12 @@ export class ChatPage {
     await expect(this.page).toHaveURL(/\/chat\//);
   }
 
+  /** Fills the chat input on the chat page and clicks submit — mirrors HomePage.submitPrompt. */
+  async sendMessage(text: string): Promise<void> {
+    await this.page.locator('textarea').fill(text);
+    await this.page.locator('button[type="submit"]').click();
+  }
+
   /** Returns the full visible text content of the page — useful for asserting response text. */
   async getBodyText(): Promise<string> {
     return this.page.locator('body').innerText();
