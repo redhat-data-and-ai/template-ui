@@ -457,6 +457,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
                 interrupt={thread.pendingInterrupt}
                 onResume={handleInterruptResume}
                 onDismiss={handleInterruptDismiss}
+                onAlwaysAllow={handleAlwaysAllow}
               />
             ) : undefined}
             onRetry={handleStreamRetry}
