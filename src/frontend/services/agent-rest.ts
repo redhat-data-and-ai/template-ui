@@ -163,6 +163,22 @@ export async function deleteThread(threadId: string): Promise<boolean> {
 }
 
 /**
+ * Create a persistent memory on the backend for the authenticated user.
+ */
+export async function createMemory(content: string): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/memories'), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Delete a single memory from the backend.
  */
 export async function deleteMemory(memoryId: string): Promise<boolean> {

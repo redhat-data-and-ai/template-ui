@@ -3,7 +3,7 @@ import { Button } from '@patternfly/react-core';
 import { Plus, Trash2, Brain, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { addMemory, removeMemory, clearMemories, selectMemories } from '../../redux/slices/personalization';
-import { deleteMemory, deleteAllMemories } from '../../services/agent-rest';
+import { createMemory, deleteMemory, deleteAllMemories } from '../../services/agent-rest';
 
 export function MemoryList() {
   const dispatch = useAppDispatch();
@@ -14,6 +14,7 @@ export function MemoryList() {
     const text = draft.trim();
     if (!text) return;
     dispatch(addMemory(text));
+    createMemory(text).catch(() => {});
     setDraft('');
   };
 
