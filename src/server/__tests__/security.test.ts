@@ -3,7 +3,6 @@ import { getSettings, resetSettings } from '../utils/settings.js';
 import {
   buildTestServer,
   parseCookieHeader,
-  assertCspDirective,
   bombardEndpoint,
   generatePathTraversalPayloads,
 } from './test-utils.js';

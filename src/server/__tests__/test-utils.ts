@@ -5,6 +5,12 @@ import type { UISettings } from '../utils/settings.js';
 export async function buildTestServer(
   overrides?: Partial<UISettings>
 ): Promise<FastifyInstance> {
+  // Disable auth plugin by default — OAuth env vars are not available in CI/test
+  // and security tests don't exercise OAuth flows
+  if (!process.env.FEATURE_AUTH_ENABLED) {
+    process.env.FEATURE_AUTH_ENABLED = 'false';
+  }
+
   // Apply test config via environment variables
   if (overrides?.security?.session) {
     if (overrides.security.session.http_only !== undefined) {

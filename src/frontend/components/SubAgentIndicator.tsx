@@ -38,7 +38,7 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onAlwaysAllow }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall, messageId: _messageId, index: _index, pendingInterrupt, onInterruptResume, onAlwaysAllow }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const name = extractSubAgentName(toolCall);

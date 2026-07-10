@@ -112,7 +112,7 @@ export function extractTodosFromMessages(messages: { type: string; tool_calls?: 
 }
 
 const CODE_FENCE_RE = /```[\s\S]*?```/;
-const JSON_START_RE = /^\s*[{\[]/;
+const JSON_START_RE = /^\s*[{[]/;
 
 export type ArtifactKind = 'code' | 'json' | 'markdown' | 'text';
 
