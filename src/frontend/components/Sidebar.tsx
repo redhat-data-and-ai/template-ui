@@ -169,6 +169,7 @@ function SidebarComponent({
                           setEditTitle('');
                         }
                       }}
+                      aria-label={`Rename chat: ${chat.title}`}
                       className="flex-1 bg-transparent text-sm text-foreground border border-border rounded px-1.5 py-0.5 outline-none focus:border-primary"
                       autoFocus
                       onClick={(e) => e.stopPropagation()}
