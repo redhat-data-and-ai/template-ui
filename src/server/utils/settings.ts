@@ -199,11 +199,23 @@ function deepMerge<T extends Record<string, unknown>>(
 }
 
 function loadYaml(filePath: string): Record<string, unknown> | null {
+  let raw: string;
   try {
-    const raw = readFileSync(filePath, "utf-8");
-    return (yaml.load(raw) as Record<string, unknown>) ?? null;
-  } catch {
-    return null;
+    raw = readFileSync(filePath, "utf-8");
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      return null;
+    }
+    throw err;
+  }
+
+  try {
+    const parsed = yaml.load(raw) as Record<string, unknown>;
+    return parsed ?? null;
+  } catch (parseError) {
+    const msg = parseError instanceof Error ? parseError.message : String(parseError);
+    throw new Error(`Config parse error: invalid YAML in "${filePath}": ${msg}`);
   }
 }
 
@@ -391,6 +403,7 @@ function applyEnvOverrides(config: UISettings): void {
 }
 
 let _settings: UISettings | undefined;
+let _agentName: string | null = null;
 
 export function getSettings(): UISettings {
   if (_settings) return _settings;
@@ -427,13 +440,11 @@ export function getSettings(): UISettings {
   return _settings;
 }
 
-// For testing only - clears the cached settings
+// For testing only - clears the cached settings and agent name
 export function resetSettings(): void {
   _settings = undefined;
+  _agentName = null;
 }
-
-// Agent name fallback (fetches from agent backend /info endpoint)
-let _agentName: string | null = null;
 
 export async function getAgentName(): Promise<string> {
   if (_agentName !== null) return _agentName;
