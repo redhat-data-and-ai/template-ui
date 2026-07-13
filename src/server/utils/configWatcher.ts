@@ -23,7 +23,7 @@ export function watchConfig(
 
   console.log(`[ConfigWatcher] Starting watch on ${configPath}`);
 
-  watcher = watch(configPath, (eventType, filename) => {
+  watcher = watch(configPath, (eventType, _filename) => {
     if (eventType !== 'change') {
       return;
     }

@@ -48,6 +48,20 @@ async function apiRoutes(fastify: FastifyInstance) {
     return cfg.features;
   });
 
+  fastify.get("/config/compliance", async (_request, reply) => {
+    if (!fastify.hasDecorator("opa")) {
+      return { enabled: false, violations: [] };
+    }
+    const violations = fastify.opa.evaluate();
+    reply.header("Cache-Control", "no-store");
+    return {
+      enabled: true,
+      loaded: fastify.opa.engine.isLoaded(),
+      violations,
+      compliant: violations.length === 0,
+    };
+  });
+
   fastify.post("/v1/stream", async (request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) => {
    handleStreamPost(fastify, request, reply);
   });

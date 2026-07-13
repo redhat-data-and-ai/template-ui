@@ -1,4 +1,4 @@
-.PHONY: dev clean local local-down container container-down deploy undeploy
+.PHONY: dev clean local local-down container container-down deploy undeploy e2e opa-build
 
 # Detect npm/node path (supports nvm, system install, etc)
 NPM := $(shell command -v npm 2>/dev/null || echo /Users/sodutta/.nvm/versions/node/v24.18.0/bin/npm)
@@ -25,6 +25,11 @@ install:
 		echo ".env file already exists, skipping copy"; \
 	fi
 	@$(NPM) ci
+
+opa-check:
+	@which opa > /dev/null || (echo "Error: opa CLI not found. Install from https://www.openpolicyagent.org/docs/latest/#running-opa" && exit 1)
+	opa check config/compliance/
+	@echo "OPA policy syntax OK"
 
 clean:
 	@echo "Stopping containers and removing volumes..."

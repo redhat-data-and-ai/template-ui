@@ -5,6 +5,7 @@ import { apiRoutes } from "./router/api.router.js";
 import { proxyRoutes } from "./router/proxy.router.js";
 import logoutPlugin from "./router/logout.router.js";
 import { authPlugin } from "./plugins/auth.plugin.js";
+import opaPlugin from "./plugins/opa.plugin.js";
 import { buildSessionStore, connectRedis } from "./utils/redis.js";
 import tracePlugin from "./plugins/trace.plugin.js";
 import { getSettings } from "./utils/settings.js";
@@ -139,6 +140,10 @@ export async function setupServer(): Promise<FastifyInstance> {
     await fastify.register(authPlugin);
   }
 
+  if (cfg.platform.opa.enabled) {
+    await fastify.register(opaPlugin);
+  }
+
   await fastify.register(logoutPlugin);
 
   await fastify.register(apiRoutes, { prefix: "/api" });
@@ -149,11 +154,11 @@ export async function setupServer(): Promise<FastifyInstance> {
   return fastify;
 }
 
-export function startConfigWatcher(configPath: string) {
+export function startConfigWatcher(configPath: string, server: FastifyInstance) {
+  const cfg = getSettings();
   const cleanup = watchConfig(configPath, (newSettings) => {
-    fastify.log.info('[ConfigWatcher] Settings reloaded');
+    server.log.info('[ConfigWatcher] Settings reloaded');
 
-    // Log which settings might require restart
     const restartRequired = [];
     if (newSettings.security.rate_limit.enabled !== cfg.security.rate_limit.enabled ||
         newSettings.security.rate_limit.max !== cfg.security.rate_limit.max ||
@@ -169,10 +174,9 @@ export function startConfigWatcher(configPath: string) {
     }
 
     if (restartRequired.length > 0) {
-      fastify.log.warn({ settings: restartRequired }, '[ConfigWatcher] The following settings changed but require server restart:');
+      server.log.warn({ settings: restartRequired }, '[ConfigWatcher] The following settings changed but require server restart:');
     }
 
-    // Settings that auto-apply without restart
     const autoApplied = [];
     if (newSettings.agent.timeout_ms !== cfg.agent.timeout_ms) {
       autoApplied.push(`agent.timeout_ms: ${cfg.agent.timeout_ms} → ${newSettings.agent.timeout_ms}`);
@@ -185,7 +189,7 @@ export function startConfigWatcher(configPath: string) {
     }
 
     if (autoApplied.length > 0) {
-      fastify.log.info({ settings: autoApplied }, '[ConfigWatcher] Settings applied without restart:');
+      server.log.info({ settings: autoApplied }, '[ConfigWatcher] Settings applied without restart:');
     }
   });
 
