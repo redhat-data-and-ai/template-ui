@@ -37,3 +37,40 @@ export async function mockThreadState(page: Page): Promise<void> {
     }),
   );
 }
+
+/**
+ * Intercept with a stream containing syntactically invalid SSE token data.
+ * The SSEProcessor should skip unrecognised chunks without crashing the UI.
+ */
+export async function mockMalformedStream(page: Page): Promise<void> {
+  await page.route('**/api/proxy/agent/v1/stream', (route) => {
+    // Mix valid and invalid JSON; the SSEProcessor must tolerate both gracefully.
+    const body =
+      'data: {this is not valid json}\n\n' +
+      tokenChunk('partial ok', 0) +
+      'data: !!INVALID!!\n\n' +
+      'data: [DONE]\n\n';
+    return route.fulfill({
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+      body,
+    });
+  });
+}
+
+/**
+ * Intercept the streaming endpoint and return the given HTTP error status.
+ * Useful for testing auth-failure (401) and server-error (500+) paths.
+ */
+export async function mockStreamError(page: Page, status: number): Promise<void> {
+  await page.route('**/api/proxy/agent/v1/stream', (route) =>
+    route.fulfill({
+      status,
+      body: `HTTP ${status}`,
+    }),
+  );
+}
