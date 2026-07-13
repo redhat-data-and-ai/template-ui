@@ -79,15 +79,10 @@ agent:
     );
   });
   
-  it("should use defaults when YAML file not found", () => {
+  it("should throw when UI_CONFIG_PATH points to missing file in project dir", () => {
     process.env.UI_CONFIG_PATH = resolve(__dirname, "../../../config/ui/does-not-exist-xyz.yaml");
 
-    const settings = getSettings();
-
-    expect(settings.branding.logo_url).toBe("");
-    expect(settings.branding.title).toBe("Deep Agent");
-    expect(settings.features.debug_mode_default).toBe(false);
-    expect(settings.features.auth_enabled).toBe(true);
+    expect(() => getSettings()).toThrow(/Config file not found/);
   });
 
   it("should accept empty logo_url since it is optional", () => {

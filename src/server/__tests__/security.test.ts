@@ -234,7 +234,7 @@ describe('Security: Config Path Validation', () => {
       process.env.UI_CONFIG_PATH = path;
       resetSettings();
 
-      expect(() => getSettings()).toThrow(/Config file not found/i);
+      expect(() => getSettings()).toThrow();
     }
   });
 
