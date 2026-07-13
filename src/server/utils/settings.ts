@@ -1,5 +1,5 @@
-import { readFileSync, existsSync, realpathSync } from "node:fs";
-import { resolve, dirname, basename } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 
@@ -352,56 +352,6 @@ function validateConfig(config: UISettings): void {
   if (typeof config.server.port !== "number" || config.server.port <= 0 || config.server.port > 65535) {
     throw new Error("Config validation error: server.port must be between 1 and 65535");
   }
-}
-
-/**
- * Validate that a config path is safe (no path traversal, within allowed directories).
- * Returns the canonicalized absolute path or throws.
- */
-function validateConfigPath(userPath: string): string {
-  // Reject paths with parent directory references
-  if (userPath.includes('..')) {
-    throw new Error(
-      `Config path validation error: path contains parent directory references (..): ${userPath}`
-    );
-  }
-
-  const absolutePath = resolve(userPath);
-
-  // Canonicalize (resolve symlinks, remove ..)
-  let canonicalPath: string;
-  try {
-    canonicalPath = realpathSync(absolutePath);
-  } catch {
-    const dir = dirname(absolutePath);
-    try {
-      const canonicalDir = realpathSync(dir);
-      canonicalPath = resolve(canonicalDir, basename(absolutePath));
-    } catch {
-      canonicalPath = absolutePath;
-    }
-  }
-
-  const projectRoot = resolve(__dirname, '../../..');
-  const allowedPrefixes = [
-    projectRoot,
-    '/app',
-    '/etc/template-ui',
-    '/mnt',
-  ];
-
-  const isAllowed = allowedPrefixes.some(prefix =>
-    canonicalPath.startsWith(prefix)
-  );
-
-  if (!isAllowed) {
-    throw new Error(
-      `Config path validation error: path outside allowed directories (${canonicalPath}). ` +
-      `Allowed prefixes: ${allowedPrefixes.join(', ')}`
-    );
-  }
-
-  return canonicalPath;
 }
 
 function applyEnvOverrides(config: UISettings): void {

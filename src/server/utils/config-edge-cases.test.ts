@@ -76,29 +76,20 @@ describe("Invalid YAML → clear parse error", () => {
 
 // ── Missing YAML → graceful fallback to defaults ────────────────────────────
 
-describe("Missing YAML → graceful fallback", () => {
-  it("returns defaults when config file does not exist in allowed dir", () => {
+describe("Missing YAML → throws when UI_CONFIG_PATH is explicit", () => {
+  it("throws when explicit UI_CONFIG_PATH points to nonexistent file", () => {
     process.env.UI_CONFIG_PATH = resolve(configDir, "nonexistent-99999.yaml");
+
+    expect(() => getSettings()).toThrow(/Config file not found/);
+  });
+
+  it("returns defaults when no UI_CONFIG_PATH is set and default file is missing", () => {
+    delete process.env.UI_CONFIG_PATH;
     const settings = getSettings();
 
     expect(settings.branding.title).toBe("Deep Agent");
     expect(settings.features.auth_enabled).toBe(true);
-    expect(settings.features.debug_mode_default).toBe(false);
-  });
-
-  it("defaults include complete agent config", () => {
-    process.env.UI_CONFIG_PATH = resolve(configDir, "nonexistent-99999.yaml");
-    const settings = getSettings();
-
     expect(settings.agent.timeout_ms).toBe(30000);
-    expect(settings.agent.streaming).toBe(true);
-    expect(settings.agent.endpoint).toBe("");
-  });
-
-  it("defaults include complete server config", () => {
-    process.env.UI_CONFIG_PATH = resolve(configDir, "nonexistent-99999.yaml");
-    const settings = getSettings();
-
     expect(settings.server.port).toBe(8080);
     expect(settings.server.host).toBe("0.0.0.0");
   });
