@@ -37,7 +37,7 @@ async function start() {
   // UI_CONFIG_PATH is set by deployer via ConfigMap mount, defaults to local path
   const configPath = process.env.UI_CONFIG_PATH || "config/ui/settings.yaml";
   try {
-    const stopWatcher = startConfigWatcher(configPath);
+    const stopWatcher = startConfigWatcher(configPath, fastify);
     console.log(`[Server] Config watcher started on ${configPath}`);
 
     // Cleanup watcher on shutdown

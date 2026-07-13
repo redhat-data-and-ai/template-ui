@@ -68,7 +68,7 @@ function compilePolicies(policyDir: string, log: Logger): Buffer | null {
     }
     return null;
   } finally {
-    try { rmSync(tmp, { recursive: true, force: true }); } catch {}
+    try { rmSync(tmp, { recursive: true, force: true }); } catch { /* cleanup is best-effort */ }
   }
 }
 
@@ -127,7 +127,7 @@ export async function createOpaEngine(
         }, 500);
       });
       watcher.on("error", () => {});
-    } catch {}
+    } catch { /* watcher setup is optional */ }
   }
 
   function destroy(): void {
