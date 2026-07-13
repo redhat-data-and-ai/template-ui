@@ -8,6 +8,7 @@ import { authPlugin } from "./plugins/auth.plugin.js";
 import { buildSessionStore, connectRedis } from "./utils/redis.js";
 import tracePlugin from "./plugins/trace.plugin.js";
 import { getSettings } from "./utils/settings.js";
+import { watchConfig } from "./utils/configWatcher.js";
 
 interface LoggerConfig {
   development: {
@@ -146,4 +147,47 @@ export async function setupServer(): Promise<FastifyInstance> {
   await fastify.register(clientRoutes);
 
   return fastify;
+}
+
+export function startConfigWatcher(configPath: string) {
+  const cleanup = watchConfig(configPath, (newSettings) => {
+    fastify.log.info('[ConfigWatcher] Settings reloaded');
+
+    // Log which settings might require restart
+    const restartRequired = [];
+    if (newSettings.security.rate_limit.enabled !== cfg.security.rate_limit.enabled ||
+        newSettings.security.rate_limit.max !== cfg.security.rate_limit.max ||
+        newSettings.security.rate_limit.window !== cfg.security.rate_limit.window) {
+      restartRequired.push('rate_limit (requires server restart)');
+    }
+    if (newSettings.security.session.max_age_days !== cfg.security.session.max_age_days ||
+        newSettings.security.session.secure_cookie !== cfg.security.session.secure_cookie) {
+      restartRequired.push('session (requires server restart)');
+    }
+    if (newSettings.security.helmet.enabled !== cfg.security.helmet.enabled) {
+      restartRequired.push('helmet (requires server restart)');
+    }
+
+    if (restartRequired.length > 0) {
+      fastify.log.warn({ settings: restartRequired }, '[ConfigWatcher] The following settings changed but require server restart:');
+    }
+
+    // Settings that auto-apply without restart
+    const autoApplied = [];
+    if (newSettings.agent.timeout_ms !== cfg.agent.timeout_ms) {
+      autoApplied.push(`agent.timeout_ms: ${cfg.agent.timeout_ms} → ${newSettings.agent.timeout_ms}`);
+    }
+    if (newSettings.agent.endpoint !== cfg.agent.endpoint) {
+      autoApplied.push(`agent.endpoint: ${cfg.agent.endpoint} → ${newSettings.agent.endpoint}`);
+    }
+    if (JSON.stringify(newSettings.branding) !== JSON.stringify(cfg.branding)) {
+      autoApplied.push('branding (colors, title, logo)');
+    }
+
+    if (autoApplied.length > 0) {
+      fastify.log.info({ settings: autoApplied }, '[ConfigWatcher] Settings applied without restart:');
+    }
+  });
+
+  return cleanup;
 }
