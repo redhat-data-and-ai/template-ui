@@ -33,6 +33,12 @@ clean:
 	@pkill -f "npm.*start" 2>/dev/null || true
 	rm -rf node_modules dist
 
+## Run Playwright e2e tests
+e2e:
+	npm run build
+	npx playwright install chromium --with-deps 2>/dev/null || npx playwright install chromium
+	npx playwright test
+
 dev:
 	$(NPM) run dev
 

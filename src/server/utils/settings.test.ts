@@ -78,9 +78,20 @@ agent:
       "Config file not found: /nonexistent/path/settings.yaml",
     );
   });
+  
+  it("should use defaults when YAML file not found", () => {
+    process.env.UI_CONFIG_PATH = resolve(__dirname, "../../../config/ui/does-not-exist-xyz.yaml");
 
-  it("should throw error for empty logo_url", () => {
-    const invalidYaml = `
+    const settings = getSettings();
+
+    expect(settings.branding.logo_url).toBe("");
+    expect(settings.branding.title).toBe("Deep Agent");
+    expect(settings.features.debug_mode_default).toBe(false);
+    expect(settings.features.auth_enabled).toBe(true);
+  });
+
+  it("should accept empty logo_url since it is optional", () => {
+    const yaml = `
 branding:
   logo_url: ""
   title: "Test"
@@ -97,10 +108,12 @@ branding:
       foreground: "#ffffff"
 `;
 
-    writeFileSync(testConfigPath, invalidYaml);
+    writeFileSync(testConfigPath, yaml);
     process.env.UI_CONFIG_PATH = testConfigPath;
 
-    expect(() => getSettings()).toThrow("Config validation error: branding.logo_url is required");
+    const settings = getSettings();
+    expect(settings.branding.logo_url).toBe("");
+    expect(settings.branding.title).toBe("Test");
   });
 
   it("should throw error for invalid hex color", () => {

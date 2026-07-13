@@ -5,6 +5,8 @@ type Theme = 'light' | 'dark';
 interface UserSettingsState {
   theme: Theme;
   debugMode: boolean;
+  alwaysAllowedTools: string[];
+  autoApproveAllTools: boolean;
   _userOverrides: { debugMode?: boolean };
 }
 
@@ -18,6 +20,8 @@ function loadSettings(): UserSettingsState {
       return {
         theme: parsed.theme ?? 'dark',
         debugMode: parsed.debugMode ?? false,
+        alwaysAllowedTools: Array.isArray(parsed.alwaysAllowedTools) ? parsed.alwaysAllowedTools : [],
+        autoApproveAllTools: parsed.autoApproveAllTools ?? false,
         _userOverrides: parsed._userOverrides ?? {},
       };
     }
@@ -27,6 +31,8 @@ function loadSettings(): UserSettingsState {
   return {
     theme: 'dark',
     debugMode: false,
+    alwaysAllowedTools: [],
+    autoApproveAllTools: false,
     _userOverrides: {},
   };
 }
@@ -62,12 +68,48 @@ const userSettingsSlice = createSlice({
       }
       persistSettings(state);
     },
+    addAlwaysAllowedTool(state, action: PayloadAction<string>) {
+      if (!state.alwaysAllowedTools.includes(action.payload)) {
+        state.alwaysAllowedTools.push(action.payload);
+        persistSettings(state);
+      }
+    },
+    removeAlwaysAllowedTool(state, action: PayloadAction<string>) {
+      state.alwaysAllowedTools = state.alwaysAllowedTools.filter((t) => t !== action.payload);
+      persistSettings(state);
+    },
+    clearAlwaysAllowedTools(state) {
+      state.alwaysAllowedTools = [];
+      persistSettings(state);
+    },
+    setAutoApproveAllTools(state, action: PayloadAction<boolean>) {
+      state.autoApproveAllTools = action.payload;
+      persistSettings(state);
+    },
+    toggleAutoApproveAllTools(state) {
+      state.autoApproveAllTools = !state.autoApproveAllTools;
+      persistSettings(state);
+    },
   },
 });
 
-export const { setTheme, toggleTheme, setDebugMode, setConfigDefaults } = userSettingsSlice.actions;
+export const {
+  setTheme,
+  toggleTheme,
+  setDebugMode,
+  setConfigDefaults,
+  addAlwaysAllowedTool,
+  removeAlwaysAllowedTool,
+  clearAlwaysAllowedTools,
+  setAutoApproveAllTools,
+  toggleAutoApproveAllTools,
+} = userSettingsSlice.actions;
 
 export const selectTheme = (state: { userSettings: UserSettingsState }) => state.userSettings.theme;
 export const selectDebugMode = (state: { userSettings: UserSettingsState }) => state.userSettings.debugMode;
+export const selectAlwaysAllowedTools = (state: { userSettings: UserSettingsState }) =>
+  state.userSettings.alwaysAllowedTools;
+export const selectAutoApproveAllTools = (state: { userSettings: UserSettingsState }) =>
+  state.userSettings.autoApproveAllTools;
 
 export default userSettingsSlice.reducer;

@@ -1,0 +1,67 @@
+stages:
+  - lint
+  - test
+  - build
+  - e2e
+
+variables:
+  NODE_VERSION: "22"
+
+default:
+  image: node:22-slim
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - node_modules/
+
+.install: &install
+  before_script:
+    - npm ci
+
+lint:
+  stage: lint
+  <<: *install
+  script:
+    - npm run lint
+
+unit-test:
+  stage: test
+  <<: *install
+  script:
+    - npm run test:coverage
+  coverage: '/All files[^|]*\|[^|]*\s+([\d.]+)/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+
+build:
+  stage: build
+  <<: *install
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 hour
+
+e2e:
+  stage: e2e
+  image: mcr.microsoft.com/playwright:v1.61.1-noble
+  needs:
+    - build
+  variables:
+    CI: "true"
+  before_script:
+    - npm ci
+  script:
+    - npx playwright test
+  artifacts:
+    when: always
+    paths:
+      - playwright-report/
+    expire_in: 7 days

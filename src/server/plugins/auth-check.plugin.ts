@@ -30,7 +30,7 @@ function headerValue(request: FastifyRequest, name: string): string | undefined 
 function buildGatewayLoginUrl(request: FastifyRequest): string {
   const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
   const redirectPath = `${basePath}${request.url}` || "/";
-  return `/auth/login?redirect=${encodeURIComponent(redirectPath)}`;
+  return `/login?redirect=${encodeURIComponent(redirectPath)}`;
 }
 
 function shouldSkipAuth(request: FastifyRequest): boolean {
@@ -40,7 +40,8 @@ function shouldSkipAuth(request: FastifyRequest): boolean {
     path.startsWith("/auth/") ||
     path.startsWith("/dist/") ||
     path === "/favicon.ico" ||
-    path === "/login"
+    path === "/login" ||
+    path === "/api/health/agent"
   );
 }
 

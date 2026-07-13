@@ -1,6 +1,7 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User, ShieldCheck } from "lucide-react";
+import type { InterruptInfo } from "../types/deep-agent";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
 import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
@@ -457,9 +458,51 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
   );
 };
 
-export function AIMessageRenderer({ message }: { message: Message }) {
+interface AIMessageRendererProps {
+  message: Message;
+  pendingInterrupt?: InterruptInfo | null;
+  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  onAlwaysAllow?: (toolNames: string[]) => void;
+}
+
+export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [approvalSubmitted, setApprovalSubmitted] = useState(false);
   const messageKey = JSON.stringify(message);
+
+  useEffect(() => {
+    if (pendingInterrupt) {
+      setApprovalSubmitted(false);
+    }
+  }, [pendingInterrupt]);
+
+  const pendingToolNames = useMemo(
+    () => {
+      const v = pendingInterrupt?.value;
+      const requests = (typeof v === 'object' && v !== null) ? (v.action_requests ?? []) : [];
+      return new Set(requests.map((r) => r.name));
+    },
+    [pendingInterrupt],
+  );
+
+  useEffect(() => {
+    if (!pendingToolNames.size) return;
+    const allToolCalls = (message as any).tool_calls;
+    if (!Array.isArray(allToolCalls)) return;
+    const visibleCalls = allToolCalls.filter(
+      (tc: any) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos',
+    );
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      visibleCalls.forEach((tc: any, idx: number) => {
+        if (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) {
+          next.add(`${message.id}-${idx}`);
+        }
+      });
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingToolNames, message.id]);
 
   const toggleExpand = (itemId: string) => {
     setExpandedItems(prev => {
@@ -495,6 +538,9 @@ export function AIMessageRenderer({ message }: { message: Message }) {
               toolCall={toolCall as any}
               messageId={message.id ?? ''}
               index={idx}
+              pendingInterrupt={pendingInterrupt}
+              onInterruptResume={onInterruptResume}
+              onAlwaysAllow={onAlwaysAllow}
             />
           ))}
 
@@ -504,59 +550,120 @@ export function AIMessageRenderer({ message }: { message: Message }) {
                 <Settings className="w-4 h-4 text-muted-foreground" />
               </div>
               <div className="flex-1 min-w-0 space-y-2">
-                {regularCalls.map((toolCall, idx) => (
-                  <div key={`${message.id}-${idx}`} className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
-                    <button
-                      onClick={() => toggleExpand(`${message.id}-${idx}`)}
-                      className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
+                {regularCalls.map((toolCall, idx) => {
+                  const itemId = `${message.id}-${idx}`;
+                  const isExpanded = expandedItems.has(itemId);
+                  const needsApproval = (pendingToolNames.has(toolCall.name) || pendingToolNames.has('task')) && !(toolCall as Record<string, unknown>).content;
+
+                  return (
+                    <div
+                      key={itemId}
+                      className={cn(
+                        "bg-card border rounded-xl overflow-hidden shadow-card transition-colors",
+                        needsApproval ? "border-yellow-500/60" : "border-border",
+                      )}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <div className="text-left">
-                          <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                            <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
-                            {(toolCall as Record<string, unknown>).content ? (
-                              <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
-                            ) : (
-                              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                      <button
+                        onClick={() => toggleExpand(itemId)}
+                        className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="text-left">
+                            <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                              <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
+                              {(toolCall as Record<string, unknown>).content != null ? (
+                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
+                              ) : (
+                                <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">Tool execution</div>
+                          </div>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-border">
+                          <div className="px-4 pb-3">
+                            <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
+                            <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                              {JSON.stringify(toolCall.args, null, 2)}
+                            </pre>
+                            {!needsApproval && (
+                              <>
+                                <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
+                                  {(toolCall as Record<string, unknown>).content ? 'Result' : 'Running...'}
+                                </div>
+                                {(() => {
+                                  const raw = (toolCall as Record<string, unknown>).content;
+                                  if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
+                                  const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+                                  const kind = detectArtifactKind(text);
+                                  if (kind !== 'text' && text.length > 100) {
+                                    return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
+                                  }
+                                  return (
+                                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                                      {text}
+                                    </pre>
+                                  );
+                                })()}
+                              </>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">Tool execution</div>
-                        </div>
-                      </div>
-                      {expandedItems.has(`${message.id}-${idx}`) ? (
-                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </button>
 
-                    {expandedItems.has(`${message.id}-${idx}`) && (
-                      <div className="px-4 pb-4 border-t border-border">
-                        <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
-                        <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                          {JSON.stringify(toolCall.args, null, 2)}
-                        </pre>
-                        <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
-                          {(toolCall as Record<string, unknown>).content ? 'Result' : 'Running...'}
+                          {needsApproval && !approvalSubmitted && onInterruptResume && (
+                            <div className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setApprovalSubmitted(true);
+                                  const count = ((pendingInterrupt?.value as any)?.action_requests ?? []).length || 1;
+                                  onInterruptResume(Array.from({ length: count }, () => ({ type: 'approve' as const })));
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
+                              >
+                                <Check className="w-3 h-3" />
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setApprovalSubmitted(true);
+                                  const count = ((pendingInterrupt?.value as any)?.action_requests ?? []).length || 1;
+                                  onInterruptResume(Array.from({ length: count }, () => ({ type: 'reject' as const, message: 'User rejected this action.' })));
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
+                                style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
+                              >
+                                Reject
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setApprovalSubmitted(true);
+                                  const count = ((pendingInterrupt?.value as any)?.action_requests ?? []).length || 1;
+                                  onAlwaysAllow?.([toolCall.name]);
+                                  onInterruptResume(Array.from({ length: count }, () => ({ type: 'approve' as const })));
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
+                              >
+                                <ShieldCheck className="w-3 h-3" />
+                                Always allow
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        {(() => {
-                          const raw = (toolCall as Record<string, unknown>).content;
-                          if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
-                          const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
-                          const kind = detectArtifactKind(text);
-                          if (kind !== 'text' && text.length > 100) {
-                            return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
-                          }
-                          return (
-                            <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                              {text}
-                            </pre>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -575,7 +682,7 @@ export function AIMessageRenderer({ message }: { message: Message }) {
 
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems]);
+  }, [messageKey, expandedItems, approvalSubmitted, pendingInterrupt, onInterruptResume, onAlwaysAllow]);
 
   return (
     <div className="space-y-2 w-full">
@@ -588,6 +695,10 @@ interface ChatMessagesViewProps {
   messages: Message[];
   streamEvents?: StreamEvent[];
   isLoading: boolean;
+  pendingInterrupt?: InterruptInfo | null;
+  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  onAlwaysAllow?: (toolNames: string[]) => void;
+  interruptContent?: React.ReactNode;
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   onSubmit: (inputValue: string) => void;
   onRetry?: () => void;
@@ -615,6 +726,10 @@ interface ChatMessagesViewProps {
 export function ChatMessagesView({
   messages,
   isLoading,
+  pendingInterrupt,
+  onInterruptResume,
+  onAlwaysAllow,
+  interruptContent,
   scrollAreaRef,
   onSubmit,
   onRetry,
@@ -647,7 +762,7 @@ export function ChatMessagesView({
   }, [messages]);
 
   const lastMessage = messages[messages.length - 1];
-  const rawNoResponse = !isLoading && messages.length > 0 && lastMessage?.type === 'human';
+  const rawNoResponse = !isLoading && !pendingInterrupt && !interruptContent && messages.length > 0 && lastMessage?.type === 'human';
   const [showNoResponse, setShowNoResponse] = useState(false);
 
   useEffect(() => {
@@ -741,7 +856,12 @@ export function ChatMessagesView({
                 />
               ) : (
                 <div className="w-full space-y-0">
-                  <AIMessageRenderer message={message} />
+                  <AIMessageRenderer
+                    message={message}
+                    pendingInterrupt={pendingInterrupt}
+                    onInterruptResume={onInterruptResume}
+                    onAlwaysAllow={onAlwaysAllow}
+                  />
                   {isLastAiInTurn && (
                     <div className="pl-11 flex items-center gap-0.5 mt-1">
                       <MessageCopyButton text={copyText} />
@@ -815,6 +935,7 @@ export function ChatMessagesView({
               </div>
             </div>
           )}
+          {interruptContent}
           <div ref={bottomRef} />
         </div>
       </div>

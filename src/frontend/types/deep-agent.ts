@@ -14,9 +14,32 @@ export interface ToolCallWithContent {
   content?: unknown;
 }
 
+export interface HITLActionRequest {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface HITLReviewConfig {
+  action_name: string;
+  allowed_decisions: ('approve' | 'edit' | 'reject' | 'respond')[];
+}
+
+export interface HITLInterruptValue {
+  action_requests: HITLActionRequest[];
+  review_configs: HITLReviewConfig[];
+}
+
+export interface McpAuthPayload {
+  type: 'mcp_auth_required';
+  mcp_name: string;
+  connect_url: string;
+  message: string;
+}
+
 export interface InterruptInfo {
-  value: string;
+  value: string | HITLInterruptValue;
   resumable: boolean;
+  payload?: McpAuthPayload;
 }
 
 export interface TaskStep {
@@ -31,7 +54,7 @@ export interface TaskStep {
 const KNOWN_SUBAGENT_NAMES = new Set(['analyst', 'publisher']);
 
 export function isSubAgentToolCall(toolCall: { name: string; args?: Record<string, unknown> }): boolean {
-  if (toolCall.name === 'task' && toolCall.args?.subagent_type) return true;
+  if (toolCall.args?.subagent_type) return true;
   return KNOWN_SUBAGENT_NAMES.has(toolCall.name);
 }
 
@@ -40,6 +63,22 @@ export function extractSubAgentName(toolCall: { name: string; args?: Record<stri
     return toolCall.args.subagent_type;
   }
   return toolCall.name;
+}
+
+export function extractDelegationText(
+  toolCall: { args?: Record<string, unknown> | string },
+): string | null {
+  const { args } = toolCall;
+  if (args == null) return null;
+  if (typeof args === 'string') {
+    const trimmed = args.trim();
+    return trimmed || null;
+  }
+  if (typeof args.description === 'string') {
+    const trimmed = args.description.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
 }
 
 export interface TodoItem {
@@ -73,7 +112,7 @@ export function extractTodosFromMessages(messages: { type: string; tool_calls?: 
 }
 
 const CODE_FENCE_RE = /```[\s\S]*?```/;
-const JSON_START_RE = /^\s*[{\[]/;
+const JSON_START_RE = /^\s*[{[]/;
 
 export type ArtifactKind = 'code' | 'json' | 'markdown' | 'text';
 
