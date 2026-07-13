@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardBody,
@@ -6,14 +6,17 @@ import {
   CardTitle,
   Label,
 } from '@patternfly/react-core';
-import { Bot, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
-import type { ToolCallWithContent } from '../types/deep-agent';
-import { extractSubAgentName } from '../types/deep-agent';
+import { Bot, Check, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
+import type { ToolCallWithContent, InterruptInfo } from '../types/deep-agent';
+import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
 
 interface SubAgentIndicatorProps {
   readonly toolCall: ToolCallWithContent;
   readonly messageId: string;
   readonly index: number;
+  readonly pendingInterrupt?: InterruptInfo | null;
+  readonly onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  readonly onAlwaysAllow?: (toolNames: string[]) => void;
 }
 
 type VisualStatus = 'delegating' | 'complete' | 'error';
@@ -35,20 +38,37 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall, messageId: _messageId, index: _index, pendingInterrupt, onInterruptResume, onAlwaysAllow }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
   const name = extractSubAgentName(toolCall);
+  const delegationText = extractDelegationText(toolCall);
   const status = deriveStatus(toolCall);
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
 
+  const interruptValue = pendingInterrupt?.value;
+  const needsApproval = !!(
+    typeof interruptValue === 'object'
+    && interruptValue !== null
+    && 'action_requests' in interruptValue
+    && interruptValue.action_requests?.some((r) => r.name === 'task' || r.name === name)
+  ) && toolCall.content == null;
+
+  useEffect(() => {
+    if (needsApproval) {
+      setIsApproving(false);
+      setExpanded(true);
+    }
+  }, [needsApproval]);
+
   return (
     <div className="flex items-start gap-3">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center">
-        <Bot className="w-4 h-4 text-blue-500" />
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${needsApproval ? 'bg-yellow-500/15 border border-yellow-500/40' : 'bg-blue-500/15 border border-blue-500/30'}`}>
+        <Bot className={`w-4 h-4 ${needsApproval ? 'text-yellow-500' : 'text-blue-500'}`} />
       </div>
       <div className="flex-1 min-w-0">
-        <Card isCompact className="shadow-card">
+        <Card isCompact className={`shadow-card ${needsApproval ? 'border-yellow-500/60' : ''}`}>
           <CardHeader
             className="cursor-pointer"
             onClick={() => setExpanded((v) => !v)}
@@ -60,14 +80,14 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
                 </CardTitle>
                 <Label
                   isCompact
-                  color={config.color}
+                  color={needsApproval ? 'yellow' : config.color}
                   icon={
                     <StatusIcon
-                      className={`w-3 h-3 ${config.animate ? 'animate-spin' : ''}`}
+                      className={`w-3 h-3 ${config.animate && !needsApproval ? 'animate-spin' : ''}`}
                     />
                   }
                 >
-                  {config.label}
+                  {needsApproval ? 'Approval required' : config.label}
                 </Label>
               </div>
               <button
@@ -84,21 +104,15 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
           </CardHeader>
 
           {expanded && (
-            <CardBody className="border-t border-border pt-3 space-y-3">
-              {toolCall.args && Object.keys(toolCall.args).length > 0 && (
+            <CardBody className="border-t border-border pt-3 space-y-3 !pb-0">
+              {delegationText && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                     Delegation
                   </p>
-                  <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono max-h-40">
-                    {JSON.stringify(
-                      Object.fromEntries(
-                        Object.entries(toolCall.args).filter(([k]) => k !== 'subagent_type'),
-                      ),
-                      null,
-                      2,
-                    )}
-                  </pre>
+                  <p className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg whitespace-pre-wrap">
+                    {delegationText}
+                  </p>
                 </div>
               )}
               {toolCall.content != null && (
@@ -113,10 +127,50 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
                   </pre>
                 </div>
               )}
-              {status === 'delegating' && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {status === 'delegating' && !needsApproval && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                   Sub-agent is processing&hellip;
+                </div>
+              )}
+
+              {needsApproval && !isApproving && onInterruptResume && (
+                <div className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsApproving(true);
+                      onInterruptResume([{ type: 'approve' }]);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                    style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
+                  >
+                    <Check className="w-3 h-3" />
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsApproving(true);
+                      onInterruptResume([{ type: 'reject', message: 'User rejected this action.' }]);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
+                    style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsApproving(true);
+                      onAlwaysAllow?.([name]);
+                      onInterruptResume([{ type: 'approve' }]);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
+                  >
+                    <ShieldCheck className="w-3 h-3" />
+                    Always allow
+                  </button>
                 </div>
               )}
             </CardBody>

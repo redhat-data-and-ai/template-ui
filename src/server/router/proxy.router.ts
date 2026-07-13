@@ -47,10 +47,6 @@ interface StreamRequestBody {
   rules?: string[];
 }
 
-interface ProxyRequestBody {
-  [key: string]: unknown;
-}
-
 /**
  * Extract text from a LangGraph message content field, which may be
  * a plain string OR an array of typed blocks [{type:"text", text:"..."}].
@@ -78,6 +74,23 @@ function extractText(content: unknown): string {
  *
  * Returns [uiChunk | null, updatedPrevPartial].
  */
+/**
+ * Extract a HITL interrupt payload from a LangGraph `updates` stream event.
+ * LangGraph 1.x surfaces interrupts as:
+ *   { "__interrupt__": [{ value: HITLInterruptValue, resumable: boolean, ... }] }
+ * Returns null when the updates event carries no interrupt.
+ */
+function extractInterruptFromUpdates(
+  payload: unknown,
+): { value: unknown; resumable: boolean } | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const p = payload as Record<string, unknown>;
+  const interrupts = p.__interrupt__;
+  if (!Array.isArray(interrupts) || interrupts.length === 0) return null;
+  const first = interrupts[0] as Record<string, unknown>;
+  return { value: first.value, resumable: first.resumable !== false };
+}
+
 /**
  * Extract tool_calls from a raw message. LangGraph streaming uses
  * `additional_kwargs.function_call` (single) or `tool_calls` (array).
@@ -112,38 +125,85 @@ function translateMessageEvent(
   chunkId: number,
   prevPartial: string,
   sentMsgIds: Set<string>,
-): [{ type: string; content: unknown; chunk_id: number } | null, string] {
-  if (!Array.isArray(payload) || payload.length === 0) return [null, prevPartial];
-  const [msg] = payload;
-  if (!msg || typeof msg !== 'object') return [null, prevPartial];
+): [Array<{ type: string; content: unknown }>, string] {
+  // ── Handle 'updates' events (complete node outputs with full args) ──
+  if (sseType === 'updates') {
+    const data = payload as Record<string, any> | null;
+    if (!data || typeof data !== 'object') return [[], prevPartial];
 
+    const chunks: Array<{ type: string; content: unknown }> = [];
+
+    const messageLists: any[][] = [];
+    for (const value of Object.values(data)) {
+      if (Array.isArray(value)) {
+        messageLists.push(value);
+      } else if (value && typeof value === 'object' && Array.isArray((value as any).messages)) {
+        messageLists.push((value as any).messages);
+      }
+    }
+
+    for (const messages of messageLists) {
+      for (const msg of messages) {
+        if (!msg || typeof msg !== 'object') continue;
+        const msgType = (msg.type ?? '').toString().toLowerCase();
+
+        if ((msgType === 'ai' || msgType === 'aimessage') && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+          const msgId = msg.id ?? `ai-upd-${chunkId}`;
+          if (sentMsgIds.has(msgId)) continue;
+          sentMsgIds.add(msgId);
+          const toolCalls = extractToolCalls(msg);
+          chunks.push({
+            type: 'message',
+            content: { type: 'ai', content: '', tool_calls: toolCalls, id: msgId },
+          });
+        }
+
+        if (msgType === 'tool' || msgType === 'toolmessage') {
+          const toolCallId = msg.tool_call_id ?? '';
+          const dedupKey = `tool-${toolCallId}`;
+          if (!sentMsgIds.has(dedupKey)) {
+            sentMsgIds.add(dedupKey);
+            chunks.push({
+              type: 'message',
+              content: {
+                type: 'tool',
+                content: extractText(msg.content) || JSON.stringify(msg.content),
+                tool_call_id: toolCallId,
+                name: msg.name ?? 'unknown',
+              },
+            });
+          }
+        }
+      }
+    }
+
+    return [chunks, prevPartial];
+  }
+
+  // ── Handle 'messages/partial' (text token streaming only) ──
   if (sseType === 'messages/partial') {
+    if (!Array.isArray(payload) || payload.length === 0) return [[], prevPartial];
+    const [msg] = payload;
+    if (!msg || typeof msg !== 'object') return [[], prevPartial];
+
     const raw = msg as Record<string, any>;
     const toolCalls = extractToolCalls(raw);
 
     if (toolCalls.length > 0) {
-      const msgId = raw.id ?? `ai-tc-${chunkId}`;
-      if (!sentMsgIds.has(msgId)) {
-        sentMsgIds.add(msgId);
-        return [{
-          type: 'message',
-          content: {
-            type: 'ai',
-            content: '',
-            tool_calls: toolCalls,
-            id: msgId,
-          },
-          chunk_id: chunkId,
-        }, ''];
-      }
-      return [null, prevPartial];
+      const fullText = extractText(raw.content);
+      return [[], fullText || prevPartial];
     }
 
     const fullText = extractText(raw.content);
-    return [null, fullText];
+    return [[], fullText];
   }
 
+  // ── Handle 'messages/complete' (fallback for anything not sent via updates) ──
   if (sseType === 'messages/complete') {
+    if (!Array.isArray(payload) || payload.length === 0) return [[], prevPartial];
+    const [msg] = payload;
+    if (!msg || typeof msg !== 'object') return [[], prevPartial];
+
     const raw = msg as Record<string, any>;
     const msgType = (raw.type ?? '').toString().toLowerCase();
 
@@ -152,42 +212,39 @@ function translateMessageEvent(
       const msgId = raw.id ?? `ai-${chunkId}`;
       if (!sentMsgIds.has(msgId)) {
         sentMsgIds.add(msgId);
-        return [{
+        return [[{
           type: 'message',
-          content: {
-            type: 'ai',
-            content: '',
-            tool_calls: toolCalls,
-            id: msgId,
-          },
-          chunk_id: chunkId,
-        }, ''];
+          content: { type: 'ai', content: '', tool_calls: toolCalls, id: msgId },
+        }], prevPartial];
       }
-      return [null, ''];
+      return [[], prevPartial];
     }
 
     if (msgType === 'tool' || msgType === 'toolmessage') {
-      return [{
+      const toolCallId = raw.tool_call_id ?? '';
+      const dedupKey = `tool-${toolCallId}`;
+      if (sentMsgIds.has(dedupKey)) return [[], prevPartial];
+      sentMsgIds.add(dedupKey);
+      return [[{
         type: 'message',
         content: {
           type: 'tool',
           content: extractText(raw.content) || JSON.stringify(raw.content),
-          tool_call_id: raw.tool_call_id ?? '',
+          tool_call_id: toolCallId,
           name: raw.name ?? 'unknown',
         },
-        chunk_id: chunkId,
-      }, ''];
+      }], prevPartial];
     }
 
     if (msgType === 'ai' || msgType === 'aimessage') {
       const fullText = extractText(raw.content);
       if (fullText.length > 0) {
-        return [null, fullText];
+        return [[], fullText];
       }
     }
   }
 
-  return [null, prevPartial];
+  return [[], prevPartial];
 }
 
 interface TokenPair {
@@ -322,7 +379,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         const runBody: Record<string, unknown> = {
           assistant_id: 'agent',
-          stream_mode: ['messages'],
+          stream_mode: ['messages', 'updates'],
         };
         if (isResume) {
           runBody.command = { resume: message };
@@ -383,6 +440,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         });
 
         let hasEmittedTextTokens = false;
+        let interruptEmittedFromStream = false;
 
         try {
           while (!clientGone) {
@@ -430,6 +488,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                       },
                     };
                     reply.raw.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
+                    chunkId++;
                   }
                 } catch {
                   fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
@@ -439,6 +498,22 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
               try {
                 const parsed = JSON.parse(sseData) as unknown;
+
+                if (sseType === 'updates') {
+                  const interrupt = extractInterruptFromUpdates(parsed);
+                  if (interrupt) {
+                    const interruptChunk = {
+                      type: 'interrupt',
+                      content: { value: interrupt.value, resumable: interrupt.resumable },
+                      chunk_id: chunkId,
+                    };
+                    reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
+                    chunkId++;
+                    interruptEmittedFromStream = true;
+                    fastify.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
+                  }
+                }
+
                 const isMcpStatus =
                   sseType === 'mcp_status' ||
                   (typeof parsed === 'object' &&
@@ -447,10 +522,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     (parsed as Record<string, unknown>).type === 'mcp_status');
                 if (isMcpStatus) {
                   reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
+                  chunkId++;
                   continue;
                 }
 
-                const [uiChunk, nextPartial] = translateMessageEvent(
+                const [uiChunks, nextPartial] = translateMessageEvent(
                   sseType,
                   parsed,
                   chunkId,
@@ -458,7 +534,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   sentMsgIds,
                 );
 
-                if (nextPartial.length > prevPartial.length && !uiChunk) {
+                if (nextPartial.length > prevPartial.length && uiChunks.length === 0) {
                   const isEchoOfPrior = completedTexts.some(
                     (ct) => nextPartial.length <= ct.length && ct.startsWith(nextPartial),
                   );
@@ -470,13 +546,13 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   }
                 }
 
-                if (sseType === 'messages/complete' && !uiChunk && nextPartial.length > 0) {
+                if (sseType === 'messages/complete' && uiChunks.length === 0 && nextPartial.length > 0) {
                   completedTexts.push(nextPartial);
                 }
 
                 prevPartial = nextPartial;
-                if (uiChunk) {
-                  reply.raw.write(`data: ${JSON.stringify(uiChunk)}\n\n`);
+                for (const chunk of uiChunks) {
+                  reply.raw.write(`data: ${JSON.stringify({ ...chunk, chunk_id: chunkId })}\n\n`);
                   chunkId++;
                 }
               } catch {
@@ -511,18 +587,19 @@ async function proxyRoutes(fastify: FastifyInstance) {
               const interrupted = tasks.find(
                 (t: any) => Array.isArray(t?.interrupts) && t.interrupts.length > 0,
               );
-              if (interrupted) {
+              if (interrupted && !interruptEmittedFromStream) {
                 const firstInterrupt = (interrupted as any).interrupts[0];
-                const value = typeof firstInterrupt?.value === 'string'
-                  ? firstInterrupt.value
-                  : JSON.stringify(firstInterrupt?.value ?? 'Action required');
                 const interruptChunk = {
                   type: 'interrupt',
-                  content: { value, resumable: true },
+                  content: {
+                    value: firstInterrupt?.value ?? null,
+                    resumable: true,
+                  },
                   chunk_id: chunkId,
                 };
                 reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
                 chunkId++;
+                fastify.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
               }
             }
           } catch (err) {

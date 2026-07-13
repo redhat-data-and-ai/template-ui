@@ -81,7 +81,7 @@ async function routes(fastify: FastifyInstance) {
       await fastify.redhatSSO.userinfo(token.access_token);
 
       return reply.send({ message: "ValidToken" });
-    } catch (error: unknown) {
+    } catch {
       try {
         const newAccessToken =
           await fastify.redhatSSO.getNewAccessTokenUsingRefreshToken(token, {});

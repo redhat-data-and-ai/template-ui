@@ -11,6 +11,9 @@ export interface StreamingState {
   activeSubAgent: SubAgentInfo | null;
   pendingInterrupt: InterruptInfo | null;
   taskSteps: TaskStep[];
+  isReconnecting: boolean;
+  reconnectAttempt: number;
+  streamDroppedMidResponse: boolean;
 }
 
 export interface ChatItem {
@@ -41,6 +44,9 @@ const DEFAULT_STREAMING_STATE: StreamingState = {
   activeSubAgent: null,
   pendingInterrupt: null,
   taskSteps: [],
+  isReconnecting: false,
+  reconnectAttempt: 0,
+  streamDroppedMidResponse: false,
 };
 
 const initialState: ChatsState = {
@@ -88,6 +94,10 @@ const chatsSlice = createSlice({
       const { chatId, message } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
       if (chat) {
+        const msgId = (message as Record<string, unknown>).id;
+        if (msgId && chat.messages.some((m) => (m as Record<string, unknown>).id === msgId)) {
+          return;
+        }
         chat.messages.push(deepClone(message));
       }
     },

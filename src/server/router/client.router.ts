@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
-import { getAgentName } from "../utils/settings.js";
+import { getAgentName, getSettings } from "../utils/settings.js";
 
 const BUILD_VERSION = Date.now().toString(36);
 const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
@@ -24,6 +24,20 @@ async function routes(fastify: FastifyInstance) {
 
   fastify.get("/_health", (_request: FastifyRequest, reply: FastifyReply) => {
     reply.send("OK");
+  });
+
+  fastify.get("/mcp/oauth/callback", async (request: FastifyRequest, reply: FastifyReply) => {
+    const cfg = getSettings();
+    const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+    const qs = request.url.split("?")[1] || "";
+    const agentUrl = `${agentHost}/mcp/oauth/callback${qs ? `?${qs}` : ""}`;
+    const resp = await fetch(agentUrl, {
+      headers: { cookie: request.headers.cookie || "" },
+    });
+    reply
+      .status(resp.status)
+      .type(resp.headers.get("content-type") || "text/html");
+    reply.send(await resp.text());
   });
 
   fastify.get("/*", async (request: FastifyRequest, reply: FastifyReply) => {
@@ -69,11 +83,7 @@ async function routes(fastify: FastifyInstance) {
     </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script>
-    window.USER_DATA = ${JSON.stringify(userData || {})}
-    window.APP_DATA = ${JSON.stringify(appData)}
-    </script>
+    <div id="root" data-user="${encodeURIComponent(JSON.stringify(userData || {}))}" data-app="${encodeURIComponent(JSON.stringify(appData))}"></div>
     <script src="${basePath}/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`);

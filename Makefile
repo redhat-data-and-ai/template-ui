@@ -1,4 +1,4 @@
-.PHONY: dev clean local deploy undeploy opa-build
+.PHONY: dev clean local deploy undeploy e2e opa-build
 
 # OpenShift namespace (can be overridden: make deploy openshift NAMESPACE=my-project)
 NAMESPACE ?= $(shell oc project -q 2>/dev/null)
@@ -28,6 +28,12 @@ opa-check:
 
 clean:
 	rm -rf node_modules dist
+
+## Run Playwright e2e tests
+e2e:
+	npm run build
+	npx playwright install chromium --with-deps 2>/dev/null || npx playwright install chromium
+	npx playwright test
 
 dev:
 	npm run dev
