@@ -15,7 +15,7 @@ import type { RootState, AppDispatch } from './redux/store';
 
 export default function App() {
   const dispatch = useDispatch<AppDispatch>();
-  const { branding, features, loading, error } = useSelector((state: RootState) => state.config);
+  const { branding, loading, error } = useSelector((state: RootState) => state.config);
   const theme = useSelector((state: RootState) => state.userSettings.theme);
 
   useThemeSync();

@@ -28,3 +28,6 @@ ROADMAP.md
 # Playwright
 playwright-report/
 test-results/
+
+# Coverage
+coverage/

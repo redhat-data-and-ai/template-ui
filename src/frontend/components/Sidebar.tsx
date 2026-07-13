@@ -41,6 +41,7 @@ function SidebarComponent({
   onNewChat,
   onSelectChat,
   onDeleteChat,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onDeleteAllChats,
   onRenameChat,
 }: SidebarProps) {
