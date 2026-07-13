@@ -87,8 +87,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                 setExpanded((v) => !v);
               }
             }}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            {...({ tabIndex: 0, role: 'button', 'aria-expanded': expanded, 'aria-controls': `subagent-body-${messageId}-${index}` } as any)}
+            {...({ tabIndex: 0, role: 'button', 'aria-expanded': expanded, 'aria-controls': `subagent-body-${messageId}-${index}` } as React.HTMLAttributes<HTMLDivElement>)}
           >
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2.5">
