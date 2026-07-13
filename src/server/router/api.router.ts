@@ -1,5 +1,10 @@
+import { createRequire } from "node:module";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require("../../../package.json");
+const APP_VERSION = process.env.APPLICATION_VERSION?.trim() || PKG_VERSION;
 
 interface StreamRequest {
   message: string;
@@ -9,6 +14,10 @@ interface StreamRequest {
 }
 
 async function apiRoutes(fastify: FastifyInstance) {
+  fastify.get("/version", async () => {
+    return { service: "template-ui", version: APP_VERSION };
+  });
+
   fastify.get("/health", async () => {
     return { status: "ok", timestamp: new Date().toISOString() };
   });
