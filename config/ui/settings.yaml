@@ -16,7 +16,7 @@ branding:
 
 features:
   debug_mode_default: false
-  auth_enabled: true
+  # auth_enabled: Controlled via AUTH_ENABLED environment variable (set by agent-engine during deployment)
 
 agent:
   endpoint: ""
@@ -34,3 +34,29 @@ platform:
     restrict_debug_mode: false             # Deny debug_mode_default = true
     restricted_features: []                # Feature flag keys that must be false
     max_rate_limit: 0                      # 0 = no cap on rate_limit.max
+
+security:
+  rate_limit:
+    enabled: true
+    max: 100
+    window: "1 minute"
+    exclude_paths:
+      - "/api/health"
+      - "/_health"
+  session:
+    secure_cookie: false
+    max_age_days: 30
+  helmet:
+    enabled: true
+    cross_origin_embedder_policy: false
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  body_limit: 1048576
+
+logging:
+  level: "info"
+
+cors:
+  origin: "http://localhost:5173"
