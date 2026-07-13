@@ -35,7 +35,14 @@ function buildGatewayLoginUrl(request: FastifyRequest): string {
 
 function shouldSkipAuth(request: FastifyRequest): boolean {
   const path = request.url.split("?")[0];
-  return path === "/_health" || path.startsWith("/auth/") || path === "/login" || path.startsWith("/dist/") || path === "/api/health/agent";
+  return (
+    path === "/_health" ||
+    path.startsWith("/auth/") ||
+    path.startsWith("/dist/") ||
+    path === "/favicon.ico" ||
+    path === "/login" ||
+    path === "/api/health/agent"
+  );
 }
 
 function authCheck(
@@ -99,10 +106,10 @@ function authCheck(
 
     if (!request.session?.user) {
       request.session.redirectUri = request.url;
-      reply.redirect(buildGatewayLoginUrl(request));
-    } else {
-      next();
+      return reply.redirect(buildGatewayLoginUrl(request));
     }
+
+    next();
   });
   done();
 }

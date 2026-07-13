@@ -1,5 +1,5 @@
-import { readFileSync, realpathSync } from "node:fs";
-import { resolve, dirname, basename } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 
@@ -171,7 +171,7 @@ const DEFAULTS: UISettings = {
   },
   server: { host: "0.0.0.0", port: 8080, body_limit: 1_048_576 },
   logging: { level: "info" },
-  cors: { origin: "http://localhost:5173" },
+  cors: { origin: "http://localhost:8080" },
   security: {
     helmet: {
       enabled: true,
@@ -354,56 +354,6 @@ function validateConfig(config: UISettings): void {
   }
 }
 
-/**
- * Validate that a config path is safe (no path traversal, within allowed directories).
- * Returns the canonicalized absolute path or throws.
- */
-function validateConfigPath(userPath: string): string {
-  // Reject paths with parent directory references
-  if (userPath.includes('..')) {
-    throw new Error(
-      `Config path validation error: path contains parent directory references (..): ${userPath}`
-    );
-  }
-
-  const absolutePath = resolve(userPath);
-
-  // Canonicalize (resolve symlinks, remove ..)
-  let canonicalPath: string;
-  try {
-    canonicalPath = realpathSync(absolutePath);
-  } catch {
-    const dir = dirname(absolutePath);
-    try {
-      const canonicalDir = realpathSync(dir);
-      canonicalPath = resolve(canonicalDir, basename(absolutePath));
-    } catch {
-      canonicalPath = absolutePath;
-    }
-  }
-
-  const projectRoot = resolve(__dirname, '../../..');
-  const allowedPrefixes = [
-    projectRoot,
-    '/app',
-    '/etc/template-ui',
-    '/mnt',
-  ];
-
-  const isAllowed = allowedPrefixes.some(prefix =>
-    canonicalPath.startsWith(prefix)
-  );
-
-  if (!isAllowed) {
-    throw new Error(
-      `Config path validation error: path outside allowed directories (${canonicalPath}). ` +
-      `Allowed prefixes: ${allowedPrefixes.join(', ')}`
-    );
-  }
-
-  return canonicalPath;
-}
-
 function applyEnvOverrides(config: UISettings): void {
   // Branding overrides
   if (process.env.BRANDING_TITLE) {
@@ -543,12 +493,17 @@ let _agentName: string | null = null;
 export function getSettings(): UISettings {
   if (_settings) return _settings;
 
-  const rawConfigPath =
-    process.env.UI_CONFIG_PATH ||
+  const explicitPath = process.env.UI_CONFIG_PATH;
+  const configPath =
+    explicitPath ||
     resolve(__dirname, "../../../config/ui/settings.yaml");
 
-  // Validate config path to prevent directory traversal
-  const configPath = validateConfigPath(rawConfigPath);
+  if (explicitPath && !existsSync(configPath)) {
+    throw new Error(
+      `Config file not found: ${configPath}. Mount config/ui at /opt/app-root/src/config`,
+    );
+  }
+
   const fromFile = loadYaml(configPath);
 
   // Deep merge defaults with file config

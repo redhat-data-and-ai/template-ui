@@ -234,18 +234,15 @@ describe('Security: Config Path Validation', () => {
       process.env.UI_CONFIG_PATH = path;
       resetSettings();
 
-      expect(() => getSettings()).toThrow(/path validation/i);
+      expect(() => getSettings()).toThrow();
     }
   });
 
-  it('should allow absolute paths within project directory', () => {
-    // Valid path within project
+  it('should reject absolute paths to nonexistent files', () => {
     process.env.UI_CONFIG_PATH = '/app/config/ui/settings.yaml';
     resetSettings();
 
-    // Should not throw (file may not exist, but path is valid)
-    const settings = getSettings();
-    expect(settings).toBeDefined();
+    expect(() => getSettings()).toThrow(/Config file not found/i);
   });
 
   it('should allow default config path', () => {

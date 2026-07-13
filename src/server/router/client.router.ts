@@ -26,6 +26,15 @@ async function routes(fastify: FastifyInstance) {
     reply.send("OK");
   });
 
+  fastify.get("/auth/login", async (request: FastifyRequest, reply: FastifyReply) => {
+    const redirect =
+      typeof (request.query as { redirect?: string }).redirect === "string"
+        ? (request.query as { redirect: string }).redirect
+        : "/";
+    request.session.redirectUri = redirect;
+    return reply.redirect("/login");
+  })
+  
   fastify.get("/mcp/oauth/callback", async (request: FastifyRequest, reply: FastifyReply) => {
     const cfg = getSettings();
     const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
@@ -68,7 +77,7 @@ async function routes(fastify: FastifyInstance) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" id="favicon" href="/favicon.ico" />
     <title>${agentName}</title>
-    <link rel="stylesheet" href="${basePath}/dist/frontend/template-ui.css">
+    <link rel="stylesheet" href="${basePath || ""}/dist/frontend/template-ui.css">
     <style>
     /* PF6/Tailwind v4 co-existence: inline to bypass Vite CSS purging */
     .pf-v6-c-button{--pf-v6-c-button--AlignItems:center}
@@ -83,8 +92,12 @@ async function routes(fastify: FastifyInstance) {
     </style>
 </head>
 <body>
-    <div id="root" data-user="${encodeURIComponent(JSON.stringify(userData || {}))}" data-app="${encodeURIComponent(JSON.stringify(appData))}"></div>
-    <script src="${basePath}/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
+    <div id="root"></div>
+    <script>
+    window.USER_DATA = ${JSON.stringify(userData || {})}
+    window.APP_DATA = ${JSON.stringify(appData)}
+    </script>
+    <script src="${basePath || ""}/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`);
   });
