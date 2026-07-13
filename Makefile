@@ -1,4 +1,4 @@
-.PHONY: dev clean local deploy undeploy e2e
+.PHONY: dev clean local deploy undeploy e2e opa-build
 
 # OpenShift namespace (can be overridden: make deploy openshift NAMESPACE=my-project)
 NAMESPACE ?= $(shell oc project -q 2>/dev/null)
@@ -20,6 +20,11 @@ install:
 		echo ".env file already exists, skipping copy"; \
 	fi
 	@npm ci
+
+opa-check:
+	@which opa > /dev/null || (echo "Error: opa CLI not found. Install from https://www.openpolicyagent.org/docs/latest/#running-opa" && exit 1)
+	opa check config/compliance/
+	@echo "OPA policy syntax OK"
 
 clean:
 	rm -rf node_modules dist

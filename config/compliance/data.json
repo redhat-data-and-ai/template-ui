@@ -1,0 +1,8 @@
+{
+  "approved_auth_providers": [],
+  "internal_endpoint_suffixes": [],
+  "max_session_ttl_days": 0,
+  "restrict_debug_mode": false,
+  "restricted_features": [],
+  "max_rate_limit": 0
+}

@@ -29,6 +29,7 @@
     "@fastify/url-data": "^6.0.3",
     "@langchain/core": "^0.3.55",
     "@langchain/langgraph-sdk": "^1.9.2",
+    "@open-policy-agent/opa-wasm": "^1.10.0",
     "@opentelemetry/auto-instrumentations-node": "^0.76.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.218.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.218.0",
