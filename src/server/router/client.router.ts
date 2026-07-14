@@ -46,7 +46,7 @@ async function routes(fastify: FastifyInstance) {
     reply
       .status(resp.status)
       .type(resp.headers.get("content-type") || "text/html");
-    reply.send(await resp.text());
+    return reply.send(await resp.text());
   });
 
   fastify.get("/*", async (request: FastifyRequest, reply: FastifyReply) => {
@@ -70,7 +70,7 @@ async function routes(fastify: FastifyInstance) {
     };
 
     reply.type("text/html");
-    reply.send(`<!DOCTYPE html>
+    return reply.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -92,11 +92,7 @@ async function routes(fastify: FastifyInstance) {
     </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script>
-    window.USER_DATA = ${JSON.stringify(userData || {})}
-    window.APP_DATA = ${JSON.stringify(appData)}
-    </script>
+    <div id="root" data-user="${encodeURIComponent(JSON.stringify(userData || {}))}" data-app="${encodeURIComponent(JSON.stringify(appData))}"></div>
     <script src="${basePath || ""}/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`);
