@@ -281,6 +281,35 @@ export function AppLayout({ children }: AppLayoutProps) {
     ids.forEach((id) => deleteThread(id).catch(() => {}));
   }, [dispatch, chats, navigate]);
 
+  const handleDeleteChats = useCallback(
+    (chatIds: string[]) => {
+      if (chatIds.length === 0) return;
+
+      const idSet = new Set(chatIds);
+      chatStorage.markThreadsDeleted(chatIds);
+      chatIds.forEach((id) => dispatch(deleteChat(id)));
+
+      const remaining = chats.filter((c) => !idSet.has(c.id));
+      if (remaining.length === 0) {
+        chatStorage.clearChats();
+      }
+
+      dispatch(
+        addToast({
+          title: chatIds.length === 1 ? 'Chat deleted' : `${chatIds.length} chats deleted`,
+          variant: 'success',
+        })
+      );
+
+      if (currentChatId && idSet.has(currentChatId)) {
+        navigate(remaining.length > 0 ? `/chat/${remaining[0].id}` : '/');
+      }
+
+      chatIds.forEach((id) => deleteThread(id).catch(() => {}));
+    },
+    [dispatch, chats, navigate, currentChatId]
+  );
+
   const handleRenameChat = useCallback(
     (chatId: string, newTitle: string) => {
       dispatch(updateChat({ id: chatId, updates: { title: newTitle.trim() || 'Untitled Chat' } }));
@@ -357,6 +386,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             onNewChat={handleNewChat}
             onSelectChat={handleSelectChat}
             onDeleteChat={handleDeleteChat}
+            onDeleteChats={handleDeleteChats}
             onDeleteAllChats={handleDeleteAllChats}
             onRenameChat={handleRenameChat}
           />

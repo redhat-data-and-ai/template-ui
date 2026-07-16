@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Button,
+  Checkbox,
   Label,
   Modal,
   ModalBody,
@@ -27,6 +28,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
+  onDeleteChats: (chatIds: string[]) => void;
   onDeleteAllChats: () => void;
   onRenameChat: (chatId: string, newTitle: string) => void;
 }
@@ -41,6 +43,7 @@ function SidebarComponent({
   onNewChat,
   onSelectChat,
   onDeleteChat,
+  onDeleteChats,
   onDeleteAllChats,
   onRenameChat,
 }: SidebarProps) {
@@ -51,7 +54,9 @@ function SidebarComponent({
   const [editTitle, setEditTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
-
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedChatIds, setSelectedChatIds] = useState<Set<string>>(new Set());
+  const [showDeleteSelectedDialog, setShowDeleteSelectedDialog] = useState(false);
 
   const filteredChats = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -62,6 +67,39 @@ function SidebarComponent({
     );
   }, [chatHistory, searchQuery]);
 
+  const allFilteredSelected =
+    filteredChats.length > 0 && filteredChats.every((chat) => selectedChatIds.has(chat.id));
+
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedChatIds(new Set());
+    setShowDeleteSelectedDialog(false);
+  };
+
+  const toggleChatSelected = (chatId: string) => {
+    setSelectedChatIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(chatId)) {
+        next.delete(chatId);
+      } else {
+        next.add(chatId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedChatIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredChats.forEach((chat) => next.delete(chat.id));
+      } else {
+        filteredChats.forEach((chat) => next.add(chat.id));
+      }
+      return next;
+    });
+  };
+
   const handleRename = (chatId: string, title: string) => {
     setEditingChat(chatId);
     setEditTitle(title);
@@ -71,6 +109,12 @@ function SidebarComponent({
     onRenameChat(chatId, editTitle);
     setEditingChat(null);
     setEditTitle('');
+  };
+
+  const confirmDeleteSelected = () => {
+    const ids = [...selectedChatIds];
+    onDeleteChats(ids);
+    exitSelectionMode();
   };
 
   return (
@@ -94,18 +138,66 @@ function SidebarComponent({
         </div>
       )}
 
-      {/* Separator + label */}
-      <div className="shrink-0 px-3 pt-3 pb-1.5 flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent chats</p>
-        {chatHistory.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowDeleteAllDialog(true)}
-            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-            title="Delete all chats"
-          >
-            Clear all
-          </button>
+      {/* Separator + label / selection toolbar */}
+      <div className="shrink-0 px-3 pt-3 pb-1.5">
+        {isSelectionMode ? (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Checkbox
+                id="select-all-chats"
+                isChecked={allFilteredSelected}
+                onChange={toggleSelectAllFiltered}
+                aria-label="Select all visible chats"
+              />
+              <p className="text-xs font-medium text-muted-foreground truncate">
+                {selectedChatIds.size} selected
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => selectedChatIds.size > 0 && setShowDeleteSelectedDialog(true)}
+                disabled={selectedChatIds.size === 0}
+                className="text-xs text-destructive hover:text-destructive/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label={`Delete ${selectedChatIds.size} selected chats`}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={exitSelectionMode}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Recent chats
+            </p>
+            {chatHistory.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSelectionMode(true)}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  title="Select chats"
+                >
+                  Select
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteAllDialog(true)}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  title="Delete all chats"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -114,6 +206,7 @@ function SidebarComponent({
         className="flex-1 min-h-0 overflow-y-auto chat-scroll px-1.5"
         role="listbox"
         aria-label="Chat history"
+        aria-multiselectable={isSelectionMode}
       >
         {filteredChats.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
@@ -126,6 +219,7 @@ function SidebarComponent({
           <div className="space-y-0.5">
             {filteredChats.map((chat) => {
               const isActive = currentChatId === chat.id;
+              const isChecked = selectedChatIds.has(chat.id);
 
               const focusNeighbor = (delta: number) => {
                 const idx = filteredChats.findIndex((c) => c.id === chat.id);
@@ -137,7 +231,11 @@ function SidebarComponent({
               const onOptionKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  onSelectChat(chat.id);
+                  if (isSelectionMode) {
+                    toggleChatSelected(chat.id);
+                  } else {
+                    onSelectChat(chat.id);
+                  }
                   return;
                 }
                 if (e.key === 'ArrowDown') {
@@ -157,16 +255,34 @@ function SidebarComponent({
                   id={`sidebar-chat-option-${chat.id}`}
                   role="option"
                   tabIndex={editingChat === chat.id ? -1 : 0}
-                  aria-selected={isActive}
+                  aria-selected={isSelectionMode ? isChecked : isActive}
                   className={cn(
                     'group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    isActive
+                    isSelectionMode && isChecked
                       ? 'bg-secondary text-foreground'
-                      : 'text-foreground/70 hover:bg-secondary/50 hover:text-foreground'
+                      : isActive && !isSelectionMode
+                        ? 'bg-secondary text-foreground'
+                        : 'text-foreground/70 hover:bg-secondary/50 hover:text-foreground'
                   )}
-                  onClick={() => onSelectChat(chat.id)}
+                  onClick={() => {
+                    if (isSelectionMode) {
+                      toggleChatSelected(chat.id);
+                    } else {
+                      onSelectChat(chat.id);
+                    }
+                  }}
                   onKeyDown={onOptionKeyDown}
                 >
+                  {isSelectionMode && (
+                    <Checkbox
+                      id={`select-chat-${chat.id}`}
+                      isChecked={isChecked}
+                      onChange={() => toggleChatSelected(chat.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select chat: ${chat.title}`}
+                    />
+                  )}
+
                   {editingChat === chat.id ? (
                     <input
                       value={editTitle}
@@ -187,7 +303,7 @@ function SidebarComponent({
                   ) : (
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{chat.title}</p>
-                      {isActive && activeSubAgent && (
+                      {isActive && activeSubAgent && !isSelectionMode && (
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <Label
                             isCompact
@@ -201,7 +317,7 @@ function SidebarComponent({
                     </div>
                   )}
 
-                  {editingChat !== chat.id && (
+                  {!isSelectionMode && editingChat !== chat.id && (
                     <div className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
                         variant="plain"
@@ -320,6 +436,27 @@ function SidebarComponent({
             Delete
           </Button>
           <Button variant="link" onClick={() => setDeletingChatId(null)}>
+            Cancel
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      <Modal
+        variant={ModalVariant.small}
+        isOpen={showDeleteSelectedDialog}
+        onClose={() => setShowDeleteSelectedDialog(false)}
+        aria-label="Delete selected chats confirmation"
+      >
+        <ModalHeader title="Delete selected chats?" />
+        <ModalBody>
+          This will permanently delete {selectedChatIds.size} selected conversation
+          {selectedChatIds.size === 1 ? '' : 's'}. This action cannot be undone.
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="danger" onClick={confirmDeleteSelected}>
+            Delete selected
+          </Button>
+          <Button variant="link" onClick={() => setShowDeleteSelectedDialog(false)}>
             Cancel
           </Button>
         </ModalFooter>
