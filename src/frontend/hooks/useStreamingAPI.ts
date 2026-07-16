@@ -548,6 +548,9 @@ export function useStreamingAPI(threadId: string) {
             onMetadata(data) {
               setTraceId(data.trace_id);
             },
+            onCodeOutput(content) {
+              console.log('[code_execution_output]', content);
+            },
           };
 
           manager.stream(streamRequest, callbacks).then(() => {
@@ -703,6 +706,9 @@ export function useStreamingAPI(threadId: string) {
         },
         onMetadata(data) {
           setTraceId(data.trace_id);
+        },
+        onCodeOutput(content) {
+          console.log('[code_execution_output]', content);
         },
       };
 
