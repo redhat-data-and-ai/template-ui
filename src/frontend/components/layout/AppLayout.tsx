@@ -99,7 +99,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const activeSubAgent = streamingState?.activeSubAgent ?? null;
 
   useEffect(() => {
-    const loadedChats = chatStorage.loadChats();
+    const deletedThreadIds = chatStorage.getDeletedThreadIds();
+    const loadedChats = chatStorage
+      .loadChats()
+      .filter((c) => !deletedThreadIds.has(c.id));
     if (loadedChats.length > 0) {
       const mapped: ChatItem[] = loadedChats.map((c) => ({
         ...c,
@@ -116,10 +119,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     async function loadUserHistory() {
       try {
         dispatch(setLoadingThreads(true));
-        const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
+        const deletedThreadIds = chatStorage.getDeletedThreadIds();
+        const history = (await getAllThreadsByUserId(window.USER_DATA.preferred_username))
+          .filter((t) => !deletedThreadIds.has(t.id));
 
         const backendIds = new Set(history.map((t) => t.id));
-        const local = chatsRef.current;
+        const local = chatsRef.current.filter((c) => !deletedThreadIds.has(c.id));
 
         const surviving = local.filter(
           (c) => backendIds.has(c.id) || isClientCreatedChat(c.id),
@@ -254,6 +259,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleDeleteChat = useCallback(
     (chatId: string) => {
+      chatStorage.markThreadDeleted(chatId);
       dispatch(deleteChat(chatId));
       dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
       if (location.pathname === `/chat/${chatId}`) {
@@ -267,6 +273,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleDeleteAllChats = useCallback(() => {
     const ids = chats.map((c) => c.id);
+    chatStorage.markThreadsDeleted(ids);
     dispatch(clearAllChats());
     chatStorage.clearChats();
     dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));

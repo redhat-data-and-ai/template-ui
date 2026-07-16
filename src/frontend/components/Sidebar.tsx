@@ -41,7 +41,6 @@ function SidebarComponent({
   onNewChat,
   onSelectChat,
   onDeleteChat,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onDeleteAllChats,
   onRenameChat,
 }: SidebarProps) {
@@ -51,6 +50,7 @@ function SidebarComponent({
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
 
   const filteredChats = useMemo(() => {
@@ -95,8 +95,18 @@ function SidebarComponent({
       )}
 
       {/* Separator + label */}
-      <div className="shrink-0 px-3 pt-3 pb-1.5">
+      <div className="shrink-0 px-3 pt-3 pb-1.5 flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent chats</p>
+        {chatHistory.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowDeleteAllDialog(true)}
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+            title="Delete all chats"
+          >
+            Clear all
+          </button>
+        )}
       </div>
 
       {/* Chat list */}
@@ -310,6 +320,33 @@ function SidebarComponent({
             Delete
           </Button>
           <Button variant="link" onClick={() => setDeletingChatId(null)}>
+            Cancel
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      <Modal
+        variant={ModalVariant.small}
+        isOpen={showDeleteAllDialog}
+        onClose={() => setShowDeleteAllDialog(false)}
+        aria-label="Delete all chats confirmation"
+      >
+        <ModalHeader title="Delete all chats?" />
+        <ModalBody>
+          This will permanently delete all {chatHistory.length} conversations from your history.
+          This action cannot be undone.
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="danger"
+            onClick={() => {
+              onDeleteAllChats();
+              setShowDeleteAllDialog(false);
+            }}
+          >
+            Delete all
+          </Button>
+          <Button variant="link" onClick={() => setShowDeleteAllDialog(false)}>
             Cancel
           </Button>
         </ModalFooter>
