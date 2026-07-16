@@ -4,7 +4,8 @@ import type { HITLInterruptValue } from '@/types/deep-agent';
 export type SSEChunk =
   | { type: 'token'; content: string; chunk_id: number }
   | { type: 'message'; content: Message; chunk_id: number }
-  | { type: 'interrupt'; content: { value: HITLInterruptValue; resumable: boolean }; chunk_id: number };
+  | { type: 'interrupt'; content: { value: HITLInterruptValue; resumable: boolean }; chunk_id: number }
+  | { type: 'code_output'; content: string; chunk_id: number };
 
 export type McpStatusData = {
   tool: string;
@@ -32,7 +33,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
   if (!isRecord(parsed)) return null;
   const type = parsed.type;
-  if (type !== 'token' && type !== 'message' && type !== 'interrupt') return null;
+  if (type !== 'token' && type !== 'message' && type !== 'interrupt' && type !== 'code_output') return null;
   const chunkIdRaw = parsed.chunk_id;
   if (typeof chunkIdRaw !== 'number' || !Number.isFinite(chunkIdRaw)) {
     return null;
@@ -42,6 +43,11 @@ function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
   if (type === 'token') {
     if (typeof contentUnknown !== 'string') return null;
     return { type: 'token', content: contentUnknown, chunk_id: chunkIdRaw };
+  }
+
+  if (type === 'code_output') {
+    if (typeof contentUnknown !== 'string') return null;
+    return { type: 'code_output', content: contentUnknown, chunk_id: chunkIdRaw };
   }
 
   if (type === 'interrupt') {

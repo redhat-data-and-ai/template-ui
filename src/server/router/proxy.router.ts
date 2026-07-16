@@ -339,7 +339,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         const runBody: Record<string, unknown> = {
           assistant_id: 'agent',
-          stream_mode: ['messages', 'updates'],
+          stream_mode: ['messages', 'updates', 'custom'],
         };
         if (isResume) {
           runBody.command = { resume: message };
@@ -486,6 +486,25 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     (parsed as Record<string, unknown>).type === 'mcp_status');
                 if (isMcpStatus) {
                   reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
+                  continue;
+                }
+
+                // Code execution output streaming (stream_mode="custom")
+                // Skip ALL custom events to avoid corrupting partial text state
+                if (sseType === 'custom') {
+                  if (
+                    typeof parsed === 'object' &&
+                    parsed !== null &&
+                    (parsed as Record<string, unknown>).type === 'code_output'
+                  ) {
+                    const codeChunk = {
+                      type: 'code_output',
+                      content: (parsed as Record<string, unknown>).content ?? '',
+                      chunk_id: chunkId,
+                    };
+                    reply.raw.write(`event: chunk\ndata: ${JSON.stringify(codeChunk)}\n\n`);
+                    chunkId++;
+                  }
                   continue;
                 }
 

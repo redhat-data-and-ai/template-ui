@@ -47,6 +47,7 @@ export type StreamCallback = {
   onDone: () => void;
   onMcpStatus?: (event: McpStreamStatusEvent) => void;
   onMetadata?: (data: StreamMetadataPayload) => void;
+  onCodeOutput?: (content: string) => void;
 };
 
 export class StreamingManager {
@@ -93,6 +94,8 @@ export class StreamingManager {
             callbacks.onToken(event.data.content);
           } else if (event.data.type === 'interrupt') {
             callbacks.onInterrupt(event.data.content);
+          } else if (event.data.type === 'code_output') {
+            callbacks.onCodeOutput?.(event.data.content);
           } else {
             callbacks.onMessage(event.data.content);
           }
