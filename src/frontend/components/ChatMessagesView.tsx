@@ -477,7 +477,11 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
   }, [pendingInterrupt]);
 
   const pendingToolNames = useMemo(
-    () => new Set((pendingInterrupt?.value?.action_requests ?? []).map((r) => r.name)),
+    () => {
+      const v = pendingInterrupt?.value;
+      const requests = (typeof v === 'object' && v !== null) ? (v.action_requests ?? []) : [];
+      return new Set(requests.map((r) => r.name));
+    },
     [pendingInterrupt],
   );
 
@@ -497,6 +501,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
       });
       return next;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingToolNames, message.id]);
 
   const toggleExpand = (itemId: string) => {
@@ -566,7 +571,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                           <div className="text-left">
                             <div className="text-sm font-medium text-foreground flex items-center gap-2">
                               <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
-                              {(toolCall as Record<string, unknown>).content ? (
+                              {(toolCall as Record<string, unknown>).content != null ? (
                                 <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
                               ) : (
                                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
@@ -676,6 +681,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     }
 
     return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageKey, expandedItems, approvalSubmitted, pendingInterrupt, onInterruptResume, onAlwaysAllow]);
 
   return (
@@ -689,6 +695,10 @@ interface ChatMessagesViewProps {
   messages: Message[];
   streamEvents?: StreamEvent[];
   isLoading: boolean;
+  pendingInterrupt?: InterruptInfo | null;
+  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  onAlwaysAllow?: (toolNames: string[]) => void;
+  interruptContent?: React.ReactNode;
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   onSubmit: (inputValue: string) => void;
   onRetry?: () => void;
@@ -711,15 +721,15 @@ interface ChatMessagesViewProps {
   chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onExportMarkdown?: () => void;
   onExportJson?: () => void;
-  pendingInterrupt?: InterruptInfo | null;
-  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
-  onAlwaysAllow?: (toolNames: string[]) => void;
-  onInterruptDismiss?: () => void;
 }
 
 export function ChatMessagesView({
   messages,
   isLoading,
+  pendingInterrupt,
+  onInterruptResume,
+  onAlwaysAllow,
+  interruptContent,
   scrollAreaRef,
   onSubmit,
   onRetry,
@@ -737,10 +747,6 @@ export function ChatMessagesView({
   chatInputRef,
   onExportMarkdown,
   onExportJson,
-  pendingInterrupt,
-  onInterruptResume,
-  onAlwaysAllow,
-  onInterruptDismiss,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -756,7 +762,7 @@ export function ChatMessagesView({
   }, [messages]);
 
   const lastMessage = messages[messages.length - 1];
-  const rawNoResponse = !isLoading && messages.length > 0 && lastMessage?.type === 'human';
+  const rawNoResponse = !isLoading && !pendingInterrupt && !interruptContent && messages.length > 0 && lastMessage?.type === 'human';
   const [showNoResponse, setShowNoResponse] = useState(false);
 
   useEffect(() => {
@@ -929,6 +935,7 @@ export function ChatMessagesView({
               </div>
             </div>
           )}
+          {interruptContent}
           <div ref={bottomRef} />
         </div>
       </div>

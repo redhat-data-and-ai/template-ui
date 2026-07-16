@@ -29,9 +29,17 @@ export interface HITLInterruptValue {
   review_configs: HITLReviewConfig[];
 }
 
+export interface McpAuthPayload {
+  type: 'mcp_auth_required';
+  mcp_name: string;
+  connect_url: string;
+  message: string;
+}
+
 export interface InterruptInfo {
-  value: HITLInterruptValue;
+  value: string | HITLInterruptValue;
   resumable: boolean;
+  payload?: McpAuthPayload;
 }
 
 export interface TaskStep {
@@ -46,7 +54,7 @@ export interface TaskStep {
 const KNOWN_SUBAGENT_NAMES = new Set(['analyst', 'publisher']);
 
 export function isSubAgentToolCall(toolCall: { name: string; args?: Record<string, unknown> }): boolean {
-  if (toolCall.name === 'task' && toolCall.args?.subagent_type) return true;
+  if (toolCall.args?.subagent_type) return true;
   return KNOWN_SUBAGENT_NAMES.has(toolCall.name);
 }
 
@@ -104,7 +112,7 @@ export function extractTodosFromMessages(messages: { type: string; tool_calls?: 
 }
 
 const CODE_FENCE_RE = /```[\s\S]*?```/;
-const JSON_START_RE = /^\s*[{\[]/;
+const JSON_START_RE = /^\s*[{[]/;
 
 export type ArtifactKind = 'code' | 'json' | 'markdown' | 'text';
 

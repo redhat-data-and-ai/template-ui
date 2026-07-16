@@ -29,9 +29,26 @@ process.on("SIGTERM", () => {
 });
 
 async function start() {
-  const { setupServer } = await import("./server.js");
+  const { setupServer, startConfigWatcher } = await import("./server.js");
   const fastify = await setupServer();
   const port = Number(process.env.PORT) || 8080;
+
+  // Start config watcher for hot reload
+  // UI_CONFIG_PATH is set by deployer via ConfigMap mount, defaults to local path
+  const configPath = process.env.UI_CONFIG_PATH || "config/ui/settings.yaml";
+  try {
+    const stopWatcher = startConfigWatcher(configPath, fastify);
+    console.log(`[Server] Config watcher started on ${configPath}`);
+
+    // Cleanup watcher on shutdown
+    process.on("SIGTERM", () => {
+      console.log("[Server] Shutting down config watcher");
+      stopWatcher();
+    });
+  } catch (error) {
+    console.warn(`[Server] Could not start config watcher on ${configPath}:`, error);
+    console.warn(`[Server] Config hot reload disabled`);
+  }
 
   fastify.listen({ port, host: "0.0.0.0" }, function (err: Error | null) {
     if (err) {

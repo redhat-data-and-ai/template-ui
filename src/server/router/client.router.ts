@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
-import { getAgentName } from "../utils/settings.js";
+import { getAgentName, getSettings } from "../utils/settings.js";
 
 const BUILD_VERSION = Date.now().toString(36);
 const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
@@ -26,6 +26,29 @@ async function routes(fastify: FastifyInstance) {
     reply.send("OK");
   });
 
+  fastify.get("/auth/login", async (request: FastifyRequest, reply: FastifyReply) => {
+    const redirect =
+      typeof (request.query as { redirect?: string }).redirect === "string"
+        ? (request.query as { redirect: string }).redirect
+        : "/";
+    request.session.redirectUri = redirect;
+    return reply.redirect("/login");
+  })
+  
+  fastify.get("/mcp/oauth/callback", async (request: FastifyRequest, reply: FastifyReply) => {
+    const cfg = getSettings();
+    const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+    const qs = request.url.split("?")[1] || "";
+    const agentUrl = `${agentHost}/mcp/oauth/callback${qs ? `?${qs}` : ""}`;
+    const resp = await fetch(agentUrl, {
+      headers: { cookie: request.headers.cookie || "" },
+    });
+    reply
+      .status(resp.status)
+      .type(resp.headers.get("content-type") || "text/html");
+    return reply.send(await resp.text());
+  });
+
   fastify.get("/*", async (request: FastifyRequest, reply: FastifyReply) => {
     const session = request.session;
     const { user, token } = session;
@@ -47,14 +70,14 @@ async function routes(fastify: FastifyInstance) {
     };
 
     reply.type("text/html");
-    reply.send(`<!DOCTYPE html>
+    return reply.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" id="favicon" href="/favicon.ico" />
     <title>${agentName}</title>
-    <link rel="stylesheet" href="${basePath}/dist/frontend/template-ui.css">
+    <link rel="stylesheet" href="${basePath || ""}/dist/frontend/template-ui.css">
     <style>
     /* PF6/Tailwind v4 co-existence: inline to bypass Vite CSS purging */
     .pf-v6-c-button{--pf-v6-c-button--AlignItems:center}
@@ -69,12 +92,8 @@ async function routes(fastify: FastifyInstance) {
     </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script>
-    window.USER_DATA = ${JSON.stringify(userData || {})}
-    window.APP_DATA = ${JSON.stringify(appData)}
-    </script>
-    <script src="${basePath}/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
+    <div id="root" data-user="${encodeURIComponent(JSON.stringify(userData || {}))}" data-app="${encodeURIComponent(JSON.stringify(appData))}"></div>
+    <script src="${basePath || ""}/dist/frontend/main.umd.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`);
   });

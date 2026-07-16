@@ -47,10 +47,6 @@ interface StreamRequestBody {
   rules?: string[];
 }
 
-interface ProxyRequestBody {
-  [key: string]: unknown;
-}
-
 /**
  * Extract text from a LangGraph message content field, which may be
  * a plain string OR an array of typed blocks [{type:"text", text:"..."}].
@@ -129,38 +125,85 @@ function translateMessageEvent(
   chunkId: number,
   prevPartial: string,
   sentMsgIds: Set<string>,
-): [{ type: string; content: unknown; chunk_id: number } | null, string] {
-  if (!Array.isArray(payload) || payload.length === 0) return [null, prevPartial];
-  const [msg] = payload;
-  if (!msg || typeof msg !== 'object') return [null, prevPartial];
+): [Array<{ type: string; content: unknown }>, string] {
+  // ── Handle 'updates' events (complete node outputs with full args) ──
+  if (sseType === 'updates') {
+    const data = payload as Record<string, any> | null;
+    if (!data || typeof data !== 'object') return [[], prevPartial];
 
+    const chunks: Array<{ type: string; content: unknown }> = [];
+
+    const messageLists: any[][] = [];
+    for (const value of Object.values(data)) {
+      if (Array.isArray(value)) {
+        messageLists.push(value);
+      } else if (value && typeof value === 'object' && Array.isArray((value as any).messages)) {
+        messageLists.push((value as any).messages);
+      }
+    }
+
+    for (const messages of messageLists) {
+      for (const msg of messages) {
+        if (!msg || typeof msg !== 'object') continue;
+        const msgType = (msg.type ?? '').toString().toLowerCase();
+
+        if ((msgType === 'ai' || msgType === 'aimessage') && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+          const msgId = msg.id ?? `ai-upd-${chunkId}`;
+          if (sentMsgIds.has(msgId)) continue;
+          sentMsgIds.add(msgId);
+          const toolCalls = extractToolCalls(msg);
+          chunks.push({
+            type: 'message',
+            content: { type: 'ai', content: '', tool_calls: toolCalls, id: msgId },
+          });
+        }
+
+        if (msgType === 'tool' || msgType === 'toolmessage') {
+          const toolCallId = msg.tool_call_id ?? '';
+          const dedupKey = `tool-${toolCallId}`;
+          if (!sentMsgIds.has(dedupKey)) {
+            sentMsgIds.add(dedupKey);
+            chunks.push({
+              type: 'message',
+              content: {
+                type: 'tool',
+                content: extractText(msg.content) || JSON.stringify(msg.content),
+                tool_call_id: toolCallId,
+                name: msg.name ?? 'unknown',
+              },
+            });
+          }
+        }
+      }
+    }
+
+    return [chunks, prevPartial];
+  }
+
+  // ── Handle 'messages/partial' (text token streaming only) ──
   if (sseType === 'messages/partial') {
+    if (!Array.isArray(payload) || payload.length === 0) return [[], prevPartial];
+    const [msg] = payload;
+    if (!msg || typeof msg !== 'object') return [[], prevPartial];
+
     const raw = msg as Record<string, any>;
     const toolCalls = extractToolCalls(raw);
 
     if (toolCalls.length > 0) {
-      const msgId = raw.id ?? `ai-tc-${chunkId}`;
-      if (!sentMsgIds.has(msgId)) {
-        sentMsgIds.add(msgId);
-        return [{
-          type: 'message',
-          content: {
-            type: 'ai',
-            content: '',
-            tool_calls: toolCalls,
-            id: msgId,
-          },
-          chunk_id: chunkId,
-        }, ''];
-      }
-      return [null, prevPartial];
+      const fullText = extractText(raw.content);
+      return [[], fullText || prevPartial];
     }
 
     const fullText = extractText(raw.content);
-    return [null, fullText];
+    return [[], fullText];
   }
 
+  // ── Handle 'messages/complete' (fallback for anything not sent via updates) ──
   if (sseType === 'messages/complete') {
+    if (!Array.isArray(payload) || payload.length === 0) return [[], prevPartial];
+    const [msg] = payload;
+    if (!msg || typeof msg !== 'object') return [[], prevPartial];
+
     const raw = msg as Record<string, any>;
     const msgType = (raw.type ?? '').toString().toLowerCase();
 
@@ -169,42 +212,39 @@ function translateMessageEvent(
       const msgId = raw.id ?? `ai-${chunkId}`;
       if (!sentMsgIds.has(msgId)) {
         sentMsgIds.add(msgId);
-        return [{
+        return [[{
           type: 'message',
-          content: {
-            type: 'ai',
-            content: '',
-            tool_calls: toolCalls,
-            id: msgId,
-          },
-          chunk_id: chunkId,
-        }, ''];
+          content: { type: 'ai', content: '', tool_calls: toolCalls, id: msgId },
+        }], prevPartial];
       }
-      return [null, ''];
+      return [[], prevPartial];
     }
 
     if (msgType === 'tool' || msgType === 'toolmessage') {
-      return [{
+      const toolCallId = raw.tool_call_id ?? '';
+      const dedupKey = `tool-${toolCallId}`;
+      if (sentMsgIds.has(dedupKey)) return [[], prevPartial];
+      sentMsgIds.add(dedupKey);
+      return [[{
         type: 'message',
         content: {
           type: 'tool',
           content: extractText(raw.content) || JSON.stringify(raw.content),
-          tool_call_id: raw.tool_call_id ?? '',
+          tool_call_id: toolCallId,
           name: raw.name ?? 'unknown',
         },
-        chunk_id: chunkId,
-      }, ''];
+      }], prevPartial];
     }
 
     if (msgType === 'ai' || msgType === 'aimessage') {
       const fullText = extractText(raw.content);
       if (fullText.length > 0) {
-        return [null, fullText];
+        return [[], fullText];
       }
     }
   }
 
-  return [null, prevPartial];
+  return [[], prevPartial];
 }
 
 interface TokenPair {
@@ -286,6 +326,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: StreamRequestBody }>(
     '/proxy/agent/v1/stream',
     async (request, reply) => {
+      const cfg = getSettings();
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
 
@@ -321,6 +362,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
             metadata: { user_identity: user_id ?? 'anonymous' },
             ifExists: 'do_nothing',
           }),
+          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
         });
 
         if (!threadResp.ok) {
@@ -360,6 +402,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           method: 'POST',
           headers: { ...headers, Accept: 'text/event-stream' },
           body: JSON.stringify(runBody),
+          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
         });
 
         if (!runResp.ok) {
@@ -448,6 +491,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                       },
                     };
                     reply.raw.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
+                    chunkId++;
                   }
                 } catch {
                   fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
@@ -455,10 +499,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
                 continue;
               }
 
-              if (sseType === 'updates') {
-                try {
-                  const updatesPayload = JSON.parse(sseData) as unknown;
-                  const interrupt = extractInterruptFromUpdates(updatesPayload);
+              try {
+                const parsed = JSON.parse(sseData) as unknown;
+
+                if (sseType === 'updates') {
+                  const interrupt = extractInterruptFromUpdates(parsed);
                   if (interrupt) {
                     const interruptChunk = {
                       type: 'interrupt',
@@ -470,14 +515,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     interruptEmittedFromStream = true;
                     fastify.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
                   }
-                } catch {
-                  fastify.log.debug({ traceId, sseData }, 'Unparseable updates event');
                 }
-                continue;
-              }
 
-              try {
-                const parsed = JSON.parse(sseData) as unknown;
                 const isMcpStatus =
                   sseType === 'mcp_status' ||
                   (typeof parsed === 'object' &&
@@ -486,6 +525,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     (parsed as Record<string, unknown>).type === 'mcp_status');
                 if (isMcpStatus) {
                   reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
+                  chunkId++;
                   continue;
                 }
 
@@ -508,7 +548,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   continue;
                 }
 
-                const [uiChunk, nextPartial] = translateMessageEvent(
+                const [uiChunks, nextPartial] = translateMessageEvent(
                   sseType,
                   parsed,
                   chunkId,
@@ -516,7 +556,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   sentMsgIds,
                 );
 
-                if (nextPartial.length > prevPartial.length && !uiChunk) {
+                if (nextPartial.length > prevPartial.length && uiChunks.length === 0) {
                   const isEchoOfPrior = completedTexts.some(
                     (ct) => nextPartial.length <= ct.length && ct.startsWith(nextPartial),
                   );
@@ -528,13 +568,13 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   }
                 }
 
-                if (sseType === 'messages/complete' && !uiChunk && nextPartial.length > 0) {
+                if (sseType === 'messages/complete' && uiChunks.length === 0 && nextPartial.length > 0) {
                   completedTexts.push(nextPartial);
                 }
 
                 prevPartial = nextPartial;
-                if (uiChunk) {
-                  reply.raw.write(`data: ${JSON.stringify(uiChunk)}\n\n`);
+                for (const chunk of uiChunks) {
+                  reply.raw.write(`data: ${JSON.stringify({ ...chunk, chunk_id: chunkId })}\n\n`);
                   chunkId++;
                 }
               } catch {
@@ -561,7 +601,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
           try {
             const stateResp = await fetch(
               `${getAgentHost()}/threads/${thread_id}/state`,
-              { method: 'GET', headers },
+              {
+                method: 'GET',
+                headers,
+                signal: AbortSignal.timeout(cfg.agent.timeout_ms),
+              },
             );
             if (stateResp.ok) {
               const threadState = await stateResp.json() as Record<string, unknown>;
@@ -610,6 +654,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
   fastify.all<{ Params: { '*': string } }>(
     '/proxy/agent/*',
     async (request, reply) => {
+      const cfg = getSettings();
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const path = (request.params as any)['*'];
       const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
@@ -655,6 +700,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         const fetchOptions: RequestInit = {
           method: request.method,
           headers,
+          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
         };
 
         if (request.method !== 'GET' && request.method !== 'HEAD' && request.body) {
@@ -688,6 +734,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
   );
 
   fastify.post('/proxy/agent/feedback', async (request, reply) => {
+    const cfg = getSettings();
     const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
     const { accessToken, refreshFailed } = await ensureFreshTokens(fastify, request);
 
@@ -710,6 +757,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         method: 'POST',
         headers,
         body: JSON.stringify(request.body),
+        signal: AbortSignal.timeout(cfg.agent.timeout_ms),
       });
 
       reply.header('X-Trace-ID', traceId);
