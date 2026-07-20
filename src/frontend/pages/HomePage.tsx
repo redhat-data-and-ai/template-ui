@@ -103,6 +103,7 @@ export function HomePage() {
               </label>
               <textarea
                 id="home-chat-input"
+                autoFocus
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}

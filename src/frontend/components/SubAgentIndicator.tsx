@@ -146,9 +146,10 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
               )}
 
               {needsApproval && !isApproving && onInterruptResume && (
-                <div className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
+                <div role="alert" aria-live="assertive" aria-label={`Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
                   <button
                     type="button"
+                    autoFocus
                     onClick={() => {
                       setIsApproving(true);
                       onInterruptResume([{ type: 'approve' }]);
