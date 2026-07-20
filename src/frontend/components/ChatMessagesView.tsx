@@ -759,12 +759,14 @@ export function ChatMessagesView({
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const prevPendingInterrupt = useRef(pendingInterrupt);
 
   useEffect(() => {
-    if (!isLoading && !pendingInterrupt) {
+    if (prevPendingInterrupt.current && !pendingInterrupt) {
       chatInputRef?.current?.focus();
     }
-  }, [isLoading, pendingInterrupt, chatInputRef]);
+    prevPendingInterrupt.current = pendingInterrupt;
+  }, [pendingInterrupt, chatInputRef]);
 
   const { lastHumanMessageIndex, lastAiMessageIndex } = useMemo(() => {
     let lastHuman = -1;
