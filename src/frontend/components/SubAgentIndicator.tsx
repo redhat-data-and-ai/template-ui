@@ -21,8 +21,14 @@ interface SubAgentIndicatorProps {
 
 type VisualStatus = 'delegating' | 'complete' | 'error';
 
+function hasContent(toolCall: ToolCallWithContent): boolean {
+  if (toolCall.content == null) return false;
+  if (typeof toolCall.content === 'string') return toolCall.content.trim().length > 0;
+  return true;
+}
+
 function deriveStatus(toolCall: ToolCallWithContent): VisualStatus {
-  if (toolCall.content == null) return 'delegating';
+  if (!hasContent(toolCall)) return 'delegating';
   if (typeof toolCall.content === 'string' && toolCall.content.startsWith('Error')) return 'error';
   return 'complete';
 }
@@ -115,7 +121,7 @@ export function SubAgentIndicator({ toolCall, messageId: _messageId, index: _ind
                   </p>
                 </div>
               )}
-              {toolCall.content != null && (
+              {hasContent(toolCall) && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                     Result

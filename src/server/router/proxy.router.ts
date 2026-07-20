@@ -398,11 +398,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
           runBody.config = { metadata: { trace_id: traceId } };
         }
 
+        const streamTimeoutMs = Math.max(cfg.agent.timeout_ms * 10, 300_000);
         const runResp = await fetch(runUrl, {
           method: 'POST',
           headers: { ...headers, Accept: 'text/event-stream' },
           body: JSON.stringify(runBody),
-          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
+          signal: AbortSignal.timeout(streamTimeoutMs),
         });
 
         if (!runResp.ok) {
@@ -618,11 +619,16 @@ async function proxyRoutes(fastify: FastifyInstance) {
           reply.raw.end('data: [DONE]\n\n');
         }
       } catch (error: unknown) {
-        if ((error as Error).name === 'AbortError') {
+        const errName = (error as Error).name;
+        if (errName === 'AbortError') {
           fastify.log.info({ traceId }, 'Client disconnected, stream aborted');
           return;
         }
-        fastify.log.error({ traceId, error }, 'Proxy stream error');
+        if (errName === 'TimeoutError') {
+          fastify.log.warn({ traceId }, 'Agent stream timed out');
+        } else {
+          fastify.log.error({ traceId, err: error }, 'Proxy stream error');
+        }
         if (reply.raw.headersSent) {
           reply.raw.end();
         } else {
@@ -708,7 +714,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         return reply.send(responseBody);
       } catch (error) {
-        fastify.log.error({ traceId, error }, 'Proxy error');
+        fastify.log.error({ traceId, err: error }, 'Proxy error');
         return reply.status(502).send({ error: 'Failed to connect to agent service' });
       }
     }
@@ -746,7 +752,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const responseBody = await agentResponse.text();
       return reply.send(responseBody);
     } catch (error) {
-      fastify.log.error({ traceId, error }, 'Feedback proxy error');
+      fastify.log.error({ traceId, err: error }, 'Feedback proxy error');
       return reply.status(502).send({ error: 'Failed to send feedback' });
     }
   });
