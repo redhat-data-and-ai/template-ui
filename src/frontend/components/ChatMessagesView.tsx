@@ -449,7 +449,7 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
             </div>
           )}
           {bodyMd.length > 0 && (
-            <div aria-live="polite" aria-atomic="true" className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
+            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
               <ReactMarkdown components={mdComponents}>{bodyMd}</ReactMarkdown>
             </div>
           )}
@@ -833,7 +833,7 @@ export function ChatMessagesView({
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto chat-scroll" ref={scrollAreaRef}>
-        <div role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions text" className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
+        <div role="log" aria-label="Chat messages" aria-live="polite" aria-busy={isLoading} className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
           {messages.map((message, messageIndex) => {
             if (message.type === 'tool') {
               return <Fragment key={message.id ?? `m-${messageIndex}`} />;
