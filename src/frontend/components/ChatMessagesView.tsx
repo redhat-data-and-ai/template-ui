@@ -577,9 +577,9 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                             <div className="text-sm font-medium text-foreground flex items-center gap-2">
                               <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
                               {(toolCall as Record<string, unknown>).content != null ? (
-                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" aria-label="Complete" />
+                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" aria-hidden="true" />
                               ) : (
-                                <Loader2 className="w-4 h-4 text-primary animate-spin" aria-label="Running" />
+                                <Loader2 className="w-4 h-4 text-primary animate-spin" aria-hidden="true" />
                               )}
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">Tool execution</div>
