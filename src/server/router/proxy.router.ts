@@ -398,7 +398,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           runBody.config = { metadata: { trace_id: traceId } };
         }
 
-        const streamTimeoutMs = Math.max(cfg.agent.timeout_ms * 10, 300_000);
+        const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);
         const runResp = await fetch(runUrl, {
           method: 'POST',
           headers: { ...headers, Accept: 'text/event-stream' },
