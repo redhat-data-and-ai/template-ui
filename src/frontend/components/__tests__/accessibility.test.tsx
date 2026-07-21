@@ -309,7 +309,7 @@ describe('RulesEditor — accessibility', () => {
     const textarea = screen.getByRole('textbox', { name: /new rule/i });
     await user.type(textarea, 'Be concise');
     await user.click(screen.getByRole('button', { name: /^add$/i }));
-    const toggle = screen.getByRole('checkbox', { name: /toggle rule: be concise/i });
+    const toggle = screen.getByRole('switch', { name: /toggle rule: be concise/i });
     expect(toggle).toBeInTheDocument();
   });
 });
@@ -459,9 +459,17 @@ describe('Sidebar — accessibility', () => {
 
   it('search input has accessible label', () => {
     renderWithProviders(
-      <Sidebar {...defaultProps} chatHistory={[{ id: '1', title: 'Test', timestamp: new Date(), preview: '' }]} />,
+      <Sidebar
+        {...defaultProps}
+        chatHistory={[
+          { id: '1', title: 'Thread One', timestamp: new Date(), preview: '' },
+          { id: '2', title: 'Thread Two', timestamp: new Date(), preview: '' },
+          { id: '3', title: 'Thread Three', timestamp: new Date(), preview: '' },
+          { id: '4', title: 'Thread Four', timestamp: new Date(), preview: '' },
+        ]}
+      />,
     );
-    expect(screen.getByRole('searchbox', { name: /search chat threads/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /search chat threads/i })).toBeInTheDocument();
   });
 
   it('new chat button has accessible label', () => {
