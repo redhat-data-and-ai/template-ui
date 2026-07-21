@@ -334,7 +334,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 
   const sidebar = (
-    <PageSidebar isSidebarOpen={!sidebarCollapsed} aria-label="Sidebar navigation">
+    <PageSidebar isSidebarOpen={!sidebarCollapsed} aria-label="Sidebar navigation" role="navigation">
       <PageSidebarBody isFilled className="min-h-0">
         <ErrorBoundary
           onError={(error, errorInfo) => {
@@ -371,7 +371,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           console.error('Main content error:', error, errorInfo);
         }}
       >
-        <div id="main-content" aria-label="Chat content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {children}
         </div>
       </ErrorBoundary>

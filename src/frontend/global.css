@@ -112,7 +112,7 @@
   --muted-foreground: #8b919a;
   --accent: #2a1a1a;
   --accent-foreground: #f56e6e;
-  --destructive: #f03e3e;
+  --destructive: #f04646;
   --border: #2a2e3a;
   --input: #2a2e3a;
   --ring: #4dabf7;
@@ -342,5 +342,17 @@ input[type="search"]:focus {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border-width: 0;
+  }
+}
+
+/* ── Reduced Motion (WCAG 2.3.1 / user preference) ──────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

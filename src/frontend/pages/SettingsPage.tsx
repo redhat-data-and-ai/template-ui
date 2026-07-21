@@ -76,43 +76,41 @@ export function SettingsPage() {
         <div className="max-w-4xl mx-auto px-6 py-6">
           <div className="flex flex-col sm:flex-row gap-6">
             {/* Tab navigation */}
-            <nav className="sm:w-48 shrink-0" aria-label="Settings sections">
-              <div
-                role="tablist"
-                aria-orientation="vertical"
-                aria-label="Settings"
-                className="flex sm:flex-col gap-1"
-              >
-                {TABS.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      id={`settings-tab-${tab.id}`}
-                      role="tab"
-                      aria-selected={isActive}
-                      aria-controls={`settings-panel-${tab.id}`}
-                      tabIndex={isActive ? 0 : -1}
-                      ref={(el) => {
-                        if (el) tabRefs.current.set(tab.id, el);
-                      }}
-                      onClick={() => setActiveTab(tab.id)}
-                      onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
-                      className={cn(
-                        'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer',
-                        isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
-                      )}
-                    >
-                      <Icon className="w-4 h-4" aria-hidden="true" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </nav>
+            <div
+              role="tablist"
+              aria-orientation="vertical"
+              aria-label="Settings sections"
+              className="sm:w-48 shrink-0 flex sm:flex-col gap-1"
+            >
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    id={`settings-tab-${tab.id}`}
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`settings-panel-${tab.id}`}
+                    tabIndex={isActive ? 0 : -1}
+                    ref={(el) => {
+                      if (el) tabRefs.current.set(tab.id, el);
+                    }}
+                    onClick={() => setActiveTab(tab.id)}
+                    onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer',
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                    )}
+                  >
+                    <Icon className="w-4 h-4" aria-hidden="true" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Content */}
             <div className="flex-1 min-w-0">

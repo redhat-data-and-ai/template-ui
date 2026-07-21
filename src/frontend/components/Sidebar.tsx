@@ -100,64 +100,50 @@ function SidebarComponent({
       </div>
 
       {/* Chat list */}
-      <div
-        className="flex-1 min-h-0 overflow-y-auto chat-scroll px-1.5"
-        role="listbox"
-        aria-label="Chat history"
-      >
-        {filteredChats.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-            <MessageSquare className="w-6 h-6 text-muted-foreground/40 mb-2" />
-            <p className="text-sm text-muted-foreground/60">
-              {chatHistory.length === 0 ? 'No chats yet' : 'No matching threads'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-0.5">
-            {filteredChats.map((chat) => {
-              const isActive = currentChatId === chat.id;
+      {filteredChats.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 text-center">
+          <MessageSquare className="w-6 h-6 text-muted-foreground/40 mb-2" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">
+            {chatHistory.length === 0 ? 'No chats yet' : 'No matching threads'}
+          </p>
+        </div>
+      ) : (
+        <ul
+          aria-label="Chat history"
+          className="flex-1 min-h-0 overflow-y-auto chat-scroll px-1.5 space-y-0.5 list-none"
+        >
+          {filteredChats.map((chat) => {
+            const isActive = currentChatId === chat.id;
 
-              const focusNeighbor = (delta: number) => {
-                const idx = filteredChats.findIndex((c) => c.id === chat.id);
-                const next = filteredChats[idx + delta];
-                if (!next) return;
-                document.getElementById(`sidebar-chat-option-${next.id}`)?.focus();
-              };
+            const focusNeighbor = (delta: number) => {
+              const idx = filteredChats.findIndex((c) => c.id === chat.id);
+              const next = filteredChats[idx + delta];
+              if (!next) return;
+              document.getElementById(`sidebar-chat-btn-${next.id}`)?.focus();
+            };
 
-              const onOptionKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelectChat(chat.id);
-                  return;
-                }
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  focusNeighbor(1);
-                  return;
-                }
-                if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  focusNeighbor(-1);
-                }
-              };
+            const onBtnKeyDown = (e: React.KeyboardEvent) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                focusNeighbor(1);
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                focusNeighbor(-1);
+              }
+            };
 
-              return (
-                <div
-                  key={chat.id}
-                  id={`sidebar-chat-option-${chat.id}`}
-                  role="option"
-                  tabIndex={editingChat === chat.id ? -1 : 0}
-                  aria-selected={isActive}
-                  className={cn(
-                    'group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    isActive
-                      ? 'bg-secondary text-foreground'
-                      : 'text-foreground/70 hover:bg-secondary/50 hover:text-foreground'
-                  )}
-                  onClick={() => onSelectChat(chat.id)}
-                  onKeyDown={onOptionKeyDown}
-                >
-                  {editingChat === chat.id ? (
+            return (
+              <li
+                key={chat.id}
+                className={cn(
+                  'relative group rounded-lg transition-colors',
+                  isActive
+                    ? 'bg-secondary text-foreground'
+                    : 'hover:bg-secondary/50',
+                )}
+              >
+                {editingChat === chat.id ? (
+                  <div className="flex items-center gap-2 px-2.5 py-2">
                     <input
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
@@ -172,13 +158,24 @@ function SidebarComponent({
                       aria-label={`Rename chat: ${chat.title}`}
                       className="flex-1 bg-transparent text-sm text-foreground border border-border rounded px-1.5 py-0.5 outline-none focus:border-primary"
                       autoFocus
-                      onClick={(e) => e.stopPropagation()}
                     />
-                  ) : (
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{chat.title}</p>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      id={`sidebar-chat-btn-${chat.id}`}
+                      type="button"
+                      onClick={() => onSelectChat(chat.id)}
+                      onKeyDown={onBtnKeyDown}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={cn(
+                        'w-full text-left text-sm px-2.5 py-2 pr-16 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                        isActive ? 'text-foreground' : 'text-foreground/70 hover:text-foreground',
+                      )}
+                    >
+                      <span className="block truncate">{chat.title}</span>
                       {isActive && activeSubAgent && (
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="flex items-center gap-1.5 mt-0.5">
                           <Label
                             isCompact
                             color="blue"
@@ -186,45 +183,37 @@ function SidebarComponent({
                           >
                             <span className="capitalize">{activeSubAgent.name}</span>
                           </Label>
-                        </div>
+                        </span>
                       )}
-                    </div>
-                  )}
+                    </button>
 
-                  {editingChat !== chat.id && (
-                    <div className="flex shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                       <Button
                         variant="plain"
                         size="sm"
-                        className="h-6 w-6 !p-0 text-muted-foreground hover:text-foreground"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          handleRename(chat.id, chat.title);
-                        }}
-                        aria-label="Rename chat"
+                        className="h-7 w-7 !p-0 text-muted-foreground hover:text-foreground focus-visible:opacity-100"
+                        onClick={() => handleRename(chat.id, chat.title)}
+                        aria-label={`Rename chat: ${chat.title}`}
                       >
                         <Edit3 className="w-3 h-3" />
                       </Button>
                       <Button
                         variant="plain"
                         size="sm"
-                        className="h-6 w-6 !p-0 text-muted-foreground hover:text-destructive"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          setDeletingChatId(chat.id);
-                        }}
+                        className="h-7 w-7 !p-0 text-muted-foreground hover:text-destructive focus-visible:opacity-100"
+                        onClick={() => setDeletingChatId(chat.id)}
                         aria-label={`Delete chat: ${chat.title}`}
                       >
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <div className="shrink-0 px-3 py-2 border-t border-sidebar-border">
         <Tooltip

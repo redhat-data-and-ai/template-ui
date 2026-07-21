@@ -20,6 +20,11 @@ export class SettingsPage {
     await this.page.getByRole('tab', { name: tab, exact: false }).click();
   }
 
+  async selectTab(tab: SettingsTab): Promise<void> {
+    await this.clickTab(tab);
+    await this.page.waitForSelector('[role="tabpanel"]:not([hidden])', { state: 'visible' });
+  }
+
   async expectTabContentVisible(heading: SettingsTab): Promise<void> {
     await expect(this.page.getByRole('heading', { name: heading, exact: false }).first()).toBeVisible();
   }
