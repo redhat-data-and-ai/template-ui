@@ -64,7 +64,12 @@ export default function App() {
   // Only show loading on initial mount, not on errors
   if (loading && !error && !branding) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label="Loading application"
+        style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}
+      >
         Loading configuration...
       </div>
     );
