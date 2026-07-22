@@ -7,11 +7,11 @@
 # Build: podman build -f Containerfile.base -t ai-template-ui:v1.0.0 .
 # Run:   podman run -v /path/to/config:/app/config/ui:ro -e UI_CONFIG_PATH=/app/config/ui/settings.yaml ai-template-ui:v1.0.0
 
-FROM registry.access.redhat.com/ubi10/nodejs-24:10.1
+FROM registry.access.redhat.com/hi/nodejs:24.18.0-builder
 
 USER root
 
-ARG OPA_VERSION=1.4.2
+ARG OPA_VERSION=1.18.2
 RUN curl -fsSL "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static" \
     -o /usr/local/bin/opa && chmod 755 /usr/local/bin/opa
 
@@ -30,7 +30,7 @@ COPY --chown=1001:0 vite-env.d.ts ./
 COPY --chown=1001:0 tsconfig.json ./
 COPY --chown=1001:0 tsconfig.node.json ./
 
-RUN mkdir -p config/ui && chown -R 1001:0 config
+RUN mkdir -p config/ui && chown -R 1001:0 config && chown -R 1001:0 /opt/app-root/src
 
 USER 1001
 
