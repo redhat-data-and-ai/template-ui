@@ -143,11 +143,9 @@ describe('StreamingManager', () => {
 
   // ── cancel() → AbortError → status 'cancelled' ───────────────────────────
   it('emits cancelled status when cancel() is called during stream', async () => {
-    let rejectFn!: (e: Error) => void;
     vi.mocked(fetch).mockImplementationOnce(
       (_url, opts) =>
         new Promise<Response>((_resolve, reject) => {
-          rejectFn = reject;
           opts?.signal?.addEventListener('abort', () => {
             const err = new Error('Aborted');
             err.name = 'AbortError';
