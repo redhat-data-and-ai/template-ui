@@ -31,7 +31,7 @@ export function TodoStrip({ messages, isLoading = false }: TodoStripProps) {
   const done = todos.filter((t) => t.status === 'completed').length;
 
   return (
-    <div className="border-t border-border bg-card/60 backdrop-blur-sm" role="status" aria-label="Current tasks">
+    <div className="border-t border-border bg-card/60 backdrop-blur-sm" role="region" aria-label="Current tasks">
       <div className="max-w-3xl mx-auto px-4 py-2">
         <div className="flex items-center gap-2 mb-1.5">
           <ListChecks className="w-3.5 h-3.5 text-muted-foreground" />

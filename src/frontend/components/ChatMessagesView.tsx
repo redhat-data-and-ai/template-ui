@@ -535,7 +535,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
       const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
 
       return (
-        <div className="space-y-2 w-full">
+        <div className="space-y-2 w-full" aria-live="off">
           {subAgentCalls.map((toolCall, idx) => (
             <SubAgentIndicator
               key={`${message.id}-sa-${idx}`}
@@ -762,6 +762,8 @@ export function ChatMessagesView({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const prevPendingInterrupt = useRef(pendingInterrupt);
+  const prevIsLoading = useRef(isLoading);
+  const [srAnnouncement, setSrAnnouncement] = useState('');
 
   useEffect(() => {
     if (prevPendingInterrupt.current && !pendingInterrupt) {
@@ -769,6 +771,19 @@ export function ChatMessagesView({
     }
     prevPendingInterrupt.current = pendingInterrupt;
   }, [pendingInterrupt, chatInputRef]);
+
+  useEffect(() => {
+    const wasLoading = prevIsLoading.current;
+    prevIsLoading.current = isLoading;
+    if (!wasLoading || isLoading) return;
+    const lastAiMessage = [...messages].reverse().find((m) => m.type === 'ai');
+    if (!lastAiMessage) return;
+    const text = getCopyableAiMessageText(lastAiMessage.content);
+    if (!text) return;
+    setSrAnnouncement('');
+    const id = setTimeout(() => setSrAnnouncement(text), 50);
+    return () => clearTimeout(id);
+  }, [isLoading, messages]);
 
   const { lastHumanMessageIndex, lastAiMessageIndex } = useMemo(() => {
     let lastHuman = -1;
@@ -801,6 +816,13 @@ export function ChatMessagesView({
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {srAnnouncement}
+      </div>
       {showExport && (
         <div className="shrink-0 flex justify-end items-center px-4 md:px-6 py-2 border-b border-border bg-background/90">
           <Dropdown
