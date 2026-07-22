@@ -1,8 +1,17 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 /** Serialise one `data:` line for a token chunk the SSEProcessor accepts. */
 export function tokenChunk(text: string, chunkId: number): string {
   return `data: ${JSON.stringify({ type: 'token', content: text, chunk_id: chunkId })}\n\n`;
+}
+
+/** Serialise one `data:` line for an interrupt chunk the SSEProcessor accepts. */
+export function interruptChunk(value: object | string, chunkId: number): string {
+  return `data: ${JSON.stringify({
+    type: 'interrupt',
+    content: { value, resumable: true },
+    chunk_id: chunkId,
+  })}\n\n`;
 }
 
 /**
@@ -71,6 +80,69 @@ export async function mockStreamError(page: Page, status: number): Promise<void>
     route.fulfill({
       status,
       body: `HTTP ${status}`,
+    }),
+  );
+}
+
+/**
+ * Intercept the streaming endpoint and return a single interrupt chunk.
+ * The interrupt value can be a plain string (generic) or an HITLInterruptValue object.
+ */
+export async function mockInterruptStream(
+  page: Page,
+  value: object | string,
+): Promise<void> {
+  await page.route('**/api/proxy/agent/v1/stream', (route) => {
+    const body = interruptChunk(value, 0) + 'data: [DONE]\n\n';
+    return route.fulfill({
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+      body,
+    });
+  });
+}
+
+/**
+ * Override the streaming endpoint for a resume request to return a simple
+ * token response. Intercepts only the NEXT call — the route is unregistered
+ * after it fires once, so subsequent stream requests fall through to any
+ * previously registered handlers.
+ */
+export async function mockResumeStream(page: Page, responseText: string): Promise<void> {
+  const handler = async (route: Route) => {
+    // Unregister before fulfilling so only the first matching request is intercepted
+    await page.unroute('**/api/proxy/agent/v1/stream', handler);
+    const body = tokenChunk(responseText, 0) + 'data: [DONE]\n\n';
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+      body,
+    });
+  };
+  await page.route('**/api/proxy/agent/v1/stream', handler);
+}
+
+/**
+ * Intercept the streaming endpoint and return HTTP 429 with a Retry-After header.
+ * Used for testing the rate-limit UI.
+ */
+export async function mockRateLimitResponse(page: Page, retryAfterSeconds = 5): Promise<void> {
+  await page.route('**/api/proxy/agent/v1/stream', (route) =>
+    route.fulfill({
+      status: 429,
+      headers: {
+        'Retry-After': String(retryAfterSeconds),
+        'Content-Type': 'text/plain',
+      },
+      body: 'Rate limited',
     }),
   );
 }

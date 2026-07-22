@@ -22,7 +22,7 @@ export interface StreamRequest {
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error' | 'cancelled';
 
 export interface InterruptPayload {
-  value: HITLInterruptValue;
+  value: HITLInterruptValue | string;
   resumable: boolean;
 }
 
