@@ -1,0 +1,7 @@
+# Default owners for everything
+* @redhat-data-and-ai/template-ui-maintainers
+
+# CI and infrastructure
+.github/ @redhat-data-and-ai/template-ui-maintainers
+Containerfile @redhat-data-and-ai/template-ui-maintainers
+deployment/ @redhat-data-and-ai/template-ui-maintainers
