@@ -17,11 +17,11 @@ export class SettingsPage {
   }
 
   async clickTab(tab: SettingsTab): Promise<void> {
-    await this.page.getByRole('button', { name: tab, exact: false }).click();
+    await this.page.getByRole('tab', { name: tab, exact: false }).click();
   }
 
   async expectTabContentVisible(heading: SettingsTab): Promise<void> {
-    await expect(this.page.getByRole('heading', { name: heading, exact: false })).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: heading, exact: false }).first()).toBeVisible();
   }
 
   /** Navigate back to the home page via the back arrow button. */
