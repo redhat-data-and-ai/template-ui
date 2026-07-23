@@ -20,6 +20,7 @@ import {
 } from "./ActivityTimeline";
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
@@ -393,7 +394,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
               </button>
             )}
             <div className="text-sm leading-relaxed [&_p]:!text-primary-foreground [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
-              <ReactMarkdown components={mdComponents}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {plain}
               </ReactMarkdown>
             </div>
@@ -450,7 +451,7 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
           )}
           {bodyMd.length > 0 && (
             <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
-              <ReactMarkdown components={mdComponents}>{bodyMd}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{bodyMd}</ReactMarkdown>
             </div>
           )}
           {customData && <CustomDataRenderer data={customData} />}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Label } from '@patternfly/react-core';
 import { Copy, Check, FileText, Code, FileJson } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { detectArtifactKind, type ArtifactKind } from '../types/deep-agent';
 
 interface ArtifactViewerProps {
@@ -50,7 +51,7 @@ export function ArtifactViewer({ content, title }: ArtifactViewerProps) {
       <div className="max-h-80 overflow-auto p-3">
         {kind === 'markdown' ? (
           <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           </div>
         ) : kind === 'json' ? (
           <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">
