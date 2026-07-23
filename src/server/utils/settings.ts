@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
@@ -32,6 +32,8 @@ interface RateLimitConfig {
 interface SessionConfig {
   secure_cookie: boolean;
   max_age_days: number;
+  http_only: boolean;
+  same_site: 'strict' | 'lax' | 'none';
 }
 
 interface SecurityConfig {
@@ -43,6 +45,22 @@ interface SecurityConfig {
 interface OtelConfig {
   enabled: boolean;
   service_name: string;
+}
+
+interface PlatformOpaConfig {
+  enabled: boolean;
+  policy_path: string;
+  fail_on_violation: boolean;
+  approved_auth_providers: string[];
+  internal_endpoint_suffixes: string[];
+  max_session_ttl_days: number;
+  restrict_debug_mode: boolean;
+  restricted_features: string[];
+  max_rate_limit: number;
+}
+
+interface PlatformConfig {
+  opa: PlatformOpaConfig;
 }
 
 interface AnnouncementConfig {
@@ -93,16 +111,26 @@ interface AgentConfig {
   streaming: boolean;
 }
 
+interface AuthConfig {
+  enabled: boolean;
+  sso_client_id: string;
+  sso_client_secret: string;  // SECURITY: Never set in YAML - only via SSO_CLIENT_SECRET env var
+  sso_issuer_host: string;
+  sso_callback_url: string;
+}
+
 export interface UISettings {
   branding: BrandingConfig;
   features: FeaturesConfig;
   agent: AgentConfig;
+  auth: AuthConfig;
   server: ServerConfig;
   logging: LoggingConfig;
   cors: CorsConfig;
   security: SecurityConfig;
   otel: OtelConfig;
   announcement: AnnouncementConfig;
+  platform: PlatformConfig;
 }
 
 const DEFAULTS: UISettings = {
@@ -134,15 +162,22 @@ const DEFAULTS: UISettings = {
     timeout_ms: 30000,
     streaming: true,
   },
+  auth: {
+    enabled: true,
+    sso_client_id: "",  // Always from SSO_CLIENT_ID env var
+    sso_client_secret: "",  // Always from SSO_CLIENT_SECRET env var (secret)
+    sso_issuer_host: "",  // Always from SSO_ISSUER_HOST env var
+    sso_callback_url: "",  // Always from SSO_CALLBACK_URL env var
+  },
   server: { host: "0.0.0.0", port: 8080, body_limit: 1_048_576 },
   logging: { level: "info" },
-  cors: { origin: "http://localhost:5173" },
+  cors: { origin: "http://localhost:8080" },
   security: {
     helmet: {
       enabled: true,
       csp: {
         default_src: ["'self'"],
-        script_src: ["'self'", "'unsafe-inline'"],
+        script_src: ["'self'"],
         style_src: ["'self'", "'unsafe-inline'"],
         img_src: ["'self'", "data:", "blob:", "https:"],
         connect_src: ["'self'"],
@@ -158,10 +193,28 @@ const DEFAULTS: UISettings = {
       window: "1 minute",
       exclude_paths: ["/api/health", "/_health"],
     },
-    session: { secure_cookie: false, max_age_days: 30 },
+    session: {
+      secure_cookie: false, // false for dev; set to true in production
+      max_age_days: 30,
+      http_only: true,
+      same_site: 'lax', // 'lax' allows OAuth2 callback flows; use 'strict' only if not using SSO
+    },
   },
   otel: { enabled: false, service_name: "template-ui" },
   announcement: { enabled: false, message: "", type: "info" },
+  platform: {
+    opa: {
+      enabled: false,
+      policy_path: "",
+      fail_on_violation: false,
+      approved_auth_providers: [],
+      internal_endpoint_suffixes: [],
+      max_session_ttl_days: 0,
+      restrict_debug_mode: false,
+      restricted_features: [],
+      max_rate_limit: 0,
+    },
+  },
 };
 
 function deepMerge<T extends Record<string, unknown>>(
@@ -192,11 +245,23 @@ function deepMerge<T extends Record<string, unknown>>(
 }
 
 function loadYaml(filePath: string): Record<string, unknown> | null {
+  let raw: string;
   try {
-    const raw = readFileSync(filePath, "utf-8");
-    return (yaml.load(raw) as Record<string, unknown>) ?? null;
-  } catch {
-    return null;
+    raw = readFileSync(filePath, "utf-8");
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      return null;
+    }
+    throw err;
+  }
+
+  try {
+    const parsed = yaml.load(raw) as Record<string, unknown>;
+    return parsed ?? null;
+  } catch (parseError) {
+    const msg = parseError instanceof Error ? parseError.message : String(parseError);
+    throw new Error(`Config parse error: invalid YAML in "${filePath}": ${msg}`);
   }
 }
 
@@ -255,6 +320,38 @@ function validateConfig(config: UISettings): void {
   if (typeof config.agent.streaming !== "boolean") {
     throw new Error("Config validation error: agent.streaming must be boolean");
   }
+
+  // Auth config validation
+  if (config.auth.enabled) {
+    if (config.auth.sso_issuer_host && !isValidUrl(config.auth.sso_issuer_host)) {
+      throw new Error(
+        `Config validation error: auth.sso_issuer_host must be a valid URL (got '${config.auth.sso_issuer_host}')`,
+      );
+    }
+    if (config.auth.sso_callback_url && !isValidUrl(config.auth.sso_callback_url)) {
+      throw new Error(
+        `Config validation error: auth.sso_callback_url must be a valid URL (got '${config.auth.sso_callback_url}')`,
+      );
+    }
+  }
+
+  // Security config validation
+  if (config.security.rate_limit.enabled) {
+    if (typeof config.security.rate_limit.max !== "number" || config.security.rate_limit.max <= 0) {
+      throw new Error("Config validation error: security.rate_limit.max must be a positive number");
+    }
+    if (!config.security.rate_limit.window || config.security.rate_limit.window.trim() === "") {
+      throw new Error("Config validation error: security.rate_limit.window is required");
+    }
+  }
+  if (typeof config.security.session.max_age_days !== "number" || config.security.session.max_age_days <= 0) {
+    throw new Error("Config validation error: security.session.max_age_days must be a positive number");
+  }
+
+  // Server config validation
+  if (typeof config.server.port !== "number" || config.server.port <= 0 || config.server.port > 65535) {
+    throw new Error("Config validation error: server.port must be between 1 and 65535");
+  }
 }
 
 function applyEnvOverrides(config: UISettings): void {
@@ -301,16 +398,112 @@ function applyEnvOverrides(config: UISettings): void {
       config.agent.timeout_ms = timeout;
     }
   }
+
+  // Auth overrides - ALL SSO config comes from environment variables (never from YAML)
+  // These are injected by agent-engine during deployment
+  if (process.env.SSO_CLIENT_ID) {
+    config.auth.sso_client_id = process.env.SSO_CLIENT_ID;
+  }
+  if (process.env.SSO_CLIENT_SECRET) {
+    config.auth.sso_client_secret = process.env.SSO_CLIENT_SECRET;
+  }
+  if (process.env.SSO_ISSUER_HOST) {
+    config.auth.sso_issuer_host = process.env.SSO_ISSUER_HOST;
+  }
+  if (process.env.SSO_CALLBACK_URL) {
+    config.auth.sso_callback_url = process.env.SSO_CALLBACK_URL;
+  }
+
+  // Security overrides - Session
+  if (process.env.SESSION_SECURE_COOKIE !== undefined) {
+    config.security.session.secure_cookie = process.env.SESSION_SECURE_COOKIE === 'true';
+  }
+  if (process.env.SECURITY_SESSION_SECURE_COOKIE !== undefined) {
+    config.security.session.secure_cookie = process.env.SECURITY_SESSION_SECURE_COOKIE === "true";
+  }
+  if (process.env.SESSION_HTTP_ONLY !== undefined) {
+    config.security.session.http_only = process.env.SESSION_HTTP_ONLY === 'true';
+  }
+  if (process.env.SESSION_SAME_SITE) {
+    const sameSite = process.env.SESSION_SAME_SITE.toLowerCase();
+    if (['strict', 'lax', 'none'].includes(sameSite)) {
+      config.security.session.same_site = sameSite as 'strict' | 'lax' | 'none';
+    }
+  }
+  
+  // Platform OPA overrides
+  if (process.env.PLATFORM_OPA_ENABLED !== undefined) {
+    config.platform.opa.enabled = process.env.PLATFORM_OPA_ENABLED === "true";
+  }
+  if (process.env.PLATFORM_OPA_POLICY_PATH) {
+    config.platform.opa.policy_path = process.env.PLATFORM_OPA_POLICY_PATH;
+  }
+  if (process.env.PLATFORM_OPA_FAIL_ON_VIOLATION !== undefined) {
+    config.platform.opa.fail_on_violation = process.env.PLATFORM_OPA_FAIL_ON_VIOLATION === "true";
+  }
+  if (process.env.SECURITY_SESSION_MAX_AGE_DAYS) {
+    const days = Number.parseInt(process.env.SECURITY_SESSION_MAX_AGE_DAYS, 10);
+    if (!Number.isNaN(days)) {
+      config.security.session.max_age_days = days;
+    }
+  }
+
+  // Security overrides - CSP (for emergency rollback)
+  if (process.env.CSP_SCRIPT_SRC) {
+    config.security.helmet.csp.script_src = process.env.CSP_SCRIPT_SRC.split(' ');
+  }
+  if (process.env.CSP_CONNECT_SRC) {
+    config.security.helmet.csp.connect_src = process.env.CSP_CONNECT_SRC.split(' ');
+  }
+
+  // Security overrides - Rate limit
+  if (process.env.RATE_LIMIT_MAX) {
+    const max = Number.parseInt(process.env.RATE_LIMIT_MAX, 10);
+    if (!Number.isNaN(max)) {
+      config.security.rate_limit.max = max;
+    }
+  }
+  if (process.env.SECURITY_RATE_LIMIT_MAX) {
+    const max = Number.parseInt(process.env.SECURITY_RATE_LIMIT_MAX, 10);
+    if (!Number.isNaN(max)) {
+      config.security.rate_limit.max = max;
+    }
+  }
+  if (process.env.SECURITY_RATE_LIMIT_WINDOW) {
+    config.security.rate_limit.window = process.env.SECURITY_RATE_LIMIT_WINDOW;
+  }
+
+  // Server overrides
+  if (process.env.PORT) {
+    const port = Number.parseInt(process.env.PORT, 10);
+    if (!Number.isNaN(port)) {
+      config.server.port = port;
+    }
+  }
+
+  // Logging override
+  if (process.env.LOG_LEVEL) {
+    config.logging.level = process.env.LOG_LEVEL;
+  }
 }
 
 let _settings: UISettings | undefined;
+let _agentName: string | null = null;
 
 export function getSettings(): UISettings {
   if (_settings) return _settings;
 
+  const explicitPath = process.env.UI_CONFIG_PATH;
   const configPath =
-    process.env.UI_CONFIG_PATH ||
+    explicitPath ||
     resolve(__dirname, "../../../config/ui/settings.yaml");
+
+  if (explicitPath && !existsSync(configPath)) {
+    throw new Error(
+      `Config file not found: ${configPath}. Mount config/ui at /opt/app-root/src/config`,
+    );
+  }
+
   const fromFile = loadYaml(configPath);
 
   // Deep merge defaults with file config
@@ -324,16 +517,24 @@ export function getSettings(): UISettings {
   // Validate the final config
   validateConfig(_settings);
 
+  // Warn if production environment has insecure session cookies
+  const isProd = process.env.ENVIRONMENT === 'production';
+  if (isProd && !_settings.security.session.secure_cookie) {
+    console.warn(
+      'WARNING: Running in production with secure_cookie=false. ' +
+      'Session cookies will be transmitted over HTTP. ' +
+      'Set SESSION_SECURE_COOKIE=true or update config file.'
+    );
+  }
+
   return _settings;
 }
 
-// For testing only - clears the cached settings
+// For testing only - clears the cached settings and agent name
 export function resetSettings(): void {
   _settings = undefined;
+  _agentName = null;
 }
-
-// Agent name fallback (fetches from agent backend /info endpoint)
-let _agentName: string | null = null;
 
 export async function getAgentName(): Promise<string> {
   if (_agentName !== null) return _agentName;

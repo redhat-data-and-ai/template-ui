@@ -304,8 +304,8 @@ const mdComponents = {
       {children}
     </td>
   ),
-  img: ({ className, ...props }: MdComponentProps) => (
-    <img className={cn("w-full h-auto rounded-lg", className)} {...props} />
+  img: ({ className, alt, ...props }: MdComponentProps) => (
+    <img className={cn("w-full h-auto rounded-lg", className)} alt={(alt as string) ?? ''} {...props} />
   ),
 };
 
@@ -366,6 +366,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
               <button
                 type="button"
                 onClick={() => saveEdit()}
+                aria-label="Save edited message"
                 className="rounded-md bg-primary-foreground px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-foreground/90"
               >
                 Save
@@ -373,6 +374,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
               <button
                 type="button"
                 onClick={() => cancelEdit()}
+                aria-label="Cancel editing message"
                 className="rounded-md border border-primary-foreground/40 px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-foreground/10"
               >
                 Cancel
@@ -478,7 +480,11 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
   }, [pendingInterrupt]);
 
   const pendingToolNames = useMemo(
-    () => new Set((pendingInterrupt?.value?.action_requests ?? []).map((r) => r.name)),
+    () => {
+      const v = pendingInterrupt?.value;
+      const requests = (typeof v === 'object' && v !== null) ? (v.action_requests ?? []) : [];
+      return new Set(requests.map((r) => r.name));
+    },
     [pendingInterrupt],
   );
 
@@ -498,6 +504,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
       });
       return next;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingToolNames, message.id]);
 
   const toggleExpand = (itemId: string) => {
@@ -561,6 +568,9 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                     >
                       <button
                         onClick={() => toggleExpand(itemId)}
+                        aria-expanded={isExpanded}
+                        aria-controls={`tool-body-${itemId}`}
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} tool call: ${toolCall.name}`}
                         className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
@@ -568,23 +578,23 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                             <div className="text-sm font-medium text-foreground flex items-center gap-2">
                               <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
                               {(toolCall as Record<string, unknown>).content != null ? (
-                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
+                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" aria-hidden="true" />
                               ) : (
-                                <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                                <Loader2 className="w-4 h-4 text-primary animate-spin" aria-hidden="true" />
                               )}
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">Tool execution</div>
                           </div>
                         </div>
                         {isExpanded ? (
-                          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                         )}
                       </button>
 
                       {isExpanded && (
-                        <div className="border-t border-border">
+                        <div id={`tool-body-${itemId}`} className="border-t border-border">
                           <div className="px-4 pb-3">
                             <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
                             <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
@@ -614,18 +624,20 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                           </div>
 
                           {needsApproval && !approvalSubmitted && onInterruptResume && (
-                            <div className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
+                            <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
                               <button
                                 type="button"
+                                autoFocus
                                 onClick={() => {
                                   setApprovalSubmitted(true);
                                   const count = ((pendingInterrupt?.value as any)?.action_requests ?? []).length || 1;
                                   onInterruptResume(Array.from({ length: count }, () => ({ type: 'approve' as const })));
                                 }}
+                                aria-label={`Approve tool call: ${toolCall.name}`}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                                 style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
                               >
-                                <Check className="w-3 h-3" />
+                                <Check className="w-3 h-3" aria-hidden="true" />
                                 Approve
                               </button>
                               <button
@@ -635,6 +647,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                                   const count = ((pendingInterrupt?.value as any)?.action_requests ?? []).length || 1;
                                   onInterruptResume(Array.from({ length: count }, () => ({ type: 'reject' as const, message: 'User rejected this action.' })));
                                 }}
+                                aria-label={`Reject tool call: ${toolCall.name}`}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
                                 style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
                               >
@@ -648,9 +661,10 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                                   onAlwaysAllow?.([toolCall.name]);
                                   onInterruptResume(Array.from({ length: count }, () => ({ type: 'approve' as const })));
                                 }}
+                                aria-label={`Always allow tool: ${toolCall.name}`}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
                               >
-                                <ShieldCheck className="w-3 h-3" />
+                                <ShieldCheck className="w-3 h-3" aria-hidden="true" />
                                 Always allow
                               </button>
                             </div>
@@ -677,6 +691,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     }
 
     return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messageKey, expandedItems, approvalSubmitted, pendingInterrupt, onInterruptResume, onAlwaysAllow]);
 
   return (
@@ -690,6 +705,10 @@ interface ChatMessagesViewProps {
   messages: Message[];
   streamEvents?: StreamEvent[];
   isLoading: boolean;
+  pendingInterrupt?: InterruptInfo | null;
+  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  onAlwaysAllow?: (toolNames: string[]) => void;
+  interruptContent?: React.ReactNode;
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   onSubmit: (inputValue: string) => void;
   onRetry?: () => void;
@@ -712,15 +731,15 @@ interface ChatMessagesViewProps {
   chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onExportMarkdown?: () => void;
   onExportJson?: () => void;
-  pendingInterrupt?: InterruptInfo | null;
-  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
-  onAlwaysAllow?: (toolNames: string[]) => void;
-  onInterruptDismiss?: () => void;
 }
 
 export function ChatMessagesView({
   messages,
   isLoading,
+  pendingInterrupt,
+  onInterruptResume,
+  onAlwaysAllow,
+  interruptContent,
   scrollAreaRef,
   onSubmit,
   onRetry,
@@ -738,13 +757,17 @@ export function ChatMessagesView({
   chatInputRef,
   onExportMarkdown,
   onExportJson,
-  pendingInterrupt,
-  onInterruptResume,
-  onAlwaysAllow,
-  onInterruptDismiss,
 }: ChatMessagesViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const prevPendingInterrupt = useRef(pendingInterrupt);
+
+  useEffect(() => {
+    if (prevPendingInterrupt.current && !pendingInterrupt) {
+      chatInputRef?.current?.focus();
+    }
+    prevPendingInterrupt.current = pendingInterrupt;
+  }, [pendingInterrupt, chatInputRef]);
 
   const { lastHumanMessageIndex, lastAiMessageIndex } = useMemo(() => {
     let lastHuman = -1;
@@ -757,7 +780,7 @@ export function ChatMessagesView({
   }, [messages]);
 
   const lastMessage = messages[messages.length - 1];
-  const rawNoResponse = !isLoading && messages.length > 0 && lastMessage?.type === 'human';
+  const rawNoResponse = !isLoading && !pendingInterrupt && !interruptContent && messages.length > 0 && lastMessage?.type === 'human';
   const [showNoResponse, setShowNoResponse] = useState(false);
 
   useEffect(() => {
@@ -811,7 +834,7 @@ export function ChatMessagesView({
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto chat-scroll" ref={scrollAreaRef}>
-        <div role="log" aria-label="Chat messages" aria-live="polite" className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
+        <div role="log" aria-label="Chat messages" aria-live="polite" aria-busy={isLoading} className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
           {messages.map((message, messageIndex) => {
             if (message.type === 'tool') {
               return <Fragment key={message.id ?? `m-${messageIndex}`} />;
@@ -870,7 +893,7 @@ export function ChatMessagesView({
                     </div>
                   )}
                   {showResponseTiming && (
-                    <div className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
+                    <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
                       <div className="text-[11px] text-muted-foreground/80">
                         Response time: {(lastResponseTiming.totalDurationMs / 1000).toFixed(1)}s
                       </div>
@@ -890,6 +913,7 @@ export function ChatMessagesView({
           {isLoading && (
             <div
               className="flex items-start gap-3 animate-fadeIn"
+              role="status"
               aria-live="assertive"
               aria-label="Agent is thinking"
             >
@@ -930,6 +954,7 @@ export function ChatMessagesView({
               </div>
             </div>
           )}
+          {interruptContent}
           <div ref={bottomRef} />
         </div>
       </div>

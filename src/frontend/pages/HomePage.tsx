@@ -59,7 +59,11 @@ export function HomePage() {
           {/* Greeting */}
           <div className="mb-8">
             <h1 className="text-foreground font-bold mb-3" style={{ fontSize: 'clamp(2rem, 5vw, 3rem)' }}>
-              {userDisplayName ? `Hey ${userDisplayName}! 👋` : 'Hey there! 👋'}
+              {userDisplayName ? (
+                <>Hey {userDisplayName}! <span aria-hidden="true">👋</span></>
+              ) : (
+                <>Hey there! <span aria-hidden="true">👋</span></>
+              )}
             </h1>
             <p className="text-muted-foreground text-base">
               <span className="font-medium text-foreground">{window.APP_DATA?.agentName || 'Agent'}</span> is ready to help. What would you like to explore today?
@@ -69,17 +73,20 @@ export function HomePage() {
           {/* Quick prompts */}
           <div className="mb-6">
             <h2 className="text-sm font-semibold text-muted-foreground mb-3">
-              Let&apos;s try some quick prompts 🚀
+              Let&apos;s try some quick prompts <span aria-hidden="true">🚀</span>
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="list" aria-label="Quick prompt suggestions">
               {QUICK_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => startChat(prompt)}
-                  className="text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer"
-                >
-                  <p className="text-sm text-foreground/90">{prompt}</p>
-                </button>
+                <div key={prompt} role="listitem">
+                  <button
+                    type="button"
+                    onClick={() => startChat(prompt)}
+                    aria-label={`Start chat: ${prompt}`}
+                    className="w-full text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer"
+                  >
+                    <p className="text-sm text-foreground/90">{prompt}</p>
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -89,9 +96,14 @@ export function HomePage() {
       {/* Bottom input bar */}
       <div className="border-t border-border bg-background px-6 pb-4 pt-3">
         <div className="max-w-2xl mx-auto">
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} aria-label="Start a new chat">
             <div className="relative rounded-2xl border border-border bg-card shadow-card focus-within:border-primary/40 focus-within:shadow-elevated transition-all duration-200">
+              <label htmlFor="home-chat-input" className="sr-only">
+                Enter a prompt for {window.APP_DATA?.agentName || 'Agent'}
+              </label>
               <textarea
+                id="home-chat-input"
+                autoFocus
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -103,13 +115,14 @@ export function HomePage() {
               <button
                 type="submit"
                 disabled={!inputValue.trim()}
+                aria-label="Send message"
                 className={`absolute right-2.5 bottom-2.5 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
                   inputValue.trim()
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
                     : 'bg-muted text-muted-foreground cursor-not-allowed'
                 }`}
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </form>

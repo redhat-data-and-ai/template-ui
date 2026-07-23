@@ -20,6 +20,7 @@ import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { ReconnectingBanner } from '../components/ReconnectingBanner';
+import { InterruptBanner } from '../components/InterruptBanner';
 import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
@@ -315,13 +316,20 @@ export function ChatPage({ threadId }: { threadId: string }) {
     [thread, threadId, currentChat, dispatch],
   );
 
-  const handleAlwaysAllow = useCallback(
-    (toolNames: string[]) => {
-      for (const name of toolNames) {
-        dispatch(addAlwaysAllowedTool(name));
+  const handleMCPOAuthResume = useCallback(
+    async (response: string) => {
+      if (!threadId || !currentChat) return;
+      try {
+        await thread.resumeInterrupt(response);
+        setTimeout(() => {
+          hasFinalizeEventOccurredRef.current = true;
+        }, 100);
+      } catch (err) {
+        console.error('Failed to resume:', err);
+        dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
       }
     },
-    [dispatch],
+    [thread, threadId, currentChat, dispatch],
   );
 
   const handleInterruptDismiss = useCallback(() => {
@@ -332,6 +340,36 @@ export function ChatPage({ threadId }: { threadId: string }) {
       }),
     );
   }, [dispatch, threadId]);
+
+  const handleAlwaysAllow = useCallback(
+    (toolNames: string[]) => {
+      for (const name of toolNames) {
+        dispatch(addAlwaysAllowedTool(name));
+      }
+    },
+    [dispatch],
+  );
+
+  const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
+  useEffect(() => {
+    const interrupt = thread.pendingInterrupt;
+    if (typeof interrupt?.value !== 'object' || !interrupt.value.action_requests?.length) return;
+
+    if (autoApproveAllTools) {
+      const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
+      thread.resumeWithDecisions(allApproved).catch((err) => {
+        console.error('Auto-approve-all resume failed:', err);
+      });
+      return;
+    }
+
+    const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
+    if (!allAutoApproved) return;
+    thread.resumeWithDecisions(decisions).catch((err) => {
+      console.error('Auto-approve resume failed:', err);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.pendingInterrupt, autoApproveAllTools]);
 
   const handleNewChat = useCallback(() => {
     navigate('/');
@@ -362,27 +400,6 @@ export function ChatPage({ threadId }: { threadId: string }) {
     onBlurChatInput: () => chatInputRef.current?.blur(),
     onExportChat: handleExportShortcut,
   });
-
-  const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
-  useEffect(() => {
-    const interrupt = thread.pendingInterrupt;
-    if (!interrupt?.value?.action_requests?.length) return;
-
-    if (autoApproveAllTools) {
-      const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
-      thread.resumeWithDecisions(allApproved).catch((err) => {
-        console.error('Auto-approve-all resume failed:', err);
-      });
-      return;
-    }
-
-    const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
-    if (!allAutoApproved) return;
-    thread.resumeWithDecisions(decisions).catch((err) => {
-      console.error('Auto-approve resume failed:', err);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.pendingInterrupt, autoApproveAllTools]);
 
   if (chatsLoading || hydrating) {
     return (
@@ -435,6 +452,28 @@ export function ChatPage({ threadId }: { threadId: string }) {
             messages={thread.messages}
             streamEvents={thread.streamEvents}
             isLoading={thread.isLoading}
+            pendingInterrupt={
+              thread.pendingInterrupt &&
+              typeof thread.pendingInterrupt.value === 'object' &&
+              'action_requests' in thread.pendingInterrupt.value
+                ? thread.pendingInterrupt
+                : null
+            }
+            onInterruptResume={handleInterruptResume}
+            onAlwaysAllow={handleAlwaysAllow}
+
+            interruptContent={
+              thread.pendingInterrupt &&
+              !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
+                ? (
+                  <InterruptBanner
+                    interrupt={thread.pendingInterrupt}
+                    onResume={handleMCPOAuthResume}
+                    onDismiss={handleInterruptDismiss}
+                  />
+                )
+                : undefined
+            }
             onRetry={handleStreamRetry}
             scrollAreaRef={scrollAreaRef}
             onSubmit={handleSubmit}
@@ -461,10 +500,6 @@ export function ChatPage({ threadId }: { threadId: string }) {
             chatInputRef={chatInputRef}
             onExportMarkdown={handleExportMarkdown}
             onExportJson={handleExportJson}
-            pendingInterrupt={thread.pendingInterrupt}
-            onInterruptResume={handleInterruptResume}
-            onAlwaysAllow={handleAlwaysAllow}
-            onInterruptDismiss={handleInterruptDismiss}
           />
         </div>
         {debugMode && (

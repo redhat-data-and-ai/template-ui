@@ -21,8 +21,14 @@ interface SubAgentIndicatorProps {
 
 type VisualStatus = 'delegating' | 'complete' | 'error';
 
+function hasContent(toolCall: ToolCallWithContent): boolean {
+  if (toolCall.content == null) return false;
+  if (typeof toolCall.content === 'string') return toolCall.content.trim().length > 0;
+  return true;
+}
+
 function deriveStatus(toolCall: ToolCallWithContent): VisualStatus {
-  if (toolCall.content == null) return 'delegating';
+  if (!hasContent(toolCall)) return 'delegating';
   if (typeof toolCall.content === 'string' && toolCall.content.startsWith('Error')) return 'error';
   return 'complete';
 }
@@ -47,8 +53,12 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
 
-  const needsApproval = !!pendingInterrupt?.value?.action_requests?.some(
-    (r) => r.name === 'task' || r.name === name,
+  const interruptValue = pendingInterrupt?.value;
+  const needsApproval = !!(
+    typeof interruptValue === 'object'
+    && interruptValue !== null
+    && 'action_requests' in interruptValue
+    && interruptValue.action_requests?.some((r) => r.name === 'task' || r.name === name)
   ) && toolCall.content == null;
 
   useEffect(() => {
@@ -60,7 +70,10 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
 
   return (
     <div className="flex items-start gap-3">
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${needsApproval ? 'bg-yellow-500/15 border border-yellow-500/40' : 'bg-blue-500/15 border border-blue-500/30'}`}>
+      <div
+        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${needsApproval ? 'bg-yellow-500/15 border border-yellow-500/40' : 'bg-blue-500/15 border border-blue-500/30'}`}
+        aria-hidden="true"
+      >
         <Bot className={`w-4 h-4 ${needsApproval ? 'text-yellow-500' : 'text-blue-500'}`} />
       </div>
       <div className="flex-1 min-w-0">
@@ -68,6 +81,13 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
           <CardHeader
             className="cursor-pointer"
             onClick={() => setExpanded((v) => !v)}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setExpanded((v) => !v);
+              }
+            }}
+            {...({ tabIndex: 0, role: 'button', 'aria-expanded': expanded, 'aria-controls': `subagent-body-${messageId}-${index}` } as React.HTMLAttributes<HTMLDivElement>)}
           >
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2.5">
@@ -80,27 +100,28 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                   icon={
                     <StatusIcon
                       className={`w-3 h-3 ${config.animate && !needsApproval ? 'animate-spin' : ''}`}
+                      aria-hidden="true"
                     />
                   }
                 >
                   {needsApproval ? 'Approval required' : config.label}
                 </Label>
               </div>
-              <button
-                className="text-muted-foreground hover:text-foreground transition-colors p-1"
-                aria-label={expanded ? 'Collapse' : 'Expand'}
-              >
+              <span aria-hidden="true">
                 {expanded ? (
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
                 ) : (
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 )}
-              </button>
+              </span>
             </div>
           </CardHeader>
 
           {expanded && (
-            <CardBody className="border-t border-border pt-3 space-y-3 !pb-0">
+            <CardBody
+              id={`subagent-body-${messageId}-${index}`}
+              className="border-t border-border pt-3 space-y-3 !pb-0"
+            >
               {delegationText && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -111,7 +132,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                   </p>
                 </div>
               )}
-              {toolCall.content != null && (
+              {hasContent(toolCall) && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                     Result
@@ -131,17 +152,19 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
               )}
 
               {needsApproval && !isApproving && onInterruptResume && (
-                <div className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
+                <div role="alert" aria-live="assertive" aria-label={`Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
                   <button
                     type="button"
+                    autoFocus
                     onClick={() => {
                       setIsApproving(true);
                       onInterruptResume([{ type: 'approve' }]);
                     }}
+                    aria-label={`Approve sub-agent action: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                     style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
                   >
-                    <Check className="w-3 h-3" />
+                    <Check className="w-3 h-3" aria-hidden="true" />
                     Approve
                   </button>
                   <button
@@ -150,6 +173,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                       setIsApproving(true);
                       onInterruptResume([{ type: 'reject', message: 'User rejected this action.' }]);
                     }}
+                    aria-label={`Reject sub-agent action: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
                     style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
                   >
@@ -162,9 +186,10 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                       onAlwaysAllow?.([name]);
                       onInterruptResume([{ type: 'approve' }]);
                     }}
+                    aria-label={`Always allow sub-agent: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
                   >
-                    <ShieldCheck className="w-3 h-3" />
+                    <ShieldCheck className="w-3 h-3" aria-hidden="true" />
                     Always allow
                   </button>
                 </div>

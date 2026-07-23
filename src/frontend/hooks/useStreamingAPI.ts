@@ -4,6 +4,7 @@ import type { AIMessage, Message } from '@langchain/langgraph-sdk';
 import type { StreamEvent } from '@/hooks/useDataStream';
 import {
   StreamingManager,
+  type InterruptPayload,
   type StreamCallback,
   type StreamStatus,
 } from '@/lib/streaming/StreamingManager';
@@ -19,13 +20,35 @@ import {
   updateStreamingState,
   type StreamingState,
 } from '@/redux/slices/chats';
-import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { chatStorage } from '@/services/chatStorage';
 import { buildAgentApiUrl } from '@/lib/app-paths';
 import { selectActiveRules, selectMemories } from '@/redux/slices/personalization';
+import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
-import type { HITLInterruptValue } from '@/types/deep-agent';
+import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
 import { getThreadState } from '@/services/agent-rest';
+
+function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
+  const raw = interrupt.value as string | HITLInterruptValue;
+  if (typeof raw === 'object' && raw !== null && (raw as { type?: string }).type === 'mcp_auth_required') {
+    return { ...interrupt, value: raw, payload: raw as unknown as NonNullable<InterruptInfo['payload']> };
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (
+        parsed
+        && typeof parsed === 'object'
+        && (parsed as { type?: string }).type === 'mcp_auth_required'
+      ) {
+        return { ...interrupt, value: raw, payload: parsed as NonNullable<InterruptInfo['payload']> };
+      }
+    } catch {
+      // plain-text interrupt
+    }
+  }
+  return { ...interrupt, value: raw };
+}
 
 function cloneMessages(messages: Message[]): Message[] {
   return messages.map((m) => JSON.parse(JSON.stringify(m)) as Message);
@@ -137,9 +160,6 @@ export function useStreamingAPI(threadId: string) {
     totalDurationMs: number;
   } | null>(null);
 
-  const pendingInterruptRef = useRef(streamingState.pendingInterrupt);
-  pendingInterruptRef.current = streamingState.pendingInterrupt;
-
   const managerRef = useRef<StreamingManager | null>(null);
   const streamClockRef = useRef<{
     streamStartTime: number | null;
@@ -150,6 +170,8 @@ export function useStreamingAPI(threadId: string) {
   const isActiveRef = useRef(true);
   const userCancelledRef = useRef(false);
   const streamEndedWithInterruptRef = useRef(false);
+  const pendingInterruptRef = useRef(streamingState.pendingInterrupt);
+  pendingInterruptRef.current = streamingState.pendingInterrupt;
   const lastStreamErrorRef = useRef<Error | null>(null);
   const lastTokenTimeRef = useRef<number>(0);
   const staleIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -430,7 +452,7 @@ export function useStreamingAPI(threadId: string) {
               dispatch(
                 updateStreamingState({
                   chatId: threadId,
-                  state: { pendingInterrupt: interrupt },
+                  state: { pendingInterrupt: enrichInterrupt(interrupt) },
                 }),
               );
             },
@@ -506,7 +528,6 @@ export function useStreamingAPI(threadId: string) {
                 dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
               }
               lastSuccessfulConnectionRef.current = Date.now();
-              // Clear reconnection state and ensure loading is off
               dispatch(
                 updateStreamingState({
                   chatId: threadId,
@@ -653,18 +674,20 @@ export function useStreamingAPI(threadId: string) {
         },
         onInterrupt(interrupt) {
           resumeStreamHadInterrupt = true;
-          dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: interrupt } }));
+          dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: enrichInterrupt(interrupt) } }));
         },
         onError(error) {
-          dispatch(updateStreamingState({
-            chatId: threadId,
-            state: {
-              error: error.message,
-              isLoading: false,
-              isConnected: false,
-              pendingInterrupt: savedInterrupt,
-            },
-          }));
+          dispatch(
+            updateStreamingState({
+              chatId: threadId,
+              state: {
+                error: error.message,
+                isLoading: false,
+                isConnected: false,
+                pendingInterrupt: savedInterrupt,
+              },
+            }),
+          );
         },
         onStatusChange(status) {
           const partial = nextStreamingPartialForStatus(status);
@@ -684,6 +707,108 @@ export function useStreamingAPI(threadId: string) {
       };
 
       await manager.stream(resumeRequest, callbacks);
+    },
+    [dispatch, threadId, memories, activeRules],
+  );
+
+  const resumeInterrupt = useCallback(
+    async (response: string) => {
+      const manager = managerRef.current;
+      if (!manager || !threadId) return;
+
+      dispatch(
+        updateStreamingState({
+          chatId: threadId,
+          state: { pendingInterrupt: null, isLoading: true, error: null },
+        }),
+      );
+
+      const token = typeof window.USER_DATA.accessToken === 'string' ? window.USER_DATA.accessToken : undefined;
+      const userId =
+        typeof window.USER_DATA.preferred_username === 'string'
+          ? window.USER_DATA.preferred_username
+          : '';
+      const apiUrl = typeof window.APP_DATA?.apiUrl === 'string' ? window.APP_DATA.apiUrl : '';
+
+      const streamRequest = {
+        message: response,
+        threadId,
+        userId,
+        apiUrl,
+        token,
+        resume: true,
+        memories: memories.map((m) => m.content),
+        rules: activeRules.map((r) => r.content),
+      };
+
+      let resumeStreamHadInterrupt = false;
+
+      await new Promise<void>((resolve) => {
+        const callbacks: StreamCallback = {
+          onToken(content) {
+            lastTokenTimeRef.current = Date.now();
+            if (!isStreamingTokensRef.current) {
+              const message: AIMessage = {
+                type: 'ai',
+                content,
+                tool_calls: [],
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              };
+              dispatch(appendMessageToChat({ chatId: threadId, message }));
+              isStreamingTokensRef.current = true;
+              return;
+            }
+            dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+          },
+          onMessage(m) {
+            isStreamingTokensRef.current = false;
+            if (m.type === 'human') return;
+
+            if (m.type === 'tool') {
+              dispatch(
+                mergeToolResult({
+                  chatId: threadId,
+                  toolCallId: m.tool_call_id,
+                  content: m.content,
+                }),
+              );
+              return;
+            }
+
+            dispatch(appendMessageToChat({ chatId: threadId, message: m }));
+          },
+          onInterrupt(interrupt) {
+            resumeStreamHadInterrupt = true;
+            dispatch(
+              updateStreamingState({
+                chatId: threadId,
+                state: { pendingInterrupt: enrichInterrupt(interrupt) },
+              }),
+            );
+          },
+          onError(error) {
+            dispatch(
+              updateStreamingState({
+                chatId: threadId,
+                state: { error: error.message, isLoading: false, isConnected: false },
+              }),
+            );
+          },
+          onStatusChange(status) {
+            const partial = nextStreamingPartialForStatus(status);
+            if (partial) {
+              dispatch(updateStreamingState({ chatId: threadId, state: partial }));
+            }
+          },
+          onDone() {
+            if (!resumeStreamHadInterrupt) {
+              dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+            }
+            resolve();
+          },
+        };
+        void manager.stream(streamRequest, callbacks);
+      });
     },
     [dispatch, threadId, memories, activeRules],
   );
@@ -715,6 +840,7 @@ export function useStreamingAPI(threadId: string) {
     submit,
     resumeWithDecisions,
     checkAndAutoApprove,
+    resumeInterrupt,
     stop,
     setMessages,
     retryCount,

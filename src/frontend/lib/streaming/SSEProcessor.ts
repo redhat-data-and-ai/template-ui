@@ -4,7 +4,7 @@ import type { HITLInterruptValue } from '@/types/deep-agent';
 export type SSEChunk =
   | { type: 'token'; content: string; chunk_id: number }
   | { type: 'message'; content: Message; chunk_id: number }
-  | { type: 'interrupt'; content: { value: HITLInterruptValue; resumable: boolean }; chunk_id: number };
+  | { type: 'interrupt'; content: { value: HITLInterruptValue | string; resumable: boolean }; chunk_id: number };
 
 export type McpStatusData = {
   tool: string;
@@ -51,13 +51,13 @@ function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
       try {
         rawValue = JSON.parse(rawValue);
       } catch {
-        rawValue = {};
+        // non-JSON plain-text interrupt value — preserve as string
       }
     }
     return {
       type: 'interrupt',
       content: {
-        value: (isRecord(rawValue) ? rawValue : {}) as unknown as HITLInterruptValue,
+        value: (isRecord(rawValue) || typeof rawValue === 'string' ? rawValue : {}) as HITLInterruptValue | string,
         resumable: contentUnknown.resumable === true,
       },
       chunk_id: chunkIdRaw,

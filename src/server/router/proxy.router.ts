@@ -47,10 +47,6 @@ interface StreamRequestBody {
   rules?: string[];
 }
 
-interface ProxyRequestBody {
-  [key: string]: unknown;
-}
-
 /**
  * Extract text from a LangGraph message content field, which may be
  * a plain string OR an array of typed blocks [{type:"text", text:"..."}].
@@ -330,6 +326,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: StreamRequestBody }>(
     '/proxy/agent/v1/stream',
     async (request, reply) => {
+      const cfg = getSettings();
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
 
@@ -365,6 +362,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
             metadata: { user_identity: user_id ?? 'anonymous' },
             ifExists: 'do_nothing',
           }),
+          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
         });
 
         if (!threadResp.ok) {
@@ -400,10 +398,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
           runBody.config = { metadata: { trace_id: traceId } };
         }
 
+        const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);
         const runResp = await fetch(runUrl, {
           method: 'POST',
           headers: { ...headers, Accept: 'text/event-stream' },
           body: JSON.stringify(runBody),
+          signal: AbortSignal.timeout(streamTimeoutMs),
         });
 
         if (!runResp.ok) {
@@ -583,7 +583,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
           try {
             const stateResp = await fetch(
               `${getAgentHost()}/threads/${thread_id}/state`,
-              { method: 'GET', headers },
+              {
+                method: 'GET',
+                headers,
+                signal: AbortSignal.timeout(cfg.agent.timeout_ms),
+              },
             );
             if (stateResp.ok) {
               const threadState = await stateResp.json() as Record<string, unknown>;
@@ -615,11 +619,16 @@ async function proxyRoutes(fastify: FastifyInstance) {
           reply.raw.end('data: [DONE]\n\n');
         }
       } catch (error: unknown) {
-        if ((error as Error).name === 'AbortError') {
+        const errName = (error as Error).name;
+        if (errName === 'AbortError') {
           fastify.log.info({ traceId }, 'Client disconnected, stream aborted');
           return;
         }
-        fastify.log.error({ traceId, error }, 'Proxy stream error');
+        if (errName === 'TimeoutError') {
+          fastify.log.warn({ traceId }, 'Agent stream timed out');
+        } else {
+          fastify.log.error({ traceId, err: error }, 'Proxy stream error');
+        }
         if (reply.raw.headersSent) {
           reply.raw.end();
         } else {
@@ -632,6 +641,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
   fastify.all<{ Params: { '*': string } }>(
     '/proxy/agent/*',
     async (request, reply) => {
+      const cfg = getSettings();
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const path = (request.params as any)['*'];
       const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
@@ -677,6 +687,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         const fetchOptions: RequestInit = {
           method: request.method,
           headers,
+          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
         };
 
         if (request.method !== 'GET' && request.method !== 'HEAD' && request.body) {
@@ -703,13 +714,14 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         return reply.send(responseBody);
       } catch (error) {
-        fastify.log.error({ traceId, error }, 'Proxy error');
+        fastify.log.error({ traceId, err: error }, 'Proxy error');
         return reply.status(502).send({ error: 'Failed to connect to agent service' });
       }
     }
   );
 
   fastify.post('/proxy/agent/feedback', async (request, reply) => {
+    const cfg = getSettings();
     const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
     const { accessToken, refreshFailed } = await ensureFreshTokens(fastify, request);
 
@@ -732,6 +744,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         method: 'POST',
         headers,
         body: JSON.stringify(request.body),
+        signal: AbortSignal.timeout(cfg.agent.timeout_ms),
       });
 
       reply.header('X-Trace-ID', traceId);
@@ -739,7 +752,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const responseBody = await agentResponse.text();
       return reply.send(responseBody);
     } catch (error) {
-      fastify.log.error({ traceId, error }, 'Feedback proxy error');
+      fastify.log.error({ traceId, err: error }, 'Feedback proxy error');
       return reply.status(502).send({ error: 'Failed to send feedback' });
     }
   });

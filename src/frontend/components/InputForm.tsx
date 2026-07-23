@@ -59,6 +59,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
       <div className="relative rounded-2xl border border-border bg-card shadow-card focus-within:border-primary/40 focus-within:shadow-elevated transition-all duration-200">
         <textarea
           ref={ref}
+          autoFocus
           value={internalInputValue}
           onChange={(e) => setInternalInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
