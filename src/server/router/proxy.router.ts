@@ -562,7 +562,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     chunkId++;
                     textEmittedForCurrentMsg = false;
                     hasEmittedTextTokens = false;
-                    prevPartial = '';
+                    prevPartial = nextPartial;
                     discardedMsgIds.add(partialMsgId);
                     completedTexts.length = 0;
                   }
