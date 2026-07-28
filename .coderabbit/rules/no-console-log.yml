@@ -1,0 +1,11 @@
+id: no-console-log
+language: typescript
+message: "Use a structured logger instead of console.log() for observability"
+severity: warning
+rule:
+  pattern: console.log($$$)
+  not:
+    inside:
+      kind: function_declaration
+      regex: "test|spec|describe|it"
+      stopBy: end

@@ -1,0 +1,11 @@
+id: no-any-type-annotation
+language: typescript
+message: "Avoid explicit 'any' type; use a specific type or 'unknown'"
+severity: warning
+rule:
+  kind: predefined_type
+  regex: "^any$"
+  not:
+    inside:
+      kind: catch_clause
+      stopBy: end
