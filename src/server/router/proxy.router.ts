@@ -534,6 +534,16 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   continue;
                 }
 
+                // Reset per-message state before translation
+                if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
+                  const peekId = (parsed[0] as Record<string, any>)?.id ?? '';
+                  if (peekId && peekId !== currentStreamingMsgId) {
+                    currentStreamingMsgId = peekId;
+                    textEmittedForCurrentMsg = false;
+                    prevPartial = '';
+                  }
+                }
+
                 const [uiChunks, nextPartial] = translateMessageEvent(
                   sseType,
                   parsed,
@@ -542,21 +552,17 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   sentMsgIds,
                 );
 
-                // Track message boundaries & detect tool_calls in partials
+                // Detect tool_calls in partials and discard any text already streamed
                 if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
                   const partialMsg = parsed[0] as Record<string, any>;
                   const partialMsgId = partialMsg?.id ?? '';
-                  if (partialMsgId && partialMsgId !== currentStreamingMsgId) {
-                    currentStreamingMsgId = partialMsgId;
-                    textEmittedForCurrentMsg = false;
-                    prevPartial = '';
-                  }
-
                   const partialToolCalls = extractToolCalls(partialMsg ?? {});
                   if (partialToolCalls.length > 0 && textEmittedForCurrentMsg) {
                     reply.raw.write(`data: ${JSON.stringify({ type: 'draft_discard', chunk_id: chunkId })}\n\n`);
                     chunkId++;
                     textEmittedForCurrentMsg = false;
+                    hasEmittedTextTokens = false;
+                    prevPartial = '';
                     discardedMsgIds.add(partialMsgId);
                     completedTexts.length = 0;
                   }
