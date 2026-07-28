@@ -90,6 +90,13 @@ const chatsSlice = createSlice({
       state.streamingStates = {};
       state.error = null;
     },
+    removeLastMessageFromChat(state, action: PayloadAction<{ chatId: string }>) {
+      const { chatId } = action.payload;
+      const chat = state.chats.find((c) => c.id === chatId);
+      if (chat && chat.messages.length > 0) {
+        chat.messages.pop();
+      }
+    },
     appendMessageToChat(state, action: PayloadAction<{ chatId: string; message: Message }>) {
       const { chatId, message } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
@@ -194,6 +201,7 @@ export const {
   deleteChat,
   clearAllChats,
   appendMessageToChat,
+  removeLastMessageFromChat,
   updateLastMessageInChat,
   mergeToolResult,
   resolveAllPendingToolCalls,

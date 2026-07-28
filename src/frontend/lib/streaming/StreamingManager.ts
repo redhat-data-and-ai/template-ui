@@ -40,6 +40,7 @@ export type StreamMetadataPayload = {
 
 export type StreamCallback = {
   onToken: (content: string) => void;
+  onDraftDiscard?: () => void;
   onMessage: (message: Message) => void;
   onInterrupt: (interrupt: InterruptPayload) => void;
   onError: (error: Error) => void;
@@ -91,6 +92,8 @@ export class StreamingManager {
 
           if (event.data.type === 'token') {
             callbacks.onToken(event.data.content);
+          } else if (event.data.type === 'draft_discard') {
+            callbacks.onDraftDiscard?.();
           } else if (event.data.type === 'interrupt') {
             callbacks.onInterrupt(event.data.content);
           } else {
