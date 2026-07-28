@@ -565,6 +565,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     prevPartial = '';
                     discardedMsgIds.add(partialMsgId);
                     completedTexts.length = 0;
+                    continue;
                   }
                 }
 
