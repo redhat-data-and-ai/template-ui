@@ -5,6 +5,7 @@ import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
 import { addToast } from '../../redux/slices/toasts';
+import { deleteThread } from '../../services/agent-rest';
 import { chatStorage } from '../../services/chatStorage';
 
 export function ProfileSection() {
@@ -19,11 +20,13 @@ export function ProfileSection() {
   const username = userData?.preferred_username || '';
 
   const handleDeleteAll = () => {
+    const ids = chats.map((c) => c.id);
     dispatch(clearAllChats());
     chatStorage.clearChats();
     dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     setConfirmDelete(false);
     navigate('/');
+    ids.forEach((id) => deleteThread(id).catch(() => {}));
   };
 
   return (
