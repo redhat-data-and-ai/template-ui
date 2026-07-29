@@ -19,14 +19,14 @@ export function ProfileSection() {
   const email = userData?.email || '';
   const username = userData?.preferred_username || '';
 
-  const handleDeleteAll = () => {
+  const handleDeleteAll = async () => {
     const ids = chats.map((c) => c.id);
     dispatch(clearAllChats());
     chatStorage.clearChats();
-    dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     setConfirmDelete(false);
+    await Promise.all(ids.map((id) => deleteThread(id).catch(() => {})));
+    dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     navigate('/');
-    ids.forEach((id) => deleteThread(id).catch(() => {}));
   };
 
   return (
