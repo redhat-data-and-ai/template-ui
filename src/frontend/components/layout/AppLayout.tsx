@@ -117,7 +117,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     async function loadUserHistory() {
       try {
         dispatch(setLoadingThreads(true));
-        const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
+        const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username || window.USER_DATA.sub);
 
         const backendIds = new Set(history.map((t) => t.id));
         const local = chatsRef.current;
