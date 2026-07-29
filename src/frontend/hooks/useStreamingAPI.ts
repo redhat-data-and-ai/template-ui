@@ -11,6 +11,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import {
   appendMessageToChat,
+  removeLastMessageFromChat,
   mergeToolResult,
   resolveAllPendingToolCalls,
   selectChatById,
@@ -399,6 +400,12 @@ export function useStreamingAPI(threadId: string) {
               }
               dispatch(updateLastMessageInChat({ chatId: threadId, content }));
             },
+            onDraftDiscard() {
+              if (isStreamingTokensRef.current) {
+                dispatch(removeLastMessageFromChat({ chatId: threadId }));
+                isStreamingTokensRef.current = false;
+              }
+            },
             onMessage(m) {
               isStreamingTokensRef.current = false;
               if (m.type === 'human') {
@@ -660,6 +667,12 @@ export function useStreamingAPI(threadId: string) {
           }
           dispatch(updateLastMessageInChat({ chatId: threadId, content }));
         },
+        onDraftDiscard() {
+          if (isStreamingTokensRef.current) {
+            dispatch(removeLastMessageFromChat({ chatId: threadId }));
+            isStreamingTokensRef.current = false;
+          }
+        },
         onMessage(m) {
           isStreamingTokensRef.current = false;
           if (m.type === 'human') return;
@@ -759,6 +772,12 @@ export function useStreamingAPI(threadId: string) {
               return;
             }
             dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+          },
+          onDraftDiscard() {
+            if (isStreamingTokensRef.current) {
+              dispatch(removeLastMessageFromChat({ chatId: threadId }));
+              isStreamingTokensRef.current = false;
+            }
           },
           onMessage(m) {
             isStreamingTokensRef.current = false;

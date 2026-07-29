@@ -3,6 +3,7 @@ import type { HITLInterruptValue } from '@/types/deep-agent';
 
 export type SSEChunk =
   | { type: 'token'; content: string; chunk_id: number }
+  | { type: 'draft_discard'; chunk_id: number }
   | { type: 'message'; content: Message; chunk_id: number }
   | { type: 'interrupt'; content: { value: HITLInterruptValue | string; resumable: boolean }; chunk_id: number };
 
@@ -32,6 +33,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
   if (!isRecord(parsed)) return null;
   const type = parsed.type;
+  if (type === 'draft_discard') {
+    const chunkId = parsed.chunk_id;
+    if (typeof chunkId === 'number' && Number.isFinite(chunkId)) {
+      return { type: 'draft_discard', chunk_id: chunkId };
+    }
+    return null;
+  }
   if (type !== 'token' && type !== 'message' && type !== 'interrupt') return null;
   const chunkIdRaw = parsed.chunk_id;
   if (typeof chunkIdRaw !== 'number' || !Number.isFinite(chunkIdRaw)) {
