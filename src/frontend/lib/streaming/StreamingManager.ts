@@ -13,8 +13,6 @@ export interface StreamRequest {
   userId: string;
   apiUrl: string;
   token?: string;
-  memories?: string[];
-  rules?: string[];
   resume?: boolean;
   resumeDecisions?: Array<{ type: 'approve' | 'reject' | 'edit'; message?: string }>;
 }
@@ -144,8 +142,6 @@ export class StreamingManager {
         stream_tokens: true,
       };
       if (request.resume) body.resume = true;
-      if (request.memories?.length) body.memories = request.memories;
-      if (request.rules?.length) body.rules = request.rules;
 
       const response = await fetch(streamUrl, {
         method: 'POST',
