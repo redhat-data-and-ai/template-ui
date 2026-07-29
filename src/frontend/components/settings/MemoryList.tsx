@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@patternfly/react-core';
 import { Plus, Trash2, Brain, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
-import { addMemory, removeMemory, clearMemories, selectMemories } from '../../redux/slices/personalization';
+import { addMemory, setMemories, removeMemory, clearMemories, selectMemories } from '../../redux/slices/personalization';
 import { createMemory, deleteMemory, deleteAllMemories, listMemories } from '../../services/agent-rest';
 
 export function MemoryList() {
@@ -17,10 +17,7 @@ export function MemoryList() {
 
     listMemories().then((backendMems) => {
       if (backendMems.length === 0) return;
-      dispatch(clearMemories());
-      for (const bm of backendMems) {
-        dispatch(addMemory(bm.content));
-      }
+      dispatch(setMemories(backendMems));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

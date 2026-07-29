@@ -19,21 +19,18 @@ interface PersonalizationState {
   rules: RuleItem[];
 }
 
-const STORAGE_KEY = 'template-ui-personalization';
+function storageKey(): string {
+  const userId = globalThis.window?.USER_DATA?.sub || globalThis.window?.USER_DATA?.preferred_username || '';
+  return userId ? `template-ui-personalization:${userId}` : 'template-ui-personalization';
+}
 
 function loadState(): PersonalizationState {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
   return { memories: [], rules: [] };
 }
 
 function persist(state: PersonalizationState) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(storageKey(), JSON.stringify(state));
   } catch {
     /* ignore */
   }
@@ -53,6 +50,14 @@ const personalizationSlice = createSlice({
     },
     removeMemory(state, action: PayloadAction<string>) {
       state.memories = state.memories.filter((m) => m.id !== action.payload);
+      persist(state);
+    },
+    setMemories(state, action: PayloadAction<Array<{ id: string; content: string }>>) {
+      state.memories = action.payload.map((m) => ({
+        id: m.id,
+        content: m.content,
+        createdAt: new Date().toISOString(),
+      }));
       persist(state);
     },
     clearMemories(state) {
@@ -87,6 +92,13 @@ const personalizationSlice = createSlice({
       state.rules = [];
       persist(state);
     },
+    setRules(state, action: PayloadAction<Array<{ id: string; content: string; isActive: boolean }>>) {
+      state.rules = action.payload.map((r) => ({
+        ...r,
+        createdAt: new Date().toISOString(),
+      }));
+      persist(state);
+    },
     resetPersonalization(state) {
       state.memories = [];
       state.rules = [];
@@ -97,6 +109,7 @@ const personalizationSlice = createSlice({
 
 export const {
   addMemory,
+  setMemories,
   removeMemory,
   clearMemories,
   addRule,
@@ -104,6 +117,7 @@ export const {
   toggleRule,
   removeRule,
   clearRules,
+  setRules,
   resetPersonalization,
 } = personalizationSlice.actions;
 

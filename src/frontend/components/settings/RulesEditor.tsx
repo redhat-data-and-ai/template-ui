@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Switch } from '@patternfly/react-core';
 import { Plus, Trash2, ScrollText, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
@@ -8,18 +8,35 @@ import {
   toggleRule,
   clearRules,
   selectRules,
+  setRules,
 } from '../../redux/slices/personalization';
-import { deleteRule, deleteAllRules } from '../../services/agent-rest';
+import { createRule, deleteRule, deleteAllRules, listRules } from '../../services/agent-rest';
 
 export function RulesEditor() {
   const dispatch = useAppDispatch();
   const rules = useAppSelector(selectRules);
   const [draft, setDraft] = useState('');
+  const loaded = useRef(false);
+
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    listRules().then((backendRules) => {
+      if (backendRules.length === 0) return;
+      const merged = backendRules.map((br) => ({
+        id: br.id,
+        content: br.content,
+        isActive: br.is_active,
+      }));
+      dispatch(setRules(merged));
+    });
+  }, [dispatch]);
 
   const handleAdd = () => {
     const text = draft.trim();
     if (!text) return;
     dispatch(addRule(text));
+    createRule(text).catch(() => {});
     setDraft('');
   };
 

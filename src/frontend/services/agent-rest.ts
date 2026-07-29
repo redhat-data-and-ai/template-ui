@@ -225,6 +225,38 @@ export async function deleteAllMemories(): Promise<boolean> {
 }
 
 /**
+ * List all rules from the backend for the authenticated user.
+ */
+export async function listRules(): Promise<Array<{ id: string; content: string; is_active: boolean }>> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/rules'), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return data.rules || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Create a rule on the backend for the authenticated user.
+ */
+export async function createRule(content: string): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/rules'), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content, is_active: true }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Delete a single rule from the backend.
  */
 export async function deleteRule(ruleId: string): Promise<boolean> {

@@ -146,6 +146,31 @@ export async function setupServer(): Promise<FastifyInstance> {
 
   await fastify.register(logoutPlugin);
 
+  if (process.env.ENVIRONMENT === "development" && process.env.TEST_JWT_DIR) {
+    const fs = await import("fs");
+    fastify.get("/test-login/:username", async (request, reply) => {
+      const { username } = request.params as { username: string };
+      const tokenFile = `${process.env.TEST_JWT_DIR}/${username}_token.txt`;
+      if (!fs.existsSync(tokenFile)) {
+        return reply.status(404).send({ error: `No token for '${username}'. Generate with jwt_provider.` });
+      }
+      const accessToken = fs.readFileSync(tokenFile, "utf-8").trim();
+      const session = (request as any).session;
+      session.user = {
+        sub: username,
+        preferred_username: username,
+        name: username.charAt(0).toUpperCase() + username.slice(1),
+        displayName: username.charAt(0).toUpperCase() + username.slice(1),
+        email: `${username}@test.local`,
+      };
+      session.token = {
+        access_token: accessToken,
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      };
+      return reply.redirect("/");
+    });
+  }
+
   await fastify.register(apiRoutes, { prefix: "/api" });
   await fastify.register(proxyRoutes, { prefix: "/api" });
 
