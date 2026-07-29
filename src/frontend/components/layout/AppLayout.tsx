@@ -254,27 +254,27 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [dispatch, navigate]);
 
   const handleDeleteChat = useCallback(
-    (chatId: string) => {
+    async (chatId: string) => {
       releaseStreamingManager(chatId);
       dispatch(deleteChat(chatId));
       dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
+      const remaining = chats.filter((c) => c.id !== chatId);
+      await deleteThread(chatId).catch(() => {});
       if (location.pathname === `/chat/${chatId}`) {
-        const remaining = chats.filter((c) => c.id !== chatId);
         navigate(remaining.length > 0 ? `/chat/${remaining[0].id}` : '/');
       }
-      deleteThread(chatId).catch(() => {});
     },
     [dispatch, chats, navigate, location.pathname]
   );
 
-  const handleDeleteAllChats = useCallback(() => {
+  const handleDeleteAllChats = useCallback(async () => {
     const ids = chats.map((c) => c.id);
     ids.forEach((id) => releaseStreamingManager(id));
     dispatch(clearAllChats());
     chatStorage.clearChats();
+    await Promise.all(ids.map((id) => deleteThread(id).catch(() => {})));
     dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     navigate('/');
-    ids.forEach((id) => deleteThread(id).catch(() => {}));
   }, [dispatch, chats, navigate]);
 
   const handleRenameChat = useCallback(
