@@ -1,13 +1,26 @@
-import { useState } from 'react';
-import { Button } from '@patternfly/react-core';
+import { useEffect, useState } from 'react';
+import { Button, Spinner } from '@patternfly/react-core';
 import { Plus, Trash2, Brain, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
-import { addMemory, removeMemory, clearMemories, selectMemories } from '../../redux/slices/personalization';
+import {
+  addMemory,
+  removeMemory,
+  fetchMemories,
+  selectMemories,
+  selectPersonalizationLoading,
+  selectPersonalizationError,
+} from '../../redux/slices/personalization';
 
 export function MemoryList() {
   const dispatch = useAppDispatch();
   const memories = useAppSelector(selectMemories);
+  const loading = useAppSelector(selectPersonalizationLoading);
+  const error = useAppSelector(selectPersonalizationError);
   const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    dispatch(fetchMemories());
+  }, [dispatch]);
 
   const handleAdd = () => {
     const text = draft.trim();
@@ -33,6 +46,13 @@ export function MemoryList() {
         </p>
       </div>
 
+      {error && (
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-xs text-red-400/80">{error}</p>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <textarea
           value={draft}
@@ -56,7 +76,12 @@ export function MemoryList() {
         </Button>
       </div>
 
-      {memories.length === 0 ? (
+      {loading ? (
+        <div className="flex flex-col items-center py-8">
+          <Spinner size="md" />
+          <p className="text-sm text-muted-foreground/60 mt-2">Loading memories...</p>
+        </div>
+      ) : memories.length === 0 ? (
         <div className="flex flex-col items-center py-8 text-center">
           <Brain className="w-8 h-8 text-muted-foreground/30 mb-2" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">No memories yet</p>
@@ -65,38 +90,24 @@ export function MemoryList() {
           </p>
         </div>
       ) : (
-        <>
-          <ul className="space-y-2">
-            {memories.map((mem) => (
-              <li
-                key={mem.id}
-                className="group flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-secondary/30 transition-colors"
+        <ul className="space-y-2">
+          {memories.map((mem) => (
+            <li
+              key={mem.id}
+              className="group flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-secondary/30 transition-colors"
+            >
+              <Brain className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" />
+              <p className="flex-1 text-sm text-foreground leading-relaxed">{mem.content}</p>
+              <button
+                onClick={() => dispatch(removeMemory(mem.id))}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                aria-label="Remove memory"
               >
-                <Brain className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" />
-                <p className="flex-1 text-sm text-foreground leading-relaxed">{mem.content}</p>
-                <button
-                  onClick={() => dispatch(removeMemory(mem.id))}
-                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                  aria-label={`Remove memory: ${mem.content.substring(0, 50)}`}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-          {memories.length > 1 && (
-            <div className="flex justify-end">
-              <Button
-                variant="plain"
-                isDanger
-                size="sm"
-                onClick={() => dispatch(clearMemories())}
-              >
-                Clear all memories
-              </Button>
-            </div>
-          )}
-        </>
+              <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
