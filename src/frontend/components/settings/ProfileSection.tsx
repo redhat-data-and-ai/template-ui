@@ -5,9 +5,9 @@ import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
 import { addToast } from '../../redux/slices/toasts';
+import { deleteThread } from '../../services/agent-rest';
 import { chatStorage } from '../../services/chatStorage';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
-import { deleteThread } from '../../services/agent-rest';
 
 export function ProfileSection() {
   const dispatch = useAppDispatch();
