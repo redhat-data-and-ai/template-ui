@@ -1,18 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@patternfly/react-core';
 import { Plus, Trash2, Brain, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
-import { addMemory, removeMemory, clearMemories, selectMemories } from '../../redux/slices/personalization';
+import { addMemory, setMemories, removeMemory, clearMemories, selectMemories } from '../../redux/slices/personalization';
+import { createMemory, deleteMemory, deleteAllMemories, listMemories } from '../../services/agent-rest';
 
 export function MemoryList() {
   const dispatch = useAppDispatch();
   const memories = useAppSelector(selectMemories);
   const [draft, setDraft] = useState('');
+  const syncedRef = useRef(false);
+
+  useEffect(() => {
+    if (syncedRef.current) return;
+    syncedRef.current = true;
+
+    listMemories().then((backendMems) => {
+      if (backendMems.length === 0) return;
+      dispatch(setMemories(backendMems));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAdd = () => {
     const text = draft.trim();
     if (!text) return;
-    dispatch(addMemory(text));
+    const alreadyExists = memories.some((m) => m.content === text);
+    if (!alreadyExists) {
+      dispatch(addMemory(text));
+    }
+    createMemory(text).catch(() => {});
     setDraft('');
   };
 
@@ -75,7 +92,7 @@ export function MemoryList() {
                 <Brain className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" />
                 <p className="flex-1 text-sm text-foreground leading-relaxed">{mem.content}</p>
                 <button
-                  onClick={() => dispatch(removeMemory(mem.id))}
+                  onClick={() => { dispatch(removeMemory(mem.id)); deleteMemory(mem.id).catch(() => {}); }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                   aria-label="Remove memory"
                 >
@@ -90,7 +107,7 @@ export function MemoryList() {
                 variant="plain"
                 isDanger
                 size="sm"
-                onClick={() => dispatch(clearMemories())}
+                onClick={() => { dispatch(clearMemories()); deleteAllMemories().catch(() => {}); }}
               >
                 Clear all memories
               </Button>

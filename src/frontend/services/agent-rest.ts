@@ -97,10 +97,11 @@ function combineToolCallandResult(messages: Message[]) {
   return newMessages;
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+function getAuthHeaders(includeContentType = true): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (includeContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (window.USER_DATA?.accessToken) {
     headers['X-Token'] = window.USER_DATA.accessToken;
   }
@@ -153,9 +154,133 @@ export async function deleteThread(threadId: string): Promise<boolean> {
   try {
     const resp = await authenticatedFetch(deleteUrl, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     return resp.ok || resp.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * List all memories from the backend for the authenticated user.
+ */
+export async function listMemories(): Promise<Array<{ id: string; content: string }>> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/memories'), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return data.memories || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Create a persistent memory on the backend for the authenticated user.
+ */
+export async function createMemory(content: string): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/memories'), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete a single memory from the backend.
+ */
+export async function deleteMemory(memoryId: string): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/memories/${memoryId}`), {
+      method: 'DELETE',
+      headers: getAuthHeaders(false),
+    });
+    return resp.ok || resp.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete all memories for the authenticated user.
+ */
+export async function deleteAllMemories(): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/memories'), {
+      method: 'DELETE',
+      headers: getAuthHeaders(false),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * List all rules from the backend for the authenticated user.
+ */
+export async function listRules(): Promise<Array<{ id: string; content: string; is_active: boolean }>> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/rules'), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return data.rules || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Create a rule on the backend for the authenticated user.
+ */
+export async function createRule(content: string): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/rules'), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content, is_active: true }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete a single rule from the backend.
+ */
+export async function deleteRule(ruleId: string): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/rules/${ruleId}`), {
+      method: 'DELETE',
+      headers: getAuthHeaders(false),
+    });
+    return resp.ok || resp.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete all rules for the authenticated user.
+ */
+export async function deleteAllRules(): Promise<boolean> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/rules'), {
+      method: 'DELETE',
+      headers: getAuthHeaders(false),
+    });
+    return resp.ok;
   } catch {
     return false;
   }

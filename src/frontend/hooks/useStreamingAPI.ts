@@ -251,6 +251,26 @@ export function useStreamingAPI(threadId: string) {
   }, []);
 
   useEffect(() => {
+    const manager = managerRef.current;
+    const currentThreadId = threadIdRef.current;
+    return () => {
+      const st = manager?.getStatus();
+      if (st === 'connecting' || st === 'streaming') {
+        manager?.cancel();
+        const apiUrl = typeof window.APP_DATA?.apiUrl === 'string' ? window.APP_DATA.apiUrl : '';
+        const cancelUrl = apiUrl ? `${apiUrl}/v1/stream/cancel` : buildAgentApiUrl('/v1/stream/cancel');
+        if (typeof navigator.sendBeacon === 'function') {
+          const payload = JSON.stringify({
+            thread_id: currentThreadId,
+            event: 'client_stream_cancel',
+          });
+          navigator.sendBeacon(cancelUrl, new Blob([payload], { type: 'application/json' }));
+        }
+      }
+    };
+  }, [threadId]);
+
+  useEffect(() => {
     if (!threadId) return;
     chatStorage.saveChatByThreadId(threadId, messages);
   }, [messages, threadId]);
@@ -295,6 +315,26 @@ export function useStreamingAPI(threadId: string) {
 
       const messageText = serializeLastMessage(clones);
       if (messageText === '') return;
+
+      if (messageText.startsWith('/memory ')) {
+        const memoryContent = messageText.slice('/memory '.length).trim();
+        if (memoryContent) {
+          const { createMemory } = await import('@/services/agent-rest');
+          const saved = await createMemory(memoryContent);
+          const confirmMsg: Message = {
+            id: `msg-${Date.now()}`,
+            type: 'ai' as const,
+            content: saved
+              ? `Memory saved: "${memoryContent}"`
+              : `Failed to save memory. Please try again.`,
+          };
+          const updated = [...clones, confirmMsg];
+          dispatch(updateChat({ id: threadId, updates: { messages: updated } }));
+          setMessages(updated.map((m) => JSON.parse(JSON.stringify(m))));
+          chatStorage.saveChatByThreadId(threadId, updated);
+        }
+        return;
+      }
 
       const token = typeof window.USER_DATA.accessToken === 'string' ? window.USER_DATA.accessToken : undefined;
       const userId =

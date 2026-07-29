@@ -1,3 +1,4 @@
+import { authenticatedFetch } from './authenticated-fetch';
 import { buildAgentApiUrl } from '../lib/app-paths';
 
 export interface FeedbackPayload {
@@ -10,11 +11,15 @@ export interface FeedbackPayload {
   userId?: string;
 }
 
+function getCurrentUserId(): string {
+  return window.USER_DATA?.sub || window.USER_DATA?.preferred_username || 'anonymous';
+}
+
 export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
-  const response = await fetch(buildAgentApiUrl('/feedback'), {
+  const userId = payload.userId || getCurrentUserId();
+  const response = await authenticatedFetch(buildAgentApiUrl('/feedback'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify({
       trace_id: payload.traceId,
       name: payload.name,
@@ -22,7 +27,7 @@ export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
       kwargs: payload.comment ? { comment: payload.comment } : {},
       thread_id: payload.threadId,
       message_id: payload.messageId,
-      user_id: payload.userId || 'anonymous',
+      user_id: userId,
     }),
   });
   if (!response.ok) {
@@ -32,13 +37,11 @@ export async function submitFeedback(payload: FeedbackPayload): Promise<void> {
 
 export async function getThreadFeedback(
   threadId: string,
-  userId: string = 'anonymous',
+  userId?: string,
 ): Promise<Record<string, 'up' | 'down'>> {
-  const response = await fetch(
-    `${buildAgentApiUrl(`/feedback/${encodeURIComponent(threadId)}`)}?user_id=${encodeURIComponent(userId)}`,
-    {
-      credentials: 'include',
-    },
+  const effectiveUserId = userId || getCurrentUserId();
+  const response = await authenticatedFetch(
+    `${buildAgentApiUrl(`/feedback/${encodeURIComponent(threadId)}`)}?user_id=${encodeURIComponent(effectiveUserId)}`,
   );
   if (!response.ok) return {};
   const data = (await response.json()) as { feedback?: Array<{ message_id: string; feedback: 'up' | 'down' }> };

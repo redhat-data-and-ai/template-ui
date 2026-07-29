@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Switch } from '@patternfly/react-core';
 import { Plus, Trash2, ScrollText, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
@@ -8,17 +8,35 @@ import {
   toggleRule,
   clearRules,
   selectRules,
+  setRules,
 } from '../../redux/slices/personalization';
+import { createRule, deleteRule, deleteAllRules, listRules } from '../../services/agent-rest';
 
 export function RulesEditor() {
   const dispatch = useAppDispatch();
   const rules = useAppSelector(selectRules);
   const [draft, setDraft] = useState('');
+  const loaded = useRef(false);
+
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    listRules().then((backendRules) => {
+      if (backendRules.length === 0) return;
+      const merged = backendRules.map((br) => ({
+        id: br.id,
+        content: br.content,
+        isActive: br.is_active,
+      }));
+      dispatch(setRules(merged));
+    });
+  }, [dispatch]);
 
   const handleAdd = () => {
     const text = draft.trim();
     if (!text) return;
     dispatch(addRule(text));
+    createRule(text).catch(() => {});
     setDraft('');
   };
 
@@ -93,7 +111,7 @@ export function RulesEditor() {
                   {rule.content}
                 </p>
                 <button
-                  onClick={() => dispatch(removeRule(rule.id))}
+                  onClick={() => { dispatch(removeRule(rule.id)); deleteRule(rule.id).catch(() => {}); }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                   aria-label="Remove rule"
                 >
@@ -108,7 +126,7 @@ export function RulesEditor() {
                 variant="plain"
                 isDanger
                 size="sm"
-                onClick={() => dispatch(clearRules())}
+                onClick={() => { dispatch(clearRules()); deleteAllRules().catch(() => {}); }}
               >
                 Clear all rules
               </Button>

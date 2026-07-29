@@ -90,11 +90,14 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, []);
 
   useEffect(() => {
-    if (!chatId || hasMessages || hydrating) return;
+    if (!chatId || hydrating) return;
 
     const locState = location.state as Record<string, unknown> | null;
     if (locState?.initialPrompt != null) return;
     if (isClientCreatedChat(chatId)) return;
+
+    const hasOnlyHumanMessages = hasMessages && currentChat?.messages.every(m => m.type === 'human');
+    if (hasMessages && !hasOnlyHumanMessages) return;
 
     let cancelled = false;
     setHydrating(true);

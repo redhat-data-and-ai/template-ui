@@ -1,8 +1,12 @@
 import { ChatItem } from '../types/chat';
 
 class ChatStorageService {
-  private readonly CHATS_STORAGE_KEY = 'dataverse-ai-chats';
-  private readonly MAX_CHATS = 50; // Limit to prevent localStorage bloat
+  private readonly MAX_CHATS = 50;
+
+  private get CHATS_STORAGE_KEY(): string {
+    const userId = globalThis.window?.USER_DATA?.sub || globalThis.window?.USER_DATA?.preferred_username || '';
+    return userId ? `dataverse-ai-chats:${userId}` : 'dataverse-ai-chats';
+  }
 
   /**
    * Save chats to localStorage with error handling and size limits

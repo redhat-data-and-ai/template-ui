@@ -72,7 +72,7 @@ function authCheck(
           preferred_username: gwEmail.split("@")[0],
           sub: gwSub || gwEmail,
         };
-      } else {
+      } else if (!request.session.user) {
         const dummyUser = {
           accessToken: "access-token",
           expiresAt: "2026-10-29T23:20:00.417Z",
