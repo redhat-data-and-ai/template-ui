@@ -1,11 +1,52 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getSettings, resetSettings } from '../utils/settings.js';
+import { setupServer } from '../server.js';
 import {
   buildTestServer,
   parseCookieHeader,
   bombardEndpoint,
   generatePathTraversalPayloads,
 } from './test-utils.js';
+
+describe('Security: COOKIE_SIGN startup guard', () => {
+  // These tests call setupServer() directly so that buildTestServer's COOKIE_SIGN
+  // defaulting doesn't mask the guard under test.
+  beforeEach(() => {
+    process.env.FEATURE_AUTH_ENABLED = 'false';
+    resetSettings();
+  });
+
+  afterEach(() => {
+    delete process.env.COOKIE_SIGN;
+    delete process.env.FEATURE_AUTH_ENABLED;
+    resetSettings();
+  });
+
+  it('should throw if COOKIE_SIGN is not set', async () => {
+    delete process.env.COOKIE_SIGN;
+    await expect(setupServer()).rejects.toThrow(/COOKIE_SIGN/);
+  });
+
+  it('should throw if COOKIE_SIGN is shorter than 32 characters', async () => {
+    process.env.COOKIE_SIGN = 'tooshort';
+    await expect(setupServer()).rejects.toThrow(/COOKIE_SIGN/);
+  });
+
+  it('should throw if COOKIE_SIGN is exactly 31 characters', async () => {
+    process.env.COOKIE_SIGN = 'a'.repeat(31);
+    await expect(setupServer()).rejects.toThrow(/COOKIE_SIGN/);
+  });
+
+  it('should start successfully when COOKIE_SIGN is exactly 32 characters', async () => {
+    process.env.COOKIE_SIGN = 'a'.repeat(32);
+    await expect(setupServer()).resolves.toBeDefined();
+  });
+
+  it('should start successfully when COOKIE_SIGN is longer than 32 characters', async () => {
+    process.env.COOKIE_SIGN = 'a-very-long-and-secure-cookie-signing-secret-value';
+    await expect(setupServer()).resolves.toBeDefined();
+  });
+});
 
 describe('Security: Session Cookie Hardening', () => {
   beforeEach(() => {
