@@ -17,6 +17,10 @@ import { SettingsPage } from '../../pages/SettingsPage';
 import { AppearanceSettings } from '../settings/AppearanceSettings';
 import { InputForm } from '../InputForm';
 import { RedHatLogo } from '../RedHatLogo';
+import { MemoryList } from '../settings/MemoryList';
+import { RulesEditor } from '../settings/RulesEditor';
+import { SubAgentIndicator } from '../SubAgentIndicator';
+import { Sidebar } from '../Sidebar';
 
 // ---------------------------------------------------------------------------
 // HomePage
@@ -74,6 +78,12 @@ describe('SettingsPage — accessibility', () => {
     renderWithProviders(<SettingsPage />);
     const tablist = screen.getByRole('tablist');
     expect(tablist).toBeInTheDocument();
+  });
+
+  it('tablist is not wrapped in a redundant nav landmark', () => {
+    renderWithProviders(<SettingsPage />);
+    const tablist = screen.getByRole('tablist');
+    expect(tablist.closest('nav')).toBeNull();
   });
 
   it('tabs have role="tab" and aria-selected', () => {
@@ -230,5 +240,245 @@ describe('RedHatLogo — accessibility', () => {
     const svg = document.querySelector('svg');
     expect(svg).toHaveAttribute('aria-hidden', 'true');
     expect(svg).toHaveAttribute('focusable', 'false');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MemoryList
+// ---------------------------------------------------------------------------
+describe('MemoryList — accessibility', () => {
+  it('passes axe audit (empty state)', async () => {
+    const { container } = renderWithProviders(<MemoryList />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('add-memory textarea has accessible label', () => {
+    renderWithProviders(<MemoryList />);
+    expect(screen.getByRole('textbox', { name: /new memory/i })).toBeInTheDocument();
+  });
+
+  it('remove button includes memory content in accessible label', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MemoryList />);
+    const textarea = screen.getByRole('textbox', { name: /new memory/i });
+    await user.type(textarea, 'Prefer metric units');
+    await user.click(screen.getByRole('button', { name: /^add$/i }));
+    const removeBtn = screen.getByRole('button', { name: /remove memory: prefer metric units/i });
+    expect(removeBtn).toBeInTheDocument();
+  });
+
+  it('remove button is keyboard-focusable (not just hover-visible)', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MemoryList />);
+    const textarea = screen.getByRole('textbox', { name: /new memory/i });
+    await user.type(textarea, 'Test memory entry');
+    await user.click(screen.getByRole('button', { name: /^add$/i }));
+    const removeBtn = screen.getByRole('button', { name: /remove memory/i });
+    removeBtn.focus();
+    expect(removeBtn).toHaveFocus();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RulesEditor
+// ---------------------------------------------------------------------------
+describe('RulesEditor — accessibility', () => {
+  it('passes axe audit (empty state)', async () => {
+    const { container } = renderWithProviders(<RulesEditor />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('add-rule textarea has accessible label', () => {
+    renderWithProviders(<RulesEditor />);
+    expect(screen.getByRole('textbox', { name: /new rule/i })).toBeInTheDocument();
+  });
+
+  it('remove button includes rule content in accessible label', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<RulesEditor />);
+    const textarea = screen.getByRole('textbox', { name: /new rule/i });
+    await user.type(textarea, 'Always respond in British English');
+    await user.click(screen.getByRole('button', { name: /^add$/i }));
+    const removeBtn = screen.getByRole('button', { name: /remove rule: always respond in british english/i });
+    expect(removeBtn).toBeInTheDocument();
+  });
+
+  it('toggle switch label includes rule content', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<RulesEditor />);
+    const textarea = screen.getByRole('textbox', { name: /new rule/i });
+    await user.type(textarea, 'Be concise');
+    await user.click(screen.getByRole('button', { name: /^add$/i }));
+    const toggle = screen.getByRole('switch', { name: /toggle rule: be concise/i });
+    expect(toggle).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SubAgentIndicator — disclosure widget
+// ---------------------------------------------------------------------------
+describe('SubAgentIndicator — accessibility', () => {
+  const baseToolCall = {
+    id: 'tool-1',
+    name: 'data_analyst',
+    args: {},
+    content: null,
+  };
+
+  it('passes axe audit (delegating state)', async () => {
+    const { container } = render(
+      <SubAgentIndicator
+        toolCall={baseToolCall}
+        messageId="msg-1"
+        index={0}
+      />,
+    );
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('header has role="button" with aria-expanded=false by default', () => {
+    render(
+      <SubAgentIndicator
+        toolCall={baseToolCall}
+        messageId="msg-1"
+        index={0}
+      />,
+    );
+    const header = screen.getByRole('button', { name: /data.analyst/i });
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('Enter key toggles expansion', async () => {
+    const user = userEvent.setup();
+    render(
+      <SubAgentIndicator
+        toolCall={baseToolCall}
+        messageId="msg-1"
+        index={0}
+      />,
+    );
+    const header = screen.getByRole('button', { name: /data.analyst/i });
+    header.focus();
+    await user.keyboard('{Enter}');
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('Space key toggles expansion', async () => {
+    const user = userEvent.setup();
+    render(
+      <SubAgentIndicator
+        toolCall={baseToolCall}
+        messageId="msg-1"
+        index={0}
+      />,
+    );
+    const header = screen.getByRole('button', { name: /data.analyst/i });
+    header.focus();
+    await user.keyboard(' ');
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('approval alert uses role="alert" when approval is needed', () => {
+    const interruptValue = {
+      action_requests: [{ name: 'data_analyst' }],
+    };
+    render(
+      <SubAgentIndicator
+        toolCall={baseToolCall}
+        messageId="msg-1"
+        index={0}
+        pendingInterrupt={{ value: interruptValue } as any}
+        onInterruptResume={() => {}}
+        onAlwaysAllow={() => {}}
+      />,
+    );
+    const alert = document.querySelector('[role="alert"]');
+    expect(alert).toBeInTheDocument();
+  });
+
+  it('approve/reject/always-allow buttons have descriptive aria-labels', () => {
+    const interruptValue = {
+      action_requests: [{ name: 'data_analyst' }],
+    };
+    render(
+      <SubAgentIndicator
+        toolCall={baseToolCall}
+        messageId="msg-1"
+        index={0}
+        pendingInterrupt={{ value: interruptValue } as any}
+        onInterruptResume={() => {}}
+        onAlwaysAllow={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /approve sub-agent action/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reject sub-agent action/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /always allow sub-agent/i })).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+describe('Sidebar — accessibility', () => {
+  const defaultProps = {
+    chatHistory: [],
+    onNewChat: () => {},
+    onSelectChat: () => {},
+    onDeleteChat: () => {},
+    onDeleteAllChats: () => {},
+    onRenameChat: () => {},
+  };
+
+  it('passes axe audit (empty state)', async () => {
+    const { container } = renderWithProviders(<Sidebar {...defaultProps} />);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('chat list is a <ul> with accessible label', () => {
+    renderWithProviders(
+      <Sidebar
+        {...defaultProps}
+        chatHistory={[{ id: '1', title: 'Test Chat', timestamp: new Date(), preview: '' }]}
+      />,
+    );
+    const list = screen.getByRole('list', { name: /chat history/i });
+    expect(list).toBeInTheDocument();
+  });
+
+  it('chat items use <li> not role="option" (no interactive controls nesting violation)', () => {
+    renderWithProviders(
+      <Sidebar
+        {...defaultProps}
+        chatHistory={[{ id: '1', title: 'Test Chat', timestamp: new Date(), preview: '' }]}
+      />,
+    );
+    expect(document.querySelector('[role="option"]')).toBeNull();
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
+    expect(document.querySelector('li')).toBeInTheDocument();
+  });
+
+  it('search input has accessible label', () => {
+    renderWithProviders(
+      <Sidebar
+        {...defaultProps}
+        chatHistory={[
+          { id: '1', title: 'Thread One', timestamp: new Date(), preview: '' },
+          { id: '2', title: 'Thread Two', timestamp: new Date(), preview: '' },
+          { id: '3', title: 'Thread Three', timestamp: new Date(), preview: '' },
+          { id: '4', title: 'Thread Four', timestamp: new Date(), preview: '' },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('textbox', { name: /search chat threads/i })).toBeInTheDocument();
+  });
+
+  it('new chat button has accessible label', () => {
+    renderWithProviders(<Sidebar {...defaultProps} />);
+    expect(screen.getByRole('button', { name: /start new chat/i })).toBeInTheDocument();
+  });
+
+  it('settings button has accessible label', () => {
+    renderWithProviders(<Sidebar {...defaultProps} />);
+    expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
   });
 });

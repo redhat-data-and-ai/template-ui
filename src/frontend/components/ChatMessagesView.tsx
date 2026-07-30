@@ -207,8 +207,8 @@ const mdComponents = {
       {children}
     </h3>
   ),
-  p: ({ className, children, ...props }: MdComponentProps) => (
-    <p className={cn("mb-3 leading-7 text-foreground/90", className)} {...props}>
+  p: ({ className, children, node: _node, ...props }: MdComponentProps) => (
+    <p className={cn("mb-3 leading-7 text-inherit", className)} {...props}>
       {children}
     </p>
   ),
@@ -222,6 +222,7 @@ const mdComponents = {
         {...props}
       >
         {children}
+        <span className="sr-only"> (opens in new tab)</span>
       </a>
     </Label>
   ),
@@ -235,8 +236,8 @@ const mdComponents = {
       {children}
     </ol>
   ),
-  li: ({ className, children, ...props }: MdComponentProps) => (
-    <li className={cn("mb-1 text-foreground/90", className)} {...props}>
+  li: ({ className, children, node: _node, ...props }: MdComponentProps) => (
+    <li className={cn("mb-1 text-inherit", className)} {...props}>
       {children}
     </li>
   ),
@@ -393,7 +394,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
                 <Pencil className="h-3.5 w-3.5" />
               </button>
             )}
-            <div className="text-sm leading-relaxed [&_p]:!text-primary-foreground [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
+            <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {plain}
               </ReactMarkdown>
@@ -450,7 +451,7 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
             </div>
           )}
           {bodyMd.length > 0 && (
-            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
+            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{bodyMd}</ReactMarkdown>
             </div>
           )}
@@ -534,7 +535,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
       const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
 
       return (
-        <div className="space-y-2 w-full">
+        <div className="space-y-2 w-full" aria-live="off">
           {subAgentCalls.map((toolCall, idx) => (
             <SubAgentIndicator
               key={`${message.id}-sa-${idx}`}
@@ -761,6 +762,8 @@ export function ChatMessagesView({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const prevPendingInterrupt = useRef(pendingInterrupt);
+  const prevIsLoading = useRef(isLoading);
+  const [srAnnouncement, setSrAnnouncement] = useState('');
 
   useEffect(() => {
     if (prevPendingInterrupt.current && !pendingInterrupt) {
@@ -768,6 +771,19 @@ export function ChatMessagesView({
     }
     prevPendingInterrupt.current = pendingInterrupt;
   }, [pendingInterrupt, chatInputRef]);
+
+  useEffect(() => {
+    const wasLoading = prevIsLoading.current;
+    prevIsLoading.current = isLoading;
+    if (!wasLoading || isLoading) return;
+    const lastAiMessage = [...messages].reverse().find((m) => m.type === 'ai');
+    if (!lastAiMessage) return;
+    const text = getCopyableAiMessageText(lastAiMessage.content);
+    if (!text) return;
+    setSrAnnouncement('');
+    const id = setTimeout(() => setSrAnnouncement(text), 50);
+    return () => clearTimeout(id);
+  }, [isLoading, messages]);
 
   const { lastHumanMessageIndex, lastAiMessageIndex } = useMemo(() => {
     let lastHuman = -1;
@@ -800,6 +816,13 @@ export function ChatMessagesView({
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {srAnnouncement}
+      </div>
       {showExport && (
         <div className="shrink-0 flex justify-end items-center px-4 md:px-6 py-2 border-b border-border bg-background/90">
           <Dropdown
@@ -894,11 +917,11 @@ export function ChatMessagesView({
                   )}
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
-                      <div className="text-[11px] text-muted-foreground/80">
+                      <div className="text-[11px] text-muted-foreground">
                         Response time: {(lastResponseTiming.totalDurationMs / 1000).toFixed(1)}s
                       </div>
                       {lastResponseTiming.timeToFirstTokenMs != null && (
-                        <div className="text-[10px] text-muted-foreground/65">
+                        <div className="text-[10px] text-muted-foreground">
                           First token: {Math.round(lastResponseTiming.timeToFirstTokenMs)}ms
                         </div>
                       )}
@@ -914,7 +937,7 @@ export function ChatMessagesView({
             <div
               className="flex items-start gap-3 animate-fadeIn"
               role="status"
-              aria-live="assertive"
+              aria-live="polite"
               aria-label="Agent is thinking"
             >
               <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">

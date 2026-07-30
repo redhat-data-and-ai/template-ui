@@ -32,8 +32,8 @@ export function RulesEditor() {
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-        <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-        <p className="text-xs text-amber-400/80">
+        <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
+        <p className="text-xs text-amber-700 dark:text-amber-300">
           Custom rules shape how the agent responds. They apply to every conversation
           unless individually disabled.
         </p>
@@ -64,9 +64,9 @@ export function RulesEditor() {
 
       {rules.length === 0 ? (
         <div className="flex flex-col items-center py-8 text-center">
-          <ScrollText className="w-8 h-8 text-muted-foreground/30 mb-2" />
-          <p className="text-sm text-muted-foreground/60">No custom rules</p>
-          <p className="text-xs text-muted-foreground/40 mt-1">
+          <ScrollText className="w-8 h-8 text-muted-foreground/30 mb-2" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">No custom rules</p>
+          <p className="text-xs text-muted-foreground mt-1">
             Add instructions for the agent to follow
           </p>
         </div>
@@ -80,7 +80,7 @@ export function RulesEditor() {
               >
                 <Switch
                   id={`rule-toggle-${rule.id}`}
-                  aria-label="Toggle rule"
+                  aria-label={`Toggle rule: ${rule.content.substring(0, 50)}`}
                   isChecked={rule.isActive}
                   onChange={() => dispatch(toggleRule(rule.id))}
                   className="mt-0.5"
@@ -94,8 +94,8 @@ export function RulesEditor() {
                 </p>
                 <button
                   onClick={() => dispatch(removeRule(rule.id))}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                  aria-label="Remove rule"
+                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  aria-label={`Remove rule: ${rule.content.substring(0, 50)}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>

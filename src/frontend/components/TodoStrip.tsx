@@ -9,7 +9,7 @@ interface TodoStripProps {
 }
 
 const STATUS_CONFIG: Record<TodoItem['status'], { icon: typeof CheckCircle; className: string; iconClass: string }> = {
-  completed: { icon: CheckCircle, className: 'text-green-600 dark:text-green-400', iconClass: 'text-green-500 dark:text-green-400' },
+  completed: { icon: CheckCircle, className: 'text-green-700 dark:text-green-400', iconClass: 'text-green-600 dark:text-green-400' },
   in_progress: { icon: Loader2, className: 'text-foreground font-medium', iconClass: 'text-primary animate-spin' },
   pending: { icon: Circle, className: 'text-muted-foreground', iconClass: 'text-muted-foreground/50' },
 };
@@ -31,7 +31,7 @@ export function TodoStrip({ messages, isLoading = false }: TodoStripProps) {
   const done = todos.filter((t) => t.status === 'completed').length;
 
   return (
-    <div className="border-t border-border bg-card/60 backdrop-blur-sm" role="status" aria-label="Current tasks">
+    <div className="border-t border-border bg-card/60 backdrop-blur-sm" role="region" aria-label="Current tasks">
       <div className="max-w-3xl mx-auto px-4 py-2">
         <div className="flex items-center gap-2 mb-1.5">
           <ListChecks className="w-3.5 h-3.5 text-muted-foreground" />

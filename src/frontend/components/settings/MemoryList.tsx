@@ -26,8 +26,8 @@ export function MemoryList() {
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-        <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-        <p className="text-xs text-blue-400/80">
+        <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" aria-hidden="true" />
+        <p className="text-xs text-blue-700 dark:text-blue-300">
           Memories are facts the agent remembers across conversations. Add things like
           your preferences, context, or recurring instructions.
         </p>
@@ -58,9 +58,9 @@ export function MemoryList() {
 
       {memories.length === 0 ? (
         <div className="flex flex-col items-center py-8 text-center">
-          <Brain className="w-8 h-8 text-muted-foreground/30 mb-2" />
-          <p className="text-sm text-muted-foreground/60">No memories yet</p>
-          <p className="text-xs text-muted-foreground/40 mt-1">
+          <Brain className="w-8 h-8 text-muted-foreground/30 mb-2" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">No memories yet</p>
+          <p className="text-xs text-muted-foreground mt-1">
             Add facts for the agent to remember
           </p>
         </div>
@@ -76,8 +76,8 @@ export function MemoryList() {
                 <p className="flex-1 text-sm text-foreground leading-relaxed">{mem.content}</p>
                 <button
                   onClick={() => dispatch(removeMemory(mem.id))}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                  aria-label="Remove memory"
+                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  aria-label={`Remove memory: ${mem.content.substring(0, 50)}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>

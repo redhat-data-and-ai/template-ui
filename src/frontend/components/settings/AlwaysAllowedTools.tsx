@@ -53,9 +53,9 @@ export function AlwaysAllowedTools() {
         <h3 className="text-sm font-semibold mb-3">Individual Tool Permissions</h3>
         {tools.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-            <ShieldCheck className="w-8 h-8 text-muted-foreground/40" />
+            <ShieldCheck className="w-8 h-8 text-muted-foreground/40" aria-hidden="true" />
             <p className="text-sm text-muted-foreground">No tools are always allowed yet.</p>
-            <p className="text-xs text-muted-foreground/70 max-w-xs">
+            <p className="text-xs text-muted-foreground max-w-xs">
               When the agent asks for approval to run a tool, click "Always allow" to skip
               approval for that tool in future runs.
             </p>
