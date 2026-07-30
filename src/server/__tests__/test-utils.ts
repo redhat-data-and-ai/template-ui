@@ -11,6 +11,12 @@ export async function buildTestServer(
     process.env.FEATURE_AUTH_ENABLED = 'false';
   }
 
+  // Provide a valid COOKIE_SIGN for tests unless the test itself is intentionally
+  // testing the missing/short secret guard (those tests set their own value).
+  if (!process.env.COOKIE_SIGN) {
+    process.env.COOKIE_SIGN = 'test-secret-value-that-is-32chars!!';
+  }
+
   // Apply test config via environment variables
   if (overrides?.security?.session) {
     if (overrides.security.session.http_only !== undefined) {

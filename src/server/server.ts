@@ -121,11 +121,17 @@ export async function setupServer(): Promise<FastifyInstance> {
     });
   }
 
+  const cookieSign = process.env.COOKIE_SIGN;
+  if (!cookieSign || cookieSign.length < 32) {
+    throw new Error(
+      "COOKIE_SIGN env var is required and must be at least 32 characters. " +
+      "Set it to a cryptographically random string before starting the server."
+    );
+  }
+
   await fastify.register(import("@fastify/cookie"));
   await fastify.register(import("@fastify/session"), {
-    secret:
-      process.env.COOKIE_SIGN ||
-      "a secret with minimum length of 32 characters",
+    secret: cookieSign,
     cookie: {
       secure: cfg.security.session.secure_cookie,
       httpOnly: cfg.security.session.http_only ?? true,

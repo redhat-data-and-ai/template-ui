@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
 import { getSettings } from "../utils/settings.js";
+import authCheckPlugin from "../plugins/auth-check.plugin.js";
 
 interface StreamRequest {
   message: string;
@@ -10,6 +11,7 @@ interface StreamRequest {
 }
 
 async function apiRoutes(fastify: FastifyInstance) {
+  // Public routes — no auth required
   fastify.get("/health", async () => {
     return { status: "ok", timestamp: new Date().toISOString() };
   });
@@ -62,12 +64,17 @@ async function apiRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.post("/v1/stream", async (request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) => {
-   handleStreamPost(fastify, request, reply);
-  });
+  // Protected routes — auth required
+  await fastify.register(async (protectedRoutes) => {
+    await protectedRoutes.register(authCheckPlugin);
 
-  fastify.get("/v1/history/:threadId", async (request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) => {
-    handleHistoryGet(fastify, request, reply);
+    protectedRoutes.post("/v1/stream", async (request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) => {
+      return handleStreamPost(protectedRoutes, request, reply);
+    });
+
+    protectedRoutes.get("/v1/history/:threadId", async (request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) => {
+      return handleHistoryGet(protectedRoutes, request, reply);
+    });
   });
 }
 

@@ -241,6 +241,109 @@ describe('POST /api/proxy/agent/feedback', () => {
   });
 });
 
+// ── Public routes remain accessible without auth ──────────────────────────────
+
+describe('Public /api routes — accessible without auth', () => {
+  it('GET /api/health returns 200 when AUTH_ENABLED=true and no session', async () => {
+    process.env.AUTH_ENABLED = 'true';
+    const server = await buildTestServer();
+    const res = await server.inject({ method: 'GET', url: '/api/health' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).status).toBe('ok');
+  });
+
+  it('GET /api/config/branding returns 200 when AUTH_ENABLED=true and no session', async () => {
+    process.env.AUTH_ENABLED = 'true';
+    const server = await buildTestServer();
+    const res = await server.inject({ method: 'GET', url: '/api/config/branding' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toHaveProperty('title');
+  });
+
+  it('GET /api/config/features returns 200 when AUTH_ENABLED=true and no session', async () => {
+    process.env.AUTH_ENABLED = 'true';
+    const server = await buildTestServer();
+    const res = await server.inject({ method: 'GET', url: '/api/config/features' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toHaveProperty('auth_enabled');
+  });
+});
+
+// ── POST /api/v1/stream — auth guard ─────────────────────────────────────────
+
+describe('POST /api/v1/stream — auth guard', () => {
+  it('redirects to /login when AUTH_ENABLED=true and no session exists', async () => {
+    process.env.AUTH_ENABLED = 'true';
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/v1/stream',
+      payload: { message: 'hello', thread_id: 'th1', session_id: 's1', user_id: 'u1' },
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers['location']).toContain('/login');
+  });
+
+  it('proxies the request when AUTH_ENABLED=false (gateway mode)', async () => {
+    const agentSSE = 'data: hello\n\n[DONE]\n\n';
+    stubFetch(makeSSEResponse(agentSSE));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/v1/stream',
+      payload: { message: 'hello', thread_id: 'th1', session_id: 's1', user_id: 'u1' },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+// ── GET /api/v1/history/:threadId — auth guard ────────────────────────────────
+
+describe('GET /api/v1/history/:threadId — auth guard', () => {
+  it('redirects to /login when AUTH_ENABLED=true and no session exists', async () => {
+    process.env.AUTH_ENABLED = 'true';
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/v1/history/thread-abc',
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(res.headers['location']).toContain('/login');
+  });
+
+  it('proxies to agent and returns history when AUTH_ENABLED=false', async () => {
+    stubFetch(okJson([{ role: 'user', content: 'hi' }]));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/v1/history/thread-abc',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(Array.isArray(body)).toBe(true);
+  });
+
+  it('propagates agent error status when auth passes', async () => {
+    stubFetch(new Response('Not Found', { status: 404 }));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/v1/history/nonexistent-thread',
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 // ── POST /api/proxy/agent/v1/stream — HITL interrupt translation ──────────────
 
 describe('POST /api/proxy/agent/v1/stream', () => {
