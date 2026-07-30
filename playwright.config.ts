@@ -29,6 +29,7 @@ export default defineConfig({
       AUTH_ENABLED: 'false',
       ENVIRONMENT: 'test',
       AGENT_HOST: 'http://localhost:19999',
+      COOKIE_SIGN: 'playwright-test-secret-32-chars-min-length',
     },
   },
 });
