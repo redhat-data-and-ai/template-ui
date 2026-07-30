@@ -41,7 +41,7 @@ reviews:
     - "!**/package-lock.json"
     - "!**/.gitignore"
     - "!**/LICENSE"
-    - "!.env*"
+    - "!**/.env*"
     - "!**/dist/**"
     - "!**/playwright-report/**"
   path_instructions:

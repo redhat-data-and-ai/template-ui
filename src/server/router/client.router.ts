@@ -27,7 +27,6 @@ async function routes(fastify: FastifyInstance) {
   fastify.get("/*", (request: FastifyRequest, reply: FastifyReply) => {
     const session = request.session;
     const { user, token } = session;
-    console.log(token);
 
     const userData = {
       ...user,

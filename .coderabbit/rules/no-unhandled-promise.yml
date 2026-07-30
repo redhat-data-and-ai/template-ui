@@ -6,13 +6,23 @@ rule:
   kind: expression_statement
   has:
     kind: call_expression
-    has:
-      kind: member_expression
-      not:
-        has:
-          kind: property_identifier
-          regex: "^(then|catch|finally)$"
+    not:
+      any:
+        - has:
+            kind: member_expression
+            has:
+              kind: property_identifier
+              regex: "^(then|catch|finally)$"
+        - has:
+            kind: member_expression
+            has:
+              kind: property_identifier
+              regex: "^(info|warn|error|debug|log|trace)$"
   inside:
-    kind: function_declaration
-    regex: "^async "
-    stopBy: end
+    any:
+      - kind: function_declaration
+        regex: "^async "
+        stopBy: end
+      - kind: arrow_function
+        regex: "^async "
+        stopBy: end
