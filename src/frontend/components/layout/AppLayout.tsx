@@ -43,6 +43,7 @@ import { getAllThreadsByUserId, getThreadState, deleteThread } from '../../servi
 import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
 import { markChatAsClientCreated, isClientCreatedChat } from '../../services/newChatTracker';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
 import type { RootState } from '../../redux/store';
 
 function toSafeDate(value: unknown): Date {
@@ -254,6 +255,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleDeleteChat = useCallback(
     (chatId: string) => {
+      releaseStreamingManager(chatId);
       dispatch(deleteChat(chatId));
       dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
       if (location.pathname === `/chat/${chatId}`) {
@@ -267,6 +269,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleDeleteAllChats = useCallback(() => {
     const ids = chats.map((c) => c.id);
+    ids.forEach((id) => releaseStreamingManager(id));
     dispatch(clearAllChats());
     chatStorage.clearChats();
     dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));

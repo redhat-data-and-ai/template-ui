@@ -6,6 +6,7 @@ import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
 import { addToast } from '../../redux/slices/toasts';
 import { chatStorage } from '../../services/chatStorage';
+import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
 
 export function ProfileSection() {
   const dispatch = useAppDispatch();
@@ -19,6 +20,8 @@ export function ProfileSection() {
   const username = userData?.preferred_username || '';
 
   const handleDeleteAll = () => {
+    const ids = chats.map((c) => c.id);
+    ids.forEach((id) => releaseStreamingManager(id));
     dispatch(clearAllChats());
     chatStorage.clearChats();
     dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
