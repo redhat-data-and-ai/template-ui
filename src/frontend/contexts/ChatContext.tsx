@@ -132,6 +132,15 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
   // Actions
   const createNewChat = useCallback((): string => {
+    const existingEmptyChat = state.chats.find(
+      chat => chat.title === "New Chat" && chat.messages.length === 0
+    );
+
+    if (existingEmptyChat) {
+      navigate(`/chat/${existingEmptyChat.id}`);
+      return existingEmptyChat.id;
+    }
+
     const newChatId = uuidv4();
     const newChat: ChatItem = {
       id: newChatId,
@@ -145,11 +154,10 @@ export function ChatProvider({ children }: ChatProviderProps) {
     dispatch({ type: 'ADD_CHAT', payload: newChat });
     dispatch({ type: 'SET_ERROR', payload: null });
 
-    // Navigate to new chat
     navigate(`/chat/${newChatId}`);
 
     return newChatId;
-  }, [navigate]);
+  }, [navigate, state.chats]);
 
   const deleteChat = useCallback((chatId: string) => {
     dispatch({ type: 'DELETE_CHAT', payload: chatId });
