@@ -116,9 +116,13 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
 
 export async function handleHistoryGet(fastify: FastifyInstance, request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) {
   const { threadId } = request.params;
-  
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(threadId)) {
+    return reply.status(400).send({ error: "Invalid thread ID" });
+  }
+
   const accessToken = resolveAccessToken(request);
-  
+
   fastify.log.info(`History request for thread: ${threadId}, Token: ${accessToken ? 'Present' : 'Missing'}`);
 
   try {
