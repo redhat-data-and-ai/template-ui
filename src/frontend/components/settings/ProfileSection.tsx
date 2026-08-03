@@ -7,6 +7,7 @@ import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
 import { addToast } from '../../redux/slices/toasts';
 import { chatStorage } from '../../services/chatStorage';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
+import { deleteThread } from '../../services/agent-rest';
 
 export function ProfileSection() {
   const dispatch = useAppDispatch();
@@ -27,6 +28,7 @@ export function ProfileSection() {
     dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     setConfirmDelete(false);
     navigate('/');
+    ids.forEach((id) => deleteThread(id).catch(() => {}));
   };
 
   return (
