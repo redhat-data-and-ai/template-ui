@@ -3,11 +3,12 @@ import type { AIMessage, Message } from '@langchain/langgraph-sdk';
 
 import type { StreamEvent } from '@/hooks/useDataStream';
 import {
-  StreamingManager,
+  type StreamingManager,
   type InterruptPayload,
   type StreamCallback,
   type StreamStatus,
 } from '@/lib/streaming/StreamingManager';
+import { getStreamingManager } from '@/lib/streaming/streamingManagerRegistry';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import {
   appendMessageToChat,
@@ -22,7 +23,6 @@ import {
   type StreamingState,
 } from '@/redux/slices/chats';
 import { chatStorage } from '@/services/chatStorage';
-import { buildAgentApiUrl } from '@/lib/app-paths';
 import { selectActiveRules, selectMemories } from '@/redux/slices/personalization';
 import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
@@ -168,7 +168,6 @@ export function useStreamingAPI(threadId: string) {
     streamEndTime: number | null;
   }>({ streamStartTime: null, firstTokenTime: null, streamEndTime: null });
   const isStreamingTokensRef = useRef<boolean>(false);
-  const isActiveRef = useRef(true);
   const userCancelledRef = useRef(false);
   const streamEndedWithInterruptRef = useRef(false);
   const pendingInterruptRef = useRef(streamingState.pendingInterrupt);
@@ -183,7 +182,7 @@ export function useStreamingAPI(threadId: string) {
   chatRef.current = chat;
 
   if (!managerRef.current) {
-    managerRef.current = new StreamingManager();
+    managerRef.current = getStreamingManager(threadId);
   }
 
   const handleStreamActivityStatus = useCallback((status: StreamStatus) => {
@@ -218,35 +217,11 @@ export function useStreamingAPI(threadId: string) {
   }, []);
 
   useEffect(() => {
-    const onBeforeUnload = () => {
-      const mgr = managerRef.current;
-      const st = mgr?.getStatus();
-      if (st !== 'connecting' && st !== 'streaming') {
-        return;
-      }
-      const apiUrl = typeof window.APP_DATA?.apiUrl === 'string' ? window.APP_DATA.apiUrl : '';
-      const cancelUrl = apiUrl ? `${apiUrl}/v1/stream/cancel` : buildAgentApiUrl('/v1/stream/cancel');
-      if (typeof navigator.sendBeacon === 'function') {
-        const payload = JSON.stringify({
-          thread_id: threadIdRef.current,
-          event: 'client_stream_cancel',
-        });
-        navigator.sendBeacon(cancelUrl, new Blob([payload], { type: 'application/json' }));
-      }
-      mgr?.cancel();
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, []);
-
-  useEffect(() => {
-    isActiveRef.current = true;
-    const manager = managerRef.current;
     return () => {
-      isActiveRef.current = false;
-      setTimeout(() => {
-        if (!isActiveRef.current) manager?.cancel();
-      }, 50);
+      if (staleIntervalRef.current != null) {
+        clearInterval(staleIntervalRef.current);
+        staleIntervalRef.current = null;
+      }
     };
   }, []);
 
