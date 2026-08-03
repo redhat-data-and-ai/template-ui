@@ -24,6 +24,11 @@ declare module "fastify" {
 async function routes(fastify: FastifyInstance) {
   const cfg = getSettings();
 
+  await fastify.register(import("@fastify/rate-limit"), {
+    max: 20,
+    timeWindow: "1 minute",
+  });
+
   fastify.register(oauthPlugin as any, {
     name: "redhatSSO",
     scope: ["profile", "email", "session:role-any"],
