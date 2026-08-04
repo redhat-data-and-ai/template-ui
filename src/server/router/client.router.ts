@@ -71,11 +71,14 @@ async function routes(fastify: FastifyInstance) {
     };
 
     const agentName = await getAgentName();
+    const cfg = getSettings();
     const appData = {
       apiUrl: basePath ? `${basePath}/api/proxy/agent` : "",
       basePath: basePath || "/",
       refreshableToken: "",
       agentName,
+      branding: cfg.branding,
+      features: cfg.features,
     };
 
     reply.type("text/html");

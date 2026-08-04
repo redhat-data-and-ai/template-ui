@@ -9,7 +9,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastNotifications } from './components/ToastNotifications';
 import { useThemeSync } from './hooks/useThemeSync';
-import { loadConfig } from './redux/slices/config';
+import { loadConfig, setBranding, setFeatures } from './redux/slices/config';
 import { setConfigDefaults } from './redux/slices/userSettings';
 import type { RootState, AppDispatch } from './redux/store';
 
@@ -22,9 +22,19 @@ export default function App() {
 
   // Load config at app init
   useEffect(() => {
+    // Seed branding/features from server-injected HTML data
+    const serverBranding = (window as any).APP_DATA?.branding;
+    const serverFeatures = (window as any).APP_DATA?.features;
+    if (serverBranding) {
+      dispatch(setBranding(serverBranding));
+    }
+    if (serverFeatures) {
+      dispatch(setFeatures(serverFeatures));
+      dispatch(setConfigDefaults({ debug_mode_default: serverFeatures.debug_mode_default }));
+    }
+
     dispatch(loadConfig()).then((result: any) => {
       if (result.meta.requestStatus === 'fulfilled' && result.payload?.features) {
-        // Apply feature flag defaults to user settings
         dispatch(setConfigDefaults({
           debug_mode_default: result.payload.features.debug_mode_default,
         }));
