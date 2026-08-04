@@ -10,6 +10,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi, beforeEach, afterEach } from 'vitest';
 import { axe } from '../../test-utils/setup';
 import { renderWithProviders } from '../../test-utils/render';
 import { HomePage } from '../../pages/HomePage';
@@ -21,6 +22,26 @@ import { MemoryList } from '../settings/MemoryList';
 import { RulesEditor } from '../settings/RulesEditor';
 import { SubAgentIndicator } from '../SubAgentIndicator';
 import { Sidebar } from '../Sidebar';
+
+// Mock fetch for components that call personalization API on mount
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url.includes('/personalization/memories')) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      if (url.includes('/personalization/rules')) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // ---------------------------------------------------------------------------
 // HomePage
@@ -80,10 +101,12 @@ describe('SettingsPage — accessibility', () => {
     expect(tablist).toBeInTheDocument();
   });
 
-  it('tablist is not wrapped in a redundant nav landmark', () => {
+  it('tablist is wrapped in a nav landmark with label', () => {
     renderWithProviders(<SettingsPage />);
     const tablist = screen.getByRole('tablist');
-    expect(tablist.closest('nav')).toBeNull();
+    const nav = tablist.closest('nav');
+    expect(nav).not.toBeNull();
+    expect(nav).toHaveAttribute('aria-label');
   });
 
   it('tabs have role="tab" and aria-selected', () => {
@@ -253,30 +276,9 @@ describe('MemoryList — accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it('add-memory textarea has accessible label', () => {
+  it('shows informational text about agent-created memories', () => {
     renderWithProviders(<MemoryList />);
-    expect(screen.getByRole('textbox', { name: /new memory/i })).toBeInTheDocument();
-  });
-
-  it('remove button includes memory content in accessible label', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<MemoryList />);
-    const textarea = screen.getByRole('textbox', { name: /new memory/i });
-    await user.type(textarea, 'Prefer metric units');
-    await user.click(screen.getByRole('button', { name: /^add$/i }));
-    const removeBtn = screen.getByRole('button', { name: /remove memory: prefer metric units/i });
-    expect(removeBtn).toBeInTheDocument();
-  });
-
-  it('remove button is keyboard-focusable (not just hover-visible)', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<MemoryList />);
-    const textarea = screen.getByRole('textbox', { name: /new memory/i });
-    await user.type(textarea, 'Test memory entry');
-    await user.click(screen.getByRole('button', { name: /^add$/i }));
-    const removeBtn = screen.getByRole('button', { name: /remove memory/i });
-    removeBtn.focus();
-    expect(removeBtn).toHaveFocus();
+    expect(screen.getByText(/memories the agent has created/i)).toBeInTheDocument();
   });
 });
 
@@ -295,23 +297,35 @@ describe('RulesEditor — accessibility', () => {
   });
 
   it('remove button includes rule content in accessible label', async () => {
+    vi.mocked(fetch).mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = typeof url === 'string' ? url : url.toString();
+      if (urlStr.includes('/personalization/rules')) {
+        if (init?.method === 'POST') {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                id: 'rule-1',
+                content: 'Always respond in British English',
+                is_active: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+
     const user = userEvent.setup();
     renderWithProviders(<RulesEditor />);
     const textarea = screen.getByRole('textbox', { name: /new rule/i });
     await user.type(textarea, 'Always respond in British English');
     await user.click(screen.getByRole('button', { name: /^add$/i }));
-    const removeBtn = screen.getByRole('button', { name: /remove rule: always respond in british english/i });
+    const removeBtn = await screen.findByRole('button', { name: /remove rule: always respond in british english/i });
     expect(removeBtn).toBeInTheDocument();
-  });
-
-  it('toggle switch label includes rule content', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<RulesEditor />);
-    const textarea = screen.getByRole('textbox', { name: /new rule/i });
-    await user.type(textarea, 'Be concise');
-    await user.click(screen.getByRole('button', { name: /^add$/i }));
-    const toggle = screen.getByRole('switch', { name: /toggle rule: be concise/i });
-    expect(toggle).toBeInTheDocument();
   });
 });
 

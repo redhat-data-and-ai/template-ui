@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
-type SettingsTab = 'Profile' | 'Memories' | 'Custom Rules' | 'Appearance' | 'Tool Approvals' | 'MCP OAuth';
+type SettingsTab = 'Profile' | 'Your Memories' | 'User Rules' | 'Appearance' | 'Tool Approvals' | 'MCP OAuth';
 
 /** Page object for the settings view (`/settings`). */
 export class SettingsPage {

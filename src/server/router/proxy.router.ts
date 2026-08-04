@@ -388,6 +388,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
         headers['X-Refresh-Token'] = refreshToken;
       }
 
+      const sessionUser = (request.session as any)?.user;
+      if (sessionUser) {
+        headers['X-User-ID'] = sessionUser.preferred_username || sessionUser.sub || sessionUser.email || '';
+      }
+
       try {
         // ── 1. Ensure the thread exists (idempotent) ──
         fastify.log.info({ traceId, thread_id }, 'Creating thread');
@@ -907,6 +912,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
       }
       if (refreshToken) {
         headers['X-Refresh-Token'] = refreshToken;
+      }
+
+      const sessionUser = (request.session as any)?.user;
+      if (sessionUser) {
+        headers['X-User-ID'] = sessionUser.preferred_username || sessionUser.sub || sessionUser.email || '';
       }
 
       try {

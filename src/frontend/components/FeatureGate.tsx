@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import type { RootState } from '../redux/store';
 
 interface FeatureGateProps {
-  feature: 'auth' | 'debug' | 'memory';
+  feature: 'auth' | 'debug' | 'memory' | 'user_rules';
   children: ReactNode;
   fallback?: ReactNode;
 }
@@ -28,9 +28,11 @@ export function FeatureGate({ feature, children, fallback = null }: FeatureGateP
     switch (feature) {
       case 'auth':
         return features.auth_enabled ?? true;
-      case 'debug':
-        return true;
       case 'memory':
+        return features.memory_enabled ?? true;
+      case 'user_rules':
+        return features.user_rules_enabled ?? true;
+      case 'debug':
         return true;
       default:
         return true;

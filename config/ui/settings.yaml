@@ -18,6 +18,8 @@ features:
   debug_mode_default: false
   # auth_enabled: Controlled via AUTH_ENABLED environment variable (set by agent-engine during deployment)
   mcp_apps_enabled: true
+  memory_enabled: true
+  user_rules_enabled: true
 
 agent:
   endpoint: ""
