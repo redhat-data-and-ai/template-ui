@@ -101,6 +101,8 @@ interface BrandingConfig {
 }
 
 interface FeaturesConfig {
+  memory_enabled: boolean;
+  user_rules_enabled: boolean;
   debug_mode_default: boolean;
   auth_enabled: boolean;
 }
@@ -156,6 +158,8 @@ const DEFAULTS: UISettings = {
   features: {
     debug_mode_default: false,
     auth_enabled: true,
+    memory_enabled: true,
+    user_rules_enabled: true,
   },
   agent: {
     endpoint: "",

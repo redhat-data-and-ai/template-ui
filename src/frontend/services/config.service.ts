@@ -18,6 +18,8 @@ export interface BrandingConfig {
 export interface FeaturesConfig {
   debug_mode_default: boolean;
   auth_enabled: boolean;
+  memory_enabled: boolean;
+  user_rules_enabled: boolean;
 }
 
 function getConfigApiBase(): string {

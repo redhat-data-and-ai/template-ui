@@ -20,6 +20,8 @@ export interface BrandingOverride {
 export interface FeaturesOverride {
   debug_mode_default?: boolean;
   auth_enabled?: boolean;
+  memory_enabled?: boolean;
+  user_rules_enabled?: boolean;
 }
 
 const DEFAULT_LIGHT: BrandingColors = {
@@ -74,6 +76,8 @@ export async function mountConfig(
       body: JSON.stringify({
         debug_mode_default: features.debug_mode_default ?? false,
         auth_enabled: features.auth_enabled ?? false,
+        memory_enabled: features.memory_enabled ?? true,
+        user_rules_enabled: features.user_rules_enabled ?? true,
       }),
     }),
   );
@@ -100,6 +104,22 @@ export async function mountConfig(
   );
 
   await page.route('**/api/proxy/agent/threads/search', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '[]',
+    }),
+  );
+
+  await page.route('**/api/proxy/agent/personalization/memories', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '[]',
+    }),
+  );
+
+  await page.route('**/api/proxy/agent/personalization/rules', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
