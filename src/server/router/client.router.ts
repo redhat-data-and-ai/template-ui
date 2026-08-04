@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
 import { getAgentName, getSettings } from "../utils/settings.js";
+import { toClientUserData } from "../utils/session-identity.js";
 import {
   buildSandboxCspHeader,
   parseCspQueryParam,
@@ -138,15 +139,12 @@ async function routes(fastify: FastifyInstance) {
 
   fastify.get("/*", async (request: FastifyRequest, reply: FastifyReply) => {
     const session = request.session;
-    const { user, token } = session;
-
-    const sessionToken = token?.access_token || headerValue(request, "x-auth-access-token") || headerValue(request, "x-token");
-
-    const userData = {
-      ...user,
-      accessToken: sessionToken,
-      expiresAt: token?.expires_at,
-    };
+    const userData = toClientUserData(session);
+    const sessionToken =
+      userData.accessToken ||
+      headerValue(request, "x-auth-access-token") ||
+      headerValue(request, "x-token");
+    userData.accessToken = sessionToken || "";
 
     const agentName = await getAgentName();
     const cfg = getSettings();

@@ -2,6 +2,7 @@ import oauthPlugin from "@fastify/oauth2";
 import { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 import { getSettings } from "../utils/settings.js";
+import { resolveSessionIdentity, safePostLoginRedirect } from "../utils/session-identity.js";
 
 import { OAuth2Namespace } from "@fastify/oauth2";
 
@@ -129,12 +130,16 @@ async function routes(fastify: FastifyInstance) {
       let defaultRedirect = "/";
       try {
         const { redirectUri = "/" } = (request as any).session;
-        defaultRedirect = redirectUri;
+        defaultRedirect = safePostLoginRedirect(redirectUri);
       } catch (error) {
         console.error(error);
       }
 
-      (request as any).session.user = userInfo;
+      const identity = resolveSessionIdentity({
+        user: userInfo,
+        token: tokenSet.token,
+      });
+      (request as any).session.user = identity.user;
       (request as any).session.token = tokenSet.token;
 
       return reply.redirect(defaultRedirect);

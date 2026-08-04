@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Button, Spinner } from '@patternfly/react-core';
+import { Button, Switch } from '@patternfly/react-core';
 import { Plus, Trash2, ScrollText, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import {
-  addRule,
-  removeRule,
+  addRuleAndPersist,
   fetchRules,
+  persistClearRules,
+  persistRemoveRule,
+  persistRule,
+  setRuleActive,
+  removeRule,
+  clearRules,
   selectRules,
-  selectPersonalizationLoading,
-  selectPersonalizationError,
 } from '../../redux/slices/personalization';
 
 export function RulesEditor() {
   const dispatch = useAppDispatch();
   const rules = useAppSelector(selectRules);
-  const loading = useAppSelector(selectPersonalizationLoading);
-  const error = useAppSelector(selectPersonalizationError);
   const [draft, setDraft] = useState('');
 
   useEffect(() => {
@@ -25,7 +26,7 @@ export function RulesEditor() {
   const handleAdd = () => {
     const text = draft.trim();
     if (!text) return;
-    dispatch(addRule(text));
+    void dispatch(addRuleAndPersist(text));
     setDraft('');
   };
 
@@ -45,13 +46,6 @@ export function RulesEditor() {
           unless individually disabled.
         </p>
       </div>
-
-      {error && (
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
-          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-          <p className="text-xs text-red-400/80">{error}</p>
-        </div>
-      )}
 
       <div className="flex gap-2">
         <textarea
@@ -76,12 +70,7 @@ export function RulesEditor() {
         </Button>
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center py-8">
-          <Spinner size="md" />
-          <p className="text-sm text-muted-foreground/60 mt-2">Loading rules...</p>
-        </div>
-      ) : rules.length === 0 ? (
+      {rules.length === 0 ? (
         <div className="flex flex-col items-center py-8 text-center">
           <ScrollText className="w-8 h-8 text-muted-foreground/30 mb-2" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">No custom rules</p>
@@ -97,10 +86,34 @@ export function RulesEditor() {
                 key={rule.id}
                 className="group flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-secondary/30 transition-colors"
               >
-                <ScrollText className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" />
-                <p className="flex-1 text-sm text-foreground leading-relaxed">{rule.content}</p>
+                <Switch
+                  id={`rule-toggle-${rule.id}`}
+                  aria-label={`Toggle rule: ${rule.content.substring(0, 50)}`}
+                  isChecked={rule.isActive}
+                  onChange={(_event, checked) => {
+                    dispatch(setRuleActive({ id: rule.id, isActive: checked }));
+                    void dispatch(
+                      persistRule({
+                        id: rule.id,
+                        content: rule.content,
+                        isActive: checked,
+                      }),
+                    );
+                  }}
+                  className="mt-0.5"
+                />
+                <p
+                  className={`flex-1 text-sm leading-relaxed ${
+                    rule.isActive ? 'text-foreground' : 'text-muted-foreground line-through'
+                  }`}
+                >
+                  {rule.content}
+                </p>
                 <button
-                  onClick={() => dispatch(removeRule(rule.id))}
+                  onClick={() => {
+                    dispatch(removeRule(rule.id));
+                    void dispatch(persistRemoveRule(rule.id));
+                  }}
                   className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                   aria-label={`Remove rule: ${rule.content.substring(0, 50)}`}
                 >
@@ -109,6 +122,21 @@ export function RulesEditor() {
               </li>
             ))}
           </ul>
+          {rules.length > 1 && (
+            <div className="flex justify-end">
+              <Button
+                variant="plain"
+                isDanger
+                size="sm"
+                onClick={() => {
+                  dispatch(clearRules());
+                  void dispatch(persistClearRules());
+                }}
+              >
+                Clear all rules
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

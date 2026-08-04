@@ -263,7 +263,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [chats]);
 
   const userData = useMemo(() => window.USER_DATA, []);
-  const userName = userData?.displayName || userData?.name || 'User';
+  const userName =
+    userData?.displayName ||
+    userData?.name ||
+    userData?.given_name ||
+    userData?.preferred_username ||
+    'User';
   const tokenExpiry = useMemo(() => {
     if (userData?.expiresAt) {
       return new Date(userData.expiresAt);

@@ -2,10 +2,16 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { getSettings } from '../utils/settings.js';
 import authCheckPlugin from '../plugins/auth-check.plugin.js';
+import { resolveXUserIdFromSession } from '../utils/session-identity.js';
 
 function getAgentHost(): string {
   const cfg = getSettings();
   return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+}
+
+/** Identity forwarded to the agent — same as prod: session username, else ``default``. */
+function resolveXUserId(request: { session?: { user?: { preferred_username?: string; sub?: string; email?: string }; token?: { access_token?: string; id_token?: string } } }): string {
+  return resolveXUserIdFromSession(request.session);
 }
 
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
@@ -376,7 +382,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, user_id, resume: isResume, project_id } = request.body;
+      const { message, thread_id, resume: isResume, project_id } = request.body;
 
       if (project_id != null && typeof project_id !== 'string') {
         return reply.status(400).send({ error: 'project_id must be a string when provided' });
@@ -393,6 +399,9 @@ async function proxyRoutes(fastify: FastifyInstance) {
         headers['X-Refresh-Token'] = refreshToken;
       }
 
+      const xUserId = resolveXUserId(request);
+      headers['X-User-ID'] = xUserId;
+
       try {
         // ── 1. Ensure the thread exists (idempotent) ──
         fastify.log.info({ traceId, thread_id }, 'Creating thread');
@@ -402,7 +411,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           body: JSON.stringify({
             threadId: thread_id,
             metadata: {
-              user_identity: user_id ?? 'anonymous',
+              user_identity: xUserId,
               ...(project_id ? { project_id } : {}),
             },
             ifExists: 'do_nothing',
@@ -434,7 +443,10 @@ async function proxyRoutes(fastify: FastifyInstance) {
           runBody.input = { messages: [{ role: 'human', content: message, id: randomUUID() }] };
         }
 
-        runBody.config = { metadata: { trace_id: traceId } };
+        runBody.config = {
+          metadata: { trace_id: traceId, user_id: xUserId },
+          configurable: { user_id: xUserId },
+        };
 
         const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);
         const runResp = await fetch(runUrl, {
@@ -916,6 +928,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
       if (refreshToken) {
         headers['X-Refresh-Token'] = refreshToken;
       }
+
+      headers['X-User-ID'] = resolveXUserId(request);
 
       try {
         const queryString = buildForwardedQueryString(request.query as Record<string, unknown>);

@@ -17,9 +17,13 @@ export function ProfileSection() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const userData = useMemo(() => window.USER_DATA, []);
-  const displayName = userData?.displayName || userData?.name || 'User';
+  const username =
+    userData?.preferred_username ||
+    (typeof userData?.email === 'string' ? userData.email.split('@')[0] : '') ||
+    '';
+  const displayName =
+    userData?.displayName || userData?.name || userData?.given_name || username || 'User';
   const email = userData?.email || '';
-  const username = userData?.preferred_username || '';
 
   const handleDeleteAll = async () => {
     const ids = chats.map((c) => c.id);
