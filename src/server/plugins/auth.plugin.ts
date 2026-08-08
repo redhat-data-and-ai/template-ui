@@ -21,10 +21,22 @@ declare module "fastify" {
   }
 }
 
+/** Auth-only limiter: this plugin is wrapped with fp(), so global:true would apply app-wide. */
+const AUTH_ROUTE_RATE_LIMIT = {
+  config: {
+    rateLimit: {
+      max: 20,
+      timeWindow: "1 minute",
+    },
+  },
+} as const;
+
 async function routes(fastify: FastifyInstance) {
   const cfg = getSettings();
 
+  // Opt-in per route — do not use global:true (fp breaks encapsulation).
   await fastify.register(import("@fastify/rate-limit"), {
+    global: false,
     max: 20,
     timeWindow: "1 minute",
   });
@@ -44,7 +56,7 @@ async function routes(fastify: FastifyInstance) {
     },
   });
 
-  fastify.get("/login", (request, reply) => {
+  fastify.get("/login", AUTH_ROUTE_RATE_LIMIT, (request, reply) => {
     fastify.redhatSSO.generateAuthorizationUri(
       request,
       reply,
@@ -59,7 +71,7 @@ async function routes(fastify: FastifyInstance) {
     );
   });
 
-  fastify.get("/auth/refresh-token", async (request, reply) => {
+  fastify.get("/auth/refresh-token", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
     const token = (request as any).session.token;
 
     const newAccessToken =
@@ -70,7 +82,7 @@ async function routes(fastify: FastifyInstance) {
     return reply.send(newAccessToken);
   });
 
-  fastify.get("/auth/refresh", async (request, reply) => {
+  fastify.get("/auth/refresh", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
     const token = (request as any).session.token;
     if (!token) {
       return reply.code(401).send({ message: "NoSession" });
@@ -102,7 +114,7 @@ async function routes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.get("/auth/callback/oidc", async function (request, reply) {
+  fastify.get("/auth/callback/oidc", AUTH_ROUTE_RATE_LIMIT, async function (request, reply) {
     try {
       const tokenSet =
         await fastify.redhatSSO.getAccessTokenFromAuthorizationCodeFlow(
