@@ -15,8 +15,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
     error,
     updateChatMessages,
     updateChatActivities,
+    setThreadLoading,
     setError,
-    getChatById
+    getChatById,
   } = useChat();
 
   // Local state
@@ -37,6 +38,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
     threadId: threadId || "",
     onError: (error: Error) => {
       setError(error.message);
+    },
+    onLoadingChange: (loading) => {
+      if (threadId) setThreadLoading(threadId, loading);
     },
   });
 

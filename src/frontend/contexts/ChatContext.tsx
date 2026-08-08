@@ -12,6 +12,7 @@ import { getAllThreadsByUserId } from '@/services/agent-rest';
 type ChatAction =
   | { type: 'SET_CHATS'; payload: ChatItem[] }
   | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_THREAD_LOADING'; payload: { threadId: string; loading: boolean } }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'ADD_CHAT'; payload: ChatItem }
   | { type: 'UPDATE_CHAT'; payload: { id: string; updates: Partial<ChatItem> } }
@@ -20,7 +21,8 @@ type ChatAction =
 // Initial state
 const initialState: ChatState = {
   chats: [],
-  isLoading: true, // Start as loading while we load from localStorage
+  isLoading: true,
+  isLoadingMessages: {},
   error: null,
 };
 
@@ -32,6 +34,15 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
+
+    case 'SET_THREAD_LOADING':
+      return {
+        ...state,
+        isLoadingMessages: {
+          ...state.isLoadingMessages,
+          [action.payload.threadId]: action.payload.loading,
+        },
+      };
 
     case 'SET_ERROR':
       return { ...state, error: action.payload };
@@ -99,35 +110,38 @@ export function ChatProvider({ children }: ChatProviderProps) {
     async function loadUserHistory() {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
+        const localChats = chatStorage.loadChats();
         const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
 
-        const chats: ChatItem[] = history.map((conversation) => {
-
+        const serverChats: ChatItem[] = history.map((conversation) => {
           let title = 'New Chat';
-
           if (Array.isArray(conversation.messages) && conversation.messages.length > 0) {
-            title = conversation.messages.find((message) => message.type === 'human')?.content as string;
+            const firstHuman = conversation.messages.find((m) => m.type === 'human');
+            title = (firstHuman?.content as string) ?? title;
           }
-
           return {
             id: conversation.id,
             messages: conversation.messages,
             title,
             preview: title,
-          }
+            timestamp: new Date(),
+            historicalActivities: {},
+          };
         });
 
-        dispatch({ type: 'SET_CHATS', payload: chats });
-        console.log(history)
+        const serverIds = new Set(serverChats.map((c) => c.id));
+        const localOnly = localChats.filter((c) => !serverIds.has(c.id));
+        const merged = [...serverChats, ...localOnly];
+
+        dispatch({ type: 'SET_CHATS', payload: merged });
       } catch (error) {
-        console.error(error)
+        console.error('Failed to load threads:', error);
       } finally {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
-
     }
 
-    loadUserHistory()
+    loadUserHistory();
   }, []);
 
   // Actions
@@ -189,6 +203,10 @@ export function ChatProvider({ children }: ChatProviderProps) {
     });
   }, [state.chats]);
 
+  const setThreadLoading = useCallback((threadId: string, loading: boolean) => {
+    dispatch({ type: 'SET_THREAD_LOADING', payload: { threadId, loading } });
+  }, []);
+
   const updateChatActivities = useCallback((chatId: string, messageId: string, activities: ProcessedEvent[]) => {
     const chat = state.chats.find(c => c.id === chatId);
     if (chat) {
@@ -233,6 +251,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     renameChat,
     updateChatMessages,
     updateChatActivities,
+    setThreadLoading,
     clearError,
     setError,
     getChatById,

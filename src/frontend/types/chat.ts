@@ -13,6 +13,7 @@ export interface ChatItem {
 export interface ChatState {
   chats: ChatItem[];
   isLoading: boolean;
+  isLoadingMessages: Record<string, boolean>;
   error: string | null;
 }
 
@@ -22,6 +23,7 @@ export interface ChatActions {
   renameChat: (chatId: string, newTitle: string) => void;
   updateChatMessages: (chatId: string, messages: Message[]) => void;
   updateChatActivities: (chatId: string, messageId: string, activities: ProcessedEvent[]) => void;
+  setThreadLoading: (threadId: string, loading: boolean) => void;
   clearError: () => void;
   setError: (error: string) => void;
   getChatById: (chatId: string) => ChatItem | undefined;
