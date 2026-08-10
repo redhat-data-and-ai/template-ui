@@ -58,7 +58,13 @@ const initialState: ChatsState = {
   error: null,
 };
 
-type ToolCallRecord = { id?: string; content?: unknown };
+type ToolCallRecord = {
+  id?: string;
+  content?: unknown;
+  args?: Record<string, unknown>;
+  mcpApp?: Record<string, unknown>;
+  artifact?: unknown;
+};
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
@@ -121,8 +127,17 @@ const chatsSlice = createSlice({
       }
       (last as { content: string }).content = prev + content;
     },
-    mergeToolResult(state, action: PayloadAction<{ chatId: string; toolCallId: string; content: any }>) {
-      const { chatId, toolCallId, content } = action.payload;
+    mergeToolResult(
+      state,
+      action: PayloadAction<{
+        chatId: string;
+        toolCallId: string;
+        content: any;
+        mcpApp?: Record<string, unknown>;
+        artifact?: unknown;
+      }>,
+    ) {
+      const { chatId, toolCallId, content, mcpApp, artifact } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
       if (!chat) {
         return;
@@ -136,6 +151,19 @@ const chatsSlice = createSlice({
         const match = toolCalls.find((tc) => tc?.id === toolCallId);
         if (match) {
           match.content = content;
+          if (artifact !== undefined) {
+            match.artifact = artifact;
+          }
+          if (mcpApp) {
+            // Fill arguments from the AI tool_call so the host can push tool-input.
+            match.mcpApp = {
+              ...mcpApp,
+              arguments:
+                (mcpApp.arguments as Record<string, unknown> | undefined) ??
+                (match.args as Record<string, unknown> | undefined) ??
+                {},
+            };
+          }
           return;
         }
       }

@@ -84,6 +84,8 @@ branding:
 features:
   debug_mode_default: false    # Default state of the debug panel toggle
   auth_enabled: true           # Set to false for local dev (no SSO credentials needed)
+  mcp_apps:
+    enabled: true              # Render interactive MCP Apps (ui://) in chat
 
 agent:
   endpoint: ""                 # Agent URL — empty falls back to AGENT_HOST env var
@@ -117,6 +119,14 @@ The config is validated at startup. Invalid values cause the server to exit with
 ```
 Config validation error: branding.colors.light.primary must be a valid hex color (got 'not-a-color')
 ```
+
+## MCP Apps host
+
+Template UI can render interactive [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) (`ui://` HTML) inside chat when Template Agent is connected to a compliant MCP server.
+
+- Enable with `features.mcp_apps.enabled` (or `FEATURE_MCP_APPS_ENABLED`)
+- Point any SEP-1865-compliant server at the agent via `mcp.json` — no per-server UI widgets
+
 
 ## 📦 Available Scripts
 

@@ -92,6 +92,10 @@ export async function setupServer(): Promise<FastifyInstance> {
 
     await fastify.register(import("@fastify/helmet"), {
       crossOriginEmbedderPolicy: cfg.security.helmet.cross_origin_embedder_policy,
+      // MCP Apps sandbox (ext-apps / sandbox_proxy.js) learns the host from
+      // document.referrer. Helmet's default no-referrer breaks that handshake;
+      // hostOrigin query param is the fallback, but send an origin referrer too.
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
       contentSecurityPolicy: {
         useDefaults: false,
         directives: {
@@ -102,6 +106,7 @@ export async function setupServer(): Promise<FastifyInstance> {
           connectSrc: connectSrc,
           fontSrc: csp.font_src,
           objectSrc: csp.object_src,
+          frameSrc: csp.frame_src ?? ["'self'"],
           frameAncestors: csp.frame_ancestors,
         },
       },

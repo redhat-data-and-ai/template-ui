@@ -181,6 +181,7 @@ describe('Security: CSP Headers', () => {
       'connect-src',
       'font-src',
       'object-src',
+      'frame-src',
       'frame-ancestors',
     ];
 
