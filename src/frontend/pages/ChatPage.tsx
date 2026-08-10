@@ -36,6 +36,11 @@ import {
   exportAsMarkdown,
   slugifyExportBase,
 } from '../services/export-chat';
+import {
+  ChatActionsProvider,
+  type McpModelContextUpdate,
+} from '../contexts/ChatActionsContext';
+import { formatMcpModelContext } from '../types/mcp-apps';
 
 export function ChatPage({ threadId }: { threadId: string }) {
   const dispatch = useAppDispatch();
@@ -252,29 +257,53 @@ export function ChatPage({ threadId }: { threadId: string }) {
     }
   }, [thread.isLoading, threadId, dispatch, thread.messages, processedEventsTimeline, currentChat]);
 
+  // Last ui/update-model-context snapshot for the next turn (not shown in the chat bubble).
+  const pendingMcpModelContextRef = useRef<string | null>(null);
+
+  const setMcpModelContext = useCallback((update: McpModelContextUpdate | null) => {
+    pendingMcpModelContextRef.current = formatMcpModelContext(update);
+  }, []);
+
   const handleSubmit = useCallback(
     async (inputValue: string) => {
       if (!threadId || !currentChat) return;
 
+      const trimmed = inputValue.trim();
+      if (!trimmed) return;
+
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
         type: 'human',
-        content: inputValue.trim(),
+        content: trimmed,
       };
 
       const messages = [...thread.messages, userMessage];
+      const mcpModelContext = pendingMcpModelContextRef.current;
+      pendingMcpModelContextRef.current = null;
 
       try {
-        await thread.submit({ messages });
+        await thread.submit({ messages, mcpModelContext });
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
       } catch (err) {
+        // Restore context so a retry can still include it.
+        if (mcpModelContext) {
+          pendingMcpModelContextRef.current = mcpModelContext;
+        }
         console.error('Failed to submit message:', err);
         dispatch(addToast({ title: 'Failed to send message', message: 'Please try again.', variant: 'danger' }));
       }
     },
     [thread, threadId, currentChat, dispatch]
+  );
+
+  const chatActions = useMemo(
+    () => ({
+      sendUserMessage: handleSubmit,
+      setMcpModelContext,
+    }),
+    [handleSubmit, setMcpModelContext],
   );
 
   const handleCancel = useCallback(() => {
@@ -536,82 +565,84 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   return (
     <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
-      <div aria-live="polite" className="sr-only">
-        {streamAnnouncement}
-      </div>
-      <h1 className="sr-only">{currentChat?.title || 'Chat'}</h1>
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <div className="flex-1 flex flex-col min-w-0">
-          {hasToolCalls && (
-            <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
-          )}
-          <ReconnectingBanner streamingState={streamingState} maxRetries={MAX_RETRIES} />
-          <ChatMessagesView
-            key={threadId}
-            messages={thread.messages}
-            streamEvents={thread.streamEvents}
-            isLoading={thread.isLoading}
-            pendingInterrupt={
-              thread.pendingInterrupt &&
-              typeof thread.pendingInterrupt.value === 'object' &&
-              'action_requests' in thread.pendingInterrupt.value
-                ? thread.pendingInterrupt
-                : null
-            }
-            onInterruptResume={handleInterruptResume}
-            onAlwaysAllow={handleAlwaysAllow}
-
-            interruptContent={
-              thread.pendingInterrupt &&
-              !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
-                ? (
-                  <InterruptBanner
-                    interrupt={thread.pendingInterrupt}
-                    onResume={handleMCPOAuthResume}
-                    onDismiss={handleInterruptDismiss}
-                  />
-                )
-                : undefined
-            }
-            onRetry={handleStreamRetry}
-            scrollAreaRef={scrollAreaRef}
-            onSubmit={handleSubmit}
-            onEditMessage={handleEditMessage}
-            onCancel={handleCancel}
-            onNewChat={handleNewChat}
-            liveActivityEvents={processedEventsTimeline}
-            historicalActivities={historicalActivities}
-            isRateLimited={rateLimit.isRateLimited}
-            rateLimitRemainingSeconds={rateLimit.retryAfterSeconds}
-            mcpEvents={thread.mcpEvents}
-            chatId={threadId}
-            traceId={thread.traceId}
-            userId={feedbackUserId}
-            messageFeedback={currentChat?.feedback ?? {}}
-            lastResponseTiming={
-              thread.totalDuration != null
-                ? {
-                    timeToFirstTokenMs: thread.timeToFirstToken,
-                    totalDurationMs: thread.totalDuration,
-                  }
-                : null
-            }
-            chatInputRef={chatInputRef}
-            onExportMarkdown={handleExportMarkdown}
-            onExportJson={handleExportJson}
-          />
+      <ChatActionsProvider value={chatActions}>
+        <div aria-live="polite" className="sr-only">
+          {streamAnnouncement}
         </div>
-        {debugMode && (
-          <div className="w-64 shrink-0 self-stretch border-l border-border hidden lg:flex lg:flex-col p-2 gap-2">
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto border-t border-border pt-2">
-              <DebugPanel messages={thread.messages} streamingState={streamingState} />
-            </div>
+        <h1 className="sr-only">{currentChat?.title || 'Chat'}</h1>
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 flex flex-col min-w-0">
+            {hasToolCalls && (
+              <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
+            )}
+            <ReconnectingBanner streamingState={streamingState} maxRetries={MAX_RETRIES} />
+            <ChatMessagesView
+              key={threadId}
+              messages={thread.messages}
+              streamEvents={thread.streamEvents}
+              isLoading={thread.isLoading}
+              pendingInterrupt={
+                thread.pendingInterrupt &&
+                typeof thread.pendingInterrupt.value === 'object' &&
+                'action_requests' in thread.pendingInterrupt.value
+                  ? thread.pendingInterrupt
+                  : null
+              }
+              onInterruptResume={handleInterruptResume}
+              onAlwaysAllow={handleAlwaysAllow}
+
+              interruptContent={
+                thread.pendingInterrupt &&
+                !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
+                  ? (
+                    <InterruptBanner
+                      interrupt={thread.pendingInterrupt}
+                      onResume={handleMCPOAuthResume}
+                      onDismiss={handleInterruptDismiss}
+                    />
+                  )
+                  : undefined
+              }
+              onRetry={handleStreamRetry}
+              scrollAreaRef={scrollAreaRef}
+              onSubmit={handleSubmit}
+              onEditMessage={handleEditMessage}
+              onCancel={handleCancel}
+              onNewChat={handleNewChat}
+              liveActivityEvents={processedEventsTimeline}
+              historicalActivities={historicalActivities}
+              isRateLimited={rateLimit.isRateLimited}
+              rateLimitRemainingSeconds={rateLimit.retryAfterSeconds}
+              mcpEvents={thread.mcpEvents}
+              chatId={threadId}
+              traceId={thread.traceId}
+              userId={feedbackUserId}
+              messageFeedback={currentChat?.feedback ?? {}}
+              lastResponseTiming={
+                thread.totalDuration != null
+                  ? {
+                      timeToFirstTokenMs: thread.timeToFirstToken,
+                      totalDurationMs: thread.totalDuration,
+                    }
+                  : null
+              }
+              chatInputRef={chatInputRef}
+              onExportMarkdown={handleExportMarkdown}
+              onExportJson={handleExportJson}
+            />
           </div>
-        )}
-      </div>
+          {debugMode && (
+            <div className="w-64 shrink-0 self-stretch border-l border-border hidden lg:flex lg:flex-col p-2 gap-2">
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto border-t border-border pt-2">
+                <DebugPanel messages={thread.messages} streamingState={streamingState} />
+              </div>
+            </div>
+          )}
+        </div>
+      </ChatActionsProvider>
     </ChatErrorBoundary>
   );
 }

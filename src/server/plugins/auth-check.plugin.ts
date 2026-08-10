@@ -42,7 +42,9 @@ function shouldSkipAuth(request: FastifyRequest): boolean {
     path.startsWith("/dist/") ||
     path === "/favicon.ico" ||
     path === "/login" ||
-    path === "/api/health/agent"
+    path === "/api/health/agent" ||
+    path === "/sandbox_proxy.html" ||
+    path === "/sandbox_proxy.js"
   );
 }
 

@@ -30,8 +30,10 @@ test.describe('Rate limit — 429 handling', () => {
     await chat.expectChatRoute();
 
     // The InputForm renders <Alert title="Rate limited. Try again in Xs" />
-    // Use the alert heading role to avoid matching user-message text bubbles
-    await expect(page.getByRole('heading', { name: /rate limited/i })).toBeVisible({ timeout: 15_000 });
+    // Match the PatternFly alert heading (not user-message / page titles).
+    await expect(
+      page.getByRole('heading', { name: /warning alert: rate limited/i }),
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   // ── Submit button is disabled ──────────────────────────────────────────────
@@ -45,7 +47,9 @@ test.describe('Rate limit — 429 handling', () => {
 
     const chat = new ChatPage(page);
     await chat.expectChatRoute();
-    await expect(page.getByRole('heading', { name: /rate limited/i })).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole('heading', { name: /warning alert: rate limited/i }),
+    ).toBeVisible({ timeout: 15_000 });
 
     // During the retry backoff the stream is still active (cancel button visible),
     // which means the submit button is NOT rendered and new messages cannot be sent.
@@ -89,6 +93,8 @@ test.describe('Rate limit — 429 handling', () => {
     await chat.expectChatRoute();
     await chat.waitForAIResponse(15_000);
 
-    await expect(page.getByRole('heading', { name: /rate limited/i })).not.toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /warning alert: rate limited/i }),
+    ).not.toBeVisible();
   });
 });

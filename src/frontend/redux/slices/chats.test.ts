@@ -160,6 +160,38 @@ describe('chats slice — mergeToolResult', () => {
     // tc-1 still has no content
     expect((s.chats[0].messages[0] as TestMessage).tool_calls![0].content).toBeUndefined();
   });
+
+  it('merges mcpApp and fills arguments from the tool call args', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const msg: TestMessage = {
+      type: 'ai',
+      content: '',
+      tool_calls: [{ id: 'tc-1', name: 'show_chart', args: { topic: 'sales' } }],
+      id: 'm1',
+    };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(msg) }));
+    s = chatsReducer(
+      s,
+      mergeToolResult({
+        chatId: 'c1',
+        toolCallId: 'tc-1',
+        content: 'ok',
+        mcpApp: {
+          server: 'chart-mcp-server',
+          resourceUri: 'ui://charts/app.html',
+          result: { content: [{ type: 'text', text: 'ok' }], isError: false },
+        },
+      }),
+    );
+
+    const toolCall = (s.chats[0].messages[0] as TestMessage).tool_calls![0] as {
+      content?: unknown;
+      mcpApp?: { arguments?: { topic?: string }; resourceUri?: string };
+    };
+    expect(toolCall.content).toBe('ok');
+    expect(toolCall.mcpApp?.resourceUri).toBe('ui://charts/app.html');
+    expect(toolCall.mcpApp?.arguments?.topic).toBe('sales');
+  });
 });
 
 describe('chats slice — resolveAllPendingToolCalls', () => {
