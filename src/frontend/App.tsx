@@ -23,8 +23,8 @@ export default function App() {
   // Load config at app init
   useEffect(() => {
     // Seed branding/features from server-injected HTML data
-    const serverBranding = (window as any).APP_DATA?.branding;
-    const serverFeatures = (window as any).APP_DATA?.features;
+    const serverBranding = window.APP_DATA?.branding;
+    const serverFeatures = window.APP_DATA?.features;
     if (serverBranding) {
       dispatch(setBranding(serverBranding));
     }
