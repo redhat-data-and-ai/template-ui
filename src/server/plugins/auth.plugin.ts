@@ -1,10 +1,7 @@
 import oauthPlugin from "@fastify/oauth2";
 import { FastifyInstance } from "fastify";
-
-const SSO_CLIENT_ID = process.env.SSO_CLIENT_ID;
-const SSO_CLIENT_SECRET = process.env.SSO_CLIENT_SECRET;
-const SSO_ISSUER_HOST = process.env.SSO_ISSUER_HOST;
-const SSO_CALLBACK_URL = process.env.SSO_CALLBACK_URL;
+import fp from "fastify-plugin";
+import { getSettings } from "../utils/settings.js";
 
 import { OAuth2Namespace } from "@fastify/oauth2";
 
@@ -25,18 +22,25 @@ declare module "fastify" {
 }
 
 async function routes(fastify: FastifyInstance) {
+  const cfg = getSettings();
+
+  await fastify.register(import("@fastify/rate-limit"), {
+    max: 20,
+    timeWindow: "1 minute",
+  });
+
   fastify.register(oauthPlugin as any, {
     name: "redhatSSO",
     scope: ["profile", "email", "session:role-any"],
     credentials: {
       client: {
-        id: SSO_CLIENT_ID,
-        secret: SSO_CLIENT_SECRET,
+        id: cfg.auth.sso_client_id,
+        secret: cfg.auth.sso_client_secret,
       },
     },
-    callbackUri: SSO_CALLBACK_URL,
+    callbackUri: cfg.auth.sso_callback_url,
     discovery: {
-      issuer: SSO_ISSUER_HOST,
+      issuer: cfg.auth.sso_issuer_host,
     },
   });
 
@@ -68,6 +72,9 @@ async function routes(fastify: FastifyInstance) {
 
   fastify.get("/auth/refresh", async (request, reply) => {
     const token = (request as any).session.token;
+    if (!token) {
+      return reply.code(401).send({ message: "NoSession" });
+    }
     try {
       const { forceRefresh = "false" } = (request as any).query;
       if (forceRefresh === "true") {
@@ -77,18 +84,21 @@ async function routes(fastify: FastifyInstance) {
       await fastify.redhatSSO.userinfo(token.access_token);
 
       return reply.send({ message: "ValidToken" });
-    } catch (error: unknown) {
-      console.error(error);
+    } catch {
+      try {
+        const newAccessToken =
+          await fastify.redhatSSO.getNewAccessTokenUsingRefreshToken(token, {});
 
-      const newAccessToken =
-        await fastify.redhatSSO.getNewAccessTokenUsingRefreshToken(token, {});
+        (request as any).session.token = newAccessToken.token;
 
-      (request as any).session.token = newAccessToken.token;
-
-      return reply.send({
-        message: "RefreshedToken",
-        token: newAccessToken.token,
-      });
+        return reply.send({
+          message: "RefreshedToken",
+          token: newAccessToken.token,
+        });
+      } catch (refreshError) {
+        fastify.log.error({ err: refreshError }, 'Token refresh failed');
+        return reply.code(401).send({ message: "RefreshFailed" });
+      }
     }
   });
 
@@ -123,4 +133,4 @@ async function routes(fastify: FastifyInstance) {
   });
 }
 
-export { routes as authPlugin };
+export const authPlugin = fp(routes, { name: "auth-plugin" });

@@ -1,0 +1,22 @@
+# Red Hat branding example.
+# Applies the Red Hat color palette and logo to both light and dark themes.
+# All other settings inherit from built-in defaults.
+#
+# To use a custom logo, place the file in public/ and reference it as "/my-logo.svg".
+# The path is served directly by the Fastify static file handler.
+
+branding:
+  title: "Red Hat AI Agent"
+  logo_url: "/dist/frontend/redhat-logo.svg"
+  favicon_url: "/dist/frontend/redhat-logo.svg"
+  colors:
+    light:
+      primary: "#ee0000"   # Red Hat Red
+      accent: "#a60000"    # Red Hat Dark Red
+      background: "#ffffff"
+      foreground: "#151515"
+    dark:
+      primary: "#ff6666"   # Red Hat Red (lightened for dark bg)
+      accent: "#f56e6e"
+      background: "#0a0a0a"
+      foreground: "#f0f4f8"

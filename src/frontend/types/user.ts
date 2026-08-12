@@ -19,6 +19,8 @@ export interface UserData {
 export interface AppData {
   apiUrl: string;
   refreshableToken: string;
+  agentName: string;
+  basePath?: string;
 }
 
 // Extend the Window interface to include USER_DATA and APP_DATA

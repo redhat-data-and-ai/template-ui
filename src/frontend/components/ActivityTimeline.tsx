@@ -1,10 +1,9 @@
 import {
   Card,
-  CardContent,
-  CardDescription,
+  CardBody,
   CardHeader,
-} from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+  CardTitle,
+} from "@patternfly/react-core";
 import {
   Loader2,
   Activity,
@@ -59,25 +58,22 @@ export function ActivityTimeline({
   }, [isLoading, processedEvents]);
 
   return (
-    <Card className="border-none rounded-lg bg-neutral-700 max-h-96">
-      <CardHeader>
-        <CardDescription className="flex items-center justify-between">
-          <div
-            className="flex items-center justify-start text-sm w-full cursor-pointer gap-2 text-neutral-100"
-            onClick={() => setIsTimelineCollapsed(!isTimelineCollapsed)}
-          >
-            Research
-            {isTimelineCollapsed ? (
-              <ChevronDown className="h-4 w-4 mr-2" />
-            ) : (
-              <ChevronUp className="h-4 w-4 mr-2" />
-            )}
-          </div>
-        </CardDescription>
+    <Card isCompact isPlain className="border-none! rounded-lg bg-neutral-700! max-h-96">
+      <CardHeader
+        className="cursor-pointer"
+        onClick={() => setIsTimelineCollapsed(!isTimelineCollapsed)}
+      >
+        <CardTitle className="flex items-center gap-2 text-sm text-neutral-100 font-normal">
+          Research
+          {isTimelineCollapsed ? (
+            <ChevronDown className="h-4 w-4 mr-2" />
+          ) : (
+            <ChevronUp className="h-4 w-4 mr-2" />
+          )}
+        </CardTitle>
       </CardHeader>
       {!isTimelineCollapsed && (
-        <ScrollArea className="max-h-96 overflow-y-auto">
-          <CardContent>
+        <CardBody className="max-h-96 overflow-y-auto">
             {isLoading && processedEvents.length === 0 && (
               <div className="relative pl-8 pb-4">
                 <div className="absolute left-3 top-3.5 h-full w-0.5 bg-neutral-800" />
@@ -138,8 +134,7 @@ export function ActivityTimeline({
                 </p>
               </div>
             ) : null}
-          </CardContent>
-        </ScrollArea>
+        </CardBody>
       )}
     </Card>
   );

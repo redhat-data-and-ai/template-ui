@@ -42,6 +42,7 @@ class ChatStorageService {
         timestamp: new Date(),
         preview: messages[messages.length - 1]?.content,
         historicalActivities: {},
+        feedback: {},
       });
     }
     return this.saveChats(chats);
@@ -64,7 +65,8 @@ class ChatStorageService {
           ...chat,
           timestamp: new Date(chat.timestamp), // Convert string back to Date
           messages: chat.messages || [],
-          historicalActivities: chat.historicalActivities || {}
+          historicalActivities: chat.historicalActivities || {},
+          feedback: chat.feedback ?? {},
         }));
     } catch (error) {
       console.error('Error loading chats from localStorage:', error);

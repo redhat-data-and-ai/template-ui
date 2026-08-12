@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { notifySessionExpired } from "../services/authenticated-fetch";
 
 const updateTokenStatus = (tokenExpiry: Date) => {
   if (!tokenExpiry) {
@@ -52,6 +53,14 @@ export function useRefreshableToken() {
         console.log("Refreshing token");
         try {
           const response = await fetch("/auth/refresh?forceRefresh=true");
+          if (response.status === 401) {
+            if (keepTokenRefreshedIntervalRef.current) {
+              clearInterval(keepTokenRefreshedIntervalRef.current);
+              keepTokenRefreshedIntervalRef.current = null;
+            }
+            notifySessionExpired();
+            return;
+          }
           const data = await response.json();
           if (data.message === "RefreshedToken") {
             setToken(data.token.access_token);

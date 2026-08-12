@@ -8,6 +8,7 @@ export interface ChatItem {
   preview: string;
   messages: Message[];
   historicalActivities?: Record<string, ProcessedEvent[]>;
+  feedback?: Record<string, 'up' | 'down'>;
 }
 
 export interface ChatState {
