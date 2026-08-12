@@ -130,7 +130,12 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
 
   if (!response.ok) return [];
 
-  const results = await response.json();
+  let results: any;
+  try {
+    results = await response.json();
+  } catch {
+    return [];
+  }
   if (!Array.isArray(results)) return [];
 
   return results

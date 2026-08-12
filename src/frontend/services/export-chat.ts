@@ -41,7 +41,7 @@ export function downloadFile(content: string, filename: string, mimeType: string
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export function slugifyExportBase(title: string): string {

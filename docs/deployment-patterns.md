@@ -41,11 +41,7 @@ branding:
   favicon_url: "/my-logo.svg"
 ```
 
-3. **Restart the server** (only the title is needed; for logo changes the file is served immediately but the browser may cache the old one):
-
-```bash
-npm start
-```
+3. **Save and refresh the browser** (branding is hot-reloaded; for logo changes the file is served immediately but the browser may cache the old one).
 
 4. **Verify** by opening the app — the tab title and masthead should reflect the new values.
 
@@ -105,12 +101,12 @@ Feature flags are boolean values in the `features` block. They control which cap
 
 | Flag | Type | Default | Env override | OPA-enforceable | Description |
 |---|---|---|---|---|---|
-| `features.auth_enabled` | `bool` | `true` | `FEATURE_AUTH_ENABLED` (or legacy `AUTH_ENABLED`) | `restricted_features`, `approved_auth_providers` | When `false`, bypasses SSO entirely and injects a dummy user (`developer@redhat.com`). Controlled by agent-engine during deployment — set via env var, not YAML. |
+| `features.auth_enabled` | `bool` | `true` | `FEATURE_AUTH_ENABLED` (or legacy `AUTH_ENABLED`) | `restricted_features`, `approved_auth_providers` | When `false`, bypasses SSO entirely and injects a dummy user (`developer@redhat.com`). Environment variables override the YAML value — set via env var during deployment. |
 | `features.debug_mode_default` | `bool` | `false` | `FEATURE_DEBUG_MODE_DEFAULT` | `restrict_debug_mode: true` | Default open/closed state of the debug panel. Users can toggle it. Never enable in production — OPA can enforce this. |
 
 ### Precedence
 
-```
+```text
 FEATURE_AUTH_ENABLED env var
   > AUTH_ENABLED env var (legacy)
     > features.auth_enabled in settings.yaml
@@ -119,7 +115,7 @@ FEATURE_AUTH_ENABLED env var
 
 ### When to use each flag
 
-**`auth_enabled: false`** — local development only. Skips the SSO plugin registration entirely. The dummy user is always `developer@redhat.com`. The `COOKIE_SIGN`, `SSO_CLIENT_ID`, and `SSO_CLIENT_SECRET` env vars are not required.
+**`auth_enabled: false`** — local development only. Skips the SSO plugin registration entirely. The dummy user is always `developer@redhat.com`. `SSO_CLIENT_ID` and `SSO_CLIENT_SECRET` are not required, but `COOKIE_SIGN` is still needed for session signing.
 
 **`debug_mode_default: true`** — useful when iterating on agent responses locally to see raw tool calls and streaming chunks. Should always be `false` in production (OPA `restrict_debug_mode: true` enforces this).
 
@@ -189,11 +185,10 @@ features:
   auth_enabled: false
 
 agent:
-  endpoint: "http://template-agent.default.svc.cluster.local:8082"
   timeout_ms: 30000
 ```
 
-Set `AGENT_HOST=http://template-agent.default.svc.cluster.local:8082` in the Kind ConfigMap instead if you prefer env-driven config.
+Set `AGENT_HOST=http://template-agent.default.svc.cluster.local:8082` in the Kind ConfigMap for env-driven config.
 
 ### Production (OpenShift)
 
@@ -216,10 +211,10 @@ Two copies of template-ui pointing at different agent engines. Use environment v
 
 ```bash
 # Agent A
-BRANDING_TITLE="Code Review Agent"  AGENT_ENDPOINT=http://code-review-agent:8082
+export BRANDING_TITLE="Code Review Agent"  AGENT_ENDPOINT=http://code-review-agent:8082
 
 # Agent B
-BRANDING_TITLE="Data Assistant"     AGENT_ENDPOINT=http://data-agent:8082
+export BRANDING_TITLE="Data Assistant"     AGENT_ENDPOINT=http://data-agent:8082
 ```
 
 No `settings.yaml` file is needed — env vars alone are sufficient.
@@ -244,7 +239,7 @@ The config file is watched for changes. Which settings apply live vs. need a res
 
 The BFF proxy (`src/server/router/proxy.router.ts`) resolves the agent host with this priority order:
 
-```
+```text
 agent.endpoint in settings.yaml
   >  AGENT_ENDPOINT env var
     >  AGENT_HOST env var
@@ -265,7 +260,7 @@ agent:
 
 ```bash
 # In a .env file or shell
-AGENT_ENDPOINT=https://prod-agent.example.com
+export AGENT_ENDPOINT=https://prod-agent.example.com
 ```
 
 `AGENT_ENDPOINT` takes precedence over `AGENT_HOST`. Use `AGENT_HOST` when you want to keep the legacy variable name (e.g., existing Helm values).
@@ -348,7 +343,7 @@ platform:
 
 With `fail_on_violation: false` the server starts regardless of violations. Violations are logged as warnings:
 
-```
+```text
 [warn] OPA policy violation: debug_mode_default cannot be enabled in this environment
 ```
 
@@ -369,7 +364,7 @@ platform:
 
 The `SSO_AUTH_PROVIDER` env var determines the provider (defaults to `"oidc"`). If it is set to anything not in `approved_auth_providers`, startup fails:
 
-```
+```text
 OPA policy violation: auth provider 'saml' is not in the approved list ["oidc"]
 ```
 
@@ -389,7 +384,7 @@ platform:
 
 Any `agent.endpoint` that does not end with one of these suffixes triggers a violation. An empty `agent.endpoint` (falling back to `AGENT_HOST`) is allowed.
 
-```
+```text
 OPA policy violation: agent endpoint 'https://public-api.example.com'
   does not match any approved internal suffix [".svc.cluster.local", ".internal.example.com"]
 ```

@@ -374,9 +374,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           console.error('Main content error:', error, errorInfo);
         }}
       >
-        <div id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {children}
-        </div>
+        </main>
       </ErrorBoundary>
     </Page>
   );

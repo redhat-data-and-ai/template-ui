@@ -49,8 +49,9 @@ function stripThinkingFromPlainText(text: string): { thinking: string; display: 
   const thinkingParts: string[] = [];
   let display = text;
   const patterns: RegExp[] = [
-    /<think>([\s\S]*?)<\/redacted_thinking>/gi,
+    /<think>([\s\S]*?)<\/think>/gi,
     /<thinking>([\s\S]*?)<\/thinking>/gi,
+    /<redacted_thinking>([\s\S]*?)<\/redacted_thinking>/gi,
   ];
   for (const re of patterns) {
     display = display.replace(re, (_full, inner: string) => {
@@ -394,7 +395,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
                 <Pencil className="h-3.5 w-3.5" />
               </button>
             )}
-            <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
+            <div className="text-sm leading-relaxed [&_p]:mb-1.5! [&_p:last-child]:mb-0!">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {plain}
               </ReactMarkdown>
@@ -857,7 +858,7 @@ export function ChatMessagesView({
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto chat-scroll" ref={scrollAreaRef}>
-        <div role="log" aria-label="Chat messages" aria-live="polite" aria-busy={isLoading} className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
+        <div role="log" aria-label="Chat messages" aria-live="off" aria-busy={isLoading} className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
           {messages.map((message, messageIndex) => {
             if (message.type === 'tool') {
               return <Fragment key={message.id ?? `m-${messageIndex}`} />;

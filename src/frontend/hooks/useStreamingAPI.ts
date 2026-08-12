@@ -181,9 +181,11 @@ export function useStreamingAPI(threadId: string) {
   const chatRef = useRef(chat);
   chatRef.current = chat;
 
-  if (!managerRef.current) {
-    managerRef.current = getStreamingManager(threadId);
-  }
+  useEffect(() => {
+    if (!managerRef.current) {
+      managerRef.current = getStreamingManager(threadId);
+    }
+  }, [threadId]);
 
   const handleStreamActivityStatus = useCallback((status: StreamStatus) => {
     if (status === 'connecting' || status === 'streaming') {
@@ -732,6 +734,13 @@ export function useStreamingAPI(threadId: string) {
       let resumeStreamHadInterrupt = false;
 
       await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        };
         const callbacks: StreamCallback = {
           onToken(content) {
             lastTokenTimeRef.current = Date.now();
@@ -787,18 +796,22 @@ export function useStreamingAPI(threadId: string) {
                 state: { error: error.message, isLoading: false, isConnected: false },
               }),
             );
+            finish();
           },
           onStatusChange(status) {
             const partial = nextStreamingPartialForStatus(status);
             if (partial) {
               dispatch(updateStreamingState({ chatId: threadId, state: partial }));
             }
+            if (status === 'cancelled') {
+              finish();
+            }
           },
           onDone() {
             if (!resumeStreamHadInterrupt) {
               dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
             }
-            resolve();
+            finish();
           },
         };
         void manager.stream(streamRequest, callbacks);

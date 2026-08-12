@@ -78,7 +78,7 @@ export function TasksSidebar({ messages, isLoading }: TasksSidebarProps) {
           )}
         </CardTitle>
       </CardHeader>
-      <CardBody className="overflow-y-auto space-y-1.5 !pt-0">
+      <CardBody className="overflow-y-auto space-y-1.5 pt-0!">
         {entries.map((entry) => {
           const Icon = entry.isSubAgent ? Bot : Wrench;
           const StatusIcon = entry.hasResult ? CheckCircle : Loader2;

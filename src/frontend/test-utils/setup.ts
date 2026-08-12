@@ -92,6 +92,7 @@ Object.defineProperty(window, 'USER_DATA', {
     displayName: 'Test User',
     given_name: 'Test',
     email: 'test@example.com',
+    preferred_username: 'test.user',
   },
   writable: true,
   configurable: true,

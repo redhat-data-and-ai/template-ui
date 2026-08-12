@@ -137,7 +137,6 @@ export function ErrorRecovery({
             isDisabled={maxRetriesReached || isRetrying}
             isLoading={isRetrying}
             spinnerAriaValueText="Retrying"
-            aria-label="Retry operation"
           >
             {retryLabel}
           </Button>

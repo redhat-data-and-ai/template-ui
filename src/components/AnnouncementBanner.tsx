@@ -59,7 +59,9 @@ export function AnnouncementBanner() {
 
   const handleClose = useCallback(() => {
     if (payload?.message) {
-      sessionStorage.setItem(STORAGE_PREFIX + messageHash(payload.message), '1');
+      try {
+        sessionStorage.setItem(STORAGE_PREFIX + messageHash(payload.message), '1');
+      } catch { /* storage full or unavailable */ }
     }
     setDismissed(true);
   }, [payload?.message]);
@@ -71,7 +73,7 @@ export function AnnouncementBanner() {
   const variant = toVariant(payload.type);
 
   return (
-    <div className="w-full shrink-0 border-b border-[var(--pf-v5-global--BorderColor--200)]">
+    <div className="w-full shrink-0 border-b border-border">
       <Alert
         variant={variant}
         isInline
