@@ -6,6 +6,15 @@ import { getAgentName, getSettings } from "../utils/settings.js";
 const BUILD_VERSION = Date.now().toString(36);
 const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function headerValue(request: FastifyRequest, name: string): string | undefined {
   const v = request.headers[name];
   return Array.isArray(v) ? v[0] : v;
@@ -76,7 +85,7 @@ async function routes(fastify: FastifyInstance) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" id="favicon" href="/favicon.ico" />
-    <title>${agentName}</title>
+    <title>${escapeHtml(agentName)}</title>
     <link rel="stylesheet" href="${basePath || ""}/dist/frontend/template-ui.css">
     <style>
     /* PF6/Tailwind v4 co-existence: inline to bypass Vite CSS purging */

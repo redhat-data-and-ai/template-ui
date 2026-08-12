@@ -114,7 +114,7 @@ Branding and `agent.endpoint` / `agent.timeout_ms` changes are applied without a
 
 The config is validated at startup. Invalid values cause the server to exit with a clear error:
 
-```
+```text
 Config validation error: branding.colors.light.primary must be a valid hex color (got 'not-a-color')
 ```
 

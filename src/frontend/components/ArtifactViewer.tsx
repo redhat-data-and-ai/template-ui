@@ -24,9 +24,13 @@ export function ArtifactViewer({ content, title }: ArtifactViewerProps) {
   const KindIcon = meta.icon;
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable (e.g. non-secure context) */
+    }
   };
 
   return (
@@ -40,7 +44,7 @@ export function ArtifactViewer({ content, title }: ArtifactViewerProps) {
         <Button
           variant="plain"
           size="sm"
-          className="!p-1"
+          className="p-1!"
           onClick={handleCopy}
           aria-label="Copy content"
         >

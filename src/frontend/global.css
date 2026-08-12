@@ -170,7 +170,10 @@ input::placeholder {
 }
 textarea:focus,
 input[type="text"]:focus,
-input[type="search"]:focus {
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="url"]:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
   outline: none;
@@ -195,11 +198,11 @@ input[type="search"]:focus {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes slideInRight {
+@keyframes slide-in-right {
   from { opacity: 0; transform: translateX(16px); }
   to { opacity: 1; transform: translateX(0); }
 }
-@keyframes pulseGlow {
+@keyframes pulse-glow {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.8; }
 }
@@ -216,8 +219,8 @@ input[type="search"]:focus {
 .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
 .animate-fadeInUp { animation: fadeInUp 0.5s ease-out forwards; }
 .animate-fadeInUpSmooth { animation: fadeInUpSmooth 0.3s ease-out forwards; }
-.animate-slideInRight { animation: slideInRight 0.4s ease-out forwards; }
-.animate-pulseGlow { animation: pulseGlow 3s ease-in-out infinite; }
+.animate-slide-in-right { animation: slide-in-right 0.4s ease-out forwards; }
+.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
 .animate-float { animation: float 4s ease-in-out infinite; }
 .animate-shimmer {
   background-size: 200% 100%;

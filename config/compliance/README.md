@@ -69,7 +69,7 @@ platform:
 
 If `agent.endpoint` is `https://public-api.example.com/agent`, the server logs:
 
-```
+```text
 OPA policy violation: agent endpoint 'https://public-api.example.com/agent'
   does not match any approved internal suffix [".svc.cluster.local", ".internal.example.com"]
 ```
@@ -139,7 +139,7 @@ deny contains msg if {
 
 **Available `input` fields:**
 
-```
+```text
 input.branding          — BrandingConfig
 input.features          — FeaturesConfig
 input.agent             — AgentConfig  (endpoint, timeout_ms, streaming)
@@ -153,7 +153,7 @@ input.platform.opa      — PlatformOpaConfig
 ```bash
 # Evaluate the deny rule against a sample input
 opa eval \
-  --data config/compliance/policy.rego \
+  --data config/compliance \
   --input <(echo '{
     "features": {"auth_enabled": true, "debug_mode_default": false},
     "agent": {"endpoint": "https://public.example.com"},
@@ -175,7 +175,7 @@ opa eval \
 
 ## File structure
 
-```
+```text
 config/compliance/
 ├── policy.rego     # Deny rules (package compliance.ui)
 ├── data.json       # Static external data available as data.* in Rego

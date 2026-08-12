@@ -54,6 +54,10 @@ export function useRefreshableToken() {
         try {
           const response = await fetch("/auth/refresh?forceRefresh=true");
           if (response.status === 401) {
+            if (keepTokenRefreshedIntervalRef.current) {
+              clearInterval(keepTokenRefreshedIntervalRef.current);
+              keepTokenRefreshedIntervalRef.current = null;
+            }
             notifySessionExpired();
             return;
           }

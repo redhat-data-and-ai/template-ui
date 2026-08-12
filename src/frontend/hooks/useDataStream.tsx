@@ -208,6 +208,7 @@ export function useDataStream({
               } else {
                 setMessages(prev => {
                   const last = prev[prev.length - 1];
+                  if (!last || last.type !== 'ai') return prev;
                   const updated = { ...last, content: ((last.content as string) || '') + content };
                   return [...prev.slice(0, -1), updated];
                 });

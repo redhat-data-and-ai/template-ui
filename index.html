@@ -8,7 +8,7 @@
     (function() {
       try {
         var stored = localStorage.getItem('template-ui-settings');
-        var theme = stored ? JSON.parse(stored).theme : 'dark';
+        var theme = stored ? JSON.parse(stored).theme || 'dark' : 'dark';
       } catch(e) {
         var theme = 'dark';
       }

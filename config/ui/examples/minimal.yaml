@@ -1,5 +1,5 @@
 # Minimal configuration — auth disabled, suitable for local development.
-# Copy to config/ui/settings.yaml and ensure AUTH_ENABLED is not set (or set to false).
+# Copy to config/ui/settings.yaml and ensure FEATURE_AUTH_ENABLED / AUTH_ENABLED is not set (or set to false).
 #
 # With this config:
 #   - No SSO credentials are required.

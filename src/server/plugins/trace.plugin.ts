@@ -23,7 +23,7 @@ const tracePlugin: FastifyPluginAsync = async function tracePlugin(fastify) {
     if (!traceId) {
       const xt = request.headers["x-trace-id"];
       traceId =
-        typeof xt === "string" && xt.length > 0 ? xt : randomUUID();
+        typeof xt === "string" && /^[\w.-]{1,64}$/.test(xt) ? xt : randomUUID();
     }
     request.headers["x-trace-id"] = traceId;
 

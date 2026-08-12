@@ -66,6 +66,9 @@
   "overrides": {
     "@grpc/grpc-js": "^1.14.4"
   },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@eslint/js": "^9.22.0",

@@ -54,6 +54,7 @@ function SidebarComponent({
 
 
   const filteredChats = useMemo(() => {
+    if (chatHistory.length <= 3) return chatHistory;
     const q = searchQuery.trim().toLowerCase();
     if (!q) return chatHistory;
     return chatHistory.filter(
@@ -68,7 +69,10 @@ function SidebarComponent({
   };
 
   const handleSaveRename = (chatId: string) => {
-    onRenameChat(chatId, editTitle);
+    const trimmed = editTitle.trim();
+    if (trimmed) {
+      onRenameChat(chatId, trimmed);
+    }
     setEditingChat(null);
     setEditTitle('');
   };

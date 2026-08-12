@@ -17,7 +17,7 @@ export function ReconnectingBanner({ streamingState, maxRetries }: ReconnectingB
     : '';
 
   return (
-    <Alert variant="warning" isInline title="Reconnecting...">
+    <Alert variant="warning" isInline title="Reconnecting..." role="status" aria-live="polite">
       {attemptText}{midResponseWarning ? '.' : ''}{midResponseWarning}
     </Alert>
   );

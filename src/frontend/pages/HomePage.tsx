@@ -5,14 +5,13 @@ import { Send } from 'lucide-react';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
 
-const QUICK_PROMPTS = [
-  `What can ${window.APP_DATA?.agentName || 'Agent'} do for me?`,
-  'Help me analyze a dataset',
-  'Write a query to find anomalies',
-  'Summarize the key findings from this data',
-];
-
 export function HomePage() {
+  const QUICK_PROMPTS = [
+    `What can ${window.APP_DATA?.agentName || 'Agent'} do for me?`,
+    'Help me analyze a dataset',
+    'Write a query to find anomalies',
+    'Summarize the key findings from this data',
+  ];
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');

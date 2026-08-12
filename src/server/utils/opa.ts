@@ -108,7 +108,11 @@ export async function createOpaEngine(
       const denials: unknown[] = first.deny ?? first.violations ?? [];
       if (!Array.isArray(denials)) return [];
 
-      return denials.map((d) => ({ message: String(d) }));
+      return denials.map((d) => ({
+        message: typeof d === "object" && d !== null && "msg" in d
+          ? String((d as { msg: unknown }).msg)
+          : String(d),
+      }));
     } catch (err) {
       log.error(`OPA evaluation error: ${err instanceof Error ? err.message : String(err)}`);
       return [];

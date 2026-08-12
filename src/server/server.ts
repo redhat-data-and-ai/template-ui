@@ -161,7 +161,7 @@ export async function setupServer(): Promise<FastifyInstance> {
 }
 
 export function startConfigWatcher(configPath: string, server: FastifyInstance) {
-  const cfg = getSettings();
+  let cfg = getSettings();
   const cleanup = watchConfig(configPath, (newSettings) => {
     server.log.info('[ConfigWatcher] Settings reloaded');
 
@@ -197,6 +197,8 @@ export function startConfigWatcher(configPath: string, server: FastifyInstance) 
     if (autoApplied.length > 0) {
       server.log.info({ settings: autoApplied }, '[ConfigWatcher] Settings applied without restart:');
     }
+
+    cfg = newSettings;
   });
 
   return cleanup;

@@ -20,15 +20,24 @@ export function ProfileSection() {
   const email = userData?.email || '';
   const username = userData?.preferred_username || '';
 
-  const handleDeleteAll = () => {
+  const handleDeleteAll = async () => {
     const ids = chats.map((c) => c.id);
     ids.forEach((id) => releaseStreamingManager(id));
+
+    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
+    const failures = results.filter((r) => r === false).length;
+
+    if (failures > 0) {
+      dispatch(addToast({ title: `Failed to delete ${failures} chat${failures !== 1 ? 's' : ''} on the server`, variant: 'danger' }));
+      setConfirmDelete(false);
+      return;
+    }
+
     dispatch(clearAllChats());
     chatStorage.clearChats();
     dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     setConfirmDelete(false);
     navigate('/');
-    ids.forEach((id) => deleteThread(id).catch(() => {}));
   };
 
   return (

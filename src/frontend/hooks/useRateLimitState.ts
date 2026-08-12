@@ -44,18 +44,17 @@ export function useRateLimitState(): RateLimitState {
       });
 
       tickRef.current = setInterval(() => {
-        setState((prev) => {
-          const next = prev.retryAfterSeconds - 1;
-          if (next <= 0) {
-            clearTick();
-            return { isRateLimited: false, retryAfterSeconds: 0, resetTime: null };
-          }
-          return {
+        const remaining = Math.max(0, Math.ceil((resetTime.getTime() - Date.now()) / 1000));
+        if (remaining <= 0) {
+          clearTick();
+          setState({ isRateLimited: false, retryAfterSeconds: 0, resetTime: null });
+        } else {
+          setState({
             isRateLimited: true,
-            retryAfterSeconds: next,
-            resetTime: prev.resetTime,
-          };
-        });
+            retryAfterSeconds: remaining,
+            resetTime,
+          });
+        }
       }, 1000);
     },
     [clearTick],

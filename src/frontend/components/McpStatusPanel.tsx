@@ -33,7 +33,7 @@ export function McpStatusPanel({ mcpEvents }: McpStatusPanelProps) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-3 pt-2" aria-label="MCP tool status">
+    <div className="max-w-3xl mx-auto px-3 pt-2" role="region" aria-label="MCP tool status">
       <ExpandableSection
         toggleText="MCP tool activity"
         isExpanded={expanded}

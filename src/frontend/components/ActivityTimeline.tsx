@@ -58,7 +58,7 @@ export function ActivityTimeline({
   }, [isLoading, processedEvents]);
 
   return (
-    <Card isCompact isPlain className="!border-none rounded-lg !bg-neutral-700 max-h-96">
+    <Card isCompact isPlain className="border-none! rounded-lg bg-neutral-700! max-h-96">
       <CardHeader
         className="cursor-pointer"
         onClick={() => setIsTimelineCollapsed(!isTimelineCollapsed)}

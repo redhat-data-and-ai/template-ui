@@ -133,7 +133,10 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
       if (!body.authorize_url) {
         throw new Error('No authorize_url returned');
       }
-      window.open(body.authorize_url, 'mcp-oauth', 'width=600,height=700');
+      const popup = window.open(body.authorize_url, 'mcp-oauth', 'width=600,height=700');
+      if (!popup) {
+        throw new Error('Popup blocked by browser');
+      }
     } catch (err) {
       setConnectError(err instanceof Error ? err.message : 'Connect failed');
     } finally {
