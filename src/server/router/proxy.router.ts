@@ -8,6 +8,11 @@ function getAgentHost(): string {
   return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
 }
 
+/** Allowlist regex for thread IDs */
+const THREAD_ID_RE = /^[\w-]{1,128}$/;
+/** Allowlist regex for wildcard proxy paths */
+const PROXY_PATH_RE = /^[\w\-/.]{1,512}$/;
+
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
 const CACHE_TTL_MS = 30_000; // 30s
@@ -339,6 +344,10 @@ async function proxyRoutes(fastify: FastifyInstance) {
       }
 
       const { message, thread_id, user_id, resume: isResume, memories, rules } = request.body;
+
+      if (typeof thread_id !== 'string' || !THREAD_ID_RE.test(thread_id)) {
+        return reply.status(400).send({ error: 'Invalid thread_id' });
+      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -680,6 +689,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const cfg = getSettings();
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const path = (request.params as any)['*'];
+
+      if (typeof path !== 'string' || !PROXY_PATH_RE.test(path) || path.includes('..')) {
+        return reply.status(400).send({ error: 'Invalid path' });
+      }
+
       const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
 
       if (refreshFailed) {
