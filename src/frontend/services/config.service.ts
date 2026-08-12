@@ -26,7 +26,7 @@ function getConfigApiBase(): string {
 }
 
 export const fetchBranding = async (): Promise<BrandingConfig> => {
-  const res = await fetch(`${getConfigApiBase()}/branding`);
+  const res = await fetch(`${getConfigApiBase()}/branding`, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error("Failed to load branding config");
   }
@@ -34,7 +34,7 @@ export const fetchBranding = async (): Promise<BrandingConfig> => {
 };
 
 export const fetchFeatures = async (): Promise<FeaturesConfig> => {
-  const res = await fetch(`${getConfigApiBase()}/features`);
+  const res = await fetch(`${getConfigApiBase()}/features`, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error("Failed to load features config");
   }
