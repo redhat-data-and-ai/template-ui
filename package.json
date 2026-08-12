@@ -64,7 +64,8 @@
     "uuid": "^11.1.0"
   },
   "overrides": {
-    "@grpc/grpc-js": "^1.14.4"
+    "@grpc/grpc-js": "^1.14.4",
+    "@opentelemetry/propagator-jaeger": ">=2.9.0"
   },
   "engines": {
     "node": ">=22.13.0"
