@@ -25,7 +25,7 @@
     "@fastify/oauth2": "^8.1.2",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/session": "^11.1.0",
-    "@fastify/static": "^8.2.0",
+    "@fastify/static": "^10.1.3",
     "@fastify/url-data": "^6.0.3",
     "@langchain/core": "^0.3.55",
     "@langchain/langgraph-sdk": "^1.9.2",
@@ -66,7 +66,8 @@
   "overrides": {
     "@grpc/grpc-js": "^1.14.4",
     "@opentelemetry/propagator-jaeger": ">=2.9.0",
-    "js-cookie": ">=3.0.7"
+    "js-cookie": ">=3.0.7",
+    "langsmith": ">=0.6.0"
   },
   "engines": {
     "node": ">=22.13.0"
