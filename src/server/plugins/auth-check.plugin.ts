@@ -1,5 +1,6 @@
 import fastifyPlugin from "fastify-plugin";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { getSettings } from "../utils/settings.js";
 
 declare module "fastify" {
   interface Session {
@@ -45,11 +46,18 @@ function shouldSkipAuth(request: FastifyRequest): boolean {
   );
 }
 
-function authCheck(
+async function authCheck(
   instance: FastifyInstance,
   _options: Record<string, unknown>,
-  done: (err?: Error) => void
 ) {
+  const rl = getSettings().security.rate_limit;
+  if (rl.enabled) {
+    await instance.register(import("@fastify/rate-limit"), {
+      max: rl.max,
+      timeWindow: rl.window,
+    });
+  }
+
   instance.addHook("preHandler", (request: FastifyRequest, reply: FastifyReply, next: () => void) => {
     if (shouldSkipAuth(request)) {
       next();
@@ -111,7 +119,6 @@ function authCheck(
 
     next();
   });
-  done();
 }
 
 export default fastifyPlugin(authCheck);

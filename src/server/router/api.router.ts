@@ -25,7 +25,9 @@ async function apiRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.get("/announcement", async () => {
+  fastify.get("/announcement", {
+    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+  }, async () => {
     const cfg = getSettings();
     const envMessage = process.env.ANNOUNCEMENT_MESSAGE;
     const message = envMessage || cfg.announcement.message;
