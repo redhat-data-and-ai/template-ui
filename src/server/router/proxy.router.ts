@@ -318,6 +318,7 @@ function buildForwardedQueryString(query: Record<string, unknown>): string {
 async function proxyRoutes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);
 
+  fastify.removeContentTypeParser('application/json');
   fastify.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 1048576 }, (req, body, done) => {
     if (!body || (typeof body === 'string' && body.trim() === '')) {
       done(null, undefined);
@@ -727,7 +728,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const headers: Record<string, string> = {
         'X-Trace-ID': traceId,
       };
-      if (request.method !== 'DELETE' && request.method !== 'GET') {
+      const hasBody = request.body !== undefined && request.body !== null;
+      if (request.method !== 'GET' && (request.method !== 'DELETE' || hasBody)) {
         headers['Content-Type'] = 'application/json';
       }
 
