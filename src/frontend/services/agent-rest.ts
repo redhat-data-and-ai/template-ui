@@ -107,6 +107,31 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+export interface ToolAccessEntity {
+  name: string;
+  type?: string;
+  allowed_tools: string[];
+  denied_tools: string[];
+  tool_approval: string[];
+}
+
+export interface ToolAccessInfo {
+  orchestrator: ToolAccessEntity;
+  subagents: ToolAccessEntity[];
+}
+
+export async function getAgentToolAccess(): Promise<ToolAccessInfo | null> {
+  const infoUrl = buildAgentApiUrl('/info');
+  try {
+    const response = await authenticatedFetch(infoUrl, { headers: getAuthHeaders() });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.tool_access ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Lightweight thread listing — returns thread IDs and metadata only.
  * Does NOT fetch full state (which is extremely slow per-thread).

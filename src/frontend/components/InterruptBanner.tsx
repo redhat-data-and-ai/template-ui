@@ -9,6 +9,19 @@ import { Bot, CheckCircle, Link2, XCircle } from 'lucide-react';
 import { buildAgentApiUrl } from '../lib/app-paths';
 import type { InterruptInfo } from '../types/deep-agent';
 
+interface ToolApprovalInfo {
+  agentName: string;
+  toolName: string;
+}
+
+function parseToolApproval(value: string): ToolApprovalInfo | null {
+  const match = value.match(
+    /subagent '([^']+)' wants to call '([^']+)'/
+  );
+  if (!match) return null;
+  return { agentName: match[1], toolName: match[2] };
+}
+
 interface InterruptBannerProps {
   readonly interrupt: InterruptInfo;
   readonly onResume: (response: string) => void;
@@ -192,33 +205,54 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
   const valueStr = interruptValueAsString(interrupt.value);
   const approval = isToolApproval(valueStr);
 
+  const toolApproval = parseToolApproval(valueStr);
+
   if (approval) {
     return (
       <div className="mx-4 mb-3" role="alert">
         <Alert
           variant="warning"
-          title="Action Required"
+          title={toolApproval ? 'Tool Approval Required' : 'Action Required'}
           isInline
           actionClose={<AlertActionCloseButton onClose={onDismiss} />}
         >
-          <p className="text-sm mb-3 whitespace-pre-wrap">{valueStr}</p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<CheckCircle className="w-3.5 h-3.5" />}
-              onClick={() => onResume('approved')}
-            >
-              Approve
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              icon={<XCircle className="w-3.5 h-3.5" />}
-              onClick={() => onResume('rejected')}
-            >
-              Reject
-            </Button>
+          <div className="space-y-2 mt-2">
+            {toolApproval ? (
+              <div className="rounded-lg border border-border bg-background/60 p-3 space-y-1.5">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground font-medium">Subagent:</span>
+                  <code className="text-xs font-mono font-semibold bg-muted/40 px-1.5 py-0.5 rounded">
+                    {toolApproval.agentName}
+                  </code>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground font-medium">Tool:</span>
+                  <code className="text-xs font-mono font-semibold text-warning-foreground bg-warning/10 px-1.5 py-0.5 rounded">
+                    {toolApproval.toolName}
+                  </code>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm whitespace-pre-wrap">{valueStr}</p>
+            )}
+            <div className="flex items-center gap-2 pt-1 flex-wrap">
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<CheckCircle className="w-3.5 h-3.5" />}
+                onClick={() => onResume('approved')}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<XCircle className="w-3.5 h-3.5" />}
+                onClick={() => onResume('rejected')}
+              >
+                Reject
+              </Button>
+            </div>
           </div>
         </Alert>
       </div>
