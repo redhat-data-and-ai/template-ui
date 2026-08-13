@@ -1,173 +1,124 @@
-import { useState } from "react";
-import { Button } from "./ui/button";
-import { SquarePen, Send, StopCircle } from "lucide-react";
-import { Textarea } from "./ui/textarea";
+import { forwardRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { SquarePen, ArrowUp, StopCircle } from "lucide-react";
+import { Alert } from "@patternfly/react-core";
+import { buildAppPath } from '../lib/app-paths';
 
-
-// Updated InputFormProps
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
   onCancel: () => void;
+  onNewChat?: () => void;
   isLoading: boolean;
   hasHistory: boolean;
+  isRateLimited?: boolean;
+  rateLimitRemainingSeconds?: number;
 }
 
-export const InputForm: React.FC<InputFormProps> = ({
+export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(function InputForm(
+  {
   onSubmit,
   onCancel,
+  onNewChat,
   isLoading,
   hasHistory,
-}) => {
+  isRateLimited = false,
+  rateLimitRemainingSeconds = 0,
+  },
+  ref,
+) {
   const [internalInputValue, setInternalInputValue] = useState("");
-  // const [effort, setEffort] = useState("medium");
-  // const [model, setModel] = useState("gemini-2.5-flash-preview-04-17");
 
-  const handleInternalSubmit = (e?: React.FormEvent) => {
+  const handleInternalSubmit = (e?: FormEvent) => {
     if (e) e.preventDefault();
     if (!internalInputValue.trim()) return;
     onSubmit(internalInputValue);
     setInternalInputValue("");
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Submit with Enter and create new line with Shift+Enter
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleInternalSubmit();
     }
   };
 
-  const isSubmitDisabled = !internalInputValue.trim() || isLoading;
+  const isSubmitDisabled = !internalInputValue.trim() || isLoading || isRateLimited;
 
   return (
     <form
       onSubmit={handleInternalSubmit}
-      className={`flex flex-col gap-2 p-3 pb-4`}
+      className="flex flex-col gap-2 p-3 pb-4"
     >
-      <div
-        className={`flex flex-row items-center justify-between text-white rounded-3xl rounded-bl-sm ${
-          hasHistory ? "rounded-br-sm" : ""
-        } break-words min-h-7 bg-neutral-700 px-4 pt-3 `}
-      >
-        <Textarea
+      {isRateLimited && rateLimitRemainingSeconds > 0 && (
+        <Alert
+          variant="warning"
+          isInline
+          title={`Rate limited. Try again in ${rateLimitRemainingSeconds}s`}
+          className="mb-1"
+        />
+      )}
+      <div className="relative rounded-2xl border border-border bg-card shadow-card focus-within:border-primary/40 focus-within:shadow-elevated transition-all duration-200">
+        <textarea
+          ref={ref}
+          autoFocus
           value={internalInputValue}
           onChange={(e) => setInternalInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask me anything about the data"
-          className={`w-full text-neutral-100 placeholder-neutral-500 resize-none border-0 focus:outline-none focus:ring-0 outline-none focus-visible:ring-0 shadow-none
-                        md:text-base  min-h-[56px] max-h-[200px]`}
+          placeholder="Ask me anything about the data..."
+          aria-label="Type a message"
+          className="w-full resize-none border-0 bg-transparent px-4 pt-3.5 pb-12 text-sm leading-relaxed min-h-[56px] max-h-[200px] rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
+          style={{ boxShadow: 'none' }}
           rows={1}
         />
-        <div className="-mt-3">
+        <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
           {isLoading ? (
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              size="icon"
-              className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-2 cursor-pointer rounded-full transition-all duration-200"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
               onClick={onCancel}
+              aria-label="Cancel streaming"
             >
-              <StopCircle className="h-5 w-5" />
-            </Button>
+              <StopCircle className="h-4 w-4" />
+            </button>
           ) : (
-            <Button
+            <button
               type="submit"
-              variant="ghost"
-              className={`${
-                isSubmitDisabled
-                  ? "text-neutral-500"
-                  : "text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
-              } p-2 cursor-pointer rounded-full transition-all duration-200 text-base`}
               disabled={isSubmitDisabled}
+              aria-label={
+                isRateLimited
+                  ? `Wait ${rateLimitRemainingSeconds} seconds`
+                  : "Send message"
+              }
+              className={`flex items-center justify-center rounded-full transition-all duration-200 ${
+                isRateLimited ? "min-w-[88px] h-8 px-2" : "w-8 h-8"
+              } ${
+                isSubmitDisabled
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md"
+              }`}
             >
-              Ask
-              <Send className="h-5 w-5" />
-            </Button>
+              {isRateLimited ? (
+                <span className="text-xs font-medium tabular-nums">
+                  Wait ({rateLimitRemainingSeconds}s)
+                </span>
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </button>
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between">
-        <div className="flex flex-row gap-2">
-          {/* <div className="flex flex-row gap-2 bg-neutral-700 border-neutral-600 text-neutral-300 focus:ring-neutral-500 rounded-xl rounded-t-sm pl-2  max-w-[100%] sm:max-w-[90%]">
-            <div className="flex flex-row items-center text-sm">
-              <Brain className="h-4 w-4 mr-2" />
-              Effort
-            </div>
-            <Select value={effort} onValueChange={setEffort}>
-              <SelectTrigger className="w-[120px] bg-transparent border-none cursor-pointer">
-                <SelectValue placeholder="Effort" />
-              </SelectTrigger>
-              <SelectContent className="bg-neutral-700 border-neutral-600 text-neutral-300 cursor-pointer">
-                <SelectItem
-                  value="low"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  Low
-                </SelectItem>
-                <SelectItem
-                  value="medium"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  Medium
-                </SelectItem>
-                <SelectItem
-                  value="high"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  High
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div> */}
-          {/* <div className="flex flex-row gap-2 bg-neutral-700 border-neutral-600 text-neutral-300 focus:ring-neutral-500 rounded-xl rounded-t-sm pl-2  max-w-[100%] sm:max-w-[90%]">
-            <div className="flex flex-row items-center text-sm ml-2">
-              <Cpu className="h-4 w-4 mr-2" />
-              Model
-            </div>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="w-[150px] bg-transparent border-none cursor-pointer">
-                <SelectValue placeholder="Model" />
-              </SelectTrigger>
-              <SelectContent className="bg-neutral-700 border-neutral-600 text-neutral-300 cursor-pointer">
-                <SelectItem
-                  value="gemini-2.0-flash"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  <div className="flex items-center">
-                    <Zap className="h-4 w-4 mr-2 text-yellow-400" /> 2.0 Flash
-                  </div>
-                </SelectItem>
-                <SelectItem
-                  value="gemini-2.5-flash-preview-04-17"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  <div className="flex items-center">
-                    <Zap className="h-4 w-4 mr-2 text-orange-400" /> 2.5 Flash
-                  </div>
-                </SelectItem>
-                <SelectItem
-                  value="gemini-2.5-pro-preview-05-06"
-                  className="hover:bg-neutral-600 focus:bg-neutral-600 cursor-pointer"
-                >
-                  <div className="flex items-center">
-                    <Cpu className="h-4 w-4 mr-2 text-purple-400" /> 2.5 Pro
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div> */}
-        </div>
-        {hasHistory && (
-          <Button
-            className="bg-neutral-700 border-neutral-600 text-neutral-300 cursor-pointer rounded-xl rounded-t-sm pl-2 "
-            variant="default"
-            onClick={() => window.location.reload()}
+      {hasHistory && (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => onNewChat ? onNewChat() : (globalThis.location.href = buildAppPath('/'))}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted"
           >
-            <SquarePen size={16} />
-             New Chat
-          </Button>
-        )}
-      </div>
+            <SquarePen size={12} />
+            New Chat
+          </button>
+        </div>
+      )}
     </form>
   );
-};
+});

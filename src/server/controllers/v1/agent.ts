@@ -1,5 +1,10 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { agentHost } from "../../utils/config.js";
+import { getSettings } from "../../utils/settings.js";
+
+function getAgentHost(): string {
+  const cfg = getSettings();
+  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+}
 
 interface StreamRequest {
   message: string;
@@ -8,11 +13,23 @@ interface StreamRequest {
   user_id: string;
 }
 
+function headerValue(request: FastifyRequest, name: string): string | undefined {
+  const v = request.headers[name];
+  return Array.isArray(v) ? v[0] : v;
+}
+
+function resolveAccessToken(request: FastifyRequest): string | undefined {
+  return (
+    request.session?.token?.access_token ||
+    headerValue(request, "x-auth-access-token") ||
+    headerValue(request, "x-token")
+  );
+}
+
 export async function handleStreamPost(fastify: FastifyInstance, request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) {
   const { message, thread_id, session_id, user_id } = request.body;
 
-  // Extract SSO access token from session
-  const accessToken = request.session?.token?.access_token;
+  const accessToken = resolveAccessToken(request);
   
   fastify.log.info(`Stream request - Thread: ${thread_id}, User: ${user_id}, Token: ${accessToken ? 'Present' : 'Missing'}`);
 
@@ -34,13 +51,11 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
       'Accept': 'text/event-stream'
     };
 
-    // Add SSO token if present
     if (accessToken) {
-      headers['X-Token'] = accessToken;
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    // Proxy request to agent backend
-    const agentUrl = `${agentHost}/v1/stream`;
+    const agentUrl = `${getAgentHost()}/v1/stream`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
     const agentResponse = await fetch(agentUrl, {
@@ -101,10 +116,13 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
 
 export async function handleHistoryGet(fastify: FastifyInstance, request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) {
   const { threadId } = request.params;
-  
-  // Extract SSO access token from session
-  const accessToken = request.session?.token?.access_token;
-  
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(threadId)) {
+    return reply.status(400).send({ error: "Invalid thread ID" });
+  }
+
+  const accessToken = resolveAccessToken(request);
+
   fastify.log.info(`History request for thread: ${threadId}, Token: ${accessToken ? 'Present' : 'Missing'}`);
 
   try {
@@ -113,13 +131,11 @@ export async function handleHistoryGet(fastify: FastifyInstance, request: Fastif
       'Content-Type': 'application/json'
     };
 
-    // Add SSO token if present
     if (accessToken) {
-      headers['X-Token'] = accessToken;
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    // Proxy request to agent backend
-    const agentUrl = `${agentHost}/v1/history/${threadId}`;
+    const agentUrl = `${getAgentHost()}/v1/history/${threadId}`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
     const agentResponse = await fetch(agentUrl, {
