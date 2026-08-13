@@ -1,5 +1,7 @@
 import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
+import { buildAgentApiUrl } from '../../lib/app-paths';
+import { authenticatedFetch } from '../../services/authenticated-fetch';
 
 export interface MemoryItem {
   id: string;
@@ -39,6 +41,32 @@ function persist(state: PersonalizationState) {
   }
 }
 
+function apiCreateMemory(content: string) {
+  authenticatedFetch(buildAgentApiUrl('/personalization/memories'), {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  }).catch(() => {});
+}
+
+function apiDeleteMemory(id: string) {
+  authenticatedFetch(buildAgentApiUrl(`/personalization/memories/${id}`), {
+    method: 'DELETE',
+  }).catch(() => {});
+}
+
+function apiCreateRule(content: string, isActive: boolean) {
+  authenticatedFetch(buildAgentApiUrl('/personalization/rules'), {
+    method: 'POST',
+    body: JSON.stringify({ content, is_active: isActive }),
+  }).catch(() => {});
+}
+
+function apiDeleteRule(id: string) {
+  authenticatedFetch(buildAgentApiUrl(`/personalization/rules/${id}`), {
+    method: 'DELETE',
+  }).catch(() => {});
+}
+
 const personalizationSlice = createSlice({
   name: 'personalization',
   initialState: loadState(),
@@ -50,14 +78,18 @@ const personalizationSlice = createSlice({
         createdAt: new Date().toISOString(),
       });
       persist(state);
+      apiCreateMemory(action.payload);
     },
     removeMemory(state, action: PayloadAction<string>) {
       state.memories = state.memories.filter((m) => m.id !== action.payload);
       persist(state);
+      apiDeleteMemory(action.payload);
     },
     clearMemories(state) {
+      const ids = state.memories.map((m) => m.id);
       state.memories = [];
       persist(state);
+      ids.forEach(apiDeleteMemory);
     },
 
     addRule(state, action: PayloadAction<string>) {
@@ -68,6 +100,7 @@ const personalizationSlice = createSlice({
         createdAt: new Date().toISOString(),
       });
       persist(state);
+      apiCreateRule(action.payload, true);
     },
     updateRule(state, action: PayloadAction<{ id: string; content: string }>) {
       const rule = state.rules.find((r) => r.id === action.payload.id);
@@ -82,15 +115,22 @@ const personalizationSlice = createSlice({
     removeRule(state, action: PayloadAction<string>) {
       state.rules = state.rules.filter((r) => r.id !== action.payload);
       persist(state);
+      apiDeleteRule(action.payload);
     },
     clearRules(state) {
+      const ids = state.rules.map((r) => r.id);
       state.rules = [];
       persist(state);
+      ids.forEach(apiDeleteRule);
     },
     resetPersonalization(state) {
+      const memIds = state.memories.map((m) => m.id);
+      const ruleIds = state.rules.map((r) => r.id);
       state.memories = [];
       state.rules = [];
       persist(state);
+      memIds.forEach(apiDeleteMemory);
+      ruleIds.forEach(apiDeleteRule);
     },
   },
 });
