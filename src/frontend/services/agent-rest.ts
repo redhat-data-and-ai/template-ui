@@ -130,7 +130,7 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
 
   if (!response.ok) return [];
 
-  let results: any;
+  let results: unknown;
   try {
     results = await response.json();
   } catch {
@@ -170,22 +170,64 @@ export async function deleteThread(threadId: string): Promise<boolean> {
  * Fetch full state for a single thread (lazy, on-demand).
  * Called only when a user navigates into a specific chat.
  */
-export async function getThreadState(threadId: string): Promise<Message[]> {
+async function fetchThreadStateRaw(threadId: string): Promise<Record<string, unknown> | null> {
   const stateUrl = buildAgentApiUrl(`/threads/${threadId}/state`);
-
   try {
     const resp = await authenticatedFetch(stateUrl, {
       headers: getAuthHeaders(),
     });
-    if (!resp.ok) return [];
-
-    const state = await resp.json();
-    const msgs = state?.values?.messages;
-    if (Array.isArray(msgs) && msgs.length > 0) {
-      return combineToolCallandResult(normalizeMessages(msgs));
-    }
+    if (!resp.ok) return null;
+    return await resp.json() as Record<string, unknown>;
   } catch {
-    // Fall through
+    return null;
+  }
+}
+
+export async function getThreadState(threadId: string): Promise<Message[]> {
+  const state = await fetchThreadStateRaw(threadId);
+  if (!state) return [];
+  const msgs = state?.values ? (state.values as Record<string, unknown>)?.messages : undefined;
+  if (Array.isArray(msgs) && msgs.length > 0) {
+    return combineToolCallandResult(normalizeMessages(msgs));
   }
   return [];
+}
+
+export async function getThreadPendingInterrupt(
+  threadId: string,
+): Promise<{ value: unknown; resumable: boolean } | null> {
+  const state = await fetchThreadStateRaw(threadId);
+  if (!state) return null;
+  const tasks = Array.isArray(state?.tasks) ? state.tasks : [];
+  for (const task of tasks) {
+    if (Array.isArray((task as any)?.interrupts) && (task as any).interrupts.length > 0) {
+      const first = (task as any).interrupts[0];
+      return { value: first.value, resumable: first.resumable !== false };
+    }
+  }
+  return null;
+}
+
+export async function getThreadStateAndInterrupt(
+  threadId: string,
+): Promise<{ messages: Message[]; interrupt: { value: unknown; resumable: boolean } | null }> {
+  const state = await fetchThreadStateRaw(threadId);
+  if (!state) return { messages: [], interrupt: null };
+
+  const msgs = state?.values ? (state.values as Record<string, unknown>)?.messages : undefined;
+  const messages = Array.isArray(msgs) && msgs.length > 0
+    ? combineToolCallandResult(normalizeMessages(msgs))
+    : [];
+
+  let interrupt: { value: unknown; resumable: boolean } | null = null;
+  const tasks = Array.isArray(state?.tasks) ? state.tasks : [];
+  for (const task of tasks) {
+    if (Array.isArray((task as any)?.interrupts) && (task as any).interrupts.length > 0) {
+      const first = (task as any).interrupts[0];
+      interrupt = { value: first.value, resumable: first.resumable !== false };
+      break;
+    }
+  }
+
+  return { messages, interrupt };
 }

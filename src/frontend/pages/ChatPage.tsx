@@ -25,10 +25,11 @@ import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
-import { getThreadState } from '../services/agent-rest';
+import { getThreadStateAndInterrupt } from '../services/agent-rest';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useAgentHealth } from '../hooks/useAgentHealth';
 import {
   downloadFile,
   exportAsJSON,
@@ -45,6 +46,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const error = useAppSelector(selectChatsError);
   const debugMode = useAppSelector(selectDebugMode);
   const streamingState = useAppSelector((state) => selectStreamingState(state, threadId));
+  const agentHealth = useAgentHealth();
+  const prevHealthRef = useRef(agentHealth.status);
+  const hasBeenHealthyRef = useRef(false);
 
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({});
@@ -89,8 +93,13 @@ export function ChatPage({ threadId }: { threadId: string }) {
     return typeof u === 'string' && u.length > 0 ? u : 'anonymous';
   }, []);
 
+  const hasStreamError = !!streamingState.error;
+  const isNotStreaming = !streamingState.isLoading;
+  const needsServerRefresh = hasMessages && hasStreamError && isNotStreaming;
+
   useEffect(() => {
-    if (!chatId || hasMessages || hydrating) return;
+    if (!chatId || hydrating) return;
+    if (hasMessages && !needsServerRefresh) return;
 
     const locState = location.state as Record<string, unknown> | null;
     if (locState?.initialPrompt != null) return;
@@ -99,11 +108,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
     let cancelled = false;
     setHydrating(true);
 
-    const statePromise = getThreadState(chatId);
+    const threadPromise = getThreadStateAndInterrupt(chatId);
     const feedbackPromise = getThreadFeedback(chatId, feedbackUserId);
 
-    Promise.all([statePromise, feedbackPromise])
-      .then(([msgs, feedbackMap]) => {
+    Promise.all([threadPromise, feedbackPromise])
+      .then(([{ messages: msgs, interrupt: pendingInterrupt }, feedbackMap]) => {
         if (cancelled) return;
         if (msgs.length > 0) {
           dispatch(updateChat({
@@ -118,11 +127,28 @@ export function ChatPage({ threadId }: { threadId: string }) {
             },
           }));
           thread.setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
+          if (needsServerRefresh) {
+            dispatch(updateStreamingState({
+              chatId,
+              state: { error: null, isLoading: false, isConnected: false },
+            }));
+          }
         }
         if (Object.keys(feedbackMap).length > 0) {
           for (const [msgId, fb] of Object.entries(feedbackMap)) {
             dispatch(setMessageFeedback({ chatId, messageId: msgId, feedback: fb }));
           }
+        }
+        if (pendingInterrupt) {
+          dispatch(updateStreamingState({
+            chatId,
+            state: {
+              pendingInterrupt: {
+                value: pendingInterrupt.value as any,
+                resumable: pendingInterrupt.resumable,
+              },
+            },
+          }));
         }
         setHydrating(false);
       })
@@ -132,7 +158,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
     return () => { cancelled = true; setHydrating(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, feedbackUserId]);
+  }, [chatId, feedbackUserId, needsServerRefresh]);
 
   useEffect(() => {
     if (!chatId || isClientCreatedChat(chatId)) return;
@@ -370,6 +396,78 @@ export function ChatPage({ threadId }: { threadId: string }) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.pendingInterrupt, autoApproveAllTools]);
+
+  // Replay queued HITL decisions when agent recovers from downtime
+  useEffect(() => {
+    const prev = prevHealthRef.current;
+    prevHealthRef.current = agentHealth.status;
+
+    if (agentHealth.status === 'healthy' && !hasBeenHealthyRef.current) {
+      hasBeenHealthyRef.current = true;
+    } else if (prev !== 'healthy' && agentHealth.status === 'healthy' && hasBeenHealthyRef.current) {
+      const currentMsgCount = currentChat?.messages?.length ?? 0;
+      if (currentMsgCount > 0) {
+        let lastUpdateCount = currentMsgCount;
+        const recoveryPoll = setInterval(async () => {
+          try {
+            const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
+
+            if (interrupt) {
+              dispatch(updateChat({ id: threadId, updates: { messages: msgs } }));
+              thread.setMessages(msgs.map((m) => JSON.parse(JSON.stringify(m)) as Message));
+
+              const queueKey = `pending-decision:${threadId}`;
+              const raw = localStorage.getItem(queueKey);
+              if (raw) {
+                const { decisions } = JSON.parse(raw) as { decisions: Array<{ type: 'approve' | 'reject'; message?: string }> };
+                localStorage.removeItem(queueKey);
+                dispatch(updateStreamingState({
+                  chatId: threadId,
+                  state: { error: null, isLoading: false, isConnected: false, pendingInterrupt: null },
+                }));
+                clearInterval(recoveryPoll);
+                thread.resumeWithDecisions(decisions).catch((err) => {
+                  console.error('Queued decision replay failed:', err);
+                });
+              } else {
+                dispatch(updateStreamingState({
+                  chatId: threadId,
+                  state: {
+                    error: null, isLoading: false, isConnected: false,
+                    pendingInterrupt: {
+                      value: interrupt.value as any,
+                      resumable: interrupt.resumable,
+                    },
+                  },
+                }));
+                clearInterval(recoveryPoll);
+              }
+              return;
+            }
+
+            if (msgs.length > lastUpdateCount) {
+              lastUpdateCount = msgs.length;
+              dispatch(updateChat({ id: threadId, updates: { messages: msgs } }));
+              thread.setMessages(msgs.map((m) => JSON.parse(JSON.stringify(m)) as Message));
+              dispatch(updateStreamingState({
+                chatId: threadId,
+                state: { error: null, isLoading: false, isConnected: false, pendingInterrupt: null },
+              }));
+              const last = msgs[msgs.length - 1];
+              const isFinalResponse = last?.type === 'ai' && last.content &&
+                (!Array.isArray((last as any).tool_calls) || (last as any).tool_calls.length === 0);
+              if (isFinalResponse) {
+                clearInterval(recoveryPoll);
+              }
+            }
+          } catch {
+            // agent may still be recovering
+          }
+        }, 5000);
+        setTimeout(() => clearInterval(recoveryPoll), 120000);
+      }
+    }
+  }, [agentHealth.status, threadId, thread, dispatch, currentChat]);
 
   const handleNewChat = useCallback(() => {
     navigate('/');

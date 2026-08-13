@@ -4,7 +4,7 @@ import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Downl
 import type { InterruptInfo } from "../types/deep-agent";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
 import { cn } from "../lib/utils";
 import {
   Dropdown,
@@ -50,8 +50,8 @@ function stripThinkingFromPlainText(text: string): { thinking: string; display: 
   let display = text;
   const patterns: RegExp[] = [
     /<think>([\s\S]*?)<\/think>/gi,
-    /<thinking>([\s\S]*?)<\/thinking>/gi,
     /<redacted_thinking>([\s\S]*?)<\/redacted_thinking>/gi,
+    /<thinking>([\s\S]*?)<\/thinking>/gi,
   ];
   for (const re of patterns) {
     display = display.replace(re, (_full, inner: string) => {
@@ -395,7 +395,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
                 <Pencil className="h-3.5 w-3.5" />
               </button>
             )}
-            <div className="text-sm leading-relaxed [&_p]:mb-1.5! [&_p:last-child]:mb-0!">
+            <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {plain}
               </ReactMarkdown>
@@ -468,18 +468,16 @@ interface AIMessageRendererProps {
   pendingInterrupt?: InterruptInfo | null;
   onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
   onAlwaysAllow?: (toolNames: string[]) => void;
+  globalApprovalIndex?: number;
+  approvalSlotOffset?: number;
+  totalActionRequests?: number;
+  allDecisionsMade?: boolean;
+  onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
 }
 
-export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [approvalSubmitted, setApprovalSubmitted] = useState(false);
   const messageKey = JSON.stringify(message);
-
-  useEffect(() => {
-    if (pendingInterrupt) {
-      setApprovalSubmitted(false);
-    }
-  }, [pendingInterrupt]);
 
   const pendingToolNames = useMemo(
     () => {
@@ -521,6 +519,22 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     });
   };
 
+  const approvalSlotByToolCallId = useMemo(() => {
+    const allToolCalls = (message as any).tool_calls ?? [];
+    const map = new Map<string, number>();
+    let localSlot = 0;
+    for (const tc of allToolCalls) {
+      if (tc.name === 'write_todos') continue;
+      const isApprovable = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !(tc as Record<string, unknown>).content;
+      if (isApprovable) {
+        const key = tc.id ?? `${tc.name}-${localSlot}`;
+        map.set(key, approvalSlotOffset + localSlot);
+        localSlot++;
+      }
+    }
+    return map;
+  }, [message, pendingToolNames, approvalSlotOffset]);
+
   const renderMessage = useMemo(() => {
     const isToolCallStart = message.type === 'ai' && Array.isArray(message?.tool_calls) && message?.tool_calls?.length > 0;
     const isNormalMessage = message.type === 'ai' && (!Array.isArray(message?.tool_calls) || message?.tool_calls?.length === 0);
@@ -537,17 +551,24 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
 
       return (
         <div className="space-y-2 w-full" aria-live="off">
-          {subAgentCalls.map((toolCall, idx) => (
-            <SubAgentIndicator
-              key={`${message.id}-sa-${idx}`}
-              toolCall={toolCall as any}
-              messageId={message.id ?? ''}
-              index={idx}
-              pendingInterrupt={pendingInterrupt}
-              onInterruptResume={onInterruptResume}
-              onAlwaysAllow={onAlwaysAllow}
-            />
-          ))}
+          {subAgentCalls.map((toolCall, idx) => {
+            const tcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
+            const slot = approvalSlotByToolCallId.get(tcId);
+            const isThisCurrent = slot !== undefined && slot === globalApprovalIndex && !allDecisionsMade;
+            return (
+              <SubAgentIndicator
+                key={`${message.id}-sa-${idx}`}
+                toolCall={toolCall as any}
+                messageId={message.id ?? ''}
+                index={idx}
+                pendingInterrupt={pendingInterrupt}
+                onInterruptResume={onInterruptResume}
+                onSingleDecision={totalActionRequests > 1 ? onSingleDecision : undefined}
+                isCurrentApproval={totalActionRequests > 1 ? isThisCurrent : undefined}
+                onAlwaysAllow={onAlwaysAllow}
+              />
+            );
+          })}
 
           {regularCalls.length > 0 && (
             <div className="flex items-start gap-3">
@@ -559,6 +580,10 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                   const itemId = `${message.id}-${idx}`;
                   const isExpanded = expandedItems.has(itemId);
                   const needsApproval = (pendingToolNames.has(toolCall.name) || pendingToolNames.has('task')) && !(toolCall as Record<string, unknown>).content;
+                  const regTcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
+                  const regSlot = approvalSlotByToolCallId.get(regTcId);
+                  const isThisCurrentApproval = regSlot !== undefined && regSlot === globalApprovalIndex && !allDecisionsMade;
+                  const showButtons = totalActionRequests <= 1 ? needsApproval : (needsApproval && isThisCurrentApproval);
 
                   return (
                     <div
@@ -625,15 +650,17 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                             )}
                           </div>
 
-                          {needsApproval && !approvalSubmitted && onInterruptResume && (
+                          {showButtons && onInterruptResume && (
                             <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
                               <button
                                 type="button"
                                 autoFocus
                                 onClick={() => {
-                                  setApprovalSubmitted(true);
-                                  const count = ((pendingInterrupt?.value as any)?.action_requests ?? []).length || 1;
-                                  onInterruptResume(Array.from({ length: count }, () => ({ type: 'approve' as const })));
+                                  if (totalActionRequests > 1 && onSingleDecision) {
+                                    onSingleDecision({ type: 'approve' });
+                                  } else {
+                                    onInterruptResume?.([{ type: 'approve' }]);
+                                  }
                                 }}
                                 aria-label={`Approve tool call: ${toolCall.name}`}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
@@ -645,9 +672,11 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setApprovalSubmitted(true);
-                                  const count = ((pendingInterrupt?.value as any)?.action_requests ?? []).length || 1;
-                                  onInterruptResume(Array.from({ length: count }, () => ({ type: 'reject' as const, message: 'User rejected this action.' })));
+                                  if (totalActionRequests > 1 && onSingleDecision) {
+                                    onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
+                                  } else {
+                                    onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
+                                  }
                                 }}
                                 aria-label={`Reject tool call: ${toolCall.name}`}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
@@ -658,10 +687,12 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setApprovalSubmitted(true);
-                                  const count = ((pendingInterrupt?.value as any)?.action_requests ?? []).length || 1;
                                   onAlwaysAllow?.([toolCall.name]);
-                                  onInterruptResume(Array.from({ length: count }, () => ({ type: 'approve' as const })));
+                                  if (totalActionRequests > 1 && onSingleDecision) {
+                                    onSingleDecision({ type: 'approve' });
+                                  } else {
+                                    onInterruptResume?.([{ type: 'approve' }]);
+                                  }
                                 }}
                                 aria-label={`Always allow tool: ${toolCall.name}`}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
@@ -694,7 +725,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
 
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems, approvalSubmitted, pendingInterrupt, onInterruptResume, onAlwaysAllow]);
+  }, [messageKey, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId]);
 
   return (
     <div className="space-y-2 w-full">
@@ -765,6 +796,57 @@ export function ChatMessagesView({
   const prevPendingInterrupt = useRef(pendingInterrupt);
   const prevIsLoading = useRef(isLoading);
   const [srAnnouncement, setSrAnnouncement] = useState('');
+
+  const globalActionRequests = useMemo(() => {
+    const v = pendingInterrupt?.value;
+    return (typeof v === 'object' && v !== null) ? ((v as any).action_requests ?? []) : [];
+  }, [pendingInterrupt]);
+
+  const [globalDecisions, setGlobalDecisions] = useState<Array<{ type: 'approve' | 'reject'; message?: string } | null>>([]);
+  const [globalApprovalIndex, setGlobalApprovalIndex] = useState(0);
+
+  useEffect(() => {
+    if (globalActionRequests.length > 0) {
+      setGlobalDecisions(new Array(globalActionRequests.length).fill(null));
+      setGlobalApprovalIndex(0);
+    }
+  }, [globalActionRequests]);
+
+  const globalAllDecisionsMade = globalActionRequests.length > 0 && globalDecisions.every(d => d !== null);
+
+  const handleGlobalSingleDecision = useCallback((decision: { type: 'approve' | 'reject'; message?: string }) => {
+    const newDecisions = [...globalDecisions];
+    newDecisions[globalApprovalIndex] = decision;
+    setGlobalDecisions(newDecisions);
+
+    const nextIndex = globalApprovalIndex + 1;
+    if (nextIndex >= globalActionRequests.length) {
+      onInterruptResume?.(newDecisions.filter(Boolean) as Array<{ type: 'approve' | 'reject'; message?: string }>);
+    } else {
+      setGlobalApprovalIndex(nextIndex);
+    }
+  }, [globalDecisions, globalApprovalIndex, globalActionRequests.length, onInterruptResume]);
+
+  const pendingToolNames = useMemo(() => {
+    const requests = globalActionRequests;
+    return new Set(requests.map((r: any) => r.name));
+  }, [globalActionRequests]);
+
+  const approvalSlotOffsets = useMemo(() => {
+    const offsets = new Map<number, number>();
+    let runningOffset = 0;
+    messages.forEach((m, idx) => {
+      offsets.set(idx, runningOffset);
+      if (m.type === 'ai' && Array.isArray((m as any).tool_calls)) {
+        for (const tc of (m as any).tool_calls) {
+          if (tc.name === 'write_todos') continue;
+          const isApprovable = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !(tc as Record<string, unknown>).content;
+          if (isApprovable) runningOffset++;
+        }
+      }
+    });
+    return offsets;
+  }, [messages, pendingToolNames]);
 
   useEffect(() => {
     if (prevPendingInterrupt.current && !pendingInterrupt) {
@@ -903,6 +985,11 @@ export function ChatMessagesView({
                     pendingInterrupt={pendingInterrupt}
                     onInterruptResume={onInterruptResume}
                     onAlwaysAllow={onAlwaysAllow}
+                    globalApprovalIndex={globalApprovalIndex}
+                    approvalSlotOffset={approvalSlotOffsets.get(messageIndex) ?? 0}
+                    totalActionRequests={globalActionRequests.length}
+                    allDecisionsMade={globalAllDecisionsMade}
+                    onSingleDecision={handleGlobalSingleDecision}
                   />
                   {isLastAiInTurn && (
                     <div className="pl-11 flex items-center gap-0.5 mt-1">

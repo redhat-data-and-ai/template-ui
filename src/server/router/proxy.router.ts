@@ -8,14 +8,9 @@ function getAgentHost(): string {
   return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
 }
 
-/** Allowlist regex for thread IDs */
-const THREAD_ID_RE = /^[\w-]{1,128}$/;
-/** Allowlist regex for wildcard proxy paths */
-const PROXY_PATH_RE = /^[\w\-/.]{1,512}$/;
-
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
-const CACHE_TTL_MS = 30_000; // 30s
+const CACHE_TTL_MS = 3_000; // 3s — short TTL for recovery polling compatibility
 const CACHE_MAX_ENTRIES = 50;
 
 function getCachedThreadState(threadId: string): string | null {
@@ -345,10 +340,6 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
       const { message, thread_id, user_id, resume: isResume, memories, rules } = request.body;
 
-      if (typeof thread_id !== 'string' || !THREAD_ID_RE.test(thread_id)) {
-        return reply.status(400).send({ error: 'Invalid thread_id' });
-      }
-
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'X-Trace-ID': traceId,
@@ -395,7 +386,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         if (isResume) {
           runBody.command = { resume: message };
         } else {
-          runBody.input = { messages: [{ role: 'human', content: message }] };
+          runBody.input = { messages: [{ role: 'human', content: message, id: randomUUID() }] };
         }
 
         const configurable: Record<string, unknown> = {};
@@ -451,9 +442,14 @@ async function proxyRoutes(fastify: FastifyInstance) {
           clientGone = true;
           reader.cancel().catch(() => {});
         });
+        reply.raw.on('error', () => {
+          clientGone = true;
+          reader.cancel().catch(() => {});
+        });
 
         let hasEmittedTextTokens = false;
         let interruptEmittedFromStream = false;
+        let streamEndedNormally = false;
         // Per-message tracking for draft_discard (suppress text from tool-call messages)
         let currentStreamingMsgId = '';
         let textEmittedForCurrentMsg = false;
@@ -461,8 +457,18 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         try {
           while (!clientGone) {
-            const { done, value } = await reader.read();
-            if (done) break;
+            let done: boolean;
+            let value: Uint8Array | undefined;
+            try {
+              ({ done, value } = await reader.read());
+            } catch {
+              fastify.log.warn({ traceId }, 'Agent stream connection lost — agent may have been killed');
+              break;
+            }
+            if (done) {
+              streamEndedNormally = true;
+              break;
+            }
 
             buffer += decoder.decode(value, { stream: true });
 
@@ -659,7 +665,18 @@ async function proxyRoutes(fastify: FastifyInstance) {
             fastify.log.warn({ traceId, err }, 'Failed to check thread state for interrupts');
           }
 
-          fastify.log.info({ traceId, chunkId }, 'Stream complete');
+          if (!streamEndedNormally) {
+            fastify.log.warn({ traceId }, 'Agent stream ended abnormally — signalling error to frontend');
+            const errChunk = {
+              type: 'error',
+              message: 'Agent connection lost during streaming. Recovery in progress.',
+              chunk_id: chunkId,
+            };
+            reply.raw.write(`data: ${JSON.stringify(errChunk)}\n\n`);
+            chunkId++;
+          }
+
+          fastify.log.info({ traceId, chunkId, streamEndedNormally }, 'Stream complete');
           invalidateThreadStateCache(thread_id);
           reply.raw.end('data: [DONE]\n\n');
         }
@@ -689,11 +706,6 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const cfg = getSettings();
       const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
       const path = (request.params as any)['*'];
-
-      if (typeof path !== 'string' || !PROXY_PATH_RE.test(path) || path.includes('..')) {
-        return reply.status(400).send({ error: 'Invalid path' });
-      }
-
       const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
 
       if (refreshFailed) {

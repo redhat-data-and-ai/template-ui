@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Message } from '@langchain/langgraph-sdk';
 import { AIMessageRenderer } from './ChatMessagesView';
@@ -104,10 +104,10 @@ describe('AIMessageRenderer — HITL approval (production path for HITLInterrupt
     expect(decisions.every((d: { type: string }) => d.type === 'approve')).toBe(true);
   });
 
-  it('hides approval buttons after one of them is clicked (approvalSubmitted)', async () => {
+  it('hides approval buttons when pendingInterrupt is cleared (post-approval)', () => {
     const msg = makeMsg({ tool_calls: [CREATE_PR_TOOL_CALL] });
 
-    render(
+    const { rerender } = render(
       <AIMessageRenderer
         message={msg}
         pendingInterrupt={hitlInterrupt}
@@ -115,11 +115,18 @@ describe('AIMessageRenderer — HITL approval (production path for HITLInterrupt
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /approve tool call: github_create_pr/i }));
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /approve tool call: github_create_pr/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /reject tool call: github_create_pr/i })).not.toBeInTheDocument();
-    });
+    expect(screen.queryByRole('button', { name: /approve tool call: github_create_pr/i })).toBeInTheDocument();
+
+    rerender(
+      <AIMessageRenderer
+        message={msg}
+        pendingInterrupt={null}
+        onInterruptResume={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /approve tool call: github_create_pr/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /reject tool call: github_create_pr/i })).not.toBeInTheDocument();
   });
 
   it('does NOT render approval buttons when pendingInterrupt is null', () => {
