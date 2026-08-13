@@ -89,8 +89,8 @@ export default function App() {
       <AnnouncementBanner />
       <AppLayout>
         <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/chat" element={<Navigate to="/" replace />} />
+          <Route path="/" element={<Navigate to="/chat" replace />} />
+          <Route path="/chat" element={<HomePage />} />
           <Route path="/chat/:threadId" element={<ChatRoutePage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
