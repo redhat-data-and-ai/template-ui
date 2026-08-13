@@ -41,10 +41,10 @@ function persist(state: PersonalizationState) {
   }
 }
 
-function apiCreateMemory(content: string) {
+function apiCreateMemory(id: string, content: string) {
   authenticatedFetch(buildAgentApiUrl('/personalization/memories'), {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ id, content }),
   }).catch(() => {});
 }
 
@@ -54,10 +54,10 @@ function apiDeleteMemory(id: string) {
   }).catch(() => {});
 }
 
-function apiCreateRule(content: string, isActive: boolean) {
+function apiCreateRule(id: string, content: string, isActive: boolean) {
   authenticatedFetch(buildAgentApiUrl('/personalization/rules'), {
     method: 'POST',
-    body: JSON.stringify({ content, is_active: isActive }),
+    body: JSON.stringify({ id, content, is_active: isActive }),
   }).catch(() => {});
 }
 
@@ -72,13 +72,14 @@ const personalizationSlice = createSlice({
   initialState: loadState(),
   reducers: {
     addMemory(state, action: PayloadAction<string>) {
+      const id = uuidv4();
       state.memories.unshift({
-        id: uuidv4(),
+        id,
         content: action.payload,
         createdAt: new Date().toISOString(),
       });
       persist(state);
-      apiCreateMemory(action.payload);
+      apiCreateMemory(id, action.payload);
     },
     removeMemory(state, action: PayloadAction<string>) {
       state.memories = state.memories.filter((m) => m.id !== action.payload);
@@ -93,14 +94,15 @@ const personalizationSlice = createSlice({
     },
 
     addRule(state, action: PayloadAction<string>) {
+      const id = uuidv4();
       state.rules.unshift({
-        id: uuidv4(),
+        id,
         content: action.payload,
         isActive: true,
         createdAt: new Date().toISOString(),
       });
       persist(state);
-      apiCreateRule(action.payload, true);
+      apiCreateRule(id, action.payload, true);
     },
     updateRule(state, action: PayloadAction<{ id: string; content: string }>) {
       const rule = state.rules.find((r) => r.id === action.payload.id);
