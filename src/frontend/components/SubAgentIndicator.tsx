@@ -16,6 +16,8 @@ interface SubAgentIndicatorProps {
   readonly index: number;
   readonly pendingInterrupt?: InterruptInfo | null;
   readonly onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  readonly onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
+  readonly isCurrentApproval?: boolean;
   readonly onAlwaysAllow?: (toolNames: string[]) => void;
 }
 
@@ -44,7 +46,7 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onAlwaysAllow }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const name = extractSubAgentName(toolCall);
@@ -66,7 +68,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
       setIsApproving(false);
       setExpanded(true);
     }
-  }, [needsApproval]);
+  }, [needsApproval, pendingInterrupt]);
 
   return (
     <div className="flex items-start gap-3">
@@ -151,14 +153,18 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                 </div>
               )}
 
-              {needsApproval && !isApproving && onInterruptResume && (
+              {needsApproval && !isApproving && (isCurrentApproval !== false) && (onSingleDecision || onInterruptResume) && (
                 <div role="alert" aria-live="assertive" aria-label={`Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
                   <button
                     type="button"
                     autoFocus
                     onClick={() => {
                       setIsApproving(true);
-                      onInterruptResume([{ type: 'approve' }]);
+                      if (onSingleDecision) {
+                        onSingleDecision({ type: 'approve' });
+                      } else {
+                        onInterruptResume?.([{ type: 'approve' }]);
+                      }
                     }}
                     aria-label={`Approve sub-agent action: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
@@ -171,7 +177,11 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     type="button"
                     onClick={() => {
                       setIsApproving(true);
-                      onInterruptResume([{ type: 'reject', message: 'User rejected this action.' }]);
+                      if (onSingleDecision) {
+                        onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
+                      } else {
+                        onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
+                      }
                     }}
                     aria-label={`Reject sub-agent action: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
@@ -184,7 +194,11 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     onClick={() => {
                       setIsApproving(true);
                       onAlwaysAllow?.([name]);
-                      onInterruptResume([{ type: 'approve' }]);
+                      if (onSingleDecision) {
+                        onSingleDecision({ type: 'approve' });
+                      } else {
+                        onInterruptResume?.([{ type: 'approve' }]);
+                      }
                     }}
                     aria-label={`Always allow sub-agent: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"

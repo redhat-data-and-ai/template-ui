@@ -43,7 +43,7 @@ export type StreamCallback = {
   onDraftDiscard?: () => void;
   onMessage: (message: Message) => void;
   onInterrupt: (interrupt: InterruptPayload) => void;
-  onError: (error: Error) => void;
+  onError: (error: Error) => void | Promise<void>;
   onStatusChange: (status: StreamStatus) => void;
   onDone: () => void;
   onMcpStatus?: (event: McpStreamStatusEvent) => void;
@@ -59,6 +59,8 @@ export class StreamingManager {
 
   private processedChunkIds = new Set<number>();
 
+  private streamError: Error | null = null;
+
   private setStatus(next: StreamStatus): void {
     this.status = next;
   }
@@ -69,7 +71,8 @@ export class StreamingManager {
         case 'done':
           break;
         case 'error':
-          callbacks.onError(new Error(event.message));
+          this.streamError = new Error(event.message);
+          void callbacks.onError(this.streamError);
           break;
         case 'mcp_status': {
           callbacks.onMcpStatus?.({
@@ -109,6 +112,7 @@ export class StreamingManager {
     this.cancel();
     this.processor.reset();
     this.processedChunkIds.clear();
+    this.streamError = null;
 
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
@@ -185,9 +189,14 @@ export class StreamingManager {
         this.handleEvents(this.processor.feed(flushText), callbacks);
       }
 
-      this.setStatus('idle');
-      callbacks.onStatusChange('idle');
-      callbacks.onDone();
+      if (this.streamError) {
+        this.setStatus('error');
+        callbacks.onStatusChange('error');
+      } else {
+        this.setStatus('idle');
+        callbacks.onStatusChange('idle');
+        callbacks.onDone();
+      }
     } catch (error: unknown) {
       let err: Error;
       if (error instanceof Error) {
@@ -208,7 +217,7 @@ export class StreamingManager {
       } else {
         this.setStatus('error');
         callbacks.onStatusChange('error');
-        callbacks.onError(err);
+        await callbacks.onError(err);
       }
     } finally {
       reader?.releaseLock?.();

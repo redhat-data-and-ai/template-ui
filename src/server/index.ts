@@ -2,7 +2,25 @@ import { shutdownTracing, startTracing } from "./tracing.js";
 
 startTracing();
 
+function isNetworkError(err: unknown): boolean {
+  if (err instanceof Error && 'code' in err && typeof (err as NodeJS.ErrnoException).code === 'string') {
+    const code = (err as NodeJS.ErrnoException).code!;
+    if (code.startsWith('UND_ERR') || code === 'ECONNREFUSED' || code === 'ECONNRESET' ||
+        code === 'EPIPE' || code === 'ETIMEDOUT' || code === 'EAI_AGAIN') {
+      return true;
+    }
+  }
+  const msg = err instanceof Error ? (err.message || '') : String(err);
+  return msg.includes('ECONNREFUSED') || msg.includes('fetch failed') ||
+    msg.includes('socket hang up') || msg.includes('network') || msg.includes('terminated') ||
+    msg.includes('aborted') || msg.includes('UND_ERR');
+}
+
 process.on("uncaughtException", (error) => {
+  if (isNetworkError(error)) {
+    console.warn("[Uncaught Exception] Network error (agent may be down):", error.message);
+    return;
+  }
   console.error("[Uncaught Exception]", {
     message: error.message,
     stack: error.stack,
@@ -14,6 +32,11 @@ process.on("uncaughtException", (error) => {
 });
 
 process.on("unhandledRejection", (reason, promise) => {
+  if (isNetworkError(reason)) {
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    console.warn("[Unhandled Rejection] Network error (agent may be down):", msg);
+    return;
+  }
   console.error("[Unhandled Rejection]", {
     reason,
     promise,
