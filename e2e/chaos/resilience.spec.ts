@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mountConfig } from '../helpers/config-mount';
-import { mockAgentStream, mockStreamError, mockThreadState, tokenChunk } from '../helpers/sse-mock';
+import { mockAgentHealthy, mockAgentStream, mockStreamError, mockThreadState, tokenChunk } from '../helpers/sse-mock';
 import { waitForAnnouncement } from '../helpers/wait';
 import { HomePage } from '../page-objects/HomePage';
 import { ChatPage } from '../page-objects/ChatPage';
@@ -24,7 +24,6 @@ import { ChatPage } from '../page-objects/ChatPage';
  */
 
 test.describe('Chaos: resilience', () => {
-  test.setTimeout(180_000);
   // ── 1. SSE drops mid-response ──────────────────────────────────────────────
   //
   // Two token chunks are delivered then the connection closes without [DONE].
@@ -76,7 +75,7 @@ test.describe('Chaos: resilience', () => {
     page,
   }) => {
     await mountConfig(page, { title: '503 Recoverable Test' });
-    // Every stream request returns 503 — all retry attempts will fail.
+    await mockAgentHealthy(page);
     await mockStreamError(page, 503);
     await mockThreadState(page);
 
@@ -104,6 +103,7 @@ test.describe('Chaos: resilience', () => {
     page,
   }) => {
     await mountConfig(page, { title: '500 Mid-Conversation Test' });
+    await mockAgentHealthy(page);
     await mockThreadState(page);
 
     let callCount = 0;
@@ -188,9 +188,10 @@ test.describe('Chaos: resilience', () => {
     ]);
 
     try {
-      // Configure both "users": healthy config, 502 on the stream endpoint.
+      // Configure both "users": healthy config, healthy agent, 502 on the stream endpoint.
       for (const p of [pageA, pageB]) {
         await mountConfig(p, { title: '502 Flap Test' });
+        await mockAgentHealthy(p);
         await mockThreadState(p);
         await p.route('**/api/proxy/agent/v1/stream', (route) =>
           route.fulfill({ status: 502, body: 'Bad Gateway' }),
@@ -234,6 +235,7 @@ test.describe('Chaos: resilience', () => {
     page,
   }) => {
     await mountConfig(page, { title: 'Stalled Stream Test' });
+    await mockAgentHealthy(page);
     await mockThreadState(page);
 
     // SSE headers present but body is completely empty — server closes immediately.
@@ -313,6 +315,7 @@ test.describe('Chaos: resilience', () => {
     page,
   }) => {
     await mountConfig(page, { title: 'Network Flap Test' });
+    await mockAgentHealthy(page);
     await mockThreadState(page);
 
     let attempts = 0;
@@ -359,6 +362,7 @@ test.describe('Chaos: resilience', () => {
     page,
   }) => {
     await mountConfig(page, { title: 'Empty Response Test' });
+    await mockAgentHealthy(page);
     await mockThreadState(page);
 
     // [DONE] fires with no preceding token events — zero content delivered.

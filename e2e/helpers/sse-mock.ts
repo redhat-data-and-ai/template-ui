@@ -36,6 +36,17 @@ export async function mockAgentStream(page: Page, responseText: string): Promise
   });
 }
 
+/** Mock the agent health endpoint to return healthy so retry logic runs normally. */
+export async function mockAgentHealthy(page: Page): Promise<void> {
+  await page.route('**/api/health/agent', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'healthy' }),
+    }),
+  );
+}
+
 /** Intercept thread state requests (used when navigating to an existing chat). */
 export async function mockThreadState(page: Page): Promise<void> {
   await page.route('**/api/proxy/agent/threads/*/state', (route) =>
