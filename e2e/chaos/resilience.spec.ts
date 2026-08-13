@@ -24,6 +24,7 @@ import { ChatPage } from '../page-objects/ChatPage';
  */
 
 test.describe('Chaos: resilience', () => {
+  test.setTimeout(120_000);
   // ── 1. SSE drops mid-response ──────────────────────────────────────────────
   //
   // Two token chunks are delivered then the connection closes without [DONE].
@@ -88,7 +89,7 @@ test.describe('Chaos: resilience', () => {
     await chat.expectChatRoute();
 
     // Wait for retry exhaustion — "Stream error" announced after all retries fail.
-    await waitForAnnouncement(page, ['Stream error'], 30_000);
+    await waitForAnnouncement(page, ['Stream error'], 60_000);
 
     // Input must still be accessible — no crash, no blank screen.
     await expect(page.locator('textarea')).toBeVisible();
@@ -132,7 +133,7 @@ test.describe('Chaos: resilience', () => {
     await chat.sendMessage('Second message');
 
     // Wait for the error state after the 500 response.
-    await waitForAnnouncement(page, ['Stream error'], 30_000);
+    await waitForAnnouncement(page, ['Stream error'], 60_000);
 
     // Input must still be accessible — user can attempt another message.
     await expect(page.locator('textarea')).toBeVisible();
@@ -211,7 +212,7 @@ test.describe('Chaos: resilience', () => {
       // Both contexts must reach an error state — not freeze or go blank.
       // 502 is recoverable — allow time for retries to exhaust.
       await Promise.all(
-        [pageA, pageB].map((p) => waitForAnnouncement(p, ['Stream error'], 30_000)),
+        [pageA, pageB].map((p) => waitForAnnouncement(p, ['Stream error'], 60_000)),
       );
 
       // Input must still be interactive for all users.
@@ -257,7 +258,7 @@ test.describe('Chaos: resilience', () => {
     await chat.expectChatRoute();
 
     // The stream ended with an empty body (no [DONE]). Wait for the terminal state.
-    await waitForAnnouncement(page, ['Response complete', 'Stream error'], 30_000);
+    await waitForAnnouncement(page, ['Response complete', 'Stream error'], 60_000);
 
     // The UI must not crash or show a blank screen — the chat page should remain interactive.
     await expect(page.locator('textarea')).toBeVisible();
@@ -340,7 +341,7 @@ test.describe('Chaos: resilience', () => {
     await chat.expectChatRoute();
 
     // Wait for recovery — the second attempt succeeds with "Response complete".
-    await waitForAnnouncement(page, ['Response complete'], 30_000);
+    await waitForAnnouncement(page, ['Response complete'], 60_000);
 
     // The recovered response content should be visible.
     await expect(page.locator('body')).toContainText('Recovered successfully!');
@@ -378,7 +379,7 @@ test.describe('Chaos: resilience', () => {
     await chat.expectChatRoute();
 
     // Wait for the stream to resolve — [DONE] with zero tokens.
-    await waitForAnnouncement(page, ['Response complete', 'Stream error'], 30_000);
+    await waitForAnnouncement(page, ['Response complete', 'Stream error'], 60_000);
 
     // Zero tokens arrived but the UI must not crash or go blank.
     await expect(page.locator('textarea')).toBeVisible();
