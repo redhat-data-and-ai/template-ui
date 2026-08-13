@@ -20,7 +20,11 @@ vi.mock("@mcp-ui/client", () => ({
       sendResourceListChanged: vi.fn(),
       sendPromptListChanged: vi.fn(),
     }));
-    return <div data-testid="mock-app-renderer" />;
+    return (
+      <div data-testid="mock-app-renderer">
+        <iframe title="mcp-app-sandbox" />
+      </div>
+    );
   }),
 }));
 
@@ -212,23 +216,29 @@ describe("McpAppHost", () => {
     });
   });
 
-  it("applies size-changed width and height within flex max bounds", async () => {
+  it("applies size-changed height and keeps host/iframe width fluid", async () => {
     renderWithStore(<McpAppHost toolName="show_chart" mcpApp={sampleApp} />);
     await waitFor(() => expect(appRendererSpy).toHaveBeenCalled());
     const props = appRendererSpy.mock.calls[0][0] as {
       onSizeChanged: (params: { height?: number; width?: number }) => void;
     };
     const frame = screen.getByTestId("mock-app-renderer").parentElement;
+    const iframe = screen.getByTitle("mcp-app-sandbox");
     expect(frame).toBeTruthy();
 
     props.onSizeChanged({ width: 640, height: 500 });
+    // AppFrame sets iframe px width after invoking onSizeChanged (same turn).
+    iframe.style.width = "640px";
     await waitFor(() => {
-      expect(frame).toHaveStyle({ width: "640px", height: "500px" });
+      expect(frame).toHaveStyle({ width: "100%", height: "500px" });
+      expect(iframe).toHaveStyle({ width: "100%" });
     });
 
     props.onSizeChanged({ width: 99999, height: 99999 });
+    iframe.style.width = "99999px";
     await waitFor(() => {
-      expect(frame).toHaveStyle({ width: "4096px", height: "1200px" });
+      expect(frame).toHaveStyle({ width: "100%", height: "1200px" });
+      expect(iframe).toHaveStyle({ width: "100%" });
     });
   });
 
