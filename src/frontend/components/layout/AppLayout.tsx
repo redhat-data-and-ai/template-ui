@@ -257,9 +257,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     async (chatId: string) => {
       releaseStreamingManager(chatId);
       dispatch(deleteChat(chatId));
+      chatStorage.clearChats();
       const remaining = chats.filter((c) => c.id !== chatId);
       const ok = await deleteThread(chatId).catch(() => false);
-      dispatch(addToast({ title: ok ? 'Chat deleted' : 'Chat removed locally but server delete failed', variant: ok ? 'success' : 'warning' }));
+      if (ok) {
+        dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
+      } else {
+        dispatch(addToast({ title: 'Chat cleared locally but server delete failed', variant: 'warning' }));
+      }
       if (location.pathname === `/chat/${chatId}`) {
         navigate(remaining.length > 0 ? `/chat/${remaining[0].id}` : '/');
       }
@@ -274,8 +279,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     chatStorage.clearChats();
     const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
     const failures = results.filter((r) => !r).length;
-    if (failures > 0) {
-      dispatch(addToast({ title: `${failures} chat${failures !== 1 ? 's' : ''} failed to delete on server`, variant: 'warning' }));
+    if (failures > 0 && failures < ids.length) {
+      dispatch(addToast({ title: `${ids.length - failures} chats deleted, ${failures} failed on server`, variant: 'warning' }));
+    } else if (failures === ids.length) {
+      dispatch(addToast({ title: 'Chats cleared locally but server deletion failed', variant: 'warning' }));
     } else {
       dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     }

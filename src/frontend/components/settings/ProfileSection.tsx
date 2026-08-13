@@ -23,13 +23,12 @@ export function ProfileSection() {
   const handleDeleteAll = async () => {
     const ids = chats.map((c) => c.id);
     ids.forEach((id) => releaseStreamingManager(id));
-
-    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
-    const failures = results.filter((r) => !r).length;
-
     dispatch(clearAllChats());
     chatStorage.clearChats();
     setConfirmDelete(false);
+
+    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
+    const failures = results.filter((r) => !r).length;
 
     if (failures > 0 && failures < ids.length) {
       dispatch(addToast({ title: `${ids.length - failures} chats deleted, ${failures} failed on server`, variant: 'warning' }));
