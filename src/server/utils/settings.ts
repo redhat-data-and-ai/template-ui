@@ -13,6 +13,7 @@ interface CspConfig {
   connect_src: string[];
   font_src: string[];
   object_src: string[];
+  frame_src: string[];
   frame_ancestors: string[];
 }
 
@@ -100,9 +101,15 @@ interface BrandingConfig {
   };
 }
 
+interface McpAppsFeaturesConfig {
+  /** When true, serve the MCP Apps sandbox proxy page. */
+  enabled: boolean;
+}
+
 interface FeaturesConfig {
   debug_mode_default: boolean;
   auth_enabled: boolean;
+  mcp_apps: McpAppsFeaturesConfig;
 }
 
 interface AgentConfig {
@@ -156,6 +163,9 @@ const DEFAULTS: UISettings = {
   features: {
     debug_mode_default: false,
     auth_enabled: true,
+    mcp_apps: {
+      enabled: true,
+    },
   },
   agent: {
     endpoint: "",
@@ -183,6 +193,7 @@ const DEFAULTS: UISettings = {
         connect_src: ["'self'"],
         font_src: ["'self'", "data:"],
         object_src: ["'none'"],
+        frame_src: ["'self'"],
         frame_ancestors: ["'none'"],
       },
       cross_origin_embedder_policy: false,
@@ -308,6 +319,12 @@ function validateConfig(config: UISettings): void {
   if (typeof config.features.auth_enabled !== "boolean") {
     throw new Error("Config validation error: features.auth_enabled must be boolean");
   }
+  if (!config.features.mcp_apps || typeof config.features.mcp_apps !== "object") {
+    throw new Error("Config validation error: features.mcp_apps must be an object");
+  }
+  if (typeof config.features.mcp_apps.enabled !== "boolean") {
+    throw new Error("Config validation error: features.mcp_apps.enabled must be boolean");
+  }
 
   // Agent config validation
   if (config.agent.endpoint && !isValidUrl(config.agent.endpoint)) {
@@ -389,6 +406,12 @@ function applyEnvOverrides(config: UISettings): void {
   if (process.env.FEATURE_DEBUG_MODE_DEFAULT !== undefined) {
     config.features.debug_mode_default = process.env.FEATURE_DEBUG_MODE_DEFAULT === "true";
   }
+  if (!config.features.mcp_apps) {
+    config.features.mcp_apps = { ...DEFAULTS.features.mcp_apps };
+  }
+  if (process.env.FEATURE_MCP_APPS_ENABLED !== undefined) {
+    config.features.mcp_apps.enabled = process.env.FEATURE_MCP_APPS_ENABLED === "true";
+  }
   // Agent overrides
   if (process.env.AGENT_ENDPOINT) {
     config.agent.endpoint = process.env.AGENT_ENDPOINT;
@@ -456,6 +479,9 @@ function applyEnvOverrides(config: UISettings): void {
   if (process.env.CSP_CONNECT_SRC) {
     config.security.helmet.csp.connect_src = process.env.CSP_CONNECT_SRC.split(' ');
   }
+  if (process.env.CSP_FRAME_SRC) {
+    config.security.helmet.csp.frame_src = process.env.CSP_FRAME_SRC.split(' ');
+  }
 
   // Security overrides - Rate limit
   if (process.env.RATE_LIMIT_MAX) {
@@ -514,6 +540,14 @@ export function getSettings(): UISettings {
 
   // Apply environment variable overrides
   applyEnvOverrides(_settings);
+
+  // Backfill keys added after older config files were written
+  if (!_settings.security.helmet.csp.frame_src?.length) {
+    _settings.security.helmet.csp.frame_src = [...DEFAULTS.security.helmet.csp.frame_src];
+  }
+  if (!_settings.features.mcp_apps) {
+    _settings.features.mcp_apps = { ...DEFAULTS.features.mcp_apps };
+  }
 
   // Validate the final config
   validateConfig(_settings);

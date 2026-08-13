@@ -28,6 +28,7 @@ import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
 import { getThreadState } from '@/services/agent-rest';
+import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
 
 function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
   const raw = interrupt.value as string | HITLInterruptValue;
@@ -243,7 +244,14 @@ export function useStreamingAPI(threadId: string) {
   );
 
   const submit = useCallback(
-    async ({ messages: submitted }: { messages: Message[] }) => {
+    async ({
+      messages: submitted,
+      mcpModelContext,
+    }: {
+      messages: Message[];
+      /** One-shot MCP App context (ui/update-model-context); not stored in the chat bubble. */
+      mcpModelContext?: string | null;
+    }) => {
       const manager = managerRef.current;
       if (!manager || !threadId) return;
 
@@ -270,7 +278,10 @@ export function useStreamingAPI(threadId: string) {
       dispatch(updateChat({ id: threadId, updates: { messages: clones } }));
       chatStorage.saveChatByThreadId(threadId, clones);
 
-      const messageText = serializeLastMessage(clones);
+      const messageText = mergeMessageWithMcpModelContext(
+        serializeLastMessage(clones),
+        mcpModelContext,
+      );
       if (messageText === '') return;
 
       const token = typeof window.USER_DATA.accessToken === 'string' ? window.USER_DATA.accessToken : undefined;
@@ -421,6 +432,8 @@ export function useStreamingAPI(threadId: string) {
                     chatId: threadId,
                     toolCallId: m.tool_call_id,
                     content: m.content,
+                    mcpApp: (m as { mcpApp?: Record<string, unknown> }).mcpApp,
+                    artifact: (m as { artifact?: unknown }).artifact,
                   }),
                 );
                 dispatch(
@@ -658,7 +671,15 @@ export function useStreamingAPI(threadId: string) {
             return;
           }
           if (m.type === 'tool') {
-            dispatch(mergeToolResult({ chatId: threadId, toolCallId: m.tool_call_id, content: m.content }));
+            dispatch(
+              mergeToolResult({
+                chatId: threadId,
+                toolCallId: m.tool_call_id,
+                content: m.content,
+                mcpApp: (m as { mcpApp?: Record<string, unknown> }).mcpApp,
+                artifact: (m as { artifact?: unknown }).artifact,
+              }),
+            );
             dispatch(updateStreamingState({ chatId: threadId, state: { activeSubAgent: null } }));
           }
         },
@@ -773,6 +794,8 @@ export function useStreamingAPI(threadId: string) {
                   chatId: threadId,
                   toolCallId: m.tool_call_id,
                   content: m.content,
+                  mcpApp: (m as { mcpApp?: Record<string, unknown> }).mcpApp,
+                  artifact: (m as { artifact?: unknown }).artifact,
                 }),
               );
               return;

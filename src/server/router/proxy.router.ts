@@ -71,6 +71,46 @@ function extractText(content: unknown): string {
 }
 
 /**
+ * Extract a generic MCP Apps host payload from a LangGraph tool message.
+ * Prefer top-level mcpApp (agent serialization), then artifact / kwargs.
+ */
+function extractMcpApp(msg: Record<string, any>): Record<string, unknown> | undefined {
+  const candidates = [
+    msg.mcpApp,
+    msg.mcp_app,
+    msg.artifact?.mcp_app,
+    msg.artifact?.mcpApp,
+    msg.additional_kwargs?.mcpApp,
+    msg.additional_kwargs?.mcp_app,
+    msg.response_metadata?.mcpApp,
+    msg.response_metadata?.mcp_app,
+  ];
+  for (const value of candidates) {
+    if (value && typeof value === 'object' && typeof (value as any).resourceUri === 'string') {
+      return value as Record<string, unknown>;
+    }
+  }
+  return undefined;
+}
+
+function buildToolMessageContent(msg: Record<string, any>): Record<string, unknown> {
+  const content: Record<string, unknown> = {
+    type: 'tool',
+    content: extractText(msg.content) || JSON.stringify(msg.content ?? ''),
+    tool_call_id: msg.tool_call_id ?? '',
+    name: msg.name ?? 'unknown',
+  };
+  if (msg.artifact != null) {
+    content.artifact = msg.artifact;
+  }
+  const mcpApp = extractMcpApp(msg);
+  if (mcpApp) {
+    content.mcpApp = mcpApp;
+  }
+  return content;
+}
+
+/**
  * Translate a LangGraph messages-mode SSE event into the UI chunk format
  * the frontend useDataStream hook expects.
  *
@@ -170,12 +210,7 @@ function translateMessageEvent(
             sentMsgIds.add(dedupKey);
             chunks.push({
               type: 'message',
-              content: {
-                type: 'tool',
-                content: extractText(msg.content) || JSON.stringify(msg.content),
-                tool_call_id: toolCallId,
-                name: msg.name ?? 'unknown',
-              },
+              content: buildToolMessageContent(msg),
             });
           }
         }
@@ -232,12 +267,7 @@ function translateMessageEvent(
       sentMsgIds.add(dedupKey);
       return [[{
         type: 'message',
-        content: {
-          type: 'tool',
-          content: extractText(raw.content) || JSON.stringify(raw.content),
-          tool_call_id: toolCallId,
-          name: raw.name ?? 'unknown',
-        },
+        content: buildToolMessageContent(raw),
       }], prevPartial];
     }
 
@@ -683,6 +713,154 @@ async function proxyRoutes(fastify: FastifyInstance) {
     },
   );
 
+  /**
+   * Forward a JSON request to the agent with refreshed session tokens.
+   * Used by MCP Apps host routes and the generic /proxy/agent/* pass-through.
+   */
+  async function forwardJsonToAgent(
+    request: any,
+    reply: FastifyReply,
+    agentPath: string,
+    options?: { method?: string; body?: unknown },
+  ) {
+    const cfg = getSettings();
+    const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
+    const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
+
+    if (refreshFailed) {
+      return sessionExpiredReply(reply);
+    }
+
+    if (!accessToken && process.env.AUTH_ENABLED === 'true') {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Trace-ID': traceId,
+    };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+    if (refreshToken) {
+      headers['X-Refresh-Token'] = refreshToken;
+    }
+
+    const method = options?.method ?? request.method;
+    const queryString = buildForwardedQueryString(request.query as Record<string, unknown>);
+    const agentUrl = `${getAgentHost()}/${agentPath.replace(/^\//, '')}${queryString}`;
+    fastify.log.info({ traceId, method, agentUrl }, 'Proxying request to agent');
+
+    try {
+      const fetchOptions: RequestInit = {
+        method,
+        headers,
+        signal: AbortSignal.timeout(cfg.agent.timeout_ms),
+      };
+      if (method !== 'GET' && method !== 'HEAD') {
+        const body = options?.body !== undefined ? options.body : request.body;
+        if (body !== undefined && body !== null) {
+          fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
+        }
+      }
+
+      const agentResponse = await fetch(agentUrl, fetchOptions);
+      reply.header('X-Trace-ID', traceId);
+      reply.status(agentResponse.status);
+      const contentType = agentResponse.headers.get('content-type');
+      if (contentType) {
+        reply.header('Content-Type', contentType);
+      }
+      return reply.send(await agentResponse.text());
+    } catch (error) {
+      fastify.log.error({ traceId, err: error }, 'Proxy error');
+      return reply.status(502).send({ error: 'Failed to connect to agent service' });
+    }
+  }
+
+  // MCP Apps host proxy (SEP-1865) — browser never talks to MCP servers directly.
+  fastify.post<{ Params: { mcpName: string }; Body: { cursor?: string } }>(
+    '/proxy/agent/mcp/:mcpName/resources/list',
+    async (request, reply) => {
+      const cursor = request.body?.cursor;
+      if (cursor !== undefined && typeof cursor !== 'string') {
+        return reply.status(400).send({ error: 'cursor must be a string when provided' });
+      }
+      const mcpName = encodeURIComponent(request.params.mcpName);
+      return forwardJsonToAgent(request, reply, `mcp/${mcpName}/resources/list`, {
+        method: 'POST',
+        body: cursor !== undefined ? { cursor } : {},
+      });
+    },
+  );
+
+  fastify.post<{ Params: { mcpName: string }; Body: { cursor?: string } }>(
+    '/proxy/agent/mcp/:mcpName/resources/templates/list',
+    async (request, reply) => {
+      const cursor = request.body?.cursor;
+      if (cursor !== undefined && typeof cursor !== 'string') {
+        return reply.status(400).send({ error: 'cursor must be a string when provided' });
+      }
+      const mcpName = encodeURIComponent(request.params.mcpName);
+      return forwardJsonToAgent(request, reply, `mcp/${mcpName}/resources/templates/list`, {
+        method: 'POST',
+        body: cursor !== undefined ? { cursor } : {},
+      });
+    },
+  );
+
+  fastify.post<{ Params: { mcpName: string }; Body: { uri?: string } }>(
+    '/proxy/agent/mcp/:mcpName/resources/read',
+    async (request, reply) => {
+      const uri = request.body?.uri;
+      if (typeof uri !== 'string' || !uri.trim()) {
+        return reply.status(400).send({ error: 'uri is required' });
+      }
+      const mcpName = encodeURIComponent(request.params.mcpName);
+      return forwardJsonToAgent(request, reply, `mcp/${mcpName}/resources/read`, {
+        method: 'POST',
+        body: { uri },
+      });
+    },
+  );
+
+  fastify.post<{ Params: { mcpName: string }; Body: { cursor?: string } }>(
+    '/proxy/agent/mcp/:mcpName/tools/list',
+    async (request, reply) => {
+      const cursor = request.body?.cursor;
+      if (cursor !== undefined && typeof cursor !== 'string') {
+        return reply.status(400).send({ error: 'cursor must be a string when provided' });
+      }
+      const mcpName = encodeURIComponent(request.params.mcpName);
+      return forwardJsonToAgent(request, reply, `mcp/${mcpName}/tools/list`, {
+        method: 'POST',
+        body: cursor !== undefined ? { cursor } : {},
+      });
+    },
+  );
+
+  fastify.post<{
+    Params: { mcpName: string };
+    Body: { name?: string; arguments?: Record<string, unknown> };
+  }>('/proxy/agent/mcp/:mcpName/tools/call', async (request, reply) => {
+    const toolName = request.body?.name;
+    if (typeof toolName !== 'string' || !toolName.trim()) {
+      return reply.status(400).send({ error: 'tool name is required' });
+    }
+    const args = request.body?.arguments;
+    if (args !== undefined && (args === null || typeof args !== 'object' || Array.isArray(args))) {
+      return reply.status(400).send({
+        error: 'arguments must be a JSON object when provided',
+      });
+    }
+    const mcpName = encodeURIComponent(request.params.mcpName);
+    return forwardJsonToAgent(request, reply, `mcp/${mcpName}/tools/call`, {
+      method: 'POST',
+      body: { name: toolName, arguments: args ?? {} },
+    });
+  });
+
+  // Generic pass-through (threads, mcp oauth connect/status, etc.)
   fastify.all<{ Params: { '*': string } }>(
     '/proxy/agent/*',
     async (request, reply) => {
