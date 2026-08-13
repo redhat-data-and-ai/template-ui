@@ -256,7 +256,6 @@ export function McpAppHost({
   const tornDownRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [height, setHeight] = useState(420);
-  const [contentWidth, setContentWidth] = useState<number | undefined>();
   const [tornDown, setTornDown] = useState(false);
   const [resourceCsp, setResourceCsp] = useState<McpAppResourceCsp | undefined>();
   const [resourcePermissions, setResourcePermissions] = useState<
@@ -284,7 +283,6 @@ export function McpAppHost({
       setTornDown(false);
       setError(null);
       setHeight(420);
-      setContentWidth(undefined);
       setCspReady(false);
       setResourceCsp(undefined);
       setResourcePermissions(undefined);
@@ -555,17 +553,17 @@ export function McpAppHost({
     }
   }, []);
 
-  const onSizeChanged = useCallback(
-    (params: { height?: number; width?: number }) => {
-      if (typeof params.height === "number" && params.height > 0) {
-        setHeight(Math.min(Math.max(params.height, 120), FLEX_MAX_HEIGHT));
-      }
-      if (typeof params.width === "number" && params.width > 0) {
-        setContentWidth(Math.min(Math.max(params.width, 120), maxWidth));
-      }
-    },
-    [maxWidth],
-  );
+  const onSizeChanged = useCallback((params: { height?: number; width?: number }) => {
+    if (typeof params.height === "number" && params.height > 0) {
+      setHeight(Math.min(Math.max(params.height, 120), FLEX_MAX_HEIGHT));
+    }
+    // AppFrame sets iframe.style.width to the View's px after calling this handler.
+    // Keep the iframe fluid so the App can grow again when the chat column widens.
+    queueMicrotask(() => {
+      const iframe = rootRef.current?.querySelector("iframe");
+      if (iframe) iframe.style.width = "100%";
+    });
+  }, []);
 
   const onError = useCallback((err: Error) => {
     console.error("[McpAppHost]", err);
@@ -734,7 +732,7 @@ export function McpAppHost({
       ) : (
         <div
           style={{
-            width: contentWidth ?? "100%",
+            width: "100%",
             maxWidth,
             height,
             minHeight: 120,
