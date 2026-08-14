@@ -6,7 +6,6 @@ export class HomePage {
 
   async goto(): Promise<void> {
     await this.page.goto('/');
-    await this.page.waitForLoadState('networkidle');
     await this.page.waitForSelector('textarea', { state: 'visible' });
   }
 
