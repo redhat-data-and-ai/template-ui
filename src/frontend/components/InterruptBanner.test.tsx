@@ -259,7 +259,6 @@ describe('InterruptBanner — MCP auth branch', () => {
     });
   });
 
-
   it('calls onResume("continue") when Continue is clicked', async () => {
     const onResume = vi.fn();
     vi.mocked(fetch).mockResolvedValue(
