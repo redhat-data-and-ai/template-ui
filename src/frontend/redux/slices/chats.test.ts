@@ -176,6 +176,7 @@ describe('chats slice — mergeToolResult', () => {
         chatId: 'c1',
         toolCallId: 'tc-1',
         content: 'ok',
+        artifact: { structured_content: { n: 1 } },
         mcpApp: {
           server: 'chart-mcp-server',
           resourceUri: 'ui://charts/app.html',
@@ -186,11 +187,43 @@ describe('chats slice — mergeToolResult', () => {
 
     const toolCall = (s.chats[0].messages[0] as TestMessage).tool_calls![0] as {
       content?: unknown;
+      artifact?: { structured_content?: { n?: number } };
       mcpApp?: { arguments?: { topic?: string }; resourceUri?: string };
     };
     expect(toolCall.content).toBe('ok');
+    expect(toolCall.artifact?.structured_content?.n).toBe(1);
     expect(toolCall.mcpApp?.resourceUri).toBe('ui://charts/app.html');
     expect(toolCall.mcpApp?.arguments?.topic).toBe('sales');
+  });
+
+  it('prefers mcpApp.arguments over tool call args when both are present', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const msg: TestMessage = {
+      type: 'ai',
+      content: '',
+      tool_calls: [{ id: 'tc-1', name: 'show_chart', args: { topic: 'sales' } }],
+      id: 'm1',
+    };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(msg) }));
+    s = chatsReducer(
+      s,
+      mergeToolResult({
+        chatId: 'c1',
+        toolCallId: 'tc-1',
+        content: 'ok',
+        mcpApp: {
+          server: 'chart-mcp-server',
+          resourceUri: 'ui://charts/app.html',
+          arguments: { topic: 'from-app' },
+          result: { content: [], isError: false },
+        },
+      }),
+    );
+
+    const toolCall = (s.chats[0].messages[0] as TestMessage).tool_calls![0] as {
+      mcpApp?: { arguments?: { topic?: string } };
+    };
+    expect(toolCall.mcpApp?.arguments?.topic).toBe('from-app');
   });
 });
 

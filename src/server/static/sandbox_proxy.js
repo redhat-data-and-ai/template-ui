@@ -19,6 +19,29 @@
     return parts.join("; ");
   }
 
+  /** Host-approved iframe sandbox tokens only (deny privilege-escalating flags). */
+  var SANDBOX_TOKEN_ALLOWLIST = {
+    "allow-scripts": true,
+    "allow-forms": true,
+    "allow-popups": true,
+    "allow-modals": true,
+    "allow-downloads": true,
+    "allow-pointer-lock": true,
+  };
+
+  function sanitizeSandboxAttribute(raw) {
+    var tokens = {};
+    tokens["allow-same-origin"] = true;
+    if (typeof raw === "string") {
+      raw.split(/\s+/).forEach(function (token) {
+        if (token && SANDBOX_TOKEN_ALLOWLIST[token]) {
+          tokens[token] = true;
+        }
+      });
+    }
+    return Object.keys(tokens).join(" ");
+  }
+
   if (window.self === window.top) {
     throw new Error("sandbox_proxy.html is only meant to run inside an iframe.");
   }
@@ -120,7 +143,7 @@
       if (event.data && event.data.method === RESOURCE_READY) {
         var p = event.data.params || {};
         if (typeof p.sandbox === "string") {
-          inner.setAttribute("sandbox", p.sandbox);
+          inner.setAttribute("sandbox", sanitizeSandboxAttribute(p.sandbox));
         }
         var allow = buildAllowAttribute(p.permissions);
         if (allow) {

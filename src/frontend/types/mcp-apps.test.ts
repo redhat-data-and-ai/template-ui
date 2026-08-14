@@ -287,6 +287,35 @@ describe("validateMcpAppResourceRead", () => {
       }),
     ).toMatch(/ui:\/\//);
   });
+
+  it("accepts valid base64 blob HTML resources", () => {
+    const blob = btoa(validHtml);
+    expect(
+      validateMcpAppResourceRead("ui://charts/app.html", {
+        contents: [
+          {
+            uri: "ui://charts/app.html",
+            mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+            blob,
+          },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects HTML containing a NUL byte", () => {
+    expect(
+      validateMcpAppResourceRead("ui://charts/app.html", {
+        contents: [
+          {
+            uri: "ui://charts/app.html",
+            mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+            text: "<!DOCTYPE html><html><body>bad\0</body></html>",
+          },
+        ],
+      }),
+    ).toMatch(/NUL/i);
+  });
 });
 
 describe("parseMcpAppResourcePermissions / extractPermissionsFromResourceRead", () => {

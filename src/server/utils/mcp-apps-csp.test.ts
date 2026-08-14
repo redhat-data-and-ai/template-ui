@@ -77,6 +77,11 @@ describe("buildSandboxCspHeader", () => {
     expect(csp).not.toContain("unsafe-eval");
     expect(csp).not.toMatch(/frame-src[^;]*'self'/);
     expect(csp).not.toMatch(/connect-src[^;]*'self'/);
+    // resourceDomains must not leak into frame-src / connect-src
+    expect(csp).not.toMatch(/frame-src[^;]*https:\/\/unpkg\.com/);
+    expect(csp).not.toMatch(/frame-src[^;]*https:\/\/cdn\.jsdelivr\.net/);
+    expect(csp).not.toMatch(/connect-src[^;]*https:\/\/unpkg\.com/);
+    expect(csp).not.toMatch(/connect-src[^;]*https:\/\/cdn\.jsdelivr\.net/);
   });
 
   it("uses frame-src none and connect-src none when those lists are omitted", () => {

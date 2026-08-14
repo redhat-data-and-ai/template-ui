@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
 import type { SubAgentInfo, InterruptInfo, TaskStep } from '../../types/deep-agent';
+import { withMcpAppArguments } from '../../types/mcp-apps';
 
 export interface StreamingState {
   isLoading: boolean;
@@ -161,13 +162,10 @@ const chatsSlice = createSlice({
           }
           if (mcpApp) {
             // Fill arguments from the AI tool_call so the host can push tool-input.
-            match.mcpApp = {
-              ...mcpApp,
-              arguments:
-                (mcpApp.arguments as Record<string, unknown> | undefined) ??
-                (match.args as Record<string, unknown> | undefined) ??
-                {},
-            };
+            match.mcpApp = withMcpAppArguments(
+              mcpApp as Record<string, unknown>,
+              match.args as Record<string, unknown> | undefined,
+            );
           }
           return;
         }

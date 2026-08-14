@@ -13,6 +13,7 @@ import {
   callMcpAppTool,
   listMcpAppResources,
   listMcpAppResourceTemplates,
+  listMcpAppTools,
   readMcpAppResource,
 } from './mcp-apps-api';
 
@@ -44,6 +45,14 @@ describe('mcp-apps-api', () => {
   it('readMcpAppResource rejects empty uri before fetch', async () => {
     await expect(readMcpAppResource('charts', '')).rejects.toThrow(/uri is required/);
     expect(authenticatedFetch).not.toHaveBeenCalled();
+  });
+
+  it('readMcpAppResource rejects non-OK responses with body text', async () => {
+    vi.mocked(authenticatedFetch).mockResolvedValue(
+      new Response('upstream boom', { status: 502 }),
+    );
+
+    await expect(readMcpAppResource('charts', 'ui://x')).rejects.toThrow(/upstream boom/);
   });
 
   it('listMcpAppResources posts to resources/list', async () => {
@@ -87,6 +96,34 @@ describe('mcp-apps-api', () => {
       },
     );
     expect(result.resourceTemplates?.[0]?.uriTemplate).toBe('showcase://{id}');
+  });
+
+  it('listMcpAppTools posts cursor and returns tools for schema resolution', async () => {
+    vi.mocked(authenticatedFetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tools: [{ name: 'show_chart', inputSchema: { type: 'object' } }],
+          nextCursor: 'page-2',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const result = await listMcpAppTools('charts', 'c0');
+
+    expect(authenticatedFetch).toHaveBeenCalledWith(
+      '/api/proxy/agent/mcp/charts/tools/list',
+      {
+        method: 'POST',
+        body: JSON.stringify({ cursor: 'c0' }),
+      },
+    );
+    expect(result.tools?.[0]?.name).toBe('show_chart');
+    expect(result.tools?.[0]?.inputSchema).toEqual({ type: 'object' });
+    expect(result.nextCursor).toBe('page-2');
   });
 
   it('callMcpAppTool posts tool name and arguments', async () => {

@@ -1,6 +1,7 @@
 import { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { authenticatedFetch } from "./authenticated-fetch";
 import { buildAgentApiUrl } from "../lib/app-paths";
+import { withMcpAppArguments } from "../types/mcp-apps";
 
 export interface Thread {
   id: string;
@@ -115,12 +116,10 @@ function combineToolCallandResult(messages: Message[]) {
                   merged.artifact = toolMsg.artifact;
                 }
                 if (mcpApp) {
-                  merged.mcpApp = {
-                    ...mcpApp,
-                    arguments:
-                      (mcpApp.arguments as Record<string, unknown> | undefined) ??
-                      ((tc as { args?: Record<string, unknown> }).args ?? {}),
-                  };
+                  merged.mcpApp = withMcpAppArguments(
+                    mcpApp,
+                    (tc as { args?: Record<string, unknown> }).args,
+                  );
                 }
                 return merged;
               });

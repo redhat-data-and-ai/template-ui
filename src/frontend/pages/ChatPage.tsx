@@ -259,6 +259,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   // Last ui/update-model-context snapshot for the next turn (not shown in the chat bubble).
   const pendingMcpModelContextRef = useRef<string | null>(null);
+  const threadRef = useRef(thread);
+  useEffect(() => {
+    threadRef.current = thread;
+  }, [thread]);
 
   const setMcpModelContext = useCallback((update: McpModelContextUpdate | null) => {
     pendingMcpModelContextRef.current = formatMcpModelContext(update);
@@ -277,25 +281,26 @@ export function ChatPage({ threadId }: { threadId: string }) {
         content: trimmed,
       };
 
-      const messages = [...thread.messages, userMessage];
+      const currentThread = threadRef.current;
+      const messages = [...currentThread.messages, userMessage];
       const mcpModelContext = pendingMcpModelContextRef.current;
-      pendingMcpModelContextRef.current = null;
 
       try {
-        await thread.submit({ messages, mcpModelContext });
+        await currentThread.submit({ messages, mcpModelContext });
+        // Clear only if still the same snapshot — a newer ui/update-model-context
+        // may have arrived while submit awaited.
+        if (pendingMcpModelContextRef.current === mcpModelContext) {
+          pendingMcpModelContextRef.current = null;
+        }
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
       } catch (err) {
-        // Restore context so a retry can still include it.
-        if (mcpModelContext) {
-          pendingMcpModelContextRef.current = mcpModelContext;
-        }
         console.error('Failed to submit message:', err);
         dispatch(addToast({ title: 'Failed to send message', message: 'Please try again.', variant: 'danger' }));
       }
     },
-    [thread, threadId, currentChat, dispatch]
+    [threadId, currentChat, dispatch]
   );
 
   const chatActions = useMemo(
@@ -343,9 +348,15 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, [currentChat]);
 
   const handleStreamRetry = useCallback(async () => {
-    if (!threadId || !currentChat || thread.messages.length === 0) return;
+    if (!threadId || !currentChat) return;
+    const currentThread = threadRef.current;
+    if (currentThread.messages.length === 0) return;
+    const mcpModelContext = pendingMcpModelContextRef.current;
     try {
-      await thread.submit({ messages: thread.messages });
+      await currentThread.submit({ messages: currentThread.messages, mcpModelContext });
+      if (pendingMcpModelContextRef.current === mcpModelContext) {
+        pendingMcpModelContextRef.current = null;
+      }
       setTimeout(() => {
         hasFinalizeEventOccurredRef.current = true;
       }, 100);
@@ -353,7 +364,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
       console.error('Failed to retry:', err);
       dispatch(addToast({ title: 'Failed to retry', message: 'Please try again.', variant: 'danger' }));
     }
-  }, [thread, threadId, currentChat, dispatch]);
+  }, [threadId, currentChat, dispatch]);
 
   const handleInterruptResume = useCallback(
     async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {

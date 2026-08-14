@@ -598,8 +598,7 @@ describe("McpAppHost", () => {
       .spyOn(URL, "createObjectURL")
       .mockReturnValue("blob:mock");
     const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-    const click = vi.fn();
-    HTMLAnchorElement.prototype.click = click;
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     renderWithStore(<McpAppHost toolName="show_chart" mcpApp={sampleApp} />);
     await waitFor(() => expect(appRendererSpy).toHaveBeenCalled());
@@ -633,10 +632,12 @@ describe("McpAppHost", () => {
     expect(confirm).toHaveBeenCalled();
     expect(createObjectURL).toHaveBeenCalled();
     expect(click).toHaveBeenCalled();
+    await Promise.resolve();
     expect(revokeObjectURL).toHaveBeenCalled();
     confirm.mockRestore();
     createObjectURL.mockRestore();
     revokeObjectURL.mockRestore();
+    click.mockRestore();
   });
 
   it("onFallbackRequest denies ui/download-file when user cancels", async () => {
@@ -682,8 +683,7 @@ describe("McpAppHost", () => {
       .spyOn(URL, "createObjectURL")
       .mockReturnValue("blob:mock");
     const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-    const click = vi.fn();
-    HTMLAnchorElement.prototype.click = click;
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     renderWithStore(<McpAppHost toolName="show_chart" mcpApp={sampleApp} />);
     await waitFor(() => expect(appRendererSpy).toHaveBeenCalled());
@@ -724,6 +724,7 @@ describe("McpAppHost", () => {
     confirm.mockRestore();
     createObjectURL.mockRestore();
     revokeObjectURL.mockRestore();
+    click.mockRestore();
   });
 
   it("onFallbackRequest echoes inline for ui/request-display-mode", async () => {
@@ -893,6 +894,21 @@ describe("McpAppHost", () => {
         }}
       />,
       { features: { mcp_apps: { enabled: false } } },
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(appRendererSpy).not.toHaveBeenCalled();
+  });
+
+  it("McpAppHostFromToolCall fails closed when features are unavailable", () => {
+    const { container } = renderWithStore(
+      <McpAppHostFromToolCall
+        toolName="show_chart"
+        mcpAppRaw={{
+          server: "charts",
+          resourceUri: "ui://charts/app.html",
+        }}
+      />,
+      { features: null },
     );
     expect(container).toBeEmptyDOMElement();
     expect(appRendererSpy).not.toHaveBeenCalled();

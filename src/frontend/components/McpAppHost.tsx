@@ -222,7 +222,12 @@ function downloadEmbeddedResource(resource: {
   if (typeof resource.text === "string") {
     blob = new Blob([resource.text], { type: mime });
   } else if (typeof resource.blob === "string") {
-    const binary = atob(resource.blob);
+    let binary: string;
+    try {
+      binary = atob(resource.blob);
+    } catch {
+      throw new McpError(ErrorCode.InvalidParams, "download blob is not valid base64");
+    }
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     blob = new Blob([bytes], { type: mime });
@@ -236,7 +241,8 @@ function downloadEmbeddedResource(resource: {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Defer revoke so navigation/download can start before the object URL is invalidated.
+  queueMicrotask(() => URL.revokeObjectURL(url));
 }
 
 /**
@@ -273,6 +279,7 @@ export function McpAppHost({
 
   useEffect(() => {
     let cancelled = false;
+    const abort = new AbortController();
     (async () => {
       // Teardown the previous View (if any) before swapping resource / remounting.
       if (appRef.current && !tornDownRef.current) {
@@ -306,6 +313,8 @@ export function McpAppHost({
             mcpApp.resourceUri,
             data,
             (cursor) => listMcpAppResources(mcpApp.server, cursor),
+            20,
+            abort.signal,
           );
           if (cancelled) return;
           csp = resolved.csp;
@@ -323,10 +332,12 @@ export function McpAppHost({
           csp = fallback.csp;
           permissions = fallback.permissions;
         }
-        setResourceCsp(csp);
-        setResourcePermissions(permissions);
-        setResourceHtml(extractMcpAppHtmlFromResourceRead(data) ?? undefined);
-        if (!cancelled) setCspReady(true);
+        if (!cancelled) {
+          setResourceCsp(csp);
+          setResourcePermissions(permissions);
+          setResourceHtml(extractMcpAppHtmlFromResourceRead(data) ?? undefined);
+          setCspReady(true);
+        }
       } catch (err) {
         console.warn("[McpAppHost] MCP App resource prefetch failed:", err);
         if (!cancelled) {
@@ -341,6 +352,7 @@ export function McpAppHost({
     })();
     return () => {
       cancelled = true;
+      abort.abort();
     };
   }, [mcpApp.server, mcpApp.resourceUri]);
 
@@ -785,7 +797,7 @@ export function McpAppHostFromToolCall({
   className?: string;
 }) {
   const features = useSelector((state: RootState) => state.config.features);
-  const enabled = features?.mcp_apps?.enabled ?? true;
+  const enabled = features?.mcp_apps?.enabled === true;
   const mcpApp = enabled ? parseMcpApp(mcpAppRaw) : null;
   if (!mcpApp) return null;
   return (

@@ -216,6 +216,7 @@ export async function resolveCspAndPermissionsWithListFallback(
   readResult: ResourceReadPayload,
   listPage: (cursor?: string) => Promise<McpAppResourceListPage>,
   maxPages = 20,
+  signal?: AbortSignal,
 ): Promise<{
   csp?: McpAppResourceCsp;
   permissions?: McpAppResourcePermissions;
@@ -230,6 +231,9 @@ export async function resolveCspAndPermissionsWithListFallback(
   let csp = fromReadCsp;
   let permissions = fromReadPermissions;
   for (let page = 0; page < maxPages; page += 1) {
+    if (signal?.aborted) {
+      return { csp, permissions };
+    }
     const listed = await listPage(cursor);
     const resolved = resolveCspAndPermissionsFromReadAndList(
       resourceUri,
@@ -251,6 +255,20 @@ export async function resolveCspAndPermissionsWithListFallback(
     cursor = next;
   }
   return { csp, permissions };
+}
+
+/** Merge mcpApp with arguments, preferring mcpApp.arguments over tool-call args. */
+export function withMcpAppArguments(
+  mcpApp: Record<string, unknown>,
+  fallbackArgs?: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...mcpApp,
+    arguments:
+      (mcpApp.arguments as Record<string, unknown> | undefined) ??
+      fallbackArgs ??
+      {},
+  };
 }
 
 /**
