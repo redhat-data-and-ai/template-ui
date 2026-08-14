@@ -225,6 +225,41 @@ describe('InterruptBanner — MCP auth branch', () => {
     expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument();
   });
 
+  it('accepts mcp_oauth_done from the OAuth provider origin after Authenticate', async () => {
+    vi.mocked(open).mockReturnValue(window);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ authorize_url: 'https://oauth.example.com/auth' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValue(
+        new Response(JSON.stringify({ connected: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /authenticate/i }));
+    await waitFor(() => expect(vi.mocked(open)).toHaveBeenCalled());
+    expect(screen.queryByText(/popup blocked by browser/i)).not.toBeInTheDocument();
+
+    fireEvent(
+      window,
+      new MessageEvent('message', {
+        data: { type: 'mcp_oauth_done', mcp_name: 'github' },
+        origin: 'https://oauth.example.com',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+    });
+  });
+
+
   it('calls onResume("continue") when Continue is clicked', async () => {
     const onResume = vi.fn();
     vi.mocked(fetch).mockResolvedValue(

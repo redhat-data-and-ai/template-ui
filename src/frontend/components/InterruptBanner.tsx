@@ -79,6 +79,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
   const [oauthReady, setOauthReady] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [oauthOrigin, setOauthOrigin] = useState<string | null>(null);
 
   const mcpAuth = parseMcpAuthPayload(interrupt);
 
@@ -94,7 +95,8 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
     if (!mcpAuth) return undefined;
 
     const handler = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      const allowedOrigins = [window.location.origin, oauthOrigin].filter(Boolean);
+      if (allowedOrigins.length > 0 && !allowedOrigins.includes(event.origin)) return;
       const data = event.data as { type?: string; mcp_name?: string } | null;
       if (data?.type === 'mcp_oauth_done' && data.mcp_name === mcpAuth.mcp_name) {
         void verifyAndSetReady(mcpAuth.mcp_name);
@@ -113,10 +115,11 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
       window.removeEventListener('message', handler);
       window.removeEventListener('focus', onFocus);
     };
-  }, [mcpAuth, oauthReady, verifyAndSetReady]);
+  }, [mcpAuth, oauthReady, oauthOrigin, verifyAndSetReady]);
 
   const handleConnect = useCallback(async () => {
     if (!mcpAuth) return;
+    setOauthOrigin(null);
     setConnecting(true);
     setConnectError(null);
     try {
@@ -133,7 +136,9 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
       if (!body.authorize_url) {
         throw new Error('No authorize_url returned');
       }
-      const popup = window.open(body.authorize_url, 'mcp-oauth', 'width=600,height=700');
+      const authorizeUrl = new URL(body.authorize_url, window.location.origin);
+      setOauthOrigin(authorizeUrl.origin);
+      const popup = window.open(authorizeUrl.href, 'mcp-oauth', 'width=600,height=700');
       if (!popup) {
         throw new Error('Popup blocked by browser');
       }
