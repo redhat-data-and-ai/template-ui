@@ -605,12 +605,21 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                             <div className="text-sm font-medium text-foreground flex items-center gap-2">
                               <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
                               {(toolCall as Record<string, unknown>).content != null ? (
-                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" aria-hidden="true" />
+                                (toolCall as Record<string, unknown>).status === 'error' ? (
+                                  <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400" aria-hidden="true" />
+                                ) : (
+                                  <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" aria-hidden="true" />
+                                )
                               ) : (
                                 <Loader2 className="w-4 h-4 text-primary animate-spin" aria-hidden="true" />
                               )}
                             </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">Tool execution</div>
+                            <div className={cn(
+                              "text-xs mt-0.5",
+                              (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
+                            )}>
+                              {(toolCall as Record<string, unknown>).status === 'error' ? 'Tool execution failed' : 'Tool execution'}
+                            </div>
                           </div>
                         </div>
                         {isExpanded ? (
@@ -629,8 +638,13 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                             </pre>
                             {!needsApproval && (
                               <>
-                                <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
-                                  {(toolCall as Record<string, unknown>).content ? 'Result' : 'Running...'}
+                                <div className={cn(
+                                  "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",
+                                  (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
+                                )}>
+                                  {(toolCall as Record<string, unknown>).content
+                                    ? ((toolCall as Record<string, unknown>).status === 'error' ? 'Error' : 'Result')
+                                    : 'Running...'}
                                 </div>
                                 {(() => {
                                   const raw = (toolCall as Record<string, unknown>).content;

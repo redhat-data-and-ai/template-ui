@@ -58,7 +58,7 @@ const initialState: ChatsState = {
   error: null,
 };
 
-type ToolCallRecord = { id?: string; content?: unknown };
+type ToolCallRecord = { id?: string; content?: unknown; status?: string };
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
@@ -121,8 +121,8 @@ const chatsSlice = createSlice({
       }
       (last as { content: string }).content = prev + content;
     },
-    mergeToolResult(state, action: PayloadAction<{ chatId: string; toolCallId: string; content: any }>) {
-      const { chatId, toolCallId, content } = action.payload;
+    mergeToolResult(state, action: PayloadAction<{ chatId: string; toolCallId: string; content: any; status?: string }>) {
+      const { chatId, toolCallId, content, status } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
       if (!chat) {
         return;
@@ -136,6 +136,9 @@ const chatsSlice = createSlice({
         const match = toolCalls.find((tc) => tc?.id === toolCallId);
         if (match) {
           match.content = content;
+          if (status) {
+            match.status = status;
+          }
           return;
         }
       }
