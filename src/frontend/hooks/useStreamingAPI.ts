@@ -671,7 +671,7 @@ export function useStreamingAPI(threadId: string) {
                 }
                 setWasInterrupted(true);
               } else {
-                dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+                dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error' }));
                 dispatch(
                   updateStreamingState({
                     chatId: threadId,
@@ -1008,7 +1008,7 @@ export function useStreamingAPI(threadId: string) {
           dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: enrichInterrupt(interrupt) } }));
         },
         onError(error) {
-          dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+          dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error' }));
           resumeStreamHadError = true;
           // Queue decision to localStorage for replay when agent recovers
           let decisionQueued = false;
@@ -1183,7 +1183,7 @@ export function useStreamingAPI(threadId: string) {
   const stop = useCallback(() => {
     userCancelledRef.current = true;
     managerRef.current?.cancel();
-    dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+    dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'cancelled' }));
     clearReconnectTimers();
     if (recoveryIntervalRef.current) {
       clearInterval(recoveryIntervalRef.current);

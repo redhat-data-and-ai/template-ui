@@ -143,15 +143,17 @@ const chatsSlice = createSlice({
         }
       }
     },
-    resolveAllPendingToolCalls(state, action: PayloadAction<{ chatId: string }>) {
+    resolveAllPendingToolCalls(state, action: PayloadAction<{ chatId: string; status?: string }>) {
       const chat = state.chats.find((c) => c.id === action.payload.chatId);
       if (!chat) return;
+      const terminalStatus = action.payload.status || 'error';
       for (const message of chat.messages) {
         const msg = message as Message & { tool_calls?: ToolCallRecord[] };
         if (!Array.isArray(msg.tool_calls)) continue;
         for (const tc of msg.tool_calls) {
           if (tc && tc.content == null) {
             tc.content = '';
+            tc.status = terminalStatus;
           }
         }
       }
