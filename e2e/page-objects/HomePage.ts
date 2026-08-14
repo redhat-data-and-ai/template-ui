@@ -6,8 +6,8 @@ export class HomePage {
 
   async goto(): Promise<void> {
     await this.page.goto('/');
-    await this.page.waitForLoadState('networkidle');
-    await this.page.waitForSelector('textarea', { state: 'visible' });
+    await this.page.waitForLoadState('domcontentloaded');
+    await this.page.waitForSelector('textarea', { state: 'visible', timeout: 30_000 });
   }
 
   /** Returns the browser document title set from the branding config. */

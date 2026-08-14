@@ -534,6 +534,7 @@ export function useStreamingAPI(threadId: string) {
                     chatId: threadId,
                     toolCallId: m.tool_call_id,
                     content: m.content,
+                    status: (m as Record<string, unknown>).status as string | undefined,
                   }),
                 );
                 dispatch(
@@ -665,6 +666,7 @@ export function useStreamingAPI(threadId: string) {
                 }
                 setWasInterrupted(true);
               } else {
+                dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error' }));
                 dispatch(
                   updateStreamingState({
                     chatId: threadId,
@@ -990,7 +992,7 @@ export function useStreamingAPI(threadId: string) {
             return;
           }
           if (m.type === 'tool') {
-            dispatch(mergeToolResult({ chatId: threadId, toolCallId: m.tool_call_id, content: m.content }));
+            dispatch(mergeToolResult({ chatId: threadId, toolCallId: m.tool_call_id, content: m.content, status: (m as Record<string, unknown>).status as string | undefined }));
             dispatch(updateStreamingState({ chatId: threadId, state: { activeSubAgent: null } }));
           }
         },
@@ -999,6 +1001,7 @@ export function useStreamingAPI(threadId: string) {
           dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: enrichInterrupt(interrupt) } }));
         },
         onError(error) {
+          dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error' }));
           resumeStreamHadError = true;
           // Queue decision to localStorage for replay when agent recovers
           let decisionQueued = false;
@@ -1111,6 +1114,7 @@ export function useStreamingAPI(threadId: string) {
                   chatId: threadId,
                   toolCallId: m.tool_call_id,
                   content: m.content,
+                  status: (m as Record<string, unknown>).status as string | undefined,
                 }),
               );
               return;
@@ -1128,6 +1132,7 @@ export function useStreamingAPI(threadId: string) {
             );
           },
           onError(error) {
+            dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
             dispatch(
               updateStreamingState({
                 chatId: threadId,
@@ -1169,6 +1174,7 @@ export function useStreamingAPI(threadId: string) {
   const stop = useCallback(() => {
     userCancelledRef.current = true;
     managerRef.current?.cancel();
+    dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'cancelled' }));
     clearReconnectTimers();
     if (recoveryIntervalRef.current) {
       clearInterval(recoveryIntervalRef.current);

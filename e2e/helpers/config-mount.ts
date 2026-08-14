@@ -126,6 +126,14 @@ export async function mountConfig(
       body: '[]',
     }),
   );
+
+  await page.route('**/api/proxy/agent/personalization/preferences', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ memory_enabled: true }),
+    }),
+  );
 }
 
 /** Minimal config: only required fields populated, no logo, default colors. */

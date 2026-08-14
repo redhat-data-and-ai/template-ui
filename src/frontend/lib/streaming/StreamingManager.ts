@@ -134,7 +134,7 @@ export class StreamingManager {
     try {
       const body: Record<string, unknown> = {
         message: request.resume
-          ? { decisions: request.resumeDecisions ?? [] }
+          ? (request.resumeDecisions?.length ? { decisions: request.resumeDecisions } : request.message)
           : request.message,
         thread_id: request.threadId || 'default-thread',
         session_id: request.threadId || 'default-session',

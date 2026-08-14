@@ -8,8 +8,8 @@ export class SettingsPage {
   constructor(private readonly page: Page) {}
 
   async goto(): Promise<void> {
-    await this.page.goto('/settings');
-    await this.page.waitForSelector('h1', { state: 'visible' });
+    await this.page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    await this.page.waitForSelector('h1', { state: 'visible', timeout: 30_000 });
   }
 
   async getHeading(): Promise<string> {

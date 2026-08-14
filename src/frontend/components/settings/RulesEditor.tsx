@@ -39,16 +39,16 @@ export function RulesEditor() {
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-        <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-        <p className="text-xs text-amber-400/80">
+        <AlertCircle className="w-4 h-4 text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
+        <p className="text-xs text-amber-800 dark:text-amber-300">
           User rules shape how the agent responds. They apply to every conversation.
         </p>
       </div>
 
       {error && (
         <div className="flex items-start gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
-          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-          <p className="text-xs text-red-400/80">{error}</p>
+          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-xs text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
 
@@ -77,8 +77,8 @@ export function RulesEditor() {
 
       {loading ? (
         <div className="flex flex-col items-center py-8">
-          <Spinner size="md" />
-          <p className="text-sm text-muted-foreground/60 mt-2">Loading rules...</p>
+          <Spinner size="md" aria-label="Loading rules" />
+          <p className="text-sm text-muted-foreground mt-2">Loading rules...</p>
         </div>
       ) : rules.length === 0 ? (
         <div className="flex flex-col items-center py-8 text-center">
@@ -96,7 +96,7 @@ export function RulesEditor() {
                 key={rule.id}
                 className="group flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-secondary/30 transition-colors"
               >
-                <ScrollText className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" />
+                <ScrollText className="w-4 h-4 text-primary/60 mt-0.5 shrink-0" aria-hidden="true" />
                 <p className="flex-1 text-sm text-foreground leading-relaxed">{rule.content}</p>
                 <button
                   onClick={() => dispatch(removeRule(rule.id))}

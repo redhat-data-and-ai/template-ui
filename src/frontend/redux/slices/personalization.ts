@@ -18,19 +18,30 @@ export interface RuleItem {
   updatedAt: string;
 }
 
+// ── Preferences ──────────────────────────────────────────────────────
+
+export interface UserPreferences {
+  memoryEnabled: boolean;
+}
+
 interface PersonalizationState {
   memories: MemoryItem[];
   rules: RuleItem[];
+  preferences: UserPreferences;
   memoriesLoading: boolean;
   rulesLoading: boolean;
+  preferencesLoading: boolean;
   error: string | null;
+  _previousMemoryEnabled?: boolean;
 }
 
 const initialState: PersonalizationState = {
   memories: [],
   rules: [],
+  preferences: { memoryEnabled: true },
   memoriesLoading: false,
   rulesLoading: false,
+  preferencesLoading: false,
   error: null,
 };
 
@@ -74,6 +85,32 @@ export const deleteAllMemories = createAsyncThunk(
       method: 'DELETE',
     });
     if (!resp.ok) throw new Error(`Failed to delete all memories: ${resp.status}`);
+  },
+);
+
+// ── Preference thunks ───────────────────────────────────────────────
+
+export const fetchPreferences = createAsyncThunk(
+  'personalization/fetchPreferences',
+  async () => {
+    const resp = await fetch(`${getApiBase()}/personalization/preferences`);
+    if (!resp.ok) throw new Error(`Failed to fetch preferences: ${resp.status}`);
+    const data = await resp.json();
+    return { memoryEnabled: data.memory_enabled } as UserPreferences;
+  },
+);
+
+export const updateMemoryEnabled = createAsyncThunk(
+  'personalization/updateMemoryEnabled',
+  async (enabled: boolean) => {
+    const resp = await fetch(`${getApiBase()}/personalization/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memory_enabled: enabled }),
+    });
+    if (!resp.ok) throw new Error(`Failed to update preferences: ${resp.status}`);
+    const data = await resp.json();
+    return { memoryEnabled: data.memory_enabled } as UserPreferences;
   },
 );
 
@@ -162,7 +199,38 @@ const personalizationSlice = createSlice({
         state.error = action.error.message || 'Failed to delete all memories';
       })
 
-      // Rules (Preferences)
+      // Preferences
+      .addCase(fetchPreferences.pending, (state) => {
+        state.preferencesLoading = true;
+      })
+      .addCase(fetchPreferences.fulfilled, (state, action) => {
+        state.preferences = action.payload;
+        state.preferencesLoading = false;
+      })
+      .addCase(fetchPreferences.rejected, (state, action) => {
+        state.preferencesLoading = false;
+        state.error = action.error.message || 'Failed to load preferences';
+      })
+      .addCase(updateMemoryEnabled.pending, (state, action) => {
+        state.preferencesLoading = true;
+        state._previousMemoryEnabled = state.preferences.memoryEnabled;
+        state.preferences.memoryEnabled = action.meta.arg;
+      })
+      .addCase(updateMemoryEnabled.fulfilled, (state, action) => {
+        state.preferences = action.payload;
+        state.preferencesLoading = false;
+        delete state._previousMemoryEnabled;
+      })
+      .addCase(updateMemoryEnabled.rejected, (state, action) => {
+        state.preferencesLoading = false;
+        if (state._previousMemoryEnabled !== undefined) {
+          state.preferences.memoryEnabled = state._previousMemoryEnabled;
+          delete state._previousMemoryEnabled;
+        }
+        state.error = action.error.message || 'Failed to update preference';
+      })
+
+      // Rules
       .addCase(fetchRules.pending, (state) => {
         state.rulesLoading = true;
         state.error = null;
@@ -211,6 +279,12 @@ export const selectMemoriesLoading = (state: { personalization: PersonalizationS
   state.personalization.memoriesLoading;
 export const selectRulesLoading = (state: { personalization: PersonalizationState }) =>
   state.personalization.rulesLoading;
+export const selectPreferences = (state: { personalization: PersonalizationState }) =>
+  state.personalization.preferences;
+export const selectMemoryEnabled = (state: { personalization: PersonalizationState }) =>
+  state.personalization.preferences.memoryEnabled;
+export const selectPreferencesLoading = (state: { personalization: PersonalizationState }) =>
+  state.personalization.preferencesLoading;
 export const selectPersonalizationError = (state: { personalization: PersonalizationState }) =>
   state.personalization.error;
 

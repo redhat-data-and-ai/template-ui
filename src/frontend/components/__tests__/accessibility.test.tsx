@@ -28,6 +28,11 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string) => {
+      if (url.includes('/personalization/preferences')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ memory_enabled: true }), { status: 200 }),
+        );
+      }
       if (url.includes('/personalization/memories')) {
         return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
       }
