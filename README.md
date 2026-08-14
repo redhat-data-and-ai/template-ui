@@ -36,6 +36,88 @@ A modern React-based frontend application with Fastify backend for interacting w
 
 The application will be available at `http://localhost:5173`
 
+## 🎨 Customizing Branding & Features
+
+Template UI supports runtime configuration for branding (logo, colors, title), feature flags, agent endpoint, and compliance policies — without code changes or rebuilds.
+
+**Full documentation:** [`docs/deployment-patterns.md`](docs/deployment-patterns.md)
+
+### Quick start
+
+Copy one of the ready-made example configs to get started:
+
+```bash
+# Local development (auth off, debug panel open)
+cp config/ui/examples/minimal.yaml config/ui/settings.yaml
+
+# Blue color scheme
+cp config/ui/examples/blue-theme.yaml config/ui/settings.yaml
+
+# Red Hat branding
+cp config/ui/examples/red-hat-branding.yaml config/ui/settings.yaml
+
+# Production-hardened (OPA enabled, strict security)
+cp config/ui/examples/production.yaml config/ui/settings.yaml
+```
+
+### Configuration file
+
+`config/ui/settings.yaml` is optional — built-in defaults are used if it is absent. Key sections:
+
+```yaml
+branding:
+  title: "My Custom Agent"
+  logo_url: "/custom-logo.svg"       # Place file in public/ to serve it
+  favicon_url: "/custom-favicon.ico"
+  colors:
+    light:
+      primary: "#0066cc"
+      accent: "#a60000"
+      background: "#ffffff"
+      foreground: "#1a1a1a"
+    dark:
+      primary: "#4dabf7"
+      accent: "#f56e6e"
+      background: "#0a1628"
+      foreground: "#f0f4f8"
+
+features:
+  debug_mode_default: false    # Default state of the debug panel toggle
+  auth_enabled: true           # Set to false for local dev (no SSO credentials needed)
+
+agent:
+  endpoint: ""                 # Agent URL — empty falls back to AGENT_HOST env var
+  timeout_ms: 30000
+  streaming: true
+```
+
+See [`config/ui/README.md`](config/ui/README.md) for the full schema and every environment variable override.
+
+### Environment variable overrides
+
+Env vars take precedence over the YAML file:
+
+```bash
+BRANDING_TITLE="Production Agent"
+BRANDING_LOGO_URL="/prod-logo.svg"
+FEATURE_AUTH_ENABLED=true
+AGENT_ENDPOINT=https://prod-agent.example.com
+```
+
+See `env.template` for the complete list.
+
+### Hot-reload
+
+Branding and `agent.endpoint` / `agent.timeout_ms` changes are applied without a server restart. Security settings (`rate_limit`, `session`, `helmet`) require a restart. The config watcher logs which category each change falls into.
+
+### Validation
+
+The config is validated at startup. Invalid values cause the server to exit with a clear error:
+
+```text
+Config validation error: branding.colors.light.primary must be a valid hex color (got 'not-a-color')
+```
+
 ## 📦 Available Scripts
 
 | Command | Description |
@@ -106,20 +188,54 @@ template-ui/
 ├── src/
 │   ├── frontend/           # React frontend application
 │   │   ├── components/     # React components
+│   │   ├── contexts/       # React context providers
 │   │   ├── hooks/          # Custom React hooks
-│   │   ├── lib/           # Utility libraries
-│   │   └── App.tsx        # Main application component
-│   └── server/            # Fastify backend server
-│       ├── plugins/       # Fastify plugins (auth, etc.)
-│       ├── router/        # API routes
-│       └── server.ts      # Server configuration
-├── public/                # Static assets
-├── dist/                  # Built files (generated)
-├── package.json          # Dependencies and scripts
-├── vite.config.ts        # Vite configuration
-├── tsconfig.json         # TypeScript configuration
-└── env.template          # Environment variables template
+│   │   ├── pages/          # Route-level page components
+│   │   ├── redux/          # Redux slices and store
+│   │   ├── services/       # API client services
+│   │   ├── types/          # TypeScript type definitions
+│   │   ├── utils/          # Shared utilities
+│   │   └── App.tsx         # Main application component
+│   └── server/             # Fastify backend server
+│       ├── plugins/        # Fastify plugins (auth, OPA, tracing)
+│       ├── router/         # Route handlers (API, proxy, client)
+│       ├── utils/          # Settings loader, OPA engine, Redis, config watcher
+│       └── server.ts       # Server factory + config watcher setup
+├── config/
+│   ├── ui/
+│   │   ├── settings.yaml   # Runtime config (optional — defaults used if absent)
+│   │   ├── README.md       # Full schema + env-var reference
+│   │   └── examples/       # Ready-to-use example configs
+│   └── compliance/
+│       ├── policy.rego     # OPA deny rules (package compliance.ui)
+│       ├── data.json       # Static external data for OPA policies
+│       └── README.md       # OPA policy authoring guide
+├── deployment/
+│   ├── openshift/          # OpenShift BuildConfig, ImageStream, Route, ConfigMap, Secret
+│   └── overlays/
+│       ├── kind/           # Kind cluster overlay (NodePort, no TLS)
+│       └── openshift/      # OpenShift overlay
+├── docs/
+│   └── deployment-patterns.md  # Branding, feature flags, runtime config, agent endpoint, OPA
+├── public/                 # Static assets served directly
+├── e2e/                    # Playwright end-to-end tests
+├── dist/                   # Built files (generated)
+├── Containerfile           # Podman/Docker build definition (UBI base)
+├── compose.yml             # Local development compose (Redis)
+├── Makefile                # Task shortcuts (dev, local, clean)
+├── package.json            # Dependencies and scripts
+├── vite.config.ts          # Vite configuration
+├── tsconfig.json           # TypeScript configuration
+└── env.template            # Environment variables template
 ```
+
+## 📚 Deployment Docs
+
+| Document | What it covers |
+|---|---|
+| [`docs/deployment-patterns.md`](docs/deployment-patterns.md) | Branding customization, feature flag reference, runtime config examples, agent endpoint switching, OPA policy examples |
+| [`config/ui/README.md`](config/ui/README.md) | Full YAML schema, every env-var override, hot-reload reference |
+| [`config/compliance/README.md`](config/compliance/README.md) | OPA policy authoring, built-in rules, testing with `opa eval` |
 
 ## 🔧 Technology Stack
 

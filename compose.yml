@@ -1,6 +1,23 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: template-ui-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - template-ui-network
+
   template-ui:
     build:
       context: .
@@ -8,13 +25,33 @@ services:
     container_name: template-ui-app
     ports:
       - "8080:8080"
-    environment:
-      - NODE_ENV=production
     env_file:
       - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - UI_CONFIG_PATH=/opt/app-root/src/config/ui/settings.yaml
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AGENT_HOST=http://host.containers.internal:5002
+      - CORS_ORIGIN=http://localhost:8080
+      - SSO_CALLBACK_URL=http://localhost:8080/auth/callback/oidc
+    volumes:
+      - ./config:/opt/app-root/src/config:ro
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/_health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - template-ui-network
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
 
 
 networks:
@@ -22,4 +59,5 @@ networks:
     driver: bridge
 
 volumes:
+  redis_data:
   node_modules:

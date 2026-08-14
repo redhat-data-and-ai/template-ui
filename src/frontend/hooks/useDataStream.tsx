@@ -2,6 +2,7 @@ import { useCallback, useState, useRef, useEffect } from "react";
 import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { useRefreshableToken } from "./useRefreshableToken";
 import { chatStorage } from "@/services/chatStorage";
+import { buildAgentApiUrl } from "../lib/app-paths";
 
 export interface ToolCall {
   name: string;
@@ -75,6 +76,7 @@ export function useDataStream({
     abortControllerRef.current = new AbortController();
 
     processedChunkIdsRef.current.clear();
+    isStreamingTokensRef.current = false;
 
     setIsLoading(true);
     setMessages(messages);
@@ -90,9 +92,14 @@ export function useDataStream({
         headers["X-Token"] = refreshableToken;
       }
 
-      const response = await fetch(`${apiUrl}/v1/stream`, {
+      const streamUrl = apiUrl
+        ? `${apiUrl}/v1/stream`
+        : buildAgentApiUrl('/v1/stream');
+
+      const response = await fetch(streamUrl, {
         method: "POST",
         headers,
+        credentials: "include",
         body: JSON.stringify({
           message: messages[messages.length - 1].content,
           thread_id: threadId || "default-thread",
@@ -114,8 +121,9 @@ export function useDataStream({
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let streamDone = false;
 
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
 
         if (done) break;
@@ -137,6 +145,7 @@ export function useDataStream({
           }
 
           if (jsonData === '[DONE]' || jsonData === 'DONE') {
+            streamDone = true;
             break;
           }
 
@@ -144,12 +153,11 @@ export function useDataStream({
             const parsedResult = JSON.parse(jsonData) as AgentSteamChunk;
             const { type, content, chunk_id, } = parsedResult;
 
-            if (processedChunkIdsRef.current.has(chunk_id)) {
-              console.log(`DEBUG: Skipping duplicate chunk_id: ${chunk_id}`);
+            if (chunk_id != null && processedChunkIdsRef.current.has(chunk_id)) {
               continue;
             }
 
-            if (chunk_id) {
+            if (chunk_id != null) {
               processedChunkIdsRef.current.add(chunk_id);
             }
 
@@ -169,22 +177,21 @@ export function useDataStream({
               } else if (toolCallResult) {
 
                 setMessages(prev => {
-                  const newMessages = [...prev];
-
                   const toolCallId = content.tool_call_id;
+                  if (!toolCallId) return [...prev];
 
-                  if (toolCallId) {
-                    newMessages.forEach((message) => {
-                      if (message.type === 'ai' && Array.isArray(message?.tool_calls) && message?.tool_calls?.length > 0) {
-                        const toolCall = message.tool_calls?.find((toolCall) => toolCall.id === toolCallId);
-                        if (toolCall) {
-                          (toolCall as any).content = content.content;
-                        }
-                      }
-                    })
-                  }
+                  return prev.map((message) => {
+                    if (message.type !== 'ai' || !Array.isArray(message?.tool_calls) || message.tool_calls.length === 0) {
+                      return message;
+                    }
+                    const idx = message.tool_calls.findIndex((tc) => tc.id === toolCallId);
+                    if (idx === -1) return message;
 
-                  return newMessages;
+                    const updatedCalls = message.tool_calls.map((tc, j) =>
+                      j === idx ? { ...tc, content: content.content } : tc,
+                    );
+                    return { ...message, tool_calls: updatedCalls };
+                  });
                 });
               }
             } else if (isStreamingTokens) {
@@ -200,9 +207,10 @@ export function useDataStream({
                 isStreamingTokensRef.current = true;
               } else {
                 setMessages(prev => {
-                  const newMessages = [...prev];
-                  newMessages[newMessages.length - 1].content += content;
-                  return newMessages;
+                  const last = prev[prev.length - 1];
+                  if (!last || last.type !== 'ai') return prev;
+                  const updated = { ...last, content: ((last.content as string) || '') + content };
+                  return [...prev.slice(0, -1), updated];
                 });
               }
 
