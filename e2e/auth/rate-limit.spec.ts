@@ -41,7 +41,7 @@ test.describe('Rate limit — 429 handling', () => {
 
     const home = new HomePage(page);
     await home.goto();
-    await home.submitPrompt('Rate limited test');
+    await home.submitPrompt('Hello from rate limit test');
 
     const chat = new ChatPage(page);
     await chat.expectChatRoute();
