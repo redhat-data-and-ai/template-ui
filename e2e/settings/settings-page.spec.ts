@@ -29,9 +29,9 @@ test.describe('Settings page', () => {
 
   test('settings page can be reached via the /settings route', async ({ page }) => {
     await mountConfig(page);
-    await page.goto('/settings');
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/settings/);
-    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.locator('h1')).toBeVisible({ timeout: 30_000 });
   });
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
@@ -59,8 +59,8 @@ test.describe('Settings page', () => {
   test('clicking Memories tab shows the Memories section', async ({ page }) => {
     const settings = new SettingsPage(page);
     await settings.goto();
-    await settings.clickTab('Memories');
-    await settings.expectTabContentVisible('Memories');
+    await settings.clickTab('Your Memories');
+    await settings.expectTabContentVisible('Your Memories');
   });
 
   // ── Theme toggle + localStorage persistence ────────────────────────────────

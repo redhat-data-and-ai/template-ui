@@ -26,7 +26,6 @@ import {
 import { chatStorage } from '@/services/chatStorage';
 import { getThreadState, getThreadStateAndInterrupt } from '@/services/agent-rest';
 import { buildAppPath } from '@/lib/app-paths';
-import { selectActiveRules, selectMemories } from '@/redux/slices/personalization';
 import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
@@ -236,8 +235,6 @@ export function useStreamingAPI(threadId: string) {
   const chat = useAppSelector((state) => selectChatById(state, threadId));
   const streamingState = useAppSelector((state) => selectStreamingState(state, threadId));
 
-  const memories = useAppSelector(selectMemories);
-  const activeRules = useAppSelector(selectActiveRules);
   const alwaysAllowedTools = useAppSelector(selectAlwaysAllowedTools);
 
   const messages = useMemo(() => chat?.messages ?? EMPTY_MESSAGES, [chat?.messages]);
@@ -415,8 +412,6 @@ export function useStreamingAPI(threadId: string) {
         userId,
         apiUrl,
         token,
-        memories: memories.map((m) => m.content),
-        rules: activeRules.map((r) => r.content),
       };
 
       let _lastOutcome: 'success' | 'cancelled' | 'failed' = 'failed';
@@ -902,7 +897,7 @@ export function useStreamingAPI(threadId: string) {
         }, RECOVERY_POLL_INTERVAL_MS);
       }
     },
-    [dispatch, threadId, memories, activeRules, handleStreamActivityStatus, clearReconnectTimers],
+    [dispatch, threadId, handleStreamActivityStatus, clearReconnectTimers],
   );
 
   /**
@@ -960,8 +955,6 @@ export function useStreamingAPI(threadId: string) {
         userId,
         apiUrl,
         token,
-        memories: memories.map((m) => m.content),
-        rules: activeRules.map((r) => r.content),
         resume: true,
         resumeDecisions: decisions,
       };
@@ -1055,7 +1048,7 @@ export function useStreamingAPI(threadId: string) {
         try { localStorage.removeItem(`pending-decision:${threadId}`); } catch { /* ignore */ }
       }
     },
-    [dispatch, threadId, memories, activeRules],
+    [dispatch, threadId],
   );
 
   const resumeInterrupt = useCallback(
@@ -1084,8 +1077,6 @@ export function useStreamingAPI(threadId: string) {
         apiUrl,
         token,
         resume: true,
-        memories: memories.map((m) => m.content),
-        rules: activeRules.map((r) => r.content),
       };
 
       let resumeStreamHadInterrupt = false;
@@ -1165,7 +1156,7 @@ export function useStreamingAPI(threadId: string) {
         void manager.stream(streamRequest, callbacks);
       });
     },
-    [dispatch, threadId, memories, activeRules],
+    [dispatch, threadId],
   );
 
   // Auto-replay queued HITL decisions when an interrupt appears after recovery

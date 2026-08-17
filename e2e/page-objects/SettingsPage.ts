@@ -1,15 +1,15 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
-type SettingsTab = 'Profile' | 'Memories' | 'Custom Rules' | 'Appearance' | 'Tool Approvals';
+type SettingsTab = 'Profile' | 'Your Memories' | 'User Rules' | 'Appearance' | 'Tool Approvals';
 
 /** Page object for the settings view (`/settings`). */
 export class SettingsPage {
   constructor(private readonly page: Page) {}
 
   async goto(): Promise<void> {
-    await this.page.goto('/settings');
-    await this.page.waitForSelector('h1', { state: 'visible' });
+    await this.page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    await this.page.waitForSelector('h1', { state: 'visible', timeout: 30_000 });
   }
 
   async getHeading(): Promise<string> {

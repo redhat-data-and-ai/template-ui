@@ -31,3 +31,4 @@ test-results/
 
 # Coverage
 coverage/
+dump.rdb
