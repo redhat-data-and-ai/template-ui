@@ -103,6 +103,7 @@ interface BrandingConfig {
 interface FeaturesConfig {
   debug_mode_default: boolean;
   auth_enabled: boolean;
+  mcp_dcr_enabled: boolean;
 }
 
 interface AgentConfig {
@@ -156,6 +157,7 @@ const DEFAULTS: UISettings = {
   features: {
     debug_mode_default: false,
     auth_enabled: true,
+    mcp_dcr_enabled: true,
   },
   agent: {
     endpoint: "",
@@ -388,6 +390,9 @@ function applyEnvOverrides(config: UISettings): void {
   }
   if (process.env.FEATURE_DEBUG_MODE_DEFAULT !== undefined) {
     config.features.debug_mode_default = process.env.FEATURE_DEBUG_MODE_DEFAULT === "true";
+  }
+  if (process.env.MCP_DCR_ENABLED !== undefined) {
+    config.features.mcp_dcr_enabled = process.env.MCP_DCR_ENABLED === "true";
   }
   // Agent overrides
   if (process.env.AGENT_ENDPOINT) {
