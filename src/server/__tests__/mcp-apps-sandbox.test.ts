@@ -91,12 +91,12 @@ describe("MCP Apps sandbox proxy", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("exposes mcp_apps.enabled on /api/config/features", async () => {
+  it("exposes mcp_apps_enabled on /api/config/features", async () => {
     const server = await buildTestServer();
     const res = await server.inject({ method: "GET", url: "/api/config/features" });
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.mcp_apps).toEqual({ enabled: true });
+    expect(body.mcp_apps_enabled).toBe(true);
   });
 });

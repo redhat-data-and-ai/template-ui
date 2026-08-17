@@ -12,8 +12,7 @@ branding:
 features:
   auth_enabled: false       # Bypasses SSO; uses dummy user developer@redhat.com
   debug_mode_default: true  # Opens the debug panel by default (useful during development)
-  mcp_apps:
-    enabled: true
+  mcp_apps_enabled: true
 
 agent:
   endpoint: ""              # Falls back to AGENT_HOST env var (default: http://localhost:5002)

@@ -797,7 +797,7 @@ export function McpAppHostFromToolCall({
   className?: string;
 }) {
   const features = useSelector((state: RootState) => state.config.features);
-  const enabled = features?.mcp_apps?.enabled === true;
+  const enabled = features?.mcp_apps_enabled === true;
   const mcpApp = enabled ? parseMcpApp(mcpAppRaw) : null;
   if (!mcpApp) return null;
   return (

@@ -54,7 +54,7 @@ const callMcpAppToolMock = vi.mocked(callMcpAppTool);
 function renderWithStore(
   ui: React.ReactElement,
   options?: {
-    features?: { mcp_apps?: { enabled: boolean } } | null;
+    features?: { mcp_apps_enabled?: boolean } | null;
     chatActions?: {
       sendUserMessage: (text: string) => Promise<void>;
       setMcpModelContext: (update: unknown) => void;
@@ -62,7 +62,7 @@ function renderWithStore(
   },
 ) {
   const features = options?.features === undefined
-    ? { mcp_apps: { enabled: true } }
+    ? { mcp_apps_enabled: true }
     : options.features;
   const store = configureStore({
     reducer: {
@@ -893,7 +893,7 @@ describe("McpAppHost", () => {
           resourceUri: "ui://charts/app.html",
         }}
       />,
-      { features: { mcp_apps: { enabled: false } } },
+      { features: { mcp_apps_enabled: false } },
     );
     expect(container).toBeEmptyDOMElement();
     expect(appRendererSpy).not.toHaveBeenCalled();

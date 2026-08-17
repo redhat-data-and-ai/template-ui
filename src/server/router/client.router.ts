@@ -86,7 +86,7 @@ async function routes(fastify: FastifyInstance) {
 
   fastify.get("/sandbox_proxy.html", async (request, reply) => {
     const cfg = getSettings();
-    if (!cfg.features.mcp_apps?.enabled) {
+    if (!cfg.features.mcp_apps_enabled) {
       return reply.code(404).send("MCP Apps sandbox is disabled");
     }
     const cspParam = (request.query as { csp?: string }).csp;
@@ -102,7 +102,7 @@ async function routes(fastify: FastifyInstance) {
 
   fastify.get("/sandbox_proxy.js", async (_request, reply) => {
     const cfg = getSettings();
-    if (!cfg.features.mcp_apps?.enabled) {
+    if (!cfg.features.mcp_apps_enabled) {
       return reply.code(404).send("MCP Apps sandbox is disabled");
     }
     const js = await readSandboxAsset("sandbox_proxy.js");

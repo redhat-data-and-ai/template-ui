@@ -70,8 +70,7 @@ Feature flags that control application behaviour. Some are user-toggleable at ru
 features:
   auth_enabled: true          # Enable SSO/OAuth2 authentication
   debug_mode_default: false   # Default state of the debug panel toggle
-  mcp_apps:
-    enabled: true             # Serve sandbox proxy + render MCP Apps in chat
+  mcp_apps_enabled: true      # Serve sandbox proxy + render MCP Apps in chat
 ```
 
 **Environment variable overrides:**
@@ -81,11 +80,11 @@ features:
 | `FEATURE_AUTH_ENABLED` | `features.auth_enabled` | Preferred |
 | `AUTH_ENABLED` | `features.auth_enabled` | Legacy alias (still supported) |
 | `FEATURE_DEBUG_MODE_DEFAULT` | `features.debug_mode_default` | |
-| `FEATURE_MCP_APPS_ENABLED` | `features.mcp_apps.enabled` | Independent of chat SSO |
+| `FEATURE_MCP_APPS_ENABLED` | `features.mcp_apps_enabled` | Independent of chat SSO |
 
 When `auth_enabled: false`, a dummy user (`developer@redhat.com`) is injected automatically. No SSO credentials are required.
 
-When `mcp_apps.enabled: false`, `/sandbox_proxy.html` is not served and interactive MCP Apps are not mounted.
+When `mcp_apps_enabled: false`, `/sandbox_proxy.html` is not served and interactive MCP Apps are not mounted.
 
 ---
 

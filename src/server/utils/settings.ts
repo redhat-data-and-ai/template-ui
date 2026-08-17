@@ -101,16 +101,11 @@ interface BrandingConfig {
   };
 }
 
-interface McpAppsFeaturesConfig {
-  /** When true, serve the MCP Apps sandbox proxy page. */
-  enabled: boolean;
-}
-
 interface FeaturesConfig {
   debug_mode_default: boolean;
   auth_enabled: boolean;
   mcp_dcr_enabled: boolean;
-  mcp_apps: McpAppsFeaturesConfig;
+  mcp_apps_enabled: boolean;
 }
 
 interface AgentConfig {
@@ -165,9 +160,7 @@ const DEFAULTS: UISettings = {
     debug_mode_default: false,
     auth_enabled: true,
     mcp_dcr_enabled: true,
-    mcp_apps: {
-      enabled: true,
-    },
+    mcp_apps_enabled: true,
   },
   agent: {
     endpoint: "",
@@ -321,11 +314,8 @@ function validateConfig(config: UISettings): void {
   if (typeof config.features.auth_enabled !== "boolean") {
     throw new Error("Config validation error: features.auth_enabled must be boolean");
   }
-  if (!config.features.mcp_apps || typeof config.features.mcp_apps !== "object") {
-    throw new Error("Config validation error: features.mcp_apps must be an object");
-  }
-  if (typeof config.features.mcp_apps.enabled !== "boolean") {
-    throw new Error("Config validation error: features.mcp_apps.enabled must be boolean");
+  if (typeof config.features.mcp_apps_enabled !== "boolean") {
+    throw new Error("Config validation error: features.mcp_apps_enabled must be boolean");
   }
 
   // Agent config validation
@@ -411,11 +401,8 @@ function applyEnvOverrides(config: UISettings): void {
   if (process.env.MCP_DCR_ENABLED !== undefined) {
     config.features.mcp_dcr_enabled = process.env.MCP_DCR_ENABLED === "true";
   }
-  if (!config.features.mcp_apps) {
-    config.features.mcp_apps = { ...DEFAULTS.features.mcp_apps };
-  }
   if (process.env.FEATURE_MCP_APPS_ENABLED !== undefined) {
-    config.features.mcp_apps.enabled = process.env.FEATURE_MCP_APPS_ENABLED === "true";
+    config.features.mcp_apps_enabled = process.env.FEATURE_MCP_APPS_ENABLED === "true";
   }
   // Agent overrides
   if (process.env.AGENT_ENDPOINT) {
@@ -549,9 +536,6 @@ export function getSettings(): UISettings {
   // Backfill keys added after older config files were written
   if (!_settings.security.helmet.csp.frame_src?.length) {
     _settings.security.helmet.csp.frame_src = [...DEFAULTS.security.helmet.csp.frame_src];
-  }
-  if (!_settings.features.mcp_apps) {
-    _settings.features.mcp_apps = { ...DEFAULTS.features.mcp_apps };
   }
 
   // Validate the final config

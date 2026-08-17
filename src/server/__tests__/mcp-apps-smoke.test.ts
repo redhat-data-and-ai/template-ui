@@ -2,7 +2,7 @@
  * Compliance smoke tests for the MCP Apps host (UI side).
  *
  * Covers sandbox serving, feature flag, BFF proxy contracts, and that
- * features.mcp_apps is exposed to the frontend.
+ * features.mcp_apps_enabled is exposed to the frontend.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildTestServer } from "./test-utils.js";
@@ -59,11 +59,11 @@ describe("MCP Apps host smoke (UI)", () => {
     expect(res.body).toContain("buildAllowAttribute");
   });
 
-  it("exposes mcp_apps.enabled on /api/config/features", async () => {
+  it("exposes mcp_apps_enabled on /api/config/features", async () => {
     const server = await buildTestServer();
     const res = await server.inject({ method: "GET", url: "/api/config/features" });
     expect(res.statusCode).toBe(200);
-    expect(res.json().mcp_apps).toEqual({ enabled: true });
+    expect(res.json().mcp_apps_enabled).toBe(true);
   });
 
   it("BFF rejects empty resources/read uri before calling the agent", async () => {

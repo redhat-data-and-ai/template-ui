@@ -68,7 +68,7 @@ agent:
     expect(settings.branding.colors.light.primary).toBe("#ff0000");
     expect(settings.features.debug_mode_default).toBe(true);
     expect(settings.features.auth_enabled).toBe(false);
-    expect(settings.features.mcp_apps.enabled).toBe(true);
+    expect(settings.features.mcp_apps_enabled).toBe(true);
     expect(settings.security.helmet.csp.frame_src).toContain("'self'");
     expect(settings.agent.timeout_ms).toBe(60000);
   });
