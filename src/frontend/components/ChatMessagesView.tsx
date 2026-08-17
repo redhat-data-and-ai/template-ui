@@ -479,8 +479,8 @@ interface AIMessageRendererProps {
 
 export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  // Track ids we have auto-expanded so stream updates don't re-open a manual collapse.
-  const autoExpandedMcpIdsRef = useRef<Set<string>>(new Set());
+  // Track ids the user collapsed so stream updates don't re-open them.
+  const userCollapsedMcpIdsRef = useRef<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
 
   const pendingToolNames = useMemo(
@@ -518,19 +518,23 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     const regularCalls = allToolCalls.filter(
       (tc) => tc && typeof tc === "object" && !isSubAgentToolCall(tc as never) && (tc as { name?: string }).name !== "write_todos",
     );
+    const idsToExpand: string[] = [];
+    regularCalls.forEach((tc, idx) => {
+      if (!parseMcpApp((tc as Record<string, unknown>).mcpApp)) return;
+      const itemId = `${message.id}-${idx}`;
+      if (userCollapsedMcpIdsRef.current.has(itemId)) return;
+      idsToExpand.push(itemId);
+    });
+    if (idsToExpand.length === 0) return;
     setExpandedItems((prev) => {
       const next = new Set(prev);
       let changed = false;
-      regularCalls.forEach((tc, idx) => {
-        if (!parseMcpApp((tc as Record<string, unknown>).mcpApp)) return;
-        const itemId = `${message.id}-${idx}`;
-        if (autoExpandedMcpIdsRef.current.has(itemId)) return;
-        autoExpandedMcpIdsRef.current.add(itemId);
+      for (const itemId of idsToExpand) {
         if (!next.has(itemId)) {
           next.add(itemId);
           changed = true;
         }
-      });
+      }
       return changed ? next : prev;
     });
   // message omitted: only re-run when id/key change (same pattern as pending-tool expand above).
@@ -539,13 +543,15 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
 
   const toggleExpand = (itemId: string) => {
     setExpandedItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
+      const next = new Set(prev);
+      if (prev.has(itemId)) {
+        next.delete(itemId);
+        userCollapsedMcpIdsRef.current.add(itemId);
       } else {
-        newSet.add(itemId);
+        next.add(itemId);
+        userCollapsedMcpIdsRef.current.delete(itemId);
       }
-      return newSet;
+      return next;
     });
   };
 
