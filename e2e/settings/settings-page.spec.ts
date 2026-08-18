@@ -28,10 +28,10 @@ test.describe('Settings page', () => {
   });
 
   test('settings page can be reached via the /settings route', async ({ page }) => {
-    // Navigate directly to /settings (beforeEach already mounted config routes)
-    await page.goto('/settings');
-    await page.waitForSelector('h1', { state: 'visible' });
+    const settings = new SettingsPage(page);
+    await settings.goto();
     await expect(page).toHaveURL(/\/settings/);
+    await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   });
 
   // ── Tab navigation ─────────────────────────────────────────────────────────

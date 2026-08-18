@@ -18,6 +18,7 @@ export interface BrandingConfig {
 export interface FeaturesConfig {
   debug_mode_default: boolean;
   auth_enabled: boolean;
+  mcp_apps_enabled?: boolean;
 }
 
 function getConfigApiBase(): string {

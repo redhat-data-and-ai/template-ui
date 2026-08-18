@@ -24,9 +24,11 @@ import remarkGfm from "remark-gfm";
 import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
+import { McpAppHostFromToolCall } from "./McpAppHost";
 import { TodoStrip } from "./TodoStrip";
 import { FeedbackButtons } from "./FeedbackButtons";
 import { CustomDataRenderer } from "./CustomDataRenderer";
+import { parseMcpApp } from "../types/mcp-apps";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -477,6 +479,8 @@ interface AIMessageRendererProps {
 
 export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  // Track ids the user collapsed so stream updates don't re-open them.
+  const userCollapsedMcpIdsRef = useRef<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
 
   const pendingToolNames = useMemo(
@@ -507,15 +511,47 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingToolNames, message.id]);
 
+  // Auto-expand regular tool cards that carry an MCP App so the interactive UI is visible.
+  useEffect(() => {
+    const allToolCalls = (message as { tool_calls?: unknown[] }).tool_calls;
+    if (!Array.isArray(allToolCalls)) return;
+    const regularCalls = allToolCalls.filter(
+      (tc) => tc && typeof tc === "object" && !isSubAgentToolCall(tc as never) && (tc as { name?: string }).name !== "write_todos",
+    );
+    const idsToExpand: string[] = [];
+    regularCalls.forEach((tc, idx) => {
+      if (!parseMcpApp((tc as Record<string, unknown>).mcpApp)) return;
+      const itemId = `${message.id}-${idx}`;
+      if (userCollapsedMcpIdsRef.current.has(itemId)) return;
+      idsToExpand.push(itemId);
+    });
+    if (idsToExpand.length === 0) return;
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const itemId of idsToExpand) {
+        if (!next.has(itemId)) {
+          next.add(itemId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  // message omitted: only re-run when id/key change (same pattern as pending-tool expand above).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [message.id, messageKey]);
+
   const toggleExpand = (itemId: string) => {
     setExpandedItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
+      const next = new Set(prev);
+      if (prev.has(itemId)) {
+        next.delete(itemId);
+        userCollapsedMcpIdsRef.current.add(itemId);
       } else {
-        newSet.add(itemId);
+        next.add(itemId);
+        userCollapsedMcpIdsRef.current.delete(itemId);
       }
-      return newSet;
+      return next;
     });
   };
 
@@ -584,6 +620,11 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                   const regSlot = approvalSlotByToolCallId.get(regTcId);
                   const isThisCurrentApproval = regSlot !== undefined && regSlot === globalApprovalIndex && !allDecisionsMade;
                   const showButtons = totalActionRequests <= 1 ? needsApproval : (needsApproval && isThisCurrentApproval);
+                  const mcpAppDesc = parseMcpApp((toolCall as Record<string, unknown>).mcpApp);
+                  const hasMcpApp = Boolean(mcpAppDesc);
+                  // Keep the tool body mounted when an MCP App is present so collapse hides
+                  // the iframe instead of destroying it (host teardown runs on real unmount).
+                  const keepToolBodyMounted = isExpanded || (!needsApproval && hasMcpApp);
 
                   return (
                     <div
@@ -627,14 +668,39 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                         )}
                       </button>
 
-                      {isExpanded && (
-                        <div id={`tool-body-${itemId}`} className="border-t border-border">
+                      {keepToolBodyMounted && (
+                        <div
+                          id={`tool-body-${itemId}`}
+                          className={cn("border-t border-border", !isExpanded && "hidden")}
+                        >
                           <div className="px-4 pb-3">
-                            <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
-                            <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                              {JSON.stringify(toolCall.args, null, 2)}
-                            </pre>
-                            {!needsApproval && (
+                            {isExpanded && (
+                              <>
+                                <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
+                                <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                                  {JSON.stringify(toolCall.args, null, 2)}
+                                </pre>
+                              </>
+                            )}
+                            {!needsApproval && hasMcpApp && (
+                              <>
+                                {isExpanded && (
+                                  <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
+                                    Interactive UI
+                                  </div>
+                                )}
+                                <McpAppHostFromToolCall
+                                  mcpAppRaw={(toolCall as Record<string, unknown>).mcpApp}
+                                  toolName={toolCall.name}
+                                  toolCancelled={
+                                    (toolCall as Record<string, unknown>).content != null &&
+                                    !mcpAppDesc?.result
+                                  }
+                                  className="mb-2"
+                                />
+                              </>
+                            )}
+                            {isExpanded && !needsApproval && (
                               <>
                                 <div className={cn(
                                   "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",

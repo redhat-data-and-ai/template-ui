@@ -1,6 +1,7 @@
 import { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { authenticatedFetch } from "./authenticated-fetch";
 import { buildAgentApiUrl } from "../lib/app-paths";
+import { withMcpAppArguments } from "../types/mcp-apps";
 
 export interface Thread {
   id: string;
@@ -71,6 +72,22 @@ function normalizeMessages(messages: any[]): Message[] {
   }));
 }
 
+function extractMcpAppFromToolMessage(
+  message: Message & { mcpApp?: Record<string, unknown>; artifact?: any },
+): Record<string, unknown> | undefined {
+  const candidates = [
+    message.mcpApp,
+    message.artifact?.mcp_app,
+    message.artifact?.mcpApp,
+  ];
+  for (const value of candidates) {
+    if (value && typeof value === 'object' && typeof (value as any).resourceUri === 'string') {
+      return value as Record<string, unknown>;
+    }
+  }
+  return undefined;
+}
+
 function combineToolCallandResult(messages: Message[]) {
   const newMessages: Message[] = [];
   messages.forEach((message) => {
@@ -84,9 +101,28 @@ function combineToolCallandResult(messages: Message[]) {
           if (Array.isArray(aiMsg.tool_calls) && aiMsg.tool_calls.length > 0 && toolCallId) {
             const idx = aiMsg.tool_calls.findIndex((tc) => tc.id === toolCallId);
             if (idx !== -1) {
-              const updated = aiMsg.tool_calls.map((tc, j) =>
-                j === idx ? { ...tc, content: normalizeContent(message.content) } : { ...tc },
-              );
+              const toolMsg = message as Message & {
+                mcpApp?: Record<string, unknown>;
+                artifact?: unknown;
+              };
+              const mcpApp = extractMcpAppFromToolMessage(toolMsg);
+              const updated = aiMsg.tool_calls.map((tc, j) => {
+                if (j !== idx) return { ...tc };
+                const merged: Record<string, unknown> = {
+                  ...tc,
+                  content: normalizeContent(message.content),
+                };
+                if (toolMsg.artifact !== undefined) {
+                  merged.artifact = toolMsg.artifact;
+                }
+                if (mcpApp) {
+                  merged.mcpApp = withMcpAppArguments(
+                    mcpApp,
+                    (tc as { args?: Record<string, unknown> }).args,
+                  );
+                }
+                return merged;
+              });
               newMessages[i] = { ...aiMsg, tool_calls: updated } as any;
             }
           }
