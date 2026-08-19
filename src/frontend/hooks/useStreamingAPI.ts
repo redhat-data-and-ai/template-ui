@@ -946,7 +946,7 @@ export function useStreamingAPI(threadId: string) {
         }, RECOVERY_POLL_INTERVAL_MS);
       }
     },
-    [dispatch, threadId, memories, activeRules, handleStreamActivityStatus, clearReconnectTimers],
+    [dispatch, threadId, memories, activeRules, handleStreamActivityStatus, clearReconnectTimers, setMessages, setWasInterrupted],
   );
 
   /**
