@@ -183,6 +183,12 @@ export class SSEProcessor {
         continue;
       }
 
+      if (isRecord(parsed) && parsed.type === 'error') {
+        const errMsg = typeof parsed.message === 'string' ? parsed.message : 'Agent stream error';
+        events.push({ kind: 'error', message: errMsg });
+        continue;
+      }
+
       const chunk = parseSSEChunkPayload(parsed);
       if (chunk === null) {
         events.push({

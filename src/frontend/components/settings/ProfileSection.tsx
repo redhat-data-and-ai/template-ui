@@ -5,9 +5,9 @@ import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
 import { addToast } from '../../redux/slices/toasts';
+import { deleteThread } from '../../services/agent-rest';
 import { chatStorage } from '../../services/chatStorage';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
-import { deleteThread } from '../../services/agent-rest';
 
 export function ProfileSection() {
   const dispatch = useAppDispatch();
@@ -23,20 +23,20 @@ export function ProfileSection() {
   const handleDeleteAll = async () => {
     const ids = chats.map((c) => c.id);
     ids.forEach((id) => releaseStreamingManager(id));
-
-    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
-    const failures = results.filter((r) => r === false).length;
-
-    if (failures > 0) {
-      dispatch(addToast({ title: `Failed to delete ${failures} chat${failures !== 1 ? 's' : ''} on the server`, variant: 'danger' }));
-      setConfirmDelete(false);
-      return;
-    }
-
     dispatch(clearAllChats());
     chatStorage.clearChats();
-    dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
     setConfirmDelete(false);
+
+    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
+    const failures = results.filter((r) => !r).length;
+
+    if (failures > 0 && failures < ids.length) {
+      dispatch(addToast({ title: `${ids.length - failures} chats deleted, ${failures} failed on server`, variant: 'warning' }));
+    } else if (failures === ids.length) {
+      dispatch(addToast({ title: 'Chats cleared locally but server deletion failed', variant: 'warning' }));
+    } else {
+      dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
+    }
     navigate('/');
   };
 

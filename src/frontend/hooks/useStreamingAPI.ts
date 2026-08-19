@@ -10,6 +10,7 @@ import {
 } from '@/lib/streaming/StreamingManager';
 import { getStreamingManager } from '@/lib/streaming/streamingManagerRegistry';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import type { AppDispatch } from '@/redux/store';
 import {
   appendMessageToChat,
   removeLastMessageFromChat,
@@ -23,11 +24,14 @@ import {
   type StreamingState,
 } from '@/redux/slices/chats';
 import { chatStorage } from '@/services/chatStorage';
+import { getThreadState, getThreadStateAndInterrupt } from '@/services/agent-rest';
+import { buildAppPath } from '@/lib/app-paths';
 import { selectActiveRules, selectMemories } from '@/redux/slices/personalization';
 import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
-import { getThreadState } from '@/services/agent-rest';
+import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
+
 
 function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
   const raw = interrupt.value as string | HITLInterruptValue;
@@ -68,16 +72,34 @@ const EMPTY_MESSAGES: Message[] = [];
 /** MR-56: max automatic retries after the first failed stream attempt */
 export const MAX_RETRIES = 3;
 /** MR-56: base delay for exponential backoff (ms) */
-const BASE_DELAY_MS = 1000;
+const BASE_DELAY_MS = 5000;
 /** MR-63: idle threshold before marking stream as stale (ms) */
 const STALE_THRESHOLD_MS = 30000;
 /** Time threshold for refetching history on reconnect (ms) */
 const HISTORY_REFETCH_THRESHOLD_MS = 10000;
+/** Poll interval when waiting for a recovered run to complete (ms) */
+const RECOVERY_POLL_INTERVAL_MS = 5000;
+/** Max time to poll for recovery before giving up (ms) */
+export const RECOVERY_POLL_TIMEOUT_MS = 120000;
 
 function computeRetryDelayMs(retryAttemptNumber: number): number {
   const capped = Math.min(BASE_DELAY_MS * 2 ** retryAttemptNumber, 30000);
   const jitter = Math.random() * Math.min(capped * 0.25, 7500);
   return Math.floor(Math.min(capped + jitter, 30000));
+}
+
+async function isAgentReachable(): Promise<boolean> {
+  try {
+    const res = await fetch(buildAppPath('/api/health/agent'), {
+      credentials: 'same-origin',
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return false;
+    const data = await res.json() as { status?: string };
+    return data.status !== 'unhealthy' && data.status !== 'unreachable';
+  } catch {
+    return false;
+  }
 }
 
 function isRecoverableStreamError(error: Error): boolean {
@@ -101,6 +123,98 @@ function isRecoverableStreamError(error: Error): boolean {
     return true;
   }
   return false;
+}
+
+function _tryReplayQueuedDecision(threadId: string): Array<{ type: 'approve' | 'reject'; message?: string }> | null {
+  try {
+    const raw = localStorage.getItem(`pending-decision:${threadId}`);
+    if (!raw) return null;
+    const { decisions, timestamp } = JSON.parse(raw) as {
+      decisions: Array<{ type: 'approve' | 'reject'; message?: string }>;
+      timestamp: number;
+    };
+    if (Date.now() - timestamp > 5 * 60 * 1000) {
+      localStorage.removeItem(`pending-decision:${threadId}`);
+      return null;
+    }
+    return decisions;
+  } catch {
+    return null;
+  }
+}
+
+export function _startRecoveryPolling(
+  threadId: string,
+  dispatch: AppDispatch,
+  onRecovered: (msgs: Message[]) => void,
+  intervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
+  deadlineRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
+  wasInterruptedRef: React.MutableRefObject<boolean>,
+  pollIntervalMs: number,
+  timeoutMs: number,
+) {
+  if (intervalRef.current) clearInterval(intervalRef.current);
+  if (deadlineRef.current) clearTimeout(deadlineRef.current);
+  wasInterruptedRef.current = true;
+  let polling = false;
+  let expired = false;
+
+  deadlineRef.current = setTimeout(() => {
+    expired = true;
+    deadlineRef.current = null;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    dispatch(updateStreamingState({
+      chatId: threadId,
+      state: {
+        isLoading: false,
+        isConnected: false,
+        isReconnecting: false,
+        reconnectAttempt: 0,
+        error: 'Agent is unavailable. Please try again.',
+      },
+    }));
+  }, timeoutMs);
+
+  const myInterval = intervalRef.current = setInterval(async () => {
+    if (polling || expired) return;
+    polling = true;
+    try {
+      const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
+      if (expired || intervalRef.current !== myInterval) return;
+      if (interrupt) {
+        if (deadlineRef.current) { clearTimeout(deadlineRef.current); deadlineRef.current = null; }
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        wasInterruptedRef.current = false;
+        dispatch(updateStreamingState({
+          chatId: threadId,
+          state: {
+            pendingInterrupt: {
+              value: interrupt.value as any,
+              resumable: interrupt.resumable,
+            },
+            isLoading: false,
+          },
+        }));
+        return;
+      }
+
+      if (msgs.length === 0) return;
+      const lastMsg = msgs[msgs.length - 1];
+      if (lastMsg.type === 'ai' && lastMsg.content) {
+        if (deadlineRef.current) { clearTimeout(deadlineRef.current); deadlineRef.current = null; }
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        wasInterruptedRef.current = false;
+        onRecovered(msgs);
+      }
+    } catch {
+      // Agent still down — keep polling
+    } finally {
+      polling = false;
+    }
+  }, pollIntervalMs);
 }
 
 function nextStreamingPartialForStatus(status: StreamStatus): Partial<StreamingState> | null {
@@ -146,11 +260,14 @@ export function useStreamingAPI(threadId: string) {
   const alwaysAllowedTools = useAppSelector(selectAlwaysAllowedTools);
 
   const messages = useMemo(() => chat?.messages ?? EMPTY_MESSAGES, [chat?.messages]);
+  // Keep messagesRef in sync for recovery polling
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const [streamEvents] = useState<StreamEvent[]>([]);
   const [retryCount, setRetryCount] = useState(0);
   const [isStreamStale, setIsStreamStale] = useState(false);
-  const [wasInterrupted, setWasInterrupted] = useState(false);
+  const [wasInterrupted, setWasInterruptedState] = useState(false);
+  const setWasInterrupted = useCallback((v: boolean) => { wasInterruptedRef.current = v; setWasInterruptedState(v); }, []);
   const [mcpEvents, setMcpEvents] = useState<Array<{ tool: string; status: string; timestamp: number }>>([]);
   const [traceId, setTraceId] = useState<string | null>(null);
   const [lastStreamTiming, setLastStreamTiming] = useState<{
@@ -180,12 +297,19 @@ export function useStreamingAPI(threadId: string) {
   threadIdRef.current = threadId;
   const chatRef = useRef(chat);
   chatRef.current = chat;
+  const wasInterruptedRef = useRef(false);
+  const messagesRef = useRef<Message[]>(EMPTY_MESSAGES);
+  const recoveryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recoveryDeadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const clearReconnectTimers = useCallback(() => {
+    for (const id of reconnectTimersRef.current) clearTimeout(id);
+    reconnectTimersRef.current = [];
+  }, []);
 
-  useEffect(() => {
-    if (!managerRef.current) {
-      managerRef.current = getStreamingManager(threadId);
-    }
-  }, [threadId]);
+  if (!managerRef.current) {
+    managerRef.current = getStreamingManager(threadId);
+  }
 
   const handleStreamActivityStatus = useCallback((status: StreamStatus) => {
     if (status === 'connecting' || status === 'streaming') {
@@ -220,12 +344,21 @@ export function useStreamingAPI(threadId: string) {
 
   useEffect(() => {
     return () => {
+      clearReconnectTimers();
+      if (recoveryIntervalRef.current) {
+        clearInterval(recoveryIntervalRef.current);
+        recoveryIntervalRef.current = null;
+      }
+      if (recoveryDeadlineRef.current) {
+        clearTimeout(recoveryDeadlineRef.current);
+        recoveryDeadlineRef.current = null;
+      }
       if (staleIntervalRef.current != null) {
         clearInterval(staleIntervalRef.current);
         staleIntervalRef.current = null;
       }
     };
-  }, []);
+  }, [clearReconnectTimers]);
 
   useEffect(() => {
     if (!threadId) return;
@@ -243,13 +376,32 @@ export function useStreamingAPI(threadId: string) {
   );
 
   const submit = useCallback(
-    async ({ messages: submitted }: { messages: Message[] }) => {
+    async ({
+      messages: submitted,
+      mcpModelContext,
+    }: {
+      messages: Message[];
+      /** One-shot MCP App context (ui/update-model-context); not stored in the chat bubble. */
+      mcpModelContext?: string | null;
+    }) => {
       const manager = managerRef.current;
       if (!manager || !threadId) return;
 
       userCancelledRef.current = false;
       setRetryCount(0);
       setWasInterrupted(false);
+      const initialMessageCount = messagesRef.current.length;
+
+      // Clear any pending reconnect timers and recovery poller from previous run.
+      clearReconnectTimers();
+      if (recoveryIntervalRef.current) {
+        clearInterval(recoveryIntervalRef.current);
+        recoveryIntervalRef.current = null;
+      }
+      if (recoveryDeadlineRef.current) {
+        clearTimeout(recoveryDeadlineRef.current);
+        recoveryDeadlineRef.current = null;
+      }
       setIsStreamStale(false);
       setMcpEvents([]);
       setTraceId(null);
@@ -270,7 +422,10 @@ export function useStreamingAPI(threadId: string) {
       dispatch(updateChat({ id: threadId, updates: { messages: clones } }));
       chatStorage.saveChatByThreadId(threadId, clones);
 
-      const messageText = serializeLastMessage(clones);
+      const messageText = mergeMessageWithMcpModelContext(
+        serializeLastMessage(clones),
+        mcpModelContext,
+      );
       if (messageText === '') return;
 
       const token = typeof window.USER_DATA.accessToken === 'string' ? window.USER_DATA.accessToken : undefined;
@@ -302,6 +457,7 @@ export function useStreamingAPI(threadId: string) {
         rules: activeRules.map((r) => r.content),
       };
 
+      let _lastOutcome: 'success' | 'cancelled' | 'failed' = 'failed';
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         if (userCancelledRef.current) {
           break;
@@ -421,6 +577,9 @@ export function useStreamingAPI(threadId: string) {
                     chatId: threadId,
                     toolCallId: m.tool_call_id,
                     content: m.content,
+                    status: (m as Record<string, unknown>).status as string | undefined,
+                    mcpApp: (m as { mcpApp?: Record<string, unknown> }).mcpApp,
+                    artifact: (m as { artifact?: unknown }).artifact,
                   }),
                 );
                 dispatch(
@@ -440,10 +599,91 @@ export function useStreamingAPI(threadId: string) {
                 }),
               );
             },
-            onError(error) {
+            async onError(error) {
               lastStreamErrorRef.current = error;
+              if (!recoveryIntervalRef.current && threadId) {
+                const pollStart = Date.now();
+                let polling = false;
+                recoveryIntervalRef.current = setInterval(async () => {
+                  if (polling) return;
+                  if (!recoveryIntervalRef.current || userCancelledRef.current || !threadId) return;
+                  if (Date.now() - pollStart > RECOVERY_POLL_TIMEOUT_MS) {
+                    const id = recoveryIntervalRef.current;
+                    recoveryIntervalRef.current = null;
+                    if (id) clearInterval(id);
+                    dispatch(updateStreamingState({
+                      chatId: threadId,
+                      state: {
+                        isLoading: false,
+                        isConnected: false,
+                        isReconnecting: false,
+                        reconnectAttempt: 0,
+                        error: 'Agent is unavailable. Please try again.',
+                      },
+                    }));
+                    return;
+                  }
+                  polling = true;
+                  try {
+                    const { messages: serverMsgs, interrupt } = await getThreadStateAndInterrupt(threadId);
+
+                    if (interrupt) {
+                      const intervalId = recoveryIntervalRef.current;
+                      recoveryIntervalRef.current = null;
+                      if (intervalId) clearInterval(intervalId);
+                      messagesRef.current = serverMsgs;
+                      dispatch(updateChat({ id: threadId, updates: { messages: serverMsgs } }));
+
+                      const queued = _tryReplayQueuedDecision(threadId);
+                      if (queued) {
+                        dispatch(updateStreamingState({
+                          chatId: threadId,
+                          state: { error: null, isLoading: true, isConnected: false, isReconnecting: false, reconnectAttempt: 0 },
+                        }));
+                        resumeWithDecisionsRef.current(queued).catch(() => {});
+                      } else {
+                        dispatch(updateStreamingState({
+                          chatId: threadId,
+                          state: {
+                            error: null, isLoading: false, isConnected: false,
+                            isReconnecting: false, reconnectAttempt: 0,
+                            pendingInterrupt: {
+                              value: interrupt.value as any,
+                              resumable: interrupt.resumable,
+                            },
+                          },
+                        }));
+                      }
+                      setWasInterrupted(false);
+                    } else if (serverMsgs.length > initialMessageCount && serverMsgs.length > messagesRef.current.length) {
+                      messagesRef.current = serverMsgs;
+                      dispatch(updateChat({ id: threadId, updates: { messages: serverMsgs } }));
+                      dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+                      const last = serverMsgs[serverMsgs.length - 1];
+                      const isFinalResponse = last?.type === 'ai' && last.content &&
+                        (!Array.isArray((last as any).tool_calls) || (last as any).tool_calls.length === 0);
+                      if (isFinalResponse) {
+                        const intervalId = recoveryIntervalRef.current;
+                        recoveryIntervalRef.current = null;
+                        if (intervalId) clearInterval(intervalId);
+                        managerRef.current?.cancel();
+                        dispatch(updateStreamingState({
+                          chatId: threadId,
+                          state: { error: null, isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0 },
+                        }));
+                        setWasInterrupted(false);
+                      }
+                    }
+                  } catch {
+                    // Server may be unreachable during pod replacement
+                  } finally {
+                    polling = false;
+                  }
+                }, RECOVERY_POLL_INTERVAL_MS);
+              }
+              const agentUp = await isAgentReachable();
               const canRetry =
-                isRecoverableStreamError(error) && attempt < MAX_RETRIES && !userCancelledRef.current;
+                agentUp && isRecoverableStreamError(error) && attempt < MAX_RETRIES && !userCancelledRef.current;
               if (canRetry) {
                 dispatch(
                   updateStreamingState({
@@ -455,7 +695,33 @@ export function useStreamingAPI(threadId: string) {
                     },
                   }),
                 );
+              } else if (!agentUp) {
+                const tid = threadIdRef.current;
+                const dropped = isStreamingTokensRef.current;
+                clearReconnectTimers();
+                for (let step = 1; step <= MAX_RETRIES; step++) {
+                  const s = step;
+                  const timerId = setTimeout(() => {
+                    if (userCancelledRef.current) return;
+                    dispatch(
+                      updateStreamingState({
+                        chatId: tid,
+                        state: {
+                          error: null,
+                          isLoading: true,
+                          isConnected: false,
+                          isReconnecting: true,
+                          reconnectAttempt: s,
+                          streamDroppedMidResponse: dropped,
+                        },
+                      }),
+                    );
+                  }, (s - 1) * 15000);
+                  reconnectTimersRef.current.push(timerId);
+                }
+                setWasInterrupted(true);
               } else {
+                dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error' }));
                 dispatch(
                   updateStreamingState({
                     chatId: threadId,
@@ -512,19 +778,100 @@ export function useStreamingAPI(threadId: string) {
                 dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
               }
               lastSuccessfulConnectionRef.current = Date.now();
-              dispatch(
-                updateStreamingState({
-                  chatId: threadId,
-                  state: {
-                    isLoading: false,
-                    isConnected: false,
-                    isReconnecting: false,
-                    reconnectAttempt: 0,
-                    streamDroppedMidResponse: false,
-                  },
-                }),
-              );
-              finish('success');
+              const gotFullResponse = messagesRef.current.length > initialMessageCount + 1;
+              if (gotFullResponse && recoveryIntervalRef.current) {
+                clearInterval(recoveryIntervalRef.current);
+                recoveryIntervalRef.current = null;
+              } else if (!gotFullResponse && !recoveryIntervalRef.current && threadId) {
+                const pollStart = Date.now();
+                let polling = false;
+                recoveryIntervalRef.current = setInterval(async () => {
+                  if (polling) return;
+                  if (!recoveryIntervalRef.current || userCancelledRef.current || !threadId) return;
+                  if (Date.now() - pollStart > RECOVERY_POLL_TIMEOUT_MS) {
+                    const id = recoveryIntervalRef.current;
+                    recoveryIntervalRef.current = null;
+                    if (id) clearInterval(id);
+                    dispatch(updateStreamingState({
+                      chatId: threadId,
+                      state: {
+                        isLoading: false,
+                        isConnected: false,
+                        isReconnecting: false,
+                        reconnectAttempt: 0,
+                        error: 'Agent is unavailable. Please try again.',
+                      },
+                    }));
+                    return;
+                  }
+                  polling = true;
+                  try {
+                    const { messages: serverMsgs, interrupt } = await getThreadStateAndInterrupt(threadId);
+
+                    if (interrupt) {
+                      const intervalId = recoveryIntervalRef.current;
+                      recoveryIntervalRef.current = null;
+                      if (intervalId) clearInterval(intervalId);
+                      messagesRef.current = serverMsgs;
+                      dispatch(updateChat({ id: threadId, updates: { messages: serverMsgs } }));
+                      dispatch(updateStreamingState({
+                        chatId: threadId,
+                        state: {
+                          error: null, isLoading: false, isConnected: false,
+                          isReconnecting: false, reconnectAttempt: 0,
+                          pendingInterrupt: {
+                            value: interrupt.value as any,
+                            resumable: interrupt.resumable,
+                          },
+                        },
+                      }));
+                      setWasInterrupted(false);
+                    } else if (serverMsgs.length > initialMessageCount && serverMsgs.length > messagesRef.current.length) {
+                      const intervalId = recoveryIntervalRef.current;
+                      recoveryIntervalRef.current = null;
+                      if (intervalId) clearInterval(intervalId);
+                      managerRef.current?.cancel();
+                      messagesRef.current = serverMsgs;
+                      dispatch(updateChat({ id: threadId, updates: { messages: serverMsgs } }));
+                      dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+                      dispatch(updateStreamingState({
+                        chatId: threadId,
+                        state: { error: null, isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0 },
+                      }));
+                      setWasInterrupted(false);
+                    }
+                  } catch { /* keep polling */ }
+                  finally { polling = false; }
+                }, RECOVERY_POLL_INTERVAL_MS);
+              }
+              if (gotFullResponse) {
+                dispatch(
+                  updateStreamingState({
+                    chatId: threadId,
+                    state: {
+                      isLoading: false,
+                      isConnected: false,
+                      isReconnecting: false,
+                      reconnectAttempt: 0,
+                      streamDroppedMidResponse: false,
+                    },
+                  }),
+                );
+              } else {
+                dispatch(
+                  updateStreamingState({
+                    chatId: threadId,
+                    state: {
+                      isLoading: true,
+                      isConnected: false,
+                      isReconnecting: true,
+                      reconnectAttempt: 1,
+                      streamDroppedMidResponse: isStreamingTokensRef.current,
+                    },
+                  }),
+                );
+              }
+              finish(gotFullResponse ? 'success' : 'failed');
             },
             onMcpStatus(evt) {
               setMcpEvents((prev) => [...prev, evt]);
@@ -544,6 +891,7 @@ export function useStreamingAPI(threadId: string) {
           });
         });
 
+        _lastOutcome = outcome;
         if (outcome === 'success' || outcome === 'cancelled') {
           break;
         }
@@ -555,14 +903,76 @@ export function useStreamingAPI(threadId: string) {
           attempt >= MAX_RETRIES ||
           userCancelledRef.current
         ) {
+          // Stream failed after all retries — start recovery polling
+          // The agent may recover (LeaseReaper) and complete the run;
+          // poll thread state until the response appears or timeout
+          if (err && !userCancelledRef.current) {
+            _startRecoveryPolling(threadIdRef.current, dispatch, (msgs) => {
+              if (msgs.length > 0) {
+                dispatch(updateChat({
+                  id: threadIdRef.current,
+                  updates: { messages: msgs },
+                }));
+                setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
+                dispatch(updateStreamingState({
+                  chatId: threadIdRef.current,
+                  state: { isLoading: false, error: null },
+                }));
+              }
+            }, recoveryIntervalRef, recoveryDeadlineRef, wasInterruptedRef, RECOVERY_POLL_INTERVAL_MS, RECOVERY_POLL_TIMEOUT_MS);
+          }
           break;
         }
 
         setRetryCount(attempt + 1);
         await new Promise<void>((r) => setTimeout(r, computeRetryDelayMs(attempt + 1)));
       }
+
+      // After all retries: start a fallback recovery poller ONLY if
+      // the stream failed (not on normal completions — that would waste
+      // a getThreadState call on every successful message exchange).
+      if (threadId && !userCancelledRef.current && !recoveryIntervalRef.current && _lastOutcome === 'failed') {
+        const pollStart = Date.now();
+        let polling = false;
+        recoveryIntervalRef.current = setInterval(async () => {
+          if (polling) return;
+          if (!recoveryIntervalRef.current || userCancelledRef.current || !threadId) return;
+          if (Date.now() - pollStart > RECOVERY_POLL_TIMEOUT_MS) {
+            const id = recoveryIntervalRef.current;
+            recoveryIntervalRef.current = null;
+            if (id) clearInterval(id);
+            dispatch(updateStreamingState({
+              chatId: threadId,
+              state: {
+                isLoading: false,
+                isConnected: false,
+                isReconnecting: false,
+                reconnectAttempt: 0,
+                error: 'Agent is unavailable. Please try again.',
+              },
+            }));
+            return;
+          }
+          polling = true;
+          try {
+            const serverMsgs = await getThreadState(threadId);
+            if (serverMsgs.length > messagesRef.current.length) {
+              const id = recoveryIntervalRef.current;
+              recoveryIntervalRef.current = null;
+              if (id) clearInterval(id);
+              managerRef.current?.cancel();
+              messagesRef.current = serverMsgs;
+              dispatch(updateChat({ id: threadId, updates: { messages: serverMsgs } }));
+              dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+              dispatch(updateStreamingState({ chatId: threadId, state: { error: null, isLoading: false, isConnected: false } }));
+              setWasInterrupted(false);
+            }
+          } catch { /* keep polling */ }
+          finally { polling = false; }
+        }, RECOVERY_POLL_INTERVAL_MS);
+      }
     },
-    [dispatch, threadId, memories, activeRules, handleStreamActivityStatus],
+    [dispatch, threadId, memories, activeRules, handleStreamActivityStatus, clearReconnectTimers, setMessages, setWasInterrupted],
   );
 
   /**
@@ -627,6 +1037,7 @@ export function useStreamingAPI(threadId: string) {
       };
 
       let resumeStreamHadInterrupt = false;
+      let resumeStreamHadError = false;
 
       const callbacks: StreamCallback = {
         onToken(content) {
@@ -658,7 +1069,16 @@ export function useStreamingAPI(threadId: string) {
             return;
           }
           if (m.type === 'tool') {
-            dispatch(mergeToolResult({ chatId: threadId, toolCallId: m.tool_call_id, content: m.content }));
+            dispatch(
+              mergeToolResult({
+                chatId: threadId,
+                toolCallId: m.tool_call_id,
+                content: m.content,
+                status: (m as Record<string, unknown>).status as string | undefined,
+                mcpApp: (m as { mcpApp?: Record<string, unknown> }).mcpApp,
+                artifact: (m as { artifact?: unknown }).artifact,
+              }),
+            );
             dispatch(updateStreamingState({ chatId: threadId, state: { activeSubAgent: null } }));
           }
         },
@@ -667,14 +1087,27 @@ export function useStreamingAPI(threadId: string) {
           dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: enrichInterrupt(interrupt) } }));
         },
         onError(error) {
+          dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error' }));
+          resumeStreamHadError = true;
+          // Queue decision to localStorage for replay when agent recovers
+          let decisionQueued = false;
+          try {
+            localStorage.setItem(
+              `pending-decision:${threadId}`,
+              JSON.stringify({ decisions, threadId, timestamp: Date.now() }),
+            );
+            decisionQueued = true;
+          } catch { /* localStorage full or unavailable */ }
           dispatch(
             updateStreamingState({
               chatId: threadId,
               state: {
-                error: error.message,
+                error: decisionQueued
+                  ? 'Decision queued. Will retry when agent recovers.'
+                  : error.message,
                 isLoading: false,
                 isConnected: false,
-                pendingInterrupt: savedInterrupt,
+                pendingInterrupt: decisionQueued ? null : savedInterrupt,
               },
             }),
           );
@@ -697,6 +1130,9 @@ export function useStreamingAPI(threadId: string) {
       };
 
       await manager.stream(resumeRequest, callbacks);
+      if (!resumeStreamHadError) {
+        try { localStorage.removeItem(`pending-decision:${threadId}`); } catch { /* ignore */ }
+      }
     },
     [dispatch, threadId, memories, activeRules],
   );
@@ -734,13 +1170,6 @@ export function useStreamingAPI(threadId: string) {
       let resumeStreamHadInterrupt = false;
 
       await new Promise<void>((resolve) => {
-        let settled = false;
-        const finish = () => {
-          if (!settled) {
-            settled = true;
-            resolve();
-          }
-        };
         const callbacks: StreamCallback = {
           onToken(content) {
             lastTokenTimeRef.current = Date.now();
@@ -773,6 +1202,9 @@ export function useStreamingAPI(threadId: string) {
                   chatId: threadId,
                   toolCallId: m.tool_call_id,
                   content: m.content,
+                  status: (m as Record<string, unknown>).status as string | undefined,
+                  mcpApp: (m as { mcpApp?: Record<string, unknown> }).mcpApp,
+                  artifact: (m as { artifact?: unknown }).artifact,
                 }),
               );
               return;
@@ -790,28 +1222,25 @@ export function useStreamingAPI(threadId: string) {
             );
           },
           onError(error) {
+            dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
             dispatch(
               updateStreamingState({
                 chatId: threadId,
                 state: { error: error.message, isLoading: false, isConnected: false },
               }),
             );
-            finish();
           },
           onStatusChange(status) {
             const partial = nextStreamingPartialForStatus(status);
             if (partial) {
               dispatch(updateStreamingState({ chatId: threadId, state: partial }));
             }
-            if (status === 'cancelled') {
-              finish();
-            }
           },
           onDone() {
             if (!resumeStreamHadInterrupt) {
               dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
             }
-            finish();
+            resolve();
           },
         };
         void manager.stream(streamRequest, callbacks);
@@ -820,9 +1249,31 @@ export function useStreamingAPI(threadId: string) {
     [dispatch, threadId, memories, activeRules],
   );
 
+  // Auto-replay queued HITL decisions when an interrupt appears after recovery
+  const resumeWithDecisionsRef = useRef(resumeWithDecisions);
+  resumeWithDecisionsRef.current = resumeWithDecisions;
+  useEffect(() => {
+    if (!streamingState.pendingInterrupt || !threadId) return;
+    const decisions = _tryReplayQueuedDecision(threadId);
+    if (!decisions) return;
+    // Defer to avoid dispatching during render
+    const id = setTimeout(() => resumeWithDecisionsRef.current(decisions), 0);
+    return () => clearTimeout(id);
+  }, [streamingState.pendingInterrupt, threadId]);
+
   const stop = useCallback(() => {
     userCancelledRef.current = true;
     managerRef.current?.cancel();
+    dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'cancelled' }));
+    clearReconnectTimers();
+    if (recoveryIntervalRef.current) {
+      clearInterval(recoveryIntervalRef.current);
+      recoveryIntervalRef.current = null;
+    }
+    if (recoveryDeadlineRef.current) {
+      clearTimeout(recoveryDeadlineRef.current);
+      recoveryDeadlineRef.current = null;
+    }
     dispatch(
       updateStreamingState({
         chatId: threadId,
@@ -836,7 +1287,7 @@ export function useStreamingAPI(threadId: string) {
         },
       }),
     );
-  }, [dispatch, threadId]);
+  }, [dispatch, threadId, clearReconnectTimers]);
 
   return {
     messages,

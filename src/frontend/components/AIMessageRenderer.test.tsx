@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { StrictMode } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Message } from '@langchain/langgraph-sdk';
 import { AIMessageRenderer } from './ChatMessagesView';
 import type { InterruptInfo } from '../types/deep-agent';
+
+vi.mock('./McpAppHost', () => ({
+  McpAppHostFromToolCall: () => <div data-testid="mcp-app-host" />,
+}));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -104,10 +108,10 @@ describe('AIMessageRenderer — HITL approval (production path for HITLInterrupt
     expect(decisions.every((d: { type: string }) => d.type === 'approve')).toBe(true);
   });
 
-  it('hides approval buttons after one of them is clicked (approvalSubmitted)', async () => {
+  it('hides approval buttons when pendingInterrupt is cleared (post-approval)', () => {
     const msg = makeMsg({ tool_calls: [CREATE_PR_TOOL_CALL] });
 
-    render(
+    const { rerender } = render(
       <AIMessageRenderer
         message={msg}
         pendingInterrupt={hitlInterrupt}
@@ -115,11 +119,18 @@ describe('AIMessageRenderer — HITL approval (production path for HITLInterrupt
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /approve tool call: github_create_pr/i }));
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /approve tool call: github_create_pr/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /reject tool call: github_create_pr/i })).not.toBeInTheDocument();
-    });
+    expect(screen.queryByRole('button', { name: /approve tool call: github_create_pr/i })).toBeInTheDocument();
+
+    rerender(
+      <AIMessageRenderer
+        message={msg}
+        pendingInterrupt={null}
+        onInterruptResume={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /approve tool call: github_create_pr/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /reject tool call: github_create_pr/i })).not.toBeInTheDocument();
   });
 
   it('does NOT render approval buttons when pendingInterrupt is null', () => {
@@ -141,5 +152,105 @@ describe('AIMessageRenderer — HITL approval (production path for HITLInterrupt
     );
 
     expect(screen.queryByRole('button', { name: /approve tool call/i })).not.toBeInTheDocument();
+  });
+});
+
+const MCP_APP = { server: 'charts', resourceUri: 'ui://charts/app.html' };
+
+const chartCall = {
+  id: 'tc-chart',
+  name: 'show_chart',
+  args: { topic: 'sales' },
+};
+
+function renderStrict(ui: React.ReactElement) {
+  return render(<StrictMode>{ui}</StrictMode>);
+}
+
+describe('AIMessageRenderer — MCP App auto-expand', () => {
+  it('expands when mcpApp arrives after the tool call (live stream)', async () => {
+    const { rerender } = renderStrict(
+      <AIMessageRenderer message={makeMsg({ tool_calls: [chartCall] })} />,
+    );
+
+    expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+
+    rerender(
+      <StrictMode>
+        <AIMessageRenderer
+          message={makeMsg({
+            tool_calls: [{ ...chartCall, mcpApp: MCP_APP, content: 'ok' }],
+          })}
+        />
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /collapse tool call: show_chart/i })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    });
+  });
+
+  it('does not expand a regular tool without mcpApp', async () => {
+    const { rerender } = renderStrict(
+      <AIMessageRenderer message={makeMsg({ tool_calls: [chartCall] })} />,
+    );
+
+    rerender(
+      <StrictMode>
+        <AIMessageRenderer
+          message={makeMsg({ tool_calls: [{ ...chartCall, content: 'ok' }] })}
+        />
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+  });
+
+  it('does not re-open after the user collapses, even on a later stream tick', async () => {
+    const withApp = makeMsg({
+      tool_calls: [{ ...chartCall, mcpApp: MCP_APP, content: 'ok' }],
+    });
+    const { rerender } = renderStrict(<AIMessageRenderer message={withApp} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /collapse tool call: show_chart/i })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /collapse tool call: show_chart/i }));
+    expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+
+    rerender(
+      <StrictMode>
+        <AIMessageRenderer
+          message={makeMsg({
+            tool_calls: [{ ...chartCall, mcpApp: MCP_APP, content: 'ok (updated)' }],
+          })}
+        />
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
   });
 });
