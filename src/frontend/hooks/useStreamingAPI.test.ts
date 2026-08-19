@@ -255,6 +255,7 @@ describe('_startRecoveryPolling — deadline fires independently of pending requ
 
   it('sets isLoading=false after timeout even when getThreadStateAndInterrupt never resolves', () => {
     const intervalRef = { current: null } as React.MutableRefObject<ReturnType<typeof setInterval> | null>;
+    const deadlineRef = { current: null } as React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
     const wasInterruptedRef = { current: false };
     const onRecovered = vi.fn();
 
@@ -263,19 +264,22 @@ describe('_startRecoveryPolling — deadline fires independently of pending requ
       store.dispatch,
       onRecovered,
       intervalRef,
+      deadlineRef,
       wasInterruptedRef,
       5000,
       RECOVERY_POLL_TIMEOUT_MS,
     );
 
     expect(intervalRef.current).not.toBeNull();
+    expect(deadlineRef.current).not.toBeNull();
 
     // Advance past the deadline — the one-shot timeout must fire
     // even though the polling request is still pending
     vi.advanceTimersByTime(RECOVERY_POLL_TIMEOUT_MS + 1000);
 
-    // Deadline should have cleaned up the interval
+    // Deadline should have cleaned up both timers
     expect(intervalRef.current).toBeNull();
+    expect(deadlineRef.current).toBeNull();
 
     // Redux state should reflect the timeout
     const state = selectStreamingState(store.getState(), THREAD_ID);

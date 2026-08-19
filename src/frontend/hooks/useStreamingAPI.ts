@@ -148,19 +148,20 @@ export function _startRecoveryPolling(
   dispatch: AppDispatch,
   onRecovered: (msgs: Message[]) => void,
   intervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
+  deadlineRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
   wasInterruptedRef: React.MutableRefObject<boolean>,
   pollIntervalMs: number,
   timeoutMs: number,
 ) {
   if (intervalRef.current) clearInterval(intervalRef.current);
+  if (deadlineRef.current) clearTimeout(deadlineRef.current);
   wasInterruptedRef.current = true;
   let polling = false;
   let expired = false;
-  let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
 
-  deadlineTimer = setTimeout(() => {
+  deadlineRef.current = setTimeout(() => {
     expired = true;
-    deadlineTimer = null;
+    deadlineRef.current = null;
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = null;
     dispatch(updateStreamingState({
@@ -182,7 +183,7 @@ export function _startRecoveryPolling(
       const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
       if (expired) return;
       if (interrupt) {
-        if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
+        if (deadlineRef.current) { clearTimeout(deadlineRef.current); deadlineRef.current = null; }
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
         wasInterruptedRef.current = false;
@@ -202,7 +203,7 @@ export function _startRecoveryPolling(
       if (msgs.length === 0) return;
       const lastMsg = msgs[msgs.length - 1];
       if (lastMsg.type === 'ai' && lastMsg.content) {
-        if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
+        if (deadlineRef.current) { clearTimeout(deadlineRef.current); deadlineRef.current = null; }
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
         wasInterruptedRef.current = false;
@@ -299,6 +300,7 @@ export function useStreamingAPI(threadId: string) {
   const wasInterruptedRef = useRef(false);
   const messagesRef = useRef<Message[]>(EMPTY_MESSAGES);
   const recoveryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recoveryDeadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const clearReconnectTimers = useCallback(() => {
     for (const id of reconnectTimersRef.current) clearTimeout(id);
@@ -347,6 +349,10 @@ export function useStreamingAPI(threadId: string) {
         clearInterval(recoveryIntervalRef.current);
         recoveryIntervalRef.current = null;
       }
+      if (recoveryDeadlineRef.current) {
+        clearTimeout(recoveryDeadlineRef.current);
+        recoveryDeadlineRef.current = null;
+      }
       if (staleIntervalRef.current != null) {
         clearInterval(staleIntervalRef.current);
         staleIntervalRef.current = null;
@@ -391,6 +397,10 @@ export function useStreamingAPI(threadId: string) {
       if (recoveryIntervalRef.current) {
         clearInterval(recoveryIntervalRef.current);
         recoveryIntervalRef.current = null;
+      }
+      if (recoveryDeadlineRef.current) {
+        clearTimeout(recoveryDeadlineRef.current);
+        recoveryDeadlineRef.current = null;
       }
       setIsStreamStale(false);
       setMcpEvents([]);
@@ -909,7 +919,7 @@ export function useStreamingAPI(threadId: string) {
                   state: { isLoading: false, error: null },
                 }));
               }
-            }, recoveryIntervalRef, wasInterruptedRef, RECOVERY_POLL_INTERVAL_MS, RECOVERY_POLL_TIMEOUT_MS);
+            }, recoveryIntervalRef, recoveryDeadlineRef, wasInterruptedRef, RECOVERY_POLL_INTERVAL_MS, RECOVERY_POLL_TIMEOUT_MS);
           }
           break;
         }
@@ -1259,6 +1269,10 @@ export function useStreamingAPI(threadId: string) {
     if (recoveryIntervalRef.current) {
       clearInterval(recoveryIntervalRef.current);
       recoveryIntervalRef.current = null;
+    }
+    if (recoveryDeadlineRef.current) {
+      clearTimeout(recoveryDeadlineRef.current);
+      recoveryDeadlineRef.current = null;
     }
     dispatch(
       updateStreamingState({
