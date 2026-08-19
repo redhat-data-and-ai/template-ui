@@ -80,7 +80,7 @@ const HISTORY_REFETCH_THRESHOLD_MS = 10000;
 /** Poll interval when waiting for a recovered run to complete (ms) */
 const RECOVERY_POLL_INTERVAL_MS = 5000;
 /** Max time to poll for recovery before giving up (ms) */
-const RECOVERY_POLL_TIMEOUT_MS = 120000;
+export const RECOVERY_POLL_TIMEOUT_MS = 120000;
 
 function computeRetryDelayMs(retryAttemptNumber: number): number {
   const capped = Math.min(BASE_DELAY_MS * 2 ** retryAttemptNumber, 30000);
@@ -143,7 +143,7 @@ function _tryReplayQueuedDecision(threadId: string): Array<{ type: 'approve' | '
   }
 }
 
-function _startRecoveryPolling(
+export function _startRecoveryPolling(
   threadId: string,
   dispatch: AppDispatch,
   onRecovered: (msgs: Message[]) => void,
@@ -154,30 +154,35 @@ function _startRecoveryPolling(
 ) {
   if (intervalRef.current) clearInterval(intervalRef.current);
   wasInterruptedRef.current = true;
-  const startTime = Date.now();
   let polling = false;
+  let expired = false;
+  let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
+
+  deadlineTimer = setTimeout(() => {
+    expired = true;
+    deadlineTimer = null;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    dispatch(updateStreamingState({
+      chatId: threadId,
+      state: {
+        isLoading: false,
+        isConnected: false,
+        isReconnecting: false,
+        reconnectAttempt: 0,
+        error: 'Agent is unavailable. Please try again.',
+      },
+    }));
+  }, timeoutMs);
 
   intervalRef.current = setInterval(async () => {
-    if (polling) return;
-    if (Date.now() - startTime > timeoutMs) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      dispatch(updateStreamingState({
-        chatId: threadId,
-        state: {
-          isLoading: false,
-          isConnected: false,
-          isReconnecting: false,
-          reconnectAttempt: 0,
-          error: 'Agent is unavailable. Please try again.',
-        },
-      }));
-      return;
-    }
+    if (polling || expired) return;
     polling = true;
     try {
       const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
+      if (expired) return;
       if (interrupt) {
+        if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
         wasInterruptedRef.current = false;
@@ -197,6 +202,7 @@ function _startRecoveryPolling(
       if (msgs.length === 0) return;
       const lastMsg = msgs[msgs.length - 1];
       if (lastMsg.type === 'ai' && lastMsg.content) {
+        if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
         wasInterruptedRef.current = false;

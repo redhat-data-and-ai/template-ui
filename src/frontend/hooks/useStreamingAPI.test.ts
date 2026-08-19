@@ -5,12 +5,12 @@ import { renderHook } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import React from 'react';
 import { configureStore } from '@reduxjs/toolkit';
-import chatsReducer, { addChat } from '../redux/slices/chats';
+import chatsReducer, { addChat, selectStreamingState } from '../redux/slices/chats';
 import configReducer from '../redux/slices/config';
 import personalizationReducer from '../redux/slices/personalization';
 import toastsReducer from '../redux/slices/toasts';
 import userSettingsReducer, { addAlwaysAllowedTool } from '../redux/slices/userSettings';
-import { useStreamingAPI } from './useStreamingAPI';
+import { useStreamingAPI, RECOVERY_POLL_TIMEOUT_MS, _startRecoveryPolling } from './useStreamingAPI';
 
 // ── Store factory ─────────────────────────────────────────────────────────────
 
@@ -228,5 +228,60 @@ describe('useStreamingAPI — initial state and stop()', () => {
 
     // Clean up the in-flight request
     act(() => result.current.stop());
+  });
+});
+
+// ── Recovery timeout independence ────────────────────────────────────────────
+
+vi.mock('@/services/agent-rest', () => ({
+  getThreadState: vi.fn(() => new Promise(() => {})),
+  getThreadStateAndInterrupt: vi.fn(() => new Promise(() => {})),
+}));
+
+describe('_startRecoveryPolling — deadline fires independently of pending request', () => {
+  let store: ReturnType<typeof makeStore>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    store = makeStore();
+    seedChat(store);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('sets isLoading=false after timeout even when getThreadStateAndInterrupt never resolves', () => {
+    const intervalRef = { current: null } as React.MutableRefObject<ReturnType<typeof setInterval> | null>;
+    const wasInterruptedRef = { current: false };
+    const onRecovered = vi.fn();
+
+    _startRecoveryPolling(
+      THREAD_ID,
+      store.dispatch,
+      onRecovered,
+      intervalRef,
+      wasInterruptedRef,
+      5000,
+      RECOVERY_POLL_TIMEOUT_MS,
+    );
+
+    expect(intervalRef.current).not.toBeNull();
+
+    // Advance past the deadline — the one-shot timeout must fire
+    // even though the polling request is still pending
+    vi.advanceTimersByTime(RECOVERY_POLL_TIMEOUT_MS + 1000);
+
+    // Deadline should have cleaned up the interval
+    expect(intervalRef.current).toBeNull();
+
+    // Redux state should reflect the timeout
+    const state = selectStreamingState(store.getState(), THREAD_ID);
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBe('Agent is unavailable. Please try again.');
+
+    expect(onRecovered).not.toHaveBeenCalled();
   });
 });
