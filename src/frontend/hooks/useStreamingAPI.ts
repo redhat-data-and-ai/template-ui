@@ -80,7 +80,7 @@ const HISTORY_REFETCH_THRESHOLD_MS = 10000;
 /** Poll interval when waiting for a recovered run to complete (ms) */
 const RECOVERY_POLL_INTERVAL_MS = 5000;
 /** Max time to poll for recovery before giving up (ms) */
-const RECOVERY_POLL_TIMEOUT_MS = 120000;
+export const RECOVERY_POLL_TIMEOUT_MS = 120000;
 
 function computeRetryDelayMs(retryAttemptNumber: number): number {
   const capped = Math.min(BASE_DELAY_MS * 2 ** retryAttemptNumber, 30000);
@@ -143,31 +143,47 @@ function _tryReplayQueuedDecision(threadId: string): Array<{ type: 'approve' | '
   }
 }
 
-function _startRecoveryPolling(
+export function _startRecoveryPolling(
   threadId: string,
   dispatch: AppDispatch,
   onRecovered: (msgs: Message[]) => void,
   intervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
+  deadlineRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
   wasInterruptedRef: React.MutableRefObject<boolean>,
   pollIntervalMs: number,
   timeoutMs: number,
 ) {
   if (intervalRef.current) clearInterval(intervalRef.current);
+  if (deadlineRef.current) clearTimeout(deadlineRef.current);
   wasInterruptedRef.current = true;
-  const startTime = Date.now();
   let polling = false;
+  let expired = false;
 
-  intervalRef.current = setInterval(async () => {
-    if (polling) return;
-    if (Date.now() - startTime > timeoutMs) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      return;
-    }
+  deadlineRef.current = setTimeout(() => {
+    expired = true;
+    deadlineRef.current = null;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    dispatch(updateStreamingState({
+      chatId: threadId,
+      state: {
+        isLoading: false,
+        isConnected: false,
+        isReconnecting: false,
+        reconnectAttempt: 0,
+        error: 'Agent is unavailable. Please try again.',
+      },
+    }));
+  }, timeoutMs);
+
+  const myInterval = intervalRef.current = setInterval(async () => {
+    if (polling || expired) return;
     polling = true;
     try {
       const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
+      if (expired || intervalRef.current !== myInterval) return;
       if (interrupt) {
+        if (deadlineRef.current) { clearTimeout(deadlineRef.current); deadlineRef.current = null; }
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
         wasInterruptedRef.current = false;
@@ -187,6 +203,7 @@ function _startRecoveryPolling(
       if (msgs.length === 0) return;
       const lastMsg = msgs[msgs.length - 1];
       if (lastMsg.type === 'ai' && lastMsg.content) {
+        if (deadlineRef.current) { clearTimeout(deadlineRef.current); deadlineRef.current = null; }
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
         wasInterruptedRef.current = false;
@@ -283,6 +300,7 @@ export function useStreamingAPI(threadId: string) {
   const wasInterruptedRef = useRef(false);
   const messagesRef = useRef<Message[]>(EMPTY_MESSAGES);
   const recoveryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recoveryDeadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const clearReconnectTimers = useCallback(() => {
     for (const id of reconnectTimersRef.current) clearTimeout(id);
@@ -331,6 +349,10 @@ export function useStreamingAPI(threadId: string) {
         clearInterval(recoveryIntervalRef.current);
         recoveryIntervalRef.current = null;
       }
+      if (recoveryDeadlineRef.current) {
+        clearTimeout(recoveryDeadlineRef.current);
+        recoveryDeadlineRef.current = null;
+      }
       if (staleIntervalRef.current != null) {
         clearInterval(staleIntervalRef.current);
         staleIntervalRef.current = null;
@@ -375,6 +397,10 @@ export function useStreamingAPI(threadId: string) {
       if (recoveryIntervalRef.current) {
         clearInterval(recoveryIntervalRef.current);
         recoveryIntervalRef.current = null;
+      }
+      if (recoveryDeadlineRef.current) {
+        clearTimeout(recoveryDeadlineRef.current);
+        recoveryDeadlineRef.current = null;
       }
       setIsStreamStale(false);
       setMcpEvents([]);
@@ -585,6 +611,16 @@ export function useStreamingAPI(threadId: string) {
                     const id = recoveryIntervalRef.current;
                     recoveryIntervalRef.current = null;
                     if (id) clearInterval(id);
+                    dispatch(updateStreamingState({
+                      chatId: threadId,
+                      state: {
+                        isLoading: false,
+                        isConnected: false,
+                        isReconnecting: false,
+                        reconnectAttempt: 0,
+                        error: 'Agent is unavailable. Please try again.',
+                      },
+                    }));
                     return;
                   }
                   polling = true;
@@ -756,6 +792,16 @@ export function useStreamingAPI(threadId: string) {
                     const id = recoveryIntervalRef.current;
                     recoveryIntervalRef.current = null;
                     if (id) clearInterval(id);
+                    dispatch(updateStreamingState({
+                      chatId: threadId,
+                      state: {
+                        isLoading: false,
+                        isConnected: false,
+                        isReconnecting: false,
+                        reconnectAttempt: 0,
+                        error: 'Agent is unavailable. Please try again.',
+                      },
+                    }));
                     return;
                   }
                   polling = true;
@@ -873,7 +919,7 @@ export function useStreamingAPI(threadId: string) {
                   state: { isLoading: false, error: null },
                 }));
               }
-            }, recoveryIntervalRef, wasInterruptedRef, RECOVERY_POLL_INTERVAL_MS, RECOVERY_POLL_TIMEOUT_MS);
+            }, recoveryIntervalRef, recoveryDeadlineRef, wasInterruptedRef, RECOVERY_POLL_INTERVAL_MS, RECOVERY_POLL_TIMEOUT_MS);
           }
           break;
         }
@@ -895,6 +941,16 @@ export function useStreamingAPI(threadId: string) {
             const id = recoveryIntervalRef.current;
             recoveryIntervalRef.current = null;
             if (id) clearInterval(id);
+            dispatch(updateStreamingState({
+              chatId: threadId,
+              state: {
+                isLoading: false,
+                isConnected: false,
+                isReconnecting: false,
+                reconnectAttempt: 0,
+                error: 'Agent is unavailable. Please try again.',
+              },
+            }));
             return;
           }
           polling = true;
@@ -916,7 +972,7 @@ export function useStreamingAPI(threadId: string) {
         }, RECOVERY_POLL_INTERVAL_MS);
       }
     },
-    [dispatch, threadId, memories, activeRules, handleStreamActivityStatus, clearReconnectTimers],
+    [dispatch, threadId, memories, activeRules, handleStreamActivityStatus, clearReconnectTimers, setMessages, setWasInterrupted],
   );
 
   /**
@@ -1213,6 +1269,10 @@ export function useStreamingAPI(threadId: string) {
     if (recoveryIntervalRef.current) {
       clearInterval(recoveryIntervalRef.current);
       recoveryIntervalRef.current = null;
+    }
+    if (recoveryDeadlineRef.current) {
+      clearTimeout(recoveryDeadlineRef.current);
+      recoveryDeadlineRef.current = null;
     }
     dispatch(
       updateStreamingState({
