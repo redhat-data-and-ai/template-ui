@@ -117,7 +117,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     async function loadUserHistory() {
       try {
         dispatch(setLoadingThreads(true));
-        const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username);
+        const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username || window.USER_DATA.sub);
 
         const backendIds = new Set(history.map((t) => t.id));
         const local = chatsRef.current;
@@ -254,27 +254,39 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [dispatch, navigate]);
 
   const handleDeleteChat = useCallback(
-    (chatId: string) => {
+    async (chatId: string) => {
       releaseStreamingManager(chatId);
       dispatch(deleteChat(chatId));
-      dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
+      chatStorage.clearChats();
+      const remaining = chats.filter((c) => c.id !== chatId);
+      const ok = await deleteThread(chatId).catch(() => false);
+      if (ok) {
+        dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
+      } else {
+        dispatch(addToast({ title: 'Chat cleared locally but server delete failed', variant: 'warning' }));
+      }
       if (location.pathname === `/chat/${chatId}`) {
-        const remaining = chats.filter((c) => c.id !== chatId);
         navigate(remaining.length > 0 ? `/chat/${remaining[0].id}` : '/');
       }
-      deleteThread(chatId).catch(() => {});
     },
     [dispatch, chats, navigate, location.pathname]
   );
 
-  const handleDeleteAllChats = useCallback(() => {
+  const handleDeleteAllChats = useCallback(async () => {
     const ids = chats.map((c) => c.id);
     ids.forEach((id) => releaseStreamingManager(id));
     dispatch(clearAllChats());
     chatStorage.clearChats();
-    dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
+    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
+    const failures = results.filter((r) => !r).length;
+    if (failures > 0 && failures < ids.length) {
+      dispatch(addToast({ title: `${ids.length - failures} chats deleted, ${failures} failed on server`, variant: 'warning' }));
+    } else if (failures === ids.length) {
+      dispatch(addToast({ title: 'Chats cleared locally but server deletion failed', variant: 'warning' }));
+    } else {
+      dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
+    }
     navigate('/');
-    ids.forEach((id) => deleteThread(id).catch(() => {}));
   }, [dispatch, chats, navigate]);
 
   const handleRenameChat = useCallback(

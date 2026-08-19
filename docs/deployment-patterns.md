@@ -103,6 +103,8 @@ Feature flags are boolean values in the `features` block. They control which cap
 |---|---|---|---|---|---|
 | `features.auth_enabled` | `bool` | `true` | `FEATURE_AUTH_ENABLED` (or legacy `AUTH_ENABLED`) | `restricted_features`, `approved_auth_providers` | When `false`, bypasses SSO entirely and injects a dummy user (`developer@redhat.com`). Environment variables override the YAML value — set via env var during deployment. |
 | `features.debug_mode_default` | `bool` | `false` | `FEATURE_DEBUG_MODE_DEFAULT` | `restrict_debug_mode: true` | Default open/closed state of the debug panel. Users can toggle it. Never enable in production — OPA can enforce this. |
+| `features.mcp_apps_enabled` | `bool` | `true` | `FEATURE_MCP_APPS_ENABLED` | — | When `true`, serves `/sandbox_proxy.html` and renders MCP Apps in chat. Independent of chat SSO. |
+
 
 ### Precedence
 

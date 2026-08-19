@@ -127,6 +127,118 @@ describe('GET /api/config/features', () => {
   });
 });
 
+// ── POST /api/proxy/agent/mcp/:mcpName/* MCP Apps host proxy ─────────────────
+
+describe('POST /api/proxy/agent/mcp/:mcpName/resources/read', () => {
+  it('forwards any resource uri to the agent with Authorization', async () => {
+    const mockFetch = stubFetch(okJson({ contents: [{ text: '{"ok":true}' }] }));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/mcp/charts/resources/read',
+      payload: { uri: 'showcase://sample.json' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).contents[0].text).toBe('{"ok":true}');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [agentUrl, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(agentUrl).toBe('http://127.0.0.1:19999/mcp/charts/resources/read');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({ uri: 'showcase://sample.json' });
+  });
+
+  it('rejects empty uris without calling the agent', async () => {
+    const mockFetch = stubFetch(okJson({}));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/mcp/charts/resources/read',
+      payload: { uri: '' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/proxy/agent/mcp/:mcpName/resources/list', () => {
+  it('forwards list to the agent', async () => {
+    const mockFetch = stubFetch(okJson({ resources: [{ uri: 'showcase://sample.json' }] }));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/mcp/charts/resources/list',
+      payload: { cursor: 'abc' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const [agentUrl, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(agentUrl).toBe('http://127.0.0.1:19999/mcp/charts/resources/list');
+    expect(JSON.parse(String(init.body))).toEqual({ cursor: 'abc' });
+  });
+});
+
+describe('POST /api/proxy/agent/mcp/:mcpName/resources/templates/list', () => {
+  it('forwards templates list to the agent', async () => {
+    const mockFetch = stubFetch(
+      okJson({ resourceTemplates: [{ uriTemplate: 'showcase://{id}' }] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/mcp/charts/resources/templates/list',
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    const [agentUrl] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(agentUrl).toBe('http://127.0.0.1:19999/mcp/charts/resources/templates/list');
+  });
+});
+
+describe('POST /api/proxy/agent/mcp/:mcpName/tools/call', () => {
+  it('forwards app tool calls to the agent', async () => {
+    const mockFetch = stubFetch(
+      okJson({ content: [{ type: 'text', text: 'ok' }], structuredContent: { n: 1 } }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/mcp/charts/tools/call',
+      payload: { name: 'refresh_showcase', arguments: { topic: 'demo' } },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).structuredContent).toEqual({ n: 1 });
+    const [agentUrl, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(agentUrl).toBe('http://127.0.0.1:19999/mcp/charts/tools/call');
+    expect(JSON.parse(String(init.body))).toEqual({
+      name: 'refresh_showcase',
+      arguments: { topic: 'demo' },
+    });
+  });
+
+  it('rejects missing tool name without calling the agent', async () => {
+    const mockFetch = stubFetch(okJson({}));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/mcp/charts/tools/call',
+      payload: { arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
 // ── ALL /api/proxy/agent/* generic pass-through ───────────────────────────────
 
 describe('ALL /api/proxy/agent/* (generic pass-through)', () => {

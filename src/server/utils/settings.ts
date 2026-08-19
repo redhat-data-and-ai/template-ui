@@ -13,6 +13,7 @@ interface CspConfig {
   connect_src: string[];
   font_src: string[];
   object_src: string[];
+  frame_src: string[];
   frame_ancestors: string[];
 }
 
@@ -103,6 +104,8 @@ interface BrandingConfig {
 interface FeaturesConfig {
   debug_mode_default: boolean;
   auth_enabled: boolean;
+  mcp_dcr_enabled: boolean;
+  mcp_apps_enabled: boolean;
 }
 
 interface AgentConfig {
@@ -156,6 +159,8 @@ const DEFAULTS: UISettings = {
   features: {
     debug_mode_default: false,
     auth_enabled: true,
+    mcp_dcr_enabled: true,
+    mcp_apps_enabled: true,
   },
   agent: {
     endpoint: "",
@@ -183,6 +188,7 @@ const DEFAULTS: UISettings = {
         connect_src: ["'self'"],
         font_src: ["'self'", "data:"],
         object_src: ["'none'"],
+        frame_src: ["'self'"],
         frame_ancestors: ["'none'"],
       },
       cross_origin_embedder_policy: false,
@@ -308,6 +314,9 @@ function validateConfig(config: UISettings): void {
   if (typeof config.features.auth_enabled !== "boolean") {
     throw new Error("Config validation error: features.auth_enabled must be boolean");
   }
+  if (typeof config.features.mcp_apps_enabled !== "boolean") {
+    throw new Error("Config validation error: features.mcp_apps_enabled must be boolean");
+  }
 
   // Agent config validation
   if (config.agent.endpoint && !isValidUrl(config.agent.endpoint)) {
@@ -389,6 +398,12 @@ function applyEnvOverrides(config: UISettings): void {
   if (process.env.FEATURE_DEBUG_MODE_DEFAULT !== undefined) {
     config.features.debug_mode_default = process.env.FEATURE_DEBUG_MODE_DEFAULT === "true";
   }
+  if (process.env.MCP_DCR_ENABLED !== undefined) {
+    config.features.mcp_dcr_enabled = process.env.MCP_DCR_ENABLED === "true";
+  }
+  if (process.env.FEATURE_MCP_APPS_ENABLED !== undefined) {
+    config.features.mcp_apps_enabled = process.env.FEATURE_MCP_APPS_ENABLED === "true";
+  }
   // Agent overrides
   if (process.env.AGENT_ENDPOINT) {
     config.agent.endpoint = process.env.AGENT_ENDPOINT;
@@ -456,6 +471,9 @@ function applyEnvOverrides(config: UISettings): void {
   if (process.env.CSP_CONNECT_SRC) {
     config.security.helmet.csp.connect_src = process.env.CSP_CONNECT_SRC.split(' ');
   }
+  if (process.env.CSP_FRAME_SRC) {
+    config.security.helmet.csp.frame_src = process.env.CSP_FRAME_SRC.split(' ');
+  }
 
   // Security overrides - Rate limit
   if (process.env.RATE_LIMIT_MAX) {
@@ -514,6 +532,11 @@ export function getSettings(): UISettings {
 
   // Apply environment variable overrides
   applyEnvOverrides(_settings);
+
+  // Backfill keys added after older config files were written
+  if (!_settings.security.helmet.csp.frame_src?.length) {
+    _settings.security.helmet.csp.frame_src = [...DEFAULTS.security.helmet.csp.frame_src];
+  }
 
   // Validate the final config
   validateConfig(_settings);

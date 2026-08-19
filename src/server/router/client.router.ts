@@ -1,10 +1,18 @@
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
 import { getAgentName, getSettings } from "../utils/settings.js";
+import {
+  buildSandboxCspHeader,
+  parseCspQueryParam,
+  SANDBOX_JS_CSP,
+} from "../utils/mcp-apps-csp.js";
 
 const BUILD_VERSION = Date.now().toString(36);
 const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function escapeHtml(str: string): string {
   return str
@@ -20,6 +28,26 @@ function headerValue(request: FastifyRequest, name: string): string | undefined 
   return Array.isArray(v) ? v[0] : v;
 }
 
+async function readSandboxAsset(filename: string): Promise<string> {
+  const candidates = [
+    path.join(__dirname, "../static", filename),
+    path.join(process.cwd(), "src/server/static", filename),
+    path.join(process.cwd(), "dist/server/static", filename),
+  ];
+  for (const candidate of candidates) {
+    try {
+      return await fs.readFile(candidate, "utf-8");
+    } catch {
+      // try next
+    }
+  }
+  throw new Error(`MCP Apps sandbox asset not found: ${filename}`);
+}
+
+function sandboxPathOnly(url: string): string {
+  return url.split("?")[0] ?? url;
+}
+
 async function routes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);
 
@@ -31,8 +59,58 @@ async function routes(fastify: FastifyInstance) {
 
   await fastify.register(import("@fastify/url-data"));
 
+  // Override global helmet CSP for sandbox assets. Helmet also sets CSP; browsers
+  // enforce every Content-Security-Policy header (intersection), so a leftover
+  // helmet `base-uri 'self'` would block allowlisted baseUriDomains.
+  fastify.addHook("onSend", async (request, reply, payload) => {
+    const pathOnly = sandboxPathOnly(request.url);
+    if (pathOnly === "/sandbox_proxy.js") {
+      reply.header("Content-Security-Policy", SANDBOX_JS_CSP);
+      return payload;
+    }
+    if (pathOnly === "/sandbox_proxy.html") {
+      reply.header("X-Frame-Options", "SAMEORIGIN");
+      const cspParam = (request.query as { csp?: string }).csp;
+      reply.header(
+        "Content-Security-Policy",
+        buildSandboxCspHeader(parseCspQueryParam(cspParam)),
+      );
+      return payload;
+    }
+    return payload;
+  });
+
   fastify.get("/_health", (_request: FastifyRequest, reply: FastifyReply) => {
     reply.send("OK");
+  });
+
+  fastify.get("/sandbox_proxy.html", async (request, reply) => {
+    const cfg = getSettings();
+    if (!cfg.features.mcp_apps_enabled) {
+      return reply.code(404).send("MCP Apps sandbox is disabled");
+    }
+    const cspParam = (request.query as { csp?: string }).csp;
+    const cspConfig = parseCspQueryParam(cspParam);
+    const html = await readSandboxAsset("sandbox_proxy.html");
+    return reply
+      .type("text/html; charset=utf-8")
+      .header("Cache-Control", "no-store")
+      .header("X-Content-Type-Options", "nosniff")
+      .header("Content-Security-Policy", buildSandboxCspHeader(cspConfig))
+      .send(html);
+  });
+
+  fastify.get("/sandbox_proxy.js", async (_request, reply) => {
+    const cfg = getSettings();
+    if (!cfg.features.mcp_apps_enabled) {
+      return reply.code(404).send("MCP Apps sandbox is disabled");
+    }
+    const js = await readSandboxAsset("sandbox_proxy.js");
+    return reply
+      .type("application/javascript; charset=utf-8")
+      .header("Cache-Control", "no-store")
+      .header("X-Content-Type-Options", "nosniff")
+      .send(js);
   });
 
   fastify.get("/auth/login", async (request: FastifyRequest, reply: FastifyReply) => {
@@ -71,11 +149,14 @@ async function routes(fastify: FastifyInstance) {
     };
 
     const agentName = await getAgentName();
+    const cfg = getSettings();
     const appData = {
       apiUrl: basePath ? `${basePath}/api/proxy/agent` : "",
       basePath: basePath || "/",
       refreshableToken: "",
       agentName,
+      branding: cfg.branding,
+      features: cfg.features,
     };
 
     reply.type("text/html");

@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 
 // https://vitejs.dev/config/
+const proxyTarget = `http://127.0.0.1:${process.env.PORT || 8080}`;
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
@@ -29,15 +31,15 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8080",
+        target: proxyTarget,
         changeOrigin: true,
       },
       "/auth": {
-        target: "http://127.0.0.1:8080",
+        target: proxyTarget,
         changeOrigin: true,
       },
       "/login": {
-        target: "http://127.0.0.1:8080",
+        target: proxyTarget,
         changeOrigin: true,
       },
     },

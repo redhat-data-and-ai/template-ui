@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
 import type { SubAgentInfo, InterruptInfo, TaskStep } from '../../types/deep-agent';
+import { withMcpAppArguments } from '../../types/mcp-apps';
 
 export interface StreamingState {
   isLoading: boolean;
@@ -58,7 +59,14 @@ const initialState: ChatsState = {
   error: null,
 };
 
-type ToolCallRecord = { id?: string; content?: unknown };
+type ToolCallRecord = {
+  id?: string;
+  content?: unknown;
+  status?: string;
+  args?: Record<string, unknown>;
+  mcpApp?: Record<string, unknown>;
+  artifact?: unknown;
+};
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
@@ -121,8 +129,18 @@ const chatsSlice = createSlice({
       }
       (last as { content: string }).content = prev + content;
     },
-    mergeToolResult(state, action: PayloadAction<{ chatId: string; toolCallId: string; content: any }>) {
-      const { chatId, toolCallId, content } = action.payload;
+    mergeToolResult(
+      state,
+      action: PayloadAction<{
+        chatId: string;
+        toolCallId: string;
+        content: any;
+        status?: string;
+        mcpApp?: Record<string, unknown>;
+        artifact?: unknown;
+      }>,
+    ) {
+      const { chatId, toolCallId, content, status, mcpApp, artifact } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
       if (!chat) {
         return;
@@ -136,19 +154,34 @@ const chatsSlice = createSlice({
         const match = toolCalls.find((tc) => tc?.id === toolCallId);
         if (match) {
           match.content = content;
+          if (status) {
+            match.status = status;
+          }
+          if (artifact !== undefined) {
+            match.artifact = artifact;
+          }
+          if (mcpApp) {
+            // Fill arguments from the AI tool_call so the host can push tool-input.
+            match.mcpApp = withMcpAppArguments(
+              mcpApp as Record<string, unknown>,
+              match.args as Record<string, unknown> | undefined,
+            );
+          }
           return;
         }
       }
     },
-    resolveAllPendingToolCalls(state, action: PayloadAction<{ chatId: string }>) {
+    resolveAllPendingToolCalls(state, action: PayloadAction<{ chatId: string; status?: string }>) {
       const chat = state.chats.find((c) => c.id === action.payload.chatId);
       if (!chat) return;
+      const terminalStatus = action.payload.status || 'error';
       for (const message of chat.messages) {
         const msg = message as Message & { tool_calls?: ToolCallRecord[] };
         if (!Array.isArray(msg.tool_calls)) continue;
         for (const tc of msg.tool_calls) {
           if (tc && tc.content == null) {
             tc.content = '';
+            tc.status = terminalStatus;
           }
         }
       }
