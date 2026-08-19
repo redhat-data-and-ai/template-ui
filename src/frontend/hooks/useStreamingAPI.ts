@@ -585,6 +585,16 @@ export function useStreamingAPI(threadId: string) {
                     const id = recoveryIntervalRef.current;
                     recoveryIntervalRef.current = null;
                     if (id) clearInterval(id);
+                    dispatch(updateStreamingState({
+                      chatId: threadId,
+                      state: {
+                        isLoading: false,
+                        isConnected: false,
+                        isReconnecting: false,
+                        reconnectAttempt: 0,
+                        error: 'Agent is unavailable. Please try again.',
+                      },
+                    }));
                     return;
                   }
                   polling = true;
@@ -756,6 +766,16 @@ export function useStreamingAPI(threadId: string) {
                     const id = recoveryIntervalRef.current;
                     recoveryIntervalRef.current = null;
                     if (id) clearInterval(id);
+                    dispatch(updateStreamingState({
+                      chatId: threadId,
+                      state: {
+                        isLoading: false,
+                        isConnected: false,
+                        isReconnecting: false,
+                        reconnectAttempt: 0,
+                        error: 'Agent is unavailable. Please try again.',
+                      },
+                    }));
                     return;
                   }
                   polling = true;
@@ -895,6 +915,16 @@ export function useStreamingAPI(threadId: string) {
             const id = recoveryIntervalRef.current;
             recoveryIntervalRef.current = null;
             if (id) clearInterval(id);
+            dispatch(updateStreamingState({
+              chatId: threadId,
+              state: {
+                isLoading: false,
+                isConnected: false,
+                isReconnecting: false,
+                reconnectAttempt: 0,
+                error: 'Agent is unavailable. Please try again.',
+              },
+            }));
             return;
           }
           polling = true;
