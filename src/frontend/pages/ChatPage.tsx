@@ -591,7 +591,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
               key={threadId}
               messages={thread.messages}
               streamEvents={thread.streamEvents}
-              isLoading={thread.isLoading}
+              isLoading={thread.isLoading || !!thread.pendingInterrupt}
               pendingInterrupt={
                 thread.pendingInterrupt &&
                 typeof thread.pendingInterrupt.value === 'object' &&
