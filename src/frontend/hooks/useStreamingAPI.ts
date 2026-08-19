@@ -162,6 +162,16 @@ function _startRecoveryPolling(
     if (Date.now() - startTime > timeoutMs) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
+      dispatch(updateStreamingState({
+        chatId: threadId,
+        state: {
+          isLoading: false,
+          isConnected: false,
+          isReconnecting: false,
+          reconnectAttempt: 0,
+          error: 'Agent is unavailable. Please try again.',
+        },
+      }));
       return;
     }
     polling = true;
