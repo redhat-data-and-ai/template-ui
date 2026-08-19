@@ -288,4 +288,48 @@ describe('_startRecoveryPolling — deadline fires independently of pending requ
 
     expect(onRecovered).not.toHaveBeenCalled();
   });
+
+  it('discards a pending result that resolves after the poller is cancelled', async () => {
+    const { getThreadStateAndInterrupt } = await import('@/services/agent-rest');
+    const mockedFn = vi.mocked(getThreadStateAndInterrupt);
+
+    // Control when the request resolves
+    let resolveRequest!: (v: { messages: Message[]; interrupt: null }) => void;
+    mockedFn.mockImplementationOnce(() => new Promise((r) => { resolveRequest = r; }));
+
+    const intervalRef = { current: null } as React.MutableRefObject<ReturnType<typeof setInterval> | null>;
+    const deadlineRef = { current: null } as React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    const wasInterruptedRef = { current: false };
+    const onRecovered = vi.fn();
+
+    _startRecoveryPolling(
+      THREAD_ID,
+      store.dispatch,
+      onRecovered,
+      intervalRef,
+      deadlineRef,
+      wasInterruptedRef,
+      5000,
+      RECOVERY_POLL_TIMEOUT_MS,
+    );
+
+    // Trigger the first poll
+    vi.advanceTimersByTime(5000);
+
+    // Simulate stop() — clear refs before the request resolves
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    if (deadlineRef.current) clearTimeout(deadlineRef.current);
+    deadlineRef.current = null;
+
+    // Now resolve the in-flight request — it should be discarded
+    resolveRequest({
+      messages: [{ type: 'ai', content: 'stale', id: 'stale-1' } as unknown as Message],
+      interrupt: null,
+    });
+    await vi.runAllTimersAsync();
+
+    // Stale result must not trigger onRecovered or dispatch state
+    expect(onRecovered).not.toHaveBeenCalled();
+  });
 });

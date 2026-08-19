@@ -176,12 +176,12 @@ export function _startRecoveryPolling(
     }));
   }, timeoutMs);
 
-  intervalRef.current = setInterval(async () => {
+  const myInterval = intervalRef.current = setInterval(async () => {
     if (polling || expired) return;
     polling = true;
     try {
       const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
-      if (expired) return;
+      if (expired || intervalRef.current !== myInterval) return;
       if (interrupt) {
         if (deadlineRef.current) { clearTimeout(deadlineRef.current); deadlineRef.current = null; }
         if (intervalRef.current) clearInterval(intervalRef.current);
