@@ -1,0 +1,19 @@
+# Pre-commit secret scanning for template-ui (same approach as usernaut).
+#
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+#
+# Also enable GitHub Secret Scanning + Push Protection on the repo:
+# https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning
+# https://docs.github.com/en/code-security/concepts/secret-security/push-protection
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
