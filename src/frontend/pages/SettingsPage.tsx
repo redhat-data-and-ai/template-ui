@@ -1,22 +1,26 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@patternfly/react-core';
-import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ProfileSection } from '../components/settings/ProfileSection';
 import { MemoryList } from '../components/settings/MemoryList';
 import { RulesEditor } from '../components/settings/RulesEditor';
 import { AppearanceSettings } from '../components/settings/AppearanceSettings';
 import { AlwaysAllowedTools } from '../components/settings/AlwaysAllowedTools';
+import { DeveloperSettings } from '../components/settings/DeveloperSettings';
+import { useAppSelector } from '../redux/hooks';
+import { selectDeveloperMode } from '../redux/slices/userSettings';
 
-type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals';
+type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals' | 'developer';
 
-const TABS: { id: TabId; label: string; icon: typeof User }[] = [
+const TABS: { id: TabId; label: string; panelTitle?: string; icon: typeof User }[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'memories', label: 'Memories', icon: Brain },
   { id: 'rules', label: 'Custom Rules', icon: ScrollText },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'tool-approvals', label: 'Tool Approvals', icon: ShieldCheck },
+  { id: 'developer', label: 'Developer', icon: Code2 },
 ];
 
 const TAB_CONTENT: Record<TabId, React.FC> = {
@@ -25,15 +29,24 @@ const TAB_CONTENT: Record<TabId, React.FC> = {
   rules: RulesEditor,
   appearance: AppearanceSettings,
   'tool-approvals': AlwaysAllowedTools,
+  developer: DeveloperSettings,
 };
 
 export function SettingsPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('profile');
   const tabRefs = useRef<Map<TabId, HTMLButtonElement>>(new Map());
+  const developerMode = useAppSelector(selectDeveloperMode);
+  const visibleTabs = TABS.filter((t) => t.id !== 'developer' || developerMode);
+
+  useEffect(() => {
+    if (activeTab === 'developer' && !developerMode) {
+      setActiveTab('profile');
+    }
+  }, [developerMode, activeTab]);
 
   const handleTabKeyDown = (e: React.KeyboardEvent, tabId: TabId) => {
-    const tabIds = TABS.map((t) => t.id);
+    const tabIds = visibleTabs.map((t) => t.id);
     const currentIndex = tabIds.indexOf(tabId);
 
     let nextIndex: number | null = null;
@@ -82,7 +95,7 @@ export function SettingsPage() {
               aria-label="Settings sections"
               className="sm:w-48 shrink-0 flex sm:flex-col gap-1"
             >
-              {TABS.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
                 return (
@@ -126,7 +139,9 @@ export function SettingsPage() {
                     tabIndex={0}
                     className="bg-card border border-border rounded-xl p-6 focus:outline-none"
                   >
-                    <h2 className="text-base font-semibold text-foreground mb-4">{tab.label}</h2>
+                    {tab.id !== 'developer' && (
+                      <h2 className="text-base font-semibold text-foreground mb-4">{tab.panelTitle ?? tab.label}</h2>
+                    )}
                     {activeTab === tab.id && <Content />}
                   </div>
                 );

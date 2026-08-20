@@ -197,7 +197,7 @@ const DEFAULTS: UISettings = {
       enabled: true,
       max: 100,
       window: "1 minute",
-      exclude_paths: ["/api/health", "/_health"],
+      exclude_paths: ["/api/health", "/_health", "/api/proxy/agent/evals/status", "/api/proxy/agent/evals/results", "/api/proxy/agent/evals/history", "/api/proxy/agent/evals/trends"],
     },
     session: {
       secure_cookie: false, // false for dev; set to true in production
