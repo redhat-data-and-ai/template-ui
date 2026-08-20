@@ -1,10 +1,25 @@
 import fp from "fastify-plugin";
 import type { FastifyInstance } from "fastify";
-import { trace } from "@opentelemetry/api";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createOpaEngine, type OpaEngine, type PolicyViolation, type EvaluationResult } from "../utils/opa.js";
 import { getSettings, type UISettings } from "../utils/settings.js";
 
-const tracer = trace.getTracer("opa-plugin");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+interface ControlStatus {
+  id: string;
+  status: "pass" | "fail" | "warn" | "off";
+  mode: "OFF" | "WARN" | "ENFORCE";
+  reason?: string;
+}
+
+export interface ComplianceState {
+  status: "compliant" | "non_compliant" | "disabled";
+  evaluated_at: string;
+  controls: ControlStatus[];
+}
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -13,7 +28,58 @@ declare module "fastify" {
       evaluateWithModes(): EvaluationResult;
       engine: OpaEngine;
     };
+    compliance: ComplianceState;
   }
+}
+
+function loadModes(policyPath: string): Record<string, string> {
+  const policyDir = policyPath && !policyPath.startsWith("/")
+    ? resolve(__dirname, "../../../", policyPath)
+    : policyPath || resolve(__dirname, "../../../config/compliance");
+  const modesFile = resolve(policyDir, "modes.json");
+  if (!existsSync(modesFile)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(modesFile, "utf-8"));
+    return raw.modes ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function buildComplianceState(
+  result: EvaluationResult,
+  modes: Record<string, string>,
+): ComplianceState {
+  const controls: ControlStatus[] = [];
+
+  for (const [controlId, mode] of Object.entries(modes)) {
+    const upperMode = mode.toUpperCase() as "OFF" | "WARN" | "ENFORCE";
+    if (upperMode === "OFF") {
+      controls.push({ id: controlId, status: "off", mode: "OFF" });
+      continue;
+    }
+
+    const denial = result.denials.find((v) => v.id === controlId);
+    if (denial) {
+      controls.push({ id: controlId, status: "fail", mode: "ENFORCE", reason: denial.message });
+      continue;
+    }
+
+    const warning = result.warnings.find((v) => v.id === controlId);
+    if (warning) {
+      controls.push({ id: controlId, status: "warn", mode: "WARN", reason: warning.message });
+      continue;
+    }
+
+    controls.push({ id: controlId, status: "pass", mode: upperMode });
+  }
+
+  const hasFailures = controls.some((c) => c.status === "fail");
+  return {
+    status: hasFailures ? "non_compliant" : "compliant",
+    evaluated_at: new Date().toISOString(),
+    controls,
+  };
 }
 
 function buildInput(cfg: UISettings): Record<string, unknown> {
@@ -52,6 +118,8 @@ export default fp(
       opaCfg.overrides_path,
     );
 
+    const modes = loadModes(opaCfg.policy_path);
+
     function evaluate(): PolicyViolation[] {
       const currentCfg = getSettings();
       const input = buildInput(currentCfg);
@@ -61,23 +129,7 @@ export default fp(
     function evaluateWithModes(): EvaluationResult {
       const currentCfg = getSettings();
       const input = buildInput(currentCfg);
-      return tracer.startActiveSpan("opa.evaluate", (span) => {
-        const result = engine.evaluateWithModes(input);
-
-        span.setAttribute("opa.denials_count", result.denials.length);
-        span.setAttribute("opa.warnings_count", result.warnings.length);
-        if (result.denials.length > 0) {
-          span.setAttribute("opa.decision", "denied");
-          span.setAttribute("opa.denial_messages", result.denials.map((v) => v.message));
-        } else if (result.warnings.length > 0) {
-          span.setAttribute("opa.decision", "warn");
-          span.setAttribute("opa.warning_messages", result.warnings.map((v) => v.message));
-        } else {
-          span.setAttribute("opa.decision", "allowed");
-        }
-        span.end();
-        return result;
-      });
+      return engine.evaluateWithModes(input);
     }
 
     const initialResult = evaluateWithModes();
@@ -100,6 +152,7 @@ export default fp(
     }
 
     fastify.decorate("opa", { evaluate, evaluateWithModes, engine });
+    fastify.decorate("compliance", buildComplianceState(initialResult, modes));
 
     fastify.addHook("onClose", () => {
       engine.destroy();

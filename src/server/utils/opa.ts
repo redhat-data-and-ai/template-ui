@@ -8,6 +8,7 @@ import { loadPolicy } from "@open-policy-agent/opa-wasm";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface PolicyViolation {
+  id?: string;
   message: string;
 }
 
@@ -110,11 +111,16 @@ function extractViolations(policy: LoadedPolicy, input: Record<string, unknown>,
     const first = resultSets[0]?.result;
     if (!first || !Array.isArray(first)) return [];
 
-    return first.map((d: unknown) => ({
-      message: typeof d === "object" && d !== null && "msg" in d
-        ? String((d as { msg: unknown }).msg)
-        : String(d),
-    }));
+    return first.map((d: unknown) => {
+      if (typeof d === "object" && d !== null) {
+        const obj = d as Record<string, unknown>;
+        return {
+          id: "id" in obj ? String(obj.id) : undefined,
+          message: "msg" in obj ? String(obj.msg) : String(d),
+        };
+      }
+      return { message: String(d) };
+    });
   } catch {
     return [];
   }
