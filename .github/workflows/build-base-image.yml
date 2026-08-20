@@ -242,11 +242,12 @@ jobs:
 
       - name: Stamp image reference into deployment manifests
         if: github.event_name != 'pull_request'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          IMAGE: ghcr.io/${{ github.repository }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          IMAGE="ghcr.io/${{ github.repository }}"
           cd deployment/overlays/openshift
-          kustomize edit set image template-ui=${IMAGE}:${VERSION}
+          kustomize edit set image "template-ui=${IMAGE}:${VERSION}"
           echo "Stamped image ${IMAGE}:${VERSION} into deployment/overlays/openshift/kustomization.yaml"
           grep -A3 'images:' kustomization.yaml
 
