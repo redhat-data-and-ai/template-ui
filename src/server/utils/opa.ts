@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, existsSync, watch, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, watch, mkdtempSync, rmSync, copyFileSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -11,8 +11,14 @@ export interface PolicyViolation {
   message: string;
 }
 
+export interface EvaluationResult {
+  denials: PolicyViolation[];
+  warnings: PolicyViolation[];
+}
+
 export interface OpaEngine {
   evaluate(input: Record<string, unknown>): PolicyViolation[];
+  evaluateWithModes(input: Record<string, unknown>): EvaluationResult;
   reload(): Promise<void>;
   isLoaded(): boolean;
   destroy(): void;
@@ -36,6 +42,30 @@ function resolvePolicyDir(policyPath: string): string {
 function hasRegoFiles(dir: string): boolean {
   if (!existsSync(dir)) return false;
   return readdirSync(dir).some((f) => f.endsWith(".rego"));
+}
+
+function mergeOverrides(baseDir: string, overridesDir: string | undefined, log: Logger): string | null {
+  if (!overridesDir || !existsSync(overridesDir)) return null;
+
+  const tmp = mkdtempSync(join(tmpdir(), "opa-merged-"));
+  try {
+    for (const f of readdirSync(baseDir)) {
+      if (f.endsWith(".rego") || f.endsWith(".json")) {
+        copyFileSync(join(baseDir, f), join(tmp, f));
+      }
+    }
+    for (const f of readdirSync(overridesDir)) {
+      if (f.endsWith(".rego") || f.endsWith(".json")) {
+        copyFileSync(join(overridesDir, f), join(tmp, f));
+        log.info(`Policy override applied: ${f}`);
+      }
+    }
+    return tmp;
+  } catch (err) {
+    log.error(`Failed to merge override directory: ${err instanceof Error ? err.message : String(err)}`);
+    try { rmSync(tmp, { recursive: true, force: true }); } catch { /* best-effort */ }
+    return null;
+  }
 }
 
 function compilePolicies(policyDir: string, log: Logger): Buffer | null {
@@ -72,18 +102,54 @@ function compilePolicies(policyDir: string, log: Logger): Buffer | null {
   }
 }
 
+function extractViolations(policy: LoadedPolicy, input: Record<string, unknown>, entrypoint: string): PolicyViolation[] {
+  try {
+    const resultSets = policy.evaluate(input, entrypoint);
+    if (!resultSets?.length) return [];
+
+    const first = resultSets[0]?.result;
+    if (!first || !Array.isArray(first)) return [];
+
+    return first.map((d: unknown) => ({
+      message: typeof d === "object" && d !== null && "msg" in d
+        ? String((d as { msg: unknown }).msg)
+        : String(d),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function createOpaEngine(
   policyPath: string,
   logger?: Logger,
+  overridesPath?: string,
 ): Promise<OpaEngine> {
   const policyDir = resolvePolicyDir(policyPath);
   let policy: LoadedPolicy | null = null;
   let watcher: ReturnType<typeof watch> | null = null;
+  let overridesWatcher: ReturnType<typeof watch> | null = null;
   let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+  let mergedDir: string | null = null;
   const log = logger ?? { info: console.log, warn: console.warn, error: console.error };
 
+  const resolvedOverrides = overridesPath
+    ? resolvePolicyDir(overridesPath)
+    : undefined;
+
   async function compileAndLoad(): Promise<void> {
-    const bundle = compilePolicies(policyDir, log);
+    if (mergedDir) {
+      try { rmSync(mergedDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+      mergedDir = null;
+    }
+
+    let compileDir = policyDir;
+    if (resolvedOverrides && existsSync(resolvedOverrides)) {
+      mergedDir = mergeOverrides(policyDir, resolvedOverrides, log);
+      if (mergedDir) compileDir = mergedDir;
+    }
+
+    const bundle = compilePolicies(compileDir, log);
     if (!bundle) {
       policy = null;
       return;
@@ -119,19 +185,41 @@ export async function createOpaEngine(
     }
   }
 
+  function evaluateWithModes(input: Record<string, unknown>): EvaluationResult {
+    if (!policy) return { denials: [], warnings: [] };
+    return {
+      denials: extractViolations(policy, input, "compliance/ui/deny"),
+      warnings: extractViolations(policy, input, "compliance/ui/violations"),
+    };
+  }
+
+  function scheduleReload(filename: string): void {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(async () => {
+      log.info(`Policy file changed (${filename}) — recompiling`);
+      await compileAndLoad();
+    }, 500);
+  }
+
   function startWatching(): void {
-    if (!existsSync(policyDir)) return;
-    try {
-      watcher = watch(policyDir, (eventType, filename) => {
-        if (!filename?.endsWith(".rego") && !filename?.endsWith(".json")) return;
-        if (reloadTimer) clearTimeout(reloadTimer);
-        reloadTimer = setTimeout(async () => {
-          log.info(`Policy file changed (${filename}) — recompiling`);
-          await compileAndLoad();
-        }, 500);
-      });
-      watcher.on("error", () => {});
-    } catch { /* watcher setup is optional */ }
+    if (existsSync(policyDir)) {
+      try {
+        watcher = watch(policyDir, (eventType, filename) => {
+          if (!filename?.endsWith(".rego") && !filename?.endsWith(".json")) return;
+          scheduleReload(filename);
+        });
+        watcher.on("error", () => {});
+      } catch { /* watcher setup is optional */ }
+    }
+    if (resolvedOverrides && existsSync(resolvedOverrides)) {
+      try {
+        overridesWatcher = watch(resolvedOverrides, (eventType, filename) => {
+          if (!filename?.endsWith(".rego") && !filename?.endsWith(".json")) return;
+          scheduleReload(filename);
+        });
+        overridesWatcher.on("error", () => {});
+      } catch { /* watcher setup is optional */ }
+    }
   }
 
   function destroy(): void {
@@ -139,9 +227,17 @@ export async function createOpaEngine(
       watcher.close();
       watcher = null;
     }
+    if (overridesWatcher) {
+      overridesWatcher.close();
+      overridesWatcher = null;
+    }
     if (reloadTimer) {
       clearTimeout(reloadTimer);
       reloadTimer = null;
+    }
+    if (mergedDir) {
+      try { rmSync(mergedDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+      mergedDir = null;
     }
     policy = null;
   }
@@ -151,6 +247,7 @@ export async function createOpaEngine(
 
   return {
     evaluate,
+    evaluateWithModes,
     reload: compileAndLoad,
     isLoaded: () => policy !== null,
     destroy,
