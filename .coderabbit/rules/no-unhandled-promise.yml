@@ -1,0 +1,18 @@
+id: no-unhandled-promise
+language: typescript
+message: "Floating promise without await or .catch() will silently swallow errors"
+severity: error
+rule:
+  kind: expression_statement
+  has:
+    kind: call_expression
+    has:
+      kind: member_expression
+      not:
+        has:
+          kind: property_identifier
+          regex: "^(then|catch|finally)$"
+  inside:
+    kind: function_declaration
+    regex: "^async "
+    stopBy: end
