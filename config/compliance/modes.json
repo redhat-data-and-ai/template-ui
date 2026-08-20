@@ -1,0 +1,10 @@
+{
+  "modes": {
+    "UI-AUTH-01": "OFF",
+    "UI-ENDPOINT-01": "OFF",
+    "UI-SESSION-01": "OFF",
+    "UI-DEBUG-01": "OFF",
+    "UI-FEATURES-01": "OFF",
+    "UI-RATELIMIT-01": "OFF"
+  }
+}

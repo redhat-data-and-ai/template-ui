@@ -51,6 +51,7 @@ interface OtelConfig {
 interface PlatformOpaConfig {
   enabled: boolean;
   policy_path: string;
+  overrides_path: string;
   fail_on_violation: boolean;
   approved_auth_providers: string[];
   internal_endpoint_suffixes: string[];
@@ -212,6 +213,7 @@ const DEFAULTS: UISettings = {
     opa: {
       enabled: false,
       policy_path: "",
+      overrides_path: "",
       fail_on_violation: false,
       approved_auth_providers: [],
       internal_endpoint_suffixes: [],
@@ -453,6 +455,9 @@ function applyEnvOverrides(config: UISettings): void {
   }
   if (process.env.PLATFORM_OPA_POLICY_PATH) {
     config.platform.opa.policy_path = process.env.PLATFORM_OPA_POLICY_PATH;
+  }
+  if (process.env.PLATFORM_OPA_OVERRIDES_PATH) {
+    config.platform.opa.overrides_path = process.env.PLATFORM_OPA_OVERRIDES_PATH;
   }
   if (process.env.PLATFORM_OPA_FAIL_ON_VIOLATION !== undefined) {
     config.platform.opa.fail_on_violation = process.env.PLATFORM_OPA_FAIL_ON_VIOLATION === "true";
