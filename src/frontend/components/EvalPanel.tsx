@@ -25,7 +25,7 @@ function safeOpenAuthorize(url: string, target: string, features: string): void 
 }
 
 export function EvalPanel() {
-  const { state: eval_ } = useEvalStatus();
+  const { state: eval_, refresh } = useEvalStatus();
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState('');
   const [connectError, setConnectError] = useState('');
@@ -95,6 +95,7 @@ export function EvalPanel() {
             (triggerData.eval_status === 'in_progress' &&
               (triggerData as { message?: string }).message)
           ) {
+            refresh();
             return;
           }
         }
