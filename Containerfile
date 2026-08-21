@@ -7,7 +7,7 @@
 # Build: podman build -f Containerfile.base -t ai-template-ui:v1.0.0 .
 # Run:   podman run -v /path/to/config:/app/config/ui:ro -e UI_CONFIG_PATH=/app/config/ui/settings.yaml ai-template-ui:v1.0.0
 
-FROM registry.access.redhat.com/hi/nodejs:24.18.0-builder
+FROM registry.access.redhat.com/hi/nodejs:26.6.0-builder
 
 USER root
 
