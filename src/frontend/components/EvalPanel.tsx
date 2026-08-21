@@ -10,15 +10,25 @@ import {
 } from '@patternfly/react-core';
 import { buildAppPath } from '../lib/app-paths';
 import { useEvalStatus } from '../hooks/useEvalStatus';
+import type { McpAuthRequired } from '../hooks/useEvalDashboard';
 
-interface McpAuthRequired {
-  name: string;
-  connect_url: string;
+function isSafeConnectUrl(url: string): boolean {
+  return /^\/[a-zA-Z0-9/_-]+$/.test(url) && !url.includes('..');
+}
+
+function safeOpenAuthorize(url: string, target: string, features: string): void {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return;
+    window.open(url, target, features);
+  } catch { /* invalid URL — ignore */ }
 }
 
 export function EvalPanel() {
   const { state: eval_ } = useEvalStatus();
   const [triggering, setTriggering] = useState(false);
+  const [triggerError, setTriggerError] = useState('');
+  const [connectError, setConnectError] = useState('');
   const [resultsOpen, setResultsOpen] = useState(false);
   const [authRequired, setAuthRequired] = useState<McpAuthRequired[]>([]);
 
@@ -44,6 +54,7 @@ export function EvalPanel() {
 
   const handleEvaluate = async (force = false) => {
     setTriggering(true);
+    setTriggerError('');
     try {
       // Call trigger — agentpod handles cache check, in_progress guard, and starting the eval pod
       const triggerPath = force
@@ -64,6 +75,16 @@ export function EvalPanel() {
           }
         }
 
+        if (!triggerRes.ok) {
+          const errFriendly: Record<number, string> = {
+            429: 'Too many requests — wait a moment and try again.',
+            503: 'Eval service unavailable — try again shortly.',
+            502: 'Could not reach the eval runner — check your deployment.',
+          };
+          setTriggerError(errFriendly[triggerRes.status] ?? `Trigger failed (${triggerRes.status}) — check the agent logs.`);
+          return;
+        }
+
         if (triggerRes.ok) {
           const triggerData = (await triggerRes.json()) as Record<string, unknown>;
           if (
@@ -75,11 +96,11 @@ export function EvalPanel() {
           }
         }
       } catch {
-        // endpoint not available — nothing to do
+        setTriggerError('Could not reach the eval service — check your connection.');
         return;
       }
-    } catch {
-      // ignore — status polling will reflect outcome
+    } catch (e) {
+      setTriggerError(String(e));
     } finally {
       setTriggering(false);
     }
@@ -102,21 +123,36 @@ export function EvalPanel() {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {authRequired.map((server) => (
-              <Button
-                key={server.name}
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  fetch(buildAppPath(`/api/proxy/agent${server.connect_url}`), { method: 'POST', credentials: 'same-origin' })
-                    .then((r) => r.json())
-                    .then((b: { authorize_url?: string }) => {
-                      if (b.authorize_url) window.open(b.authorize_url, `mcp-connect-${server.name}`, 'width=600,height=700');
-                    })
-                    .catch(() => undefined);
-                }}
-              >
-                Connect {server.name.charAt(0).toUpperCase() + server.name.slice(1)}
-              </Button>
+              <div key={server.name} className="flex flex-col gap-1">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setConnectError('');
+                    if (!isSafeConnectUrl(server.connect_url)) {
+                      setConnectError('Invalid connect URL from server.');
+                      return;
+                    }
+                    fetch(buildAppPath(`/api/proxy/agent${server.connect_url}`), { method: 'POST', credentials: 'same-origin' })
+                      .then((r) => r.json())
+                      .then((b: { authorize_url?: string }) => {
+                        if (b.authorize_url) {
+                          safeOpenAuthorize(b.authorize_url, `mcp-connect-${server.name}`, 'noopener,noreferrer,width=600,height=700');
+                        } else {
+                          setConnectError('No authorization URL returned — check the MCP server config.');
+                        }
+                      })
+                      .catch(() => setConnectError('Could not reach the MCP server — check your connection.'));
+                  }}
+                >
+                  Connect {server.name.charAt(0).toUpperCase() + server.name.slice(1)}
+                </Button>
+                {connectError && (
+                  <p style={{ fontSize: 12, color: 'var(--pf-global--danger-color--100, #c9190b)', marginTop: 2 }}>
+                    {connectError}
+                  </p>
+                )}
+              </div>
             ))}
           </div>
           <p style={{ marginTop: 8, fontSize: 12, color: 'var(--pf-global--Color--200)' }}>
@@ -153,6 +189,11 @@ export function EvalPanel() {
 
         {badge()}
       </div>
+      {triggerError && (
+        <p style={{ fontSize: 12, color: 'var(--pf-global--danger-color--100, #c9190b)', marginTop: 4 }}>
+          {triggerError}
+        </p>
+      )}
 
       {eval_.status === 'completed' && (
         <Button variant="link" isInline onClick={() => setResultsOpen(true)}>

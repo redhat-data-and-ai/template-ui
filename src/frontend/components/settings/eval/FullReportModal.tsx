@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { EvalRow, MetricStats } from './eval-types';
 import { ScoreGauge } from './ScoreGauge';
 import { ScoreHero } from './ScoreHero';
@@ -20,6 +20,12 @@ export function FullReportModal({ result, prevScore, onClose }: FullReportModalP
   const availableTags = [...new Set(turns.map((t) => t.tag).filter((t): t is string => !!t))];
   const [activeTag, setActiveTag] = useState('all');
   const isFiltered = activeTag !== 'all';
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
 
   const { displayByMetric, displayData, displayScore } = useMemo(() => {
     if (!isFiltered) {
@@ -45,11 +51,16 @@ export function FullReportModal({ result, prevScore, onClose }: FullReportModalP
       stats.pass_rate = tot > 0 ? (stats.pass ?? 0) / tot : 0;
     }
 
-    const dPass = filtered.filter((t) => (t.result ?? '').toUpperCase() === 'PASS').length;
-    const dFail = filtered.filter((t) => (t.result ?? '').toUpperCase() === 'FAIL').length;
-    const dError = filtered.filter(
-      (t) => !['PASS', 'FAIL'].includes((t.result ?? '').toUpperCase()),
-    ).length;
+    const { dPass, dFail, dError } = filtered.reduce(
+      (acc, t) => {
+        const r = (t.result ?? '').toUpperCase();
+        if (r === 'PASS') acc.dPass++;
+        else if (r === 'FAIL') acc.dFail++;
+        else acc.dError++;
+        return acc;
+      },
+      { dPass: 0, dFail: 0, dError: 0 },
+    );
     const dTotal = dPass + dFail + dError;
     const dScore = dTotal > 0 ? dPass / dTotal : 0;
 
@@ -58,7 +69,7 @@ export function FullReportModal({ result, prevScore, onClose }: FullReportModalP
       displayData: { ...result, pass: dPass, fail: dFail, error: dError, eval_score: dScore },
       displayScore: dScore,
     };
-  }, [activeTag, isFiltered, turns, byMetric, result]);
+  }, [activeTag, turns, byMetric, result]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

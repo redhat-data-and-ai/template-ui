@@ -9,17 +9,10 @@ import {
   CartesianGrid,
 } from 'recharts';
 import type { EvalTrendsResponse } from './eval-types';
-import { friendlyMetricName } from './eval-utils';
+import { friendlyMetricName, useDarkMode } from './eval-utils';
 
 const CHART_COLORS_LIGHT = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed'];
 const CHART_COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
-
-function getChartColors(): string[] {
-  if (typeof document === 'undefined') return CHART_COLORS_LIGHT;
-  return document.documentElement.classList.contains('dark')
-    ? CHART_COLORS_DARK
-    : CHART_COLORS_LIGHT;
-}
 
 function formatTickLabel(iso: string, allSameDay: boolean): string {
   const d = new Date(iso);
@@ -45,6 +38,8 @@ interface TrendChartProps {
 }
 
 export function TrendChart({ data }: TrendChartProps) {
+  const isDark = useDarkMode();
+
   if (!data.overall || data.overall.length < 2) {
     return (
       <div className="rounded-lg border border-border bg-card px-4 py-8 text-center">
@@ -55,7 +50,7 @@ export function TrendChart({ data }: TrendChartProps) {
     );
   }
 
-  const colors = getChartColors();
+  const colors = isDark ? CHART_COLORS_DARK : CHART_COLORS_LIGHT;
   const metricKeys = Object.keys(data.metrics);
 
   const timestamps = [...new Set([
@@ -89,7 +84,6 @@ export function TrendChart({ data }: TrendChartProps) {
   });
 
   const allKeys = ['Overall', ...metricKeys.map(k => friendlyMetricName(k))];
-  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const axisTickColor = isDark ? '#a1a1aa' : '#71717a';
 

@@ -18,7 +18,6 @@ const TAG_OPTIONS: { value: CaseTag | 'all'; label: string }[] = [
   { value: 'non_hitl', label: 'non_hitl' },
   { value: 'hitl', label: 'hitl' },
   { value: 'multi_turn', label: 'multi_turn' },
-  { value: 'multi_agent', label: 'multi_agent' },
 ];
 
 export function EvalDatasetPage() {
@@ -29,6 +28,7 @@ export function EvalDatasetPage() {
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState<CaseTag | 'all'>('all');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -61,7 +61,7 @@ export function EvalDatasetPage() {
         setJudgeModel(data.judge_model ?? '');
       }
     } catch {
-      // network error — start with empty state
+      setLoadError('Could not load dataset — check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export function EvalDatasetPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setSaveError((err as any).detail ?? `Error ${res.status}`);
+        setSaveError((err as { detail?: string }).detail ?? `Error ${res.status}`);
       } else {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
@@ -195,6 +195,16 @@ export function EvalDatasetPage() {
             <div className="flex items-center justify-center py-16 text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
               <span className="text-sm">Loading dataset…</span>
+            </div>
+          ) : loadError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-8 text-center">
+              <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>
+              <button
+                onClick={() => { setLoadError(''); void loadDataset(); }}
+                className="mt-3 text-xs text-red-600 dark:text-red-400 underline"
+              >
+                Retry
+              </button>
             </div>
           ) : (
             <>

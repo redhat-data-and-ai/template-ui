@@ -1,3 +1,19 @@
+import { useState, useEffect } from 'react';
+
+export function useDarkMode(): boolean {
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
 const METRIC_LABELS: Record<string, string> = {
   // Custom metrics
   'custom:answer_correctness':               'Response Accuracy',

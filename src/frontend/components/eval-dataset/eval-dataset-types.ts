@@ -23,7 +23,7 @@ export interface Turn {
 
 // tag describes conversation shape; tool_use is NOT a separate tag —
 // custom:tool_eval is auto-applied per-turn whenever expected_tool_calls is set.
-export type CaseTag = 'non_hitl' | 'hitl' | 'multi_turn' | 'multi_agent';
+export type CaseTag = 'non_hitl' | 'hitl' | 'multi_turn';
 
 export interface TestCase {
   id: string;

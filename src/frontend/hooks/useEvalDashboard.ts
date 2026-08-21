@@ -34,6 +34,16 @@ export function useEvalDashboard(): EvalDashboardState {
   const { data: history, refetch: refetchHistory } = useEvalHistory();
   const { data: trends, refetch: refetchTrends } = useEvalTrends();
 
+  const mountedRef = useRef(true);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
   const [result, setResult] = useState<EvalRow | null>(null);
   const [triggerState, setTriggerState] = useState<ActionState>({
     status: 'idle',
@@ -64,7 +74,7 @@ export function useEvalDashboard(): EvalDashboardState {
       );
       if (!res.ok) return;
       const data = (await res.json()) as EvalRow;
-      setResult(data);
+      if (mountedRef.current) setResult(data);
     } catch {
       // ignore
     }
@@ -142,17 +152,22 @@ export function useEvalDashboard(): EvalDashboardState {
           }
         }
         // Non-403 response — clear any stale auth prompt
-        setAuthRequired([]);
+        if (mountedRef.current) setAuthRequired([]);
         if (!res.ok) {
-          setTriggerState({
+          const errFriendly: Record<number, string> = {
+            429: 'Too many requests — wait a moment and try again.',
+            503: 'Eval service unavailable — try again shortly.',
+            502: 'Could not reach the eval runner — check your deployment.',
+          };
+          if (mountedRef.current) setTriggerState({
             status: 'error',
-            message: (data.message as string) || (data.detail as string) || res.statusText,
+            message: errFriendly[res.status] ?? `Trigger failed (${res.status}) — check the agent logs.`,
           });
           return;
         }
 
         if ((data as { cached?: boolean }).cached) {
-          setTriggerState({
+          if (mountedRef.current) setTriggerState({
             status: 'success',
             message: 'Already complete — showing latest result.',
           });
@@ -166,14 +181,14 @@ export function useEvalDashboard(): EvalDashboardState {
           data.eval_status === 'in_progress' &&
           (data as { message?: string }).message
         ) {
-          setTriggerState({
+          if (mountedRef.current) setTriggerState({
             status: 'success',
             message: 'Eval already running — check back shortly.',
           });
           return;
         }
 
-        setTriggerState({
+        if (mountedRef.current) setTriggerState({
           status: 'success',
           message: 'Eval queued — running in background.',
         });
@@ -184,15 +199,17 @@ export function useEvalDashboard(): EvalDashboardState {
         // the status never changes from 'error' → 'error', so the effect won't
         // fire. Poll once after a short delay and clear the queued message if
         // the eval has already reached a terminal state.
-        setTimeout(() => {
+        if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
           const terminal = ['completed', 'failed', 'error', 'no_dataset'];
           if (terminal.includes(evalStatusRef.current)) {
             setTriggerState({ status: 'idle', message: '' });
             setTriggeredAt(null);
           }
         }, 2000);
-      } catch (e) {
-        setTriggerState({ status: 'error', message: String(e) });
+      } catch {
+        if (mountedRef.current) setTriggerState({ status: 'error', message: 'Network error — could not reach the eval service.' });
       }
     },
     [fetchResults, refetchHistory, refetchTrends],

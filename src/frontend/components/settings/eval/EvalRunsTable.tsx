@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { buildAppPath } from '../../../lib/app-paths';
 import type { EvalHistoryRun, EvalRow } from './eval-types';
@@ -31,11 +31,11 @@ function downloadJson(data: EvalRow, timestamp: string) {
   URL.revokeObjectURL(url);
 }
 
-async function fetchRunDetail(completedAt: string): Promise<EvalRow | null> {
+async function fetchRunDetail(completedAt: string, signal: AbortSignal): Promise<EvalRow | null> {
   try {
     const res = await fetch(
       buildAppPath(`/api/proxy/agent/evals/results?completed_at=${encodeURIComponent(completedAt)}`),
-      { credentials: 'same-origin' },
+      { credentials: 'same-origin', signal },
     );
     if (!res.ok) return null;
     return (await res.json()) as EvalRow;
@@ -48,7 +48,11 @@ const PAGE_SIZE = 5;
 
 export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
   const [loadingRow, setLoadingRow] = useState<string | null>(null);
+  const [errorRow, setErrorRow] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
 
   if (runs.length === 0) return null;
 
@@ -56,18 +60,36 @@ export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
   const pageRuns = runs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const handleRowClick = async (run: EvalHistoryRun) => {
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setErrorRow(null);
     setLoadingRow(run.completed_at);
-    const detail = await fetchRunDetail(run.completed_at);
+    const detail = await fetchRunDetail(run.completed_at, ac.signal);
+    if (ac.signal.aborted) return;
     setLoadingRow(null);
-    if (detail) onViewReport(detail);
+    if (detail) {
+      onViewReport(detail);
+    } else {
+      setErrorRow(run.completed_at);
+    }
   };
 
   const handleDownload = async (e: React.MouseEvent, run: EvalHistoryRun) => {
     e.stopPropagation();
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setErrorRow(null);
     setLoadingRow(run.completed_at);
-    const detail = await fetchRunDetail(run.completed_at);
+    const detail = await fetchRunDetail(run.completed_at, ac.signal);
+    if (ac.signal.aborted) return;
     setLoadingRow(null);
-    if (detail) downloadJson(detail, run.completed_at);
+    if (detail) {
+      downloadJson(detail, run.completed_at);
+    } else {
+      setErrorRow(run.completed_at);
+    }
   };
 
   return (
@@ -90,11 +112,12 @@ export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
             {pageRuns.map((run, i) => {
               const pct = Math.round(run.eval_score * 100);
               const isLoading = loadingRow === run.completed_at;
+              const hasError = errorRow === run.completed_at;
               const globalIndex = page * PAGE_SIZE + i;
 
               return (
                 <tr
-                  key={run.completed_at}
+                  key={`${page}_${i}`}
                   onClick={() => handleRowClick(run)}
                   className="border-t border-border cursor-pointer hover:bg-secondary/40 transition-colors"
                   title="Click to view full report"
@@ -102,6 +125,9 @@ export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
                   <td className="px-3 py-2.5 text-foreground">
                     {isLoading && (
                       <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse mr-2" />
+                    )}
+                    {hasError && (
+                      <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" title="Failed to load report" />
                     )}
                     {formatTimestamp(run.completed_at)}
                     {globalIndex === 0 && (

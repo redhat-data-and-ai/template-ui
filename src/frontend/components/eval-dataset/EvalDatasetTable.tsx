@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Edit, Trash2, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TestCase, CaseTag } from './eval-dataset-types';
@@ -12,14 +13,12 @@ const TAG_STYLES: Record<CaseTag, string> = {
   non_hitl: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
   hitl: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
   multi_turn: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-  multi_agent: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300',
 };
 
 const TAG_LABELS: Record<CaseTag, string> = {
   non_hitl: 'non_hitl',
   hitl: 'hitl',
   multi_turn: 'multi_turn',
-  multi_agent: 'multi_agent',
 };
 
 function formatDate(iso: string): string {
@@ -32,6 +31,8 @@ function toolCallCount(testCase: TestCase): number {
 }
 
 export function EvalDatasetTable({ cases, onEdit, onDelete }: EvalDatasetTableProps) {
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+
   if (cases.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-card px-4 py-12 text-center">
@@ -90,14 +91,31 @@ export function EvalDatasetTable({ cases, onEdit, onDelete }: EvalDatasetTablePr
                   {formatDate(tc.createdAt)}
                 </td>
                 <td className={cn('px-3 py-3 border-t border-border', isLast && 'rounded-br-lg')}>
-                  <div className="flex items-center gap-1 justify-end">
-                    <button onClick={() => onEdit(tc.id)} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors" title="Edit">
-                      <Edit className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => onDelete(tc.id)} className="p-1.5 rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Delete">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {pendingDelete === tc.id ? (
+                    <div className="flex items-center gap-1 justify-end">
+                      <button
+                        onClick={() => { onDelete(tc.id); setPendingDelete(null); }}
+                        className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 hover:bg-red-200 transition-colors"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setPendingDelete(null)}
+                        className="px-2 py-0.5 rounded text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => onEdit(tc.id)} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors" title="Edit">
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setPendingDelete(tc.id)} className="p-1.5 rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Delete">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             );

@@ -78,7 +78,7 @@ export function useEvalStatus(): UseEvalStatusResult {
     mounted.current = true;
     void fetchStatus();
 
-    if (statusRef.current !== 'in_progress') {
+    if (state.status !== 'in_progress') {
       return () => { mounted.current = false; };
     }
 
@@ -89,5 +89,6 @@ export function useEvalStatus(): UseEvalStatusResult {
     };
   }, [fetchStatus, state.status]);
 
-  return { state, refresh: () => { void fetchStatus(); } };
+  const refresh = useCallback(() => { void fetchStatus(); }, [fetchStatus]);
+  return { state, refresh };
 }

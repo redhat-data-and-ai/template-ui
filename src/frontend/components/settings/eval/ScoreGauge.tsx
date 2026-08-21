@@ -24,7 +24,7 @@ export function ScoreGauge({ score }: { score: number }) {
         <text x="70" y="67" textAnchor="middle" fontSize="26" fontWeight="700" fill={color}>
           {pct}%
         </text>
-        <text x="70" y="87" textAnchor="middle" fontSize="11" fill="#6b7280">
+        <text x="70" y="87" textAnchor="middle" fontSize="11" fill="currentColor" className="text-muted-foreground">
           overall
         </text>
       </svg>

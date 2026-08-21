@@ -15,7 +15,7 @@ interface AddTestCaseModalProps {
 type Mode = 'single' | 'multi';
 
 
-const MULTI_TAGS: CaseTag[] = ['multi_turn', 'multi_agent'];
+const MULTI_TAGS: CaseTag[] = ['multi_turn'];
 
 function modeFromCase(tc: TestCase): Mode {
   return MULTI_TAGS.includes(tc.tag) ? 'multi' : 'single';
@@ -35,11 +35,20 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
   );
   const [error, setError] = useState('');
 
-  // Sync tag when mode changes
+  // Sync tag when mode changes — functional updater avoids closing over stale tag
   useEffect(() => {
-    if (mode === 'multi' && !MULTI_TAGS.includes(tag)) setTag('multi_turn');
-    else if (mode === 'single' && MULTI_TAGS.includes(tag)) setTag('non_hitl');
+    setTag((prev) => {
+      if (mode === 'multi' && !MULTI_TAGS.includes(prev)) return 'multi_turn';
+      if (mode === 'single' && MULTI_TAGS.includes(prev)) return 'non_hitl';
+      return prev;
+    });
   }, [mode]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
 
   function handleSave() {
     setError('');
@@ -145,11 +154,9 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
           ) : (
             <MultiTurnForm
               name={name}
-              tag={MULTI_TAGS.includes(tag) ? (tag as 'multi_turn' | 'multi_agent') : 'multi_turn'}
               turns={multiTurns}
               description={description}
               onNameChange={setName}
-              onTagChange={(t) => setTag(t)}
               onTurnsChange={setMultiTurns}
               onDescriptionChange={setDescription}
             />

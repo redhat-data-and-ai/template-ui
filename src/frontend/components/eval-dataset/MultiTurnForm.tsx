@@ -6,17 +6,15 @@ import { emptyToolCall, emptyTurn, normTurn } from './eval-dataset-utils';
 
 interface MultiTurnFormProps {
   name: string;
-  tag: 'multi_turn' | 'multi_agent';
   turns: Turn[];
   description: string;
   onNameChange: (v: string) => void;
-  onTagChange: (v: 'multi_turn' | 'multi_agent') => void;
   onTurnsChange: (turns: Turn[]) => void;
   onDescriptionChange: (v: string) => void;
 }
 
 
-export function MultiTurnForm({ name, tag, turns, description, onNameChange, onTagChange, onTurnsChange, onDescriptionChange }: MultiTurnFormProps) {
+export function MultiTurnForm({ name, turns, description, onNameChange, onTurnsChange, onDescriptionChange }: MultiTurnFormProps) {
   const safeTurns = turns.map(normTurn);
   const toolCallTotal = safeTurns.reduce((sum, t) => sum + (t.toolCallEnabled ? Math.max(1, t.expectedToolCalls.length) : 0), 0);
 
@@ -80,23 +78,9 @@ export function MultiTurnForm({ name, tag, turns, description, onNameChange, onT
             placeholder="e.g. multi_turn_onboarding_flow"
             className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
-          <div className="flex gap-1 shrink-0">
-            {(['multi_turn', 'multi_agent'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onTagChange(t)}
-                className={cn(
-                  'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-                  tag === t
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                    : 'bg-secondary text-muted-foreground hover:bg-secondary/80',
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+            multi_turn
+          </span>
         </div>
         <p className="text-xs text-muted-foreground">Use lowercase letters and underscores only</p>
       </div>

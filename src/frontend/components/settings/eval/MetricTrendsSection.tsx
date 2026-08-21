@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { EvalTrendsResponse } from './eval-types';
+import { useDarkMode } from './eval-utils';
 import { MetricTrendCard } from './MetricTrendCard';
 import { TrendChart } from './TrendChart';
 
@@ -9,23 +10,17 @@ type View = 'cards' | 'chart';
 const COLORS_LIGHT = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed'];
 const COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
 
-function getColors(): string[] {
-  if (typeof document === 'undefined') return COLORS_LIGHT;
-  return document.documentElement.classList.contains('dark')
-    ? COLORS_DARK
-    : COLORS_LIGHT;
-}
-
 interface MetricTrendsSectionProps {
   data: EvalTrendsResponse;
 }
 
 export function MetricTrendsSection({ data }: MetricTrendsSectionProps) {
   const [view, setView] = useState<View>('cards');
+  const isDark = useDarkMode();
 
   const metricKeys = Object.keys(data.metrics);
   const hasMetrics = metricKeys.length > 0;
-  const colors = getColors();
+  const colors = isDark ? COLORS_DARK : COLORS_LIGHT;
 
   // ISO timestamp of the most recent overall run — used to determine which
   // metric cards should show a "current" value vs. a stale historical one.

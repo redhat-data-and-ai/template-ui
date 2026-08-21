@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { buildAppPath } from '../../../lib/app-paths';
 import { useEvalDashboard } from '../../../hooks/useEvalDashboard';
 import type { EvalRow } from './eval-types';
 import { EvalControls } from './EvalControls';
@@ -6,6 +7,18 @@ import { EvalStatusBar } from './EvalStatusBar';
 import { MetricTrendsSection } from './MetricTrendsSection';
 import { EvalRunsTable } from './EvalRunsTable';
 import { FullReportModal } from './FullReportModal';
+
+function isSafeConnectUrl(url: string): boolean {
+  return /^\/[a-zA-Z0-9/_-]+$/.test(url) && !url.includes('..');
+}
+
+function safeOpenAuthorize(url: string, target: string, features: string): void {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return;
+    window.open(url, target, features);
+  } catch { /* invalid URL — ignore */ }
+}
 
 export function EvalDashboard() {
   const {
@@ -51,12 +64,16 @@ export function EvalDashboard() {
                   className="w-fit rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
                   onClick={() => {
                     setConnectErrors((e) => ({ ...e, [server.name]: '' }));
-                    fetch(`/api/proxy/agent${server.connect_url}`, { method: 'POST', credentials: 'same-origin' })
+                    if (!isSafeConnectUrl(server.connect_url)) {
+                      setConnectErrors((e) => ({ ...e, [server.name]: 'Invalid connect URL from server.' }));
+                      return;
+                    }
+                    fetch(buildAppPath(`/api/proxy/agent${server.connect_url}`), { method: 'POST', credentials: 'same-origin' })
                       .then(async (r) => {
                         try {
                           const b = await r.json() as { authorize_url?: string; detail?: string; error?: string };
                           if (b.authorize_url) {
-                            window.open(b.authorize_url, `mcp-connect-${server.name}`, 'width=600,height=700');
+                            safeOpenAuthorize(b.authorize_url, `mcp-connect-${server.name}`, 'noopener,noreferrer,width=600,height=700');
                             return;
                           }
                         } catch { /* ignore parse error, fall through to status-based message */ }
