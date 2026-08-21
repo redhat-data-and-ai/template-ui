@@ -137,7 +137,7 @@ export function EvalPanel() {
                       .then((r) => r.json())
                       .then((b: { authorize_url?: string }) => {
                         if (b.authorize_url) {
-                          safeOpenAuthorize(b.authorize_url, `mcp-connect-${server.name}`, 'noopener,noreferrer,width=600,height=700');
+                          safeOpenAuthorize(b.authorize_url, `mcp-connect-${server.name}`, 'width=600,height=700');
                         } else {
                           setConnectError('No authorization URL returned — check the MCP server config.');
                         }

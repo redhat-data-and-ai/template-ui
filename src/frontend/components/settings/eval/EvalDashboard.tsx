@@ -73,7 +73,7 @@ export function EvalDashboard() {
                         try {
                           const b = await r.json() as { authorize_url?: string; detail?: string; error?: string };
                           if (b.authorize_url) {
-                            safeOpenAuthorize(b.authorize_url, `mcp-connect-${server.name}`, 'noopener,noreferrer,width=600,height=700');
+                            safeOpenAuthorize(b.authorize_url, `mcp-connect-${server.name}`, 'width=600,height=700');
                             return;
                           }
                         } catch { /* ignore parse error, fall through to status-based message */ }
