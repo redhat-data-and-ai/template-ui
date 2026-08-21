@@ -76,12 +76,15 @@ export function EvalPanel() {
         }
 
         if (!triggerRes.ok) {
+          const errBody = await triggerRes.json().catch(() => ({})) as { detail?: string };
           const errFriendly: Record<number, string> = {
             429: 'Too many requests — wait a moment and try again.',
-            503: 'Eval service unavailable — try again shortly.',
             502: 'Could not reach the eval runner — check your deployment.',
           };
-          setTriggerError(errFriendly[triggerRes.status] ?? `Trigger failed (${triggerRes.status}) — check the agent logs.`);
+          const msg = errBody.detail
+            ?? errFriendly[triggerRes.status]
+            ?? `Trigger failed (${triggerRes.status}) — check the agent logs.`;
+          setTriggerError(msg);
           return;
         }
 

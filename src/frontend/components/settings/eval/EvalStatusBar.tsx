@@ -7,6 +7,7 @@ interface EvalStatusBarProps {
   fail: number;
   error?: number;
   triggeredAt?: number | null;
+  errorMessage?: string | null;
 }
 
 function formatElapsed(ms: number): string {
@@ -15,7 +16,7 @@ function formatElapsed(ms: number): string {
   return `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
 
-export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredAt }: EvalStatusBarProps) {
+export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredAt, errorMessage }: EvalStatusBarProps) {
   const [elapsed, setElapsed] = useState('');
   const isRunning = status === 'in_progress' || status === 'not_started';
 
