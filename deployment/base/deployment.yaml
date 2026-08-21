@@ -20,7 +20,7 @@ spec:
       containers:
         - name: template-ui
           image: template-ui:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http
