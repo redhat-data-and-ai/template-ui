@@ -1,0 +1,8 @@
+id: no-empty-useeffect-deps
+language: typescript
+message: "useEffect without a dependency array runs on every render; add dependencies or an empty array"
+severity: warning
+rule:
+  pattern: useEffect($CALLBACK)
+  not:
+    pattern: useEffect($CALLBACK, $DEPS)
