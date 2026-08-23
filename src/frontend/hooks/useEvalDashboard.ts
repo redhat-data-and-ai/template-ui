@@ -9,6 +9,7 @@ import type {
   EvalHistoryResponse,
   EvalTrendsResponse,
 } from '../components/settings/eval/eval-types';
+import { evalTriggerDoneMessage } from '../components/settings/eval/eval-utils';
 
 export interface McpAuthRequired {
   name: string;
@@ -24,6 +25,7 @@ export interface EvalDashboardState {
   triggerState: ActionState;
   triggeredAt: number | null;
   hasTriggered: boolean;
+  isCached: boolean;
   trigger: (force: boolean) => Promise<void>;
   authRequired: McpAuthRequired[];
   clearAuthRequired: () => void;
@@ -38,6 +40,7 @@ export function useEvalDashboard(): EvalDashboardState {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
@@ -51,11 +54,32 @@ export function useEvalDashboard(): EvalDashboardState {
   });
   const [authRequired, setAuthRequired] = useState<McpAuthRequired[]>([]);
   const [triggeredAt, setTriggeredAt] = useState<number | null>(null);
+  const [isCached, setIsCached] = useState(false);
   const [hasTriggered, setHasTriggered] = useState(
     () => sessionStorage.getItem('evalHasTriggered') === '1'
   );
 
   const prevStatusRef = useRef(evalState.status);
+  const cacheHitRef = useRef(false);
+
+  // Auto-release the button only after a live in-progress run finishes.
+  // If status is already completed, this is a cache hit — wait for the trigger
+  // response so we can show "result already exists" instead of a generic message.
+  useEffect(() => {
+    if (triggerState.status !== 'loading') return;
+    if (evalState.status !== 'completed') return;
+    if (prevStatusRef.current !== 'in_progress' && prevStatusRef.current !== 'not_started') {
+      return;
+    }
+    if (mountedRef.current) {
+      setTriggerState({
+        status: 'success',
+        message: 'Eval completed. Showing latest result.',
+      });
+      setTriggeredAt(null);
+    }
+  }, [triggerState.status, evalState.status]);
+
   // Keep refreshStatus stable in a ref so trigger callback can use it without re-creating
   const refreshStatusRef = useRef(refreshStatus);
   refreshStatusRef.current = refreshStatus;
@@ -102,8 +126,13 @@ export function useEvalDashboard(): EvalDashboardState {
     // Clear the "queued / running" trigger message once the eval reaches any
     // terminal or definitive state — including the fast-fail path where status
     // jumps from the initial 'unknown' directly to 'error' before the first poll.
-    if (wasRunning && isNowDone) {
-      setTriggerState({ status: 'idle', message: '' });
+    if (wasRunning && isNowDone && !cacheHitRef.current) {
+      setTriggerState({
+        status: 'success',
+        message: isNowComplete
+          ? 'Eval completed. Showing latest result.'
+          : '',
+      });
       setTriggeredAt(null);
     }
 
@@ -131,6 +160,7 @@ export function useEvalDashboard(): EvalDashboardState {
         ? '/api/proxy/agent/evals/force-trigger'
         : '/api/proxy/agent/evals/trigger';
 
+      cacheHitRef.current = false;
       setTriggerState({ status: 'loading', message: '' });
       setTriggeredAt(Date.now());
       setHasTriggered(true);
@@ -141,6 +171,7 @@ export function useEvalDashboard(): EvalDashboardState {
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: '{}',
+          signal: AbortSignal.timeout(15_000),
         });
         const data = (await res.json()) as Record<string, unknown>;
         if (res.status === 403) {
@@ -159,27 +190,47 @@ export function useEvalDashboard(): EvalDashboardState {
             503: 'Eval service unavailable — try again shortly.',
             502: 'Could not reach the eval runner — check your deployment.',
           };
+          const backendMsg =
+            typeof data.message === 'string' ? data.message :
+            typeof (data.detail as Record<string, unknown>)?.message === 'string'
+              ? (data.detail as Record<string, unknown>).message as string
+              : typeof data.detail === 'string' ? data.detail : null;
           if (mountedRef.current) setTriggerState({
             status: 'error',
-            message: errFriendly[res.status] ?? `Trigger failed (${res.status}) — check the agent logs.`,
+            message: errFriendly[res.status] ?? backendMsg ?? `Trigger failed (${res.status}) — check the agent logs.`,
           });
           return;
         }
 
-        if ((data as { cached?: boolean }).cached) {
-          if (mountedRef.current) setTriggerState({
-            status: 'success',
-            message: 'Already complete — showing latest result.',
-          });
-          await fetchResults();
+        const payload = (data.detail && typeof data.detail === 'object'
+          ? data.detail
+          : data) as Record<string, unknown>;
+        const doneMessage = evalTriggerDoneMessage({
+          cached: payload.cached,
+          eval_status: payload.eval_status as string | undefined,
+        });
+        if (doneMessage) {
+          cacheHitRef.current = true;
+          if (mountedRef.current) {
+            setTriggerState({ status: 'success', message: doneMessage });
+            setTriggeredAt(null);
+            setIsCached(true);
+            // Trigger response already contains the full result — use it directly
+            // instead of making a redundant /evals/results call
+            setResult(payload as unknown as EvalRow);
+          }
           void refetchHistory();
           void refetchTrends();
+          refreshStatusRef.current();
           return;
         }
+        // New run starting — clear cached flag
+        if (mountedRef.current) setIsCached(false);
 
         if (
-          data.eval_status === 'in_progress' &&
-          (data as { message?: string }).message
+          payload.eval_status === 'in_progress' &&
+          typeof payload.message === 'string' &&
+          payload.message
         ) {
           if (mountedRef.current) setTriggerState({
             status: 'success',
@@ -204,7 +255,12 @@ export function useEvalDashboard(): EvalDashboardState {
           if (!mountedRef.current) return;
           const terminal = ['completed', 'failed', 'error', 'no_dataset'];
           if (terminal.includes(evalStatusRef.current)) {
-            setTriggerState({ status: 'idle', message: '' });
+            setTriggerState({
+              status: 'success',
+              message: evalStatusRef.current === 'completed'
+                ? 'Eval completed. Showing latest result.'
+                : '',
+            });
             setTriggeredAt(null);
           }
         }, 2000);
@@ -224,6 +280,7 @@ export function useEvalDashboard(): EvalDashboardState {
     triggerState,
     triggeredAt,
     hasTriggered,
+    isCached,
     trigger,
     authRequired,
     clearAuthRequired: () => setAuthRequired([]),

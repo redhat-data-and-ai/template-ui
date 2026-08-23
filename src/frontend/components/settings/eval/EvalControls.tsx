@@ -28,10 +28,10 @@ export function EvalControls({
       <div className="flex items-center gap-4 flex-wrap">
         <button
           onClick={() => onTrigger(forceMode)}
-          disabled={triggerState.status === 'loading' || isRunning}
+          disabled={isRunning}
           className="px-5 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
         >
-          {triggerState.status === 'loading' ? 'Running…' : 'Evaluate'}
+          {triggerState.status === 'loading' && isRunning ? 'Running…' : 'Evaluate'}
         </button>
 
         <button

@@ -119,7 +119,7 @@ describe('SettingsPage — accessibility', () => {
     renderWithProviders(<SettingsPage />);
     const hiddenPanels = document
       .querySelectorAll('[role="tabpanel"][hidden]');
-    expect(hiddenPanels.length).toBe(4);
+    expect(hiddenPanels.length).toBe(5);
   });
 
   it('arrow-key navigation moves focus between tabs', async () => {

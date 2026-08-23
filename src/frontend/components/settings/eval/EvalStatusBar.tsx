@@ -8,6 +8,7 @@ interface EvalStatusBarProps {
   error?: number;
   triggeredAt?: number | null;
   errorMessage?: string | null;
+  isCached?: boolean;
 }
 
 function formatElapsed(ms: number): string {
@@ -16,12 +17,15 @@ function formatElapsed(ms: number): string {
   return `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
 
-export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredAt, errorMessage }: EvalStatusBarProps) {
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'error', 'no_dataset']);
+
+export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredAt, errorMessage, isCached = false }: EvalStatusBarProps) {
   const [elapsed, setElapsed] = useState('');
   const isRunning = status === 'in_progress' || status === 'not_started';
+  const isTerminal = status != null && TERMINAL_STATUSES.has(status);
 
   useEffect(() => {
-    if (!isRunning || !triggeredAt) {
+    if (!isRunning || !triggeredAt || isTerminal) {
       setElapsed('');
       return;
     }
@@ -29,7 +33,7 @@ export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredA
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [isRunning, triggeredAt]);
+  }, [isRunning, triggeredAt, isTerminal]);
 
   if (!status || status === 'unknown') return null;
 
@@ -67,6 +71,9 @@ export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredA
           {pass} passed · {fail} failed
           {error > 0 && <span className="text-amber-600 dark:text-amber-400"> · {error} error{error !== 1 ? 's' : ''}</span>}
         </span>
+        {isCached && (
+          <span className="ml-auto text-xs text-muted-foreground italic">No changes since last run · reusing result</span>
+        )}
       </div>
     );
   }
@@ -82,6 +89,16 @@ export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredA
             {error > 0 && <span className="text-amber-600 dark:text-amber-400"> · {error} error{error !== 1 ? 's' : ''}</span>}
           </span>
         )}
+      </div>
+    );
+  }
+
+  if (status === 'no_dataset') {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+        <span className="text-amber-600 dark:text-amber-400">⚠</span>
+        <span className="text-sm font-medium text-amber-700 dark:text-amber-300">No dataset configured</span>
+        <span className="text-xs text-muted-foreground">Add test cases via the Dataset button to run evaluations.</span>
       </div>
     );
   }

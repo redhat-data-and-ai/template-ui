@@ -75,3 +75,39 @@ export function computeDelta(
 export function friendlyTagName(tag: string): string {
   return toTitleCase(tag);
 }
+
+const TERMINAL_EVAL_STATUSES = new Set(['completed', 'failed', 'error', 'no_dataset']);
+
+/** True only while an eval is actually running (or the trigger request is in flight). */
+export function isLiveEvalRun(opts: {
+  evalStatus: string;
+  triggerStatus: string;
+}): boolean {
+  if (opts.evalStatus === 'in_progress' || opts.evalStatus === 'not_started') {
+    return true;
+  }
+  if (opts.triggerStatus === 'loading' && !TERMINAL_EVAL_STATUSES.has(opts.evalStatus)) {
+    return true;
+  }
+  return false;
+}
+
+const CACHED_RESULT_MESSAGE =
+  'Result already exists — eval completed. Showing latest result.';
+
+function isCachedFlag(value: unknown): boolean {
+  return value === true || value === 'true' || value === 1;
+}
+
+/** Message when trigger 200 means a finished run, not a new live run. */
+export function evalTriggerDoneMessage(data: {
+  cached?: unknown;
+  eval_status?: string;
+}): string | null {
+  // A 200 from /trigger with completed status is always a cache hit (new runs
+  // return in_progress). Keep this even if the cached flag is stripped.
+  if (isCachedFlag(data.cached) || data.eval_status === 'completed') {
+    return CACHED_RESULT_MESSAGE;
+  }
+  return null;
+}

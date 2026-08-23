@@ -1,4 +1,10 @@
-import { friendlyMetricName, friendlyConversationName, computeDelta } from '../eval-utils';
+import {
+  friendlyMetricName,
+  friendlyConversationName,
+  computeDelta,
+  isLiveEvalRun,
+  evalTriggerDoneMessage,
+} from '../eval-utils';
 
 describe('friendlyMetricName', () => {
   it('returns human-readable labels for known custom metrics', () => {
@@ -75,5 +81,49 @@ describe('computeDelta', () => {
 
   it('handles zero-to-positive improvement', () => {
     expect(computeDelta(0.5, 0.0)).toEqual({ value: 50, direction: 'up' });
+  });
+});
+
+describe('isLiveEvalRun', () => {
+  it('is true while status is in_progress', () => {
+    expect(isLiveEvalRun({ evalStatus: 'in_progress', triggerStatus: 'idle' })).toBe(true);
+  });
+
+  it('is true while trigger is loading and status is not terminal', () => {
+    expect(isLiveEvalRun({ evalStatus: 'unknown', triggerStatus: 'loading' })).toBe(true);
+  });
+
+  it('is false when eval completed', () => {
+    expect(isLiveEvalRun({ evalStatus: 'completed', triggerStatus: 'loading' })).toBe(false);
+    expect(isLiveEvalRun({ evalStatus: 'completed', triggerStatus: 'success' })).toBe(false);
+  });
+
+  it('is false when eval failed', () => {
+    expect(isLiveEvalRun({ evalStatus: 'failed', triggerStatus: 'loading' })).toBe(false);
+    expect(isLiveEvalRun({ evalStatus: 'error', triggerStatus: 'idle' })).toBe(false);
+  });
+});
+
+describe('evalTriggerDoneMessage', () => {
+  it('says result already exists when the trigger returns a cached completed run', () => {
+    expect(evalTriggerDoneMessage({ cached: true })).toBe(
+      'Result already exists — eval completed. Showing latest result.',
+    );
+  });
+
+  it('says result already exists when trigger returns completed without a cached flag', () => {
+    expect(evalTriggerDoneMessage({ eval_status: 'completed' })).toBe(
+      'Result already exists — eval completed. Showing latest result.',
+    );
+  });
+
+  it('treats cached as true when the backend sends a string flag', () => {
+    expect(evalTriggerDoneMessage({ cached: 'true' as unknown as boolean })).toBe(
+      'Result already exists — eval completed. Showing latest result.',
+    );
+  });
+
+  it('returns null for a queued in-progress run', () => {
+    expect(evalTriggerDoneMessage({ eval_status: 'in_progress' })).toBeNull();
   });
 });
