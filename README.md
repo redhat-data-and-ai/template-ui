@@ -71,7 +71,7 @@ These commands are equivalent to:
 - `make local` → `npm ci && npm run build && npm start`
 - `make clean` → `rm -rf node_modules dist`
 
-## ⚙️ Environment Configuration
+<h2 id="environment-configuration">⚙️ Environment Configuration</h2>
 
 Copy `env.template` to `.env` and configure the following variables:
 
