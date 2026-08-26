@@ -5,12 +5,25 @@ import { renderHook } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import React from 'react';
 import { configureStore } from '@reduxjs/toolkit';
-import chatsReducer, { addChat, selectStreamingState } from '../redux/slices/chats';
+import chatsReducer, { addChat, selectStreamingState, updateChat } from '../redux/slices/chats';
 import configReducer from '../redux/slices/config';
 import personalizationReducer from '../redux/slices/personalization';
 import toastsReducer from '../redux/slices/toasts';
 import userSettingsReducer, { addAlwaysAllowedTool } from '../redux/slices/userSettings';
+import projectsReducer from '../redux/slices/projects';
 import { useStreamingAPI, RECOVERY_POLL_TIMEOUT_MS, _startRecoveryPolling } from './useStreamingAPI';
+import * as projectsApi from '../services/projects-api';
+import { markChatAsClientCreated, unmarkChatAsClientCreated } from '../services/newChatTracker';
+
+vi.mock('../services/projects-api', () => ({
+  getProjects: vi.fn(async () => []),
+  createProject: vi.fn(),
+  updateProject: vi.fn(),
+  deleteProject: vi.fn(),
+  assignThreadToProject: vi.fn(async () => undefined),
+  unassignAllThreadsFromProject: vi.fn(),
+  getThreadsByProject: vi.fn(async () => []),
+}));
 
 // ── Store factory ─────────────────────────────────────────────────────────────
 
@@ -22,6 +35,7 @@ function makeStore(preloadedState?: Record<string, unknown>) {
       personalization: personalizationReducer,
       toasts: toastsReducer,
       userSettings: userSettingsReducer,
+      projects: projectsReducer,
     },
     preloadedState,
   });
@@ -228,6 +242,116 @@ describe('useStreamingAPI — initial state and stop()', () => {
 
     // Clean up the in-flight request
     act(() => result.current.stop());
+  });
+
+  it('stamps the current project_id even if submit was created before assign', async () => {
+    const fetchMock = vi.fn(
+      () => new Promise(() => { /* never resolves */ }),
+    );
+    vi.mocked(fetch).mockImplementation(fetchMock);
+
+    const { result } = renderHook(() => useStreamingAPI(THREAD_ID), {
+      wrapper: makeWrapper(store),
+    });
+    const submitBeforeAssign = result.current.submit;
+
+    act(() => {
+      store.dispatch(updateChat({ id: THREAD_ID, updates: { project_id: 'p-new' } }));
+    });
+
+    const userMessage = {
+      type: 'human',
+      content: 'hello world',
+      id: 'user-msg-1',
+    } as unknown as Message;
+
+    act(() => void submitBeforeAssign({ messages: [userMessage] }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
+    expect(JSON.parse(init.body).project_id).toBe('p-new');
+
+    act(() => result.current.stop());
+  });
+
+  it('persists folder membership after the first successful stream of a client-created chat', async () => {
+    markChatAsClientCreated(THREAD_ID);
+    store.dispatch(updateChat({ id: THREAD_ID, updates: { project_id: 'p1' } }));
+    vi.mocked(projectsApi.assignThreadToProject).mockResolvedValue();
+
+    const encoder = new TextEncoder();
+    const sseBody =
+      `data: ${JSON.stringify({ type: 'token', content: 'Hi', chunk_id: 0 })}\n\n` +
+      'data: [DONE]\n\n';
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sseBody));
+        controller.close();
+      },
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
+    );
+
+    const { result } = renderHook(() => useStreamingAPI(THREAD_ID), {
+      wrapper: makeWrapper(store),
+    });
+    const userMessage = {
+      type: 'human',
+      content: 'hello world',
+      id: 'user-msg-1',
+    } as unknown as Message;
+
+    await act(async () => {
+      await result.current.submit({ messages: [userMessage] });
+    });
+
+    await waitFor(() => {
+      expect(projectsApi.assignThreadToProject).toHaveBeenCalledWith(THREAD_ID, 'p1');
+    });
+    unmarkChatAsClientCreated(THREAD_ID);
+  });
+
+  it('does not persist folder membership for a chat that already exists on the server', async () => {
+    unmarkChatAsClientCreated(THREAD_ID);
+    store.dispatch(updateChat({ id: THREAD_ID, updates: { project_id: 'p1' } }));
+    vi.mocked(projectsApi.assignThreadToProject).mockClear();
+
+    const encoder = new TextEncoder();
+    const sseBody =
+      `data: ${JSON.stringify({ type: 'token', content: 'Hi', chunk_id: 0 })}\n\n` +
+      'data: [DONE]\n\n';
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sseBody));
+        controller.close();
+      },
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
+    );
+
+    const { result } = renderHook(() => useStreamingAPI(THREAD_ID), {
+      wrapper: makeWrapper(store),
+    });
+    const userMessage = {
+      type: 'human',
+      content: 'hello world',
+      id: 'user-msg-2',
+    } as unknown as Message;
+
+    await act(async () => {
+      await result.current.submit({ messages: [userMessage] });
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(projectsApi.assignThreadToProject).not.toHaveBeenCalled();
   });
 });
 
