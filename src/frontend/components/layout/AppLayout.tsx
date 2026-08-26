@@ -29,7 +29,6 @@ import {
   selectStreamingState,
   addChat,
   deleteChat,
-  clearAllChats,
   updateChat,
   setChats,
   setLoadingThreads,
@@ -37,13 +36,16 @@ import {
   ChatItem,
 } from '../../redux/slices/chats';
 import { addToast } from '../../redux/slices/toasts';
+import { updateProjectThreadCount } from '../../redux/slices/projects';
 import { SidebarChatItem } from '../../types/chat';
 import { chatStorage } from '../../services/chatStorage';
-import { getAllThreadsByUserId, getThreadState, deleteThread } from '../../services/agent-rest';
+import { getAllThreadsByUserId, getThreadState, deleteThread, type Thread } from '../../services/agent-rest';
+import { getProjects, getThreadsByProject } from '../../services/projects-api';
 import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
 import { markChatAsClientCreated, isClientCreatedChat } from '../../services/newChatTracker';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
+import { useProjects } from '../../hooks/useProjects';
 import type { RootState } from '../../redux/store';
 
 function toSafeDate(value: unknown): Date {
@@ -63,6 +65,34 @@ function toSafeISOString(value: unknown): string {
   return toSafeDate(value).toISOString();
 }
 
+async function withProjectThreads(history: Thread[]): Promise<Thread[]> {
+  try {
+    const projects = await getProjects();
+    const extras = (
+      await Promise.allSettled(
+        projects.map((p) => getThreadsByProject(p.project_id)),
+      )
+    ).flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+    const byId = new Map(history.map((t) => [t.id, t]));
+    for (const t of extras) {
+      const prev = byId.get(t.id);
+      if (!prev) {
+        byId.set(t.id, t);
+        continue;
+      }
+      byId.set(t.id, {
+        ...prev,
+        title: prev.title || t.title,
+        updatedAt: t.updatedAt ?? prev.updatedAt,
+        project_id: t.project_id ?? prev.project_id,
+      });
+    }
+    return [...byId.values()];
+  } catch {
+    return history;
+  }
+}
+
 interface AppLayoutProps {
   children: React.ReactNode;
 }
@@ -71,6 +101,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   const dispatch = useAppDispatch();
   const chats = useAppSelector(selectAllChats);
   const branding = useAppSelector((state: RootState) => state.config.branding);
+  const {
+    sidebarProjects,
+    createProject,
+    updateProject,
+    deleteProject,
+    assignThreadToProject,
+    unassignAllThreads,
+  } = useProjects();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -117,7 +155,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     async function loadUserHistory() {
       try {
         dispatch(setLoadingThreads(true));
-        const history = await getAllThreadsByUserId(window.USER_DATA.preferred_username || window.USER_DATA.sub);
+        const history = await withProjectThreads(
+          await getAllThreadsByUserId(window.USER_DATA.preferred_username || window.USER_DATA.sub),
+        );
 
         const backendIds = new Set(history.map((t) => t.id));
         const local = chatsRef.current;
@@ -136,6 +176,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           }, []),
         );
 
+        const backendProjectMap = new Map(
+          history.map((t) => [t.id, t.project_id ?? null] as const),
+        );
+
         const survivingWithTitles = surviving.map((c) => {
           const backendTitle = backendTitleMap.get(c.id);
           const ts = backendTimestampMap.get(c.id);
@@ -146,6 +190,13 @@ export function AppLayout({ children }: AppLayoutProps) {
           }
           if (ts) {
             updated.timestamp = ts;
+          }
+          if (
+            backendIds.has(c.id) &&
+            backendProjectMap.has(c.id) &&
+            c._prevProjectId === undefined
+          ) {
+            updated.project_id = backendProjectMap.get(c.id);
           }
           return updated;
         });
@@ -161,6 +212,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             timestamp: t.updatedAt || new Date().toISOString(),
             historicalActivities: {},
             feedback: {},
+            project_id: t.project_id ?? null,
           }));
 
         const reconciled = [...survivingWithTitles, ...added].sort(
@@ -231,13 +283,16 @@ export function AppLayout({ children }: AppLayoutProps) {
           chat.messages.length > 0
             ? (chat.messages[0].content as string).substring(0, 60) + '...'
             : chat.preview,
+        project_id: chat.project_id,
       })),
     [chats]
   );
 
   const handleSelectChat = (chatId: string) => navigate(`/chat/${chatId}`);
 
-  const handleNewChat = useCallback(() => {
+  const handleNewChat = useCallback((projectId?: string) => {
+    // Only the per-project "+" control passes projectId. The sidebar
+    // "New Chat" button always starts an unassigned conversation.
     const newChatId = uuidv4();
     markChatAsClientCreated(newChatId);
     const newChat: ChatItem = {
@@ -248,13 +303,21 @@ export function AppLayout({ children }: AppLayoutProps) {
       messages: [],
       historicalActivities: {},
       feedback: {},
+      project_id: projectId ?? null,
     };
     dispatch(addChat(newChat));
+    if (projectId) {
+      dispatch(updateProjectThreadCount({ projectId, delta: 1 }));
+    }
     navigate(`/chat/${newChatId}`, { state: { newChat: true } });
   }, [dispatch, navigate]);
 
   const handleDeleteChat = useCallback(
     async (chatId: string) => {
+      const chat = chats.find((c) => c.id === chatId);
+      if (chat?.project_id) {
+        dispatch(updateProjectThreadCount({ projectId: chat.project_id, delta: -1 }));
+      }
       releaseStreamingManager(chatId);
       dispatch(deleteChat(chatId));
       chatStorage.clearChats();
@@ -263,6 +326,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       if (ok) {
         dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
       } else {
+        if (chat?.project_id) {
+          dispatch(updateProjectThreadCount({ projectId: chat.project_id, delta: 1 }));
+        }
         dispatch(addToast({ title: 'Chat cleared locally but server delete failed', variant: 'warning' }));
       }
       if (location.pathname === `/chat/${chatId}`) {
@@ -272,28 +338,81 @@ export function AppLayout({ children }: AppLayoutProps) {
     [dispatch, chats, navigate, location.pathname]
   );
 
-  const handleDeleteAllChats = useCallback(async () => {
-    const ids = chats.map((c) => c.id);
-    ids.forEach((id) => releaseStreamingManager(id));
-    dispatch(clearAllChats());
-    chatStorage.clearChats();
-    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
-    const failures = results.filter((r) => !r).length;
-    if (failures > 0 && failures < ids.length) {
-      dispatch(addToast({ title: `${ids.length - failures} chats deleted, ${failures} failed on server`, variant: 'warning' }));
-    } else if (failures === ids.length) {
-      dispatch(addToast({ title: 'Chats cleared locally but server deletion failed', variant: 'warning' }));
-    } else {
-      dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
-    }
-    navigate('/');
-  }, [dispatch, chats, navigate]);
-
   const handleRenameChat = useCallback(
     (chatId: string, newTitle: string) => {
       dispatch(updateChat({ id: chatId, updates: { title: newTitle.trim() || 'Untitled Chat' } }));
     },
     [dispatch]
+  );
+
+  const handleDeleteProject = useCallback(
+    async (projectId: string, options?: { keepThreads?: boolean }) => {
+      const keepThreads = options?.keepThreads === true;
+      const { ok, deletedThreadIds, missing } = await deleteProject(projectId, { keepThreads });
+      if (!ok) {
+        dispatch(addToast({ title: 'Failed to delete project', variant: 'danger' }));
+        return false;
+      }
+
+      if (keepThreads) {
+        dispatch(addToast({
+          title: 'Project deleted. Conversations moved to Chats.',
+          variant: 'success',
+        }));
+        if (location.pathname.startsWith(`/project/${projectId}`)) {
+          navigate('/');
+        }
+        return true;
+      }
+
+      dispatch(addToast({ title: 'Project deleted', variant: 'success' }));
+      if (missing) {
+        for (const chat of chats) {
+          if (chat.project_id === projectId) {
+            dispatch(updateChat({ id: chat.id, updates: { project_id: null } }));
+          }
+        }
+        if (location.pathname.startsWith(`/project/${projectId}`)) {
+          navigate('/');
+        }
+        return true;
+      }
+      const localChatIds = chats
+        .filter((c) => c.project_id === projectId)
+        .map((c) => c.id);
+      const allIds = new Set([...deletedThreadIds, ...localChatIds]);
+      if (
+        location.pathname.startsWith(`/project/${projectId}`) ||
+        (currentChatId && allIds.has(currentChatId))
+      ) {
+        navigate('/');
+      }
+      for (const id of allIds) {
+        releaseStreamingManager(id);
+        dispatch(deleteChat(id));
+      }
+      const remaining = chats.filter((c) => !allIds.has(c.id));
+      if (remaining.length === 0) {
+        chatStorage.clearChats();
+      } else {
+        chatStorage.saveChats(remaining as any);
+      }
+      return true;
+    },
+    [deleteProject, dispatch, chats, navigate, location.pathname, currentChatId],
+  );
+
+  const handleUnassignAll = useCallback(
+    async (projectId: string) => {
+      const ok = await unassignAllThreads(projectId);
+      if (ok) {
+        dispatch(addToast({ title: 'Conversations moved to Chats', variant: 'success' }));
+      } else {
+        dispatch(addToast({ title: 'Failed to unassign conversations', variant: 'danger' }));
+      }
+      return ok;
+    },
+    [unassignAllThreads, dispatch],
   );
 
   useKeyboardShortcuts({
@@ -365,8 +484,13 @@ export function AppLayout({ children }: AppLayoutProps) {
             onNewChat={handleNewChat}
             onSelectChat={handleSelectChat}
             onDeleteChat={handleDeleteChat}
-            onDeleteAllChats={handleDeleteAllChats}
             onRenameChat={handleRenameChat}
+            projects={sidebarProjects}
+            onCreateProject={createProject}
+            onUpdateProject={updateProject}
+            onDeleteProject={handleDeleteProject}
+            onAssignThread={assignThreadToProject}
+            onUnassignAll={handleUnassignAll}
           />
         </ErrorBoundary>
       </PageSidebarBody>

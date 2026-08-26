@@ -4,6 +4,7 @@ import configReducer from './slices/config';
 import personalizationReducer from './slices/personalization';
 import toastsReducer from './slices/toasts';
 import userSettingsReducer from './slices/userSettings';
+import projectsReducer from './slices/projects';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     personalization: personalizationReducer,
     toasts: toastsReducer,
     userSettings: userSettingsReducer,
+    projects: projectsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

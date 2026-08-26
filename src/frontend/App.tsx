@@ -6,6 +6,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { HomePage } from './pages/HomePage';
 import { ChatRoutePage } from './pages/ChatPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ProjectChatPage } from './pages/ProjectChatPage';
 import { EvalDatasetPage } from './pages/EvalDatasetPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastNotifications } from './components/ToastNotifications';
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/chat" element={<Navigate to="/" replace />} />
           <Route path="/chat/:threadId" element={<ChatRoutePage />} />
+          <Route path="/project/:projectId" element={<ProjectChatPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/eval/dataset" element={<EvalDatasetPage />} />
         </Routes>

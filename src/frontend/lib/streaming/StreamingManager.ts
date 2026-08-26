@@ -1,6 +1,7 @@
 import type { Message } from '@langchain/langgraph-sdk';
 
 import { parseRetryAfterSeconds, triggerRateLimit } from '@/services/authenticated-fetch';
+import { unmarkChatAsClientCreated } from '@/services/newChatTracker';
 import { buildAgentApiUrl } from '../app-paths';
 import type { HITLInterruptValue } from '@/types/deep-agent';
 
@@ -15,6 +16,7 @@ export interface StreamRequest {
   token?: string;
   memories?: string[];
   rules?: string[];
+  projectId?: string | null;
   resume?: boolean;
   resumeDecisions?: Array<{ type: 'approve' | 'reject' | 'edit'; message?: string }>;
 }
@@ -146,6 +148,7 @@ export class StreamingManager {
       if (request.resume) body.resume = true;
       if (request.memories?.length) body.memories = request.memories;
       if (request.rules?.length) body.rules = request.rules;
+      if (request.projectId) body.project_id = request.projectId;
 
       const response = await fetch(streamUrl, {
         method: 'POST',
@@ -162,6 +165,8 @@ export class StreamingManager {
         }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      unmarkChatAsClientCreated(request.threadId);
 
       reader = response.body?.getReader();
       if (!reader) {
