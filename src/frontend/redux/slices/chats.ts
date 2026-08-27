@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
 import type { SubAgentInfo, InterruptInfo, TaskStep } from '../../types/deep-agent';
 import { withMcpAppArguments } from '../../types/mcp-apps';
@@ -317,8 +317,9 @@ export function selectChatsError(state: { chats: ChatsState }) {
   return state.chats.error;
 }
 
-export function selectChatsByProject(state: { chats: ChatsState }, projectId: string) {
-  return state.chats.chats.filter((c) => c.project_id === projectId);
-}
+export const selectChatsByProject = createSelector(
+  [(state: { chats: ChatsState }) => state.chats.chats, (_state, projectId: string) => projectId],
+  (chats, projectId) => chats.filter((c) => c.project_id === projectId),
+);
 
 export default chatsSlice.reducer;

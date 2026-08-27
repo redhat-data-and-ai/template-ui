@@ -318,6 +318,7 @@ describe('chats slice — project assignment', () => {
     s = chatsReducer(s, addChat(makeChat('c2', { project_id: 'p1' })));
     const state = { chats: s };
     expect(selectChatsByProject(state, 'p1').map((c) => c.id)).toEqual(['c2']);
+    expect(selectChatsByProject(state, 'p1')).toBe(selectChatsByProject(state, 'p1'));
   });
 
   it('optimistically sets project_id while assign is pending', () => {

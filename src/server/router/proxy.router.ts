@@ -380,6 +380,10 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
       const { message, thread_id, user_id, resume: isResume, memories, rules, project_id } = request.body;
 
+      if (project_id != null && typeof project_id !== 'string') {
+        return reply.status(400).send({ error: 'project_id must be a string when provided' });
+      }
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'X-Trace-ID': traceId,
