@@ -658,8 +658,9 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                               (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
                             )}>
                               {(toolCall as Record<string, unknown>).status === 'error'
-                                ? (typeof (toolCall as Record<string, unknown>).content === 'string' && (toolCall as Record<string, unknown>).content
-                                  ? String((toolCall as Record<string, unknown>).content).replace(/^\[TOOL_ERROR]\s*/i, '').slice(0, 150)
+                                ? (typeof (toolCall as Record<string, unknown>).content === 'string'
+                                  && String((toolCall as Record<string, unknown>).content).replace(/^\[TOOL_ERROR]\s*/i, '').trim()
+                                  ? String((toolCall as Record<string, unknown>).content).replace(/^\[TOOL_ERROR]\s*/i, '').trim().slice(0, 150)
                                   : 'Tool execution failed')
                                 : 'Tool execution'}
                             </div>

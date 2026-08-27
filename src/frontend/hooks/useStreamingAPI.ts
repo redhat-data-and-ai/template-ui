@@ -1222,7 +1222,7 @@ export function useStreamingAPI(threadId: string) {
             );
           },
           onError(error) {
-            dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+            dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error', errorMessage: error.message }));
             dispatch(
               updateStreamingState({
                 chatId: threadId,
