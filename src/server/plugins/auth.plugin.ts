@@ -43,7 +43,7 @@ async function routes(fastify: FastifyInstance) {
 
   fastify.register(oauthPlugin as any, {
     name: "redhatSSO",
-    scope: ["profile", "email", "session:role-any", "offline_access"],
+    scope: ["openid", "profile", "email", "session:role-any", "offline_access"],
     credentials: {
       client: {
         id: cfg.auth.sso_client_id,
