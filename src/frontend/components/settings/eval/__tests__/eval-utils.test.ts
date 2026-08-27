@@ -89,6 +89,11 @@ describe('isLiveEvalRun', () => {
     expect(isLiveEvalRun({ evalStatus: 'in_progress', triggerStatus: 'idle' })).toBe(true);
   });
 
+  it('is false for idle not_started (no runs yet, not a live run)', () => {
+    expect(isLiveEvalRun({ evalStatus: 'not_started', triggerStatus: 'idle' })).toBe(false);
+    expect(isLiveEvalRun({ evalStatus: 'not_started', triggerStatus: 'success' })).toBe(false);
+  });
+
   it('is true while trigger is loading and status is not terminal', () => {
     expect(isLiveEvalRun({ evalStatus: 'unknown', triggerStatus: 'loading' })).toBe(true);
   });

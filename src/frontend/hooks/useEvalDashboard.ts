@@ -88,7 +88,9 @@ export function useEvalDashboard(): EvalDashboardState {
   const evalStatusRef = useRef(evalState.status);
   evalStatusRef.current = evalState.status;
 
-  const isRunning = evalState.status === 'in_progress';
+  const isRunning =
+    evalState.status === 'in_progress' ||
+    (hasTriggered && evalState.status === 'unknown');
 
   const fetchResults = useCallback(async () => {
     try {
@@ -236,6 +238,7 @@ export function useEvalDashboard(): EvalDashboardState {
             status: 'success',
             message: 'Eval already running — check back shortly.',
           });
+          refreshStatusRef.current();
           return;
         }
 

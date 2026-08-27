@@ -24,6 +24,25 @@ export interface EvalState {
 
 const POLL_ACTIVE_MS = 10_000;
 
+/** Set when the user triggers an eval so tab switches can resume polling. */
+const EVAL_STATUS_POLL_KEY = 'evalHasTriggered';
+
+function readPollingFlag(): boolean {
+  try {
+    return sessionStorage.getItem(EVAL_STATUS_POLL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writePollingFlag(): void {
+  try {
+    sessionStorage.setItem(EVAL_STATUS_POLL_KEY, '1');
+  } catch {
+    // private mode / disabled storage
+  }
+}
+
 const INITIAL: EvalState = {
   status: 'unknown',
   message: '',
@@ -43,6 +62,7 @@ export interface UseEvalStatusResult {
 
 export function useEvalStatus(): UseEvalStatusResult {
   const [state, setState] = useState<EvalState>(INITIAL);
+  const [polling, setPolling] = useState(readPollingFlag);
   const statusRef = useRef<EvalStatusValue>('unknown');
   const mounted = useRef(true);
 
@@ -76,19 +96,28 @@ export function useEvalStatus(): UseEvalStatusResult {
 
   useEffect(() => {
     mounted.current = true;
-    void fetchStatus();
+    return () => { mounted.current = false; };
+  }, []);
 
-    if (state.status !== 'in_progress') {
-      return () => { mounted.current = false; };
-    }
+  // Resume after tab switch: settings unmounts this panel, so restore from
+  // sessionStorage instead of polling on every cold open.
+  useEffect(() => {
+    if (!polling) return;
+    void fetchStatus();
+  }, [polling, fetchStatus]);
+
+  useEffect(() => {
+    if (!polling) return;
+    if (state.status !== 'in_progress') return;
 
     const id = window.setInterval(() => { void fetchStatus(); }, POLL_ACTIVE_MS);
-    return () => {
-      mounted.current = false;
-      window.clearInterval(id);
-    };
-  }, [fetchStatus, state.status]);
+    return () => window.clearInterval(id);
+  }, [fetchStatus, polling, state.status]);
 
-  const refresh = useCallback(() => { void fetchStatus(); }, [fetchStatus]);
+  const refresh = useCallback(() => {
+    writePollingFlag();
+    setPolling(true);
+    void fetchStatus();
+  }, [fetchStatus]);
   return { state, refresh };
 }

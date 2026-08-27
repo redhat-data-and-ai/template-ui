@@ -89,15 +89,7 @@ export function EvalPanel() {
         }
 
         if (triggerRes.ok) {
-          const triggerData = (await triggerRes.json()) as Record<string, unknown>;
-          if (
-            (triggerData as { cached?: boolean }).cached ||
-            (triggerData.eval_status === 'in_progress' &&
-              (triggerData as { message?: string }).message)
-          ) {
-            refresh();
-            return;
-          }
+          refresh();
         }
       } catch {
         setTriggerError('Could not reach the eval service — check your connection.');

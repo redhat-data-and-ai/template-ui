@@ -83,7 +83,7 @@ export function isLiveEvalRun(opts: {
   evalStatus: string;
   triggerStatus: string;
 }): boolean {
-  if (opts.evalStatus === 'in_progress' || opts.evalStatus === 'not_started') {
+  if (opts.evalStatus === 'in_progress') {
     return true;
   }
   if (opts.triggerStatus === 'loading' && !TERMINAL_EVAL_STATUSES.has(opts.evalStatus)) {

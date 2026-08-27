@@ -31,6 +31,7 @@ export function EvalDashboard() {
     triggerState,
     triggeredAt,
     isCached,
+    hasTriggered,
     trigger,
     authRequired,
     clearAuthRequired,
@@ -112,7 +113,12 @@ export function EvalDashboard() {
       )}
 
       <EvalStatusBar
-        status={isLiveEvalRun({ evalStatus: evalState.status, triggerStatus: triggerState.status }) ? 'in_progress' : evalState.status}
+        status={
+          isLiveEvalRun({ evalStatus: evalState.status, triggerStatus: triggerState.status })
+          || (hasTriggered && evalState.status === 'unknown')
+            ? 'in_progress'
+            : evalState.status
+        }
         score={evalState.score}
         pass={evalState.pass}
         fail={evalState.fail}

@@ -62,6 +62,19 @@ describe('useEvalDashboard — cache-hit message', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not poll /evals/status until Evaluate is clicked', async () => {
+    renderHook(() => useEvalDashboard());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const statusCalls = vi.mocked(fetch).mock.calls.filter((call) =>
+      String(call[0]).includes('/evals/status'),
+    );
+    expect(statusCalls).toHaveLength(0);
+  });
+
   it('keeps the cache-hit message after trigger 200 under React Strict Mode', async () => {
     const { result } = renderHook(() => useEvalDashboard(), {
       reactStrictMode: true,
