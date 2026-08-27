@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Search, Database, Loader2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buildAgentApiUrl } from '@/lib/app-paths';
-import type { TestCase, CaseTag, EvalDataset } from '../components/eval-dataset/eval-dataset-types';
+import type { TestCase, CaseTag } from '../components/eval-dataset/eval-dataset-types';
 import { EvalDatasetTable } from '../components/eval-dataset/EvalDatasetTable';
 import { AddTestCaseModal } from '../components/eval-dataset/AddTestCaseModal';
 

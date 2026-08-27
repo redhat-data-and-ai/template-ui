@@ -7,7 +7,6 @@ interface EvalStatusBarProps {
   fail: number;
   error?: number;
   triggeredAt?: number | null;
-  errorMessage?: string | null;
   isCached?: boolean;
 }
 
@@ -19,7 +18,7 @@ function formatElapsed(ms: number): string {
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'error', 'no_dataset']);
 
-export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredAt, errorMessage, isCached = false }: EvalStatusBarProps) {
+export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredAt, isCached = false }: EvalStatusBarProps) {
   const [elapsed, setElapsed] = useState('');
   const isRunning = status === 'in_progress' || status === 'not_started';
   const isTerminal = status != null && TERMINAL_STATUSES.has(status);
