@@ -106,6 +106,14 @@ export async function mountConfig(
       body: '[]',
     }),
   );
+
+  await page.route('**/api/proxy/agent/mcp/oauth/connections', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ connections: [] }),
+    }),
+  );
 }
 
 /** Minimal config: only required fields populated, no logo, default colors. */

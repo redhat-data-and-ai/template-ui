@@ -63,6 +63,14 @@ test.describe('Settings page', () => {
     await settings.expectTabContentVisible('Memories');
   });
 
+  test('clicking MCP OAuth tab shows the OAuth connections section', async ({ page }) => {
+    const settings = new SettingsPage(page);
+    await settings.goto();
+    await settings.clickTab('MCP OAuth');
+    await settings.expectTabContentVisible('MCP OAuth');
+    await expect(page.getByText(/no oauth-connected services are configured/i)).toBeVisible();
+  });
+
   // ── Theme toggle + localStorage persistence ────────────────────────────────
 
   test('toggling the theme persists the selection to localStorage', async ({ page }) => {
