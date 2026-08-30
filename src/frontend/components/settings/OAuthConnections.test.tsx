@@ -107,7 +107,7 @@ describe('OAuthConnections', () => {
     });
   });
 
-  it('refreshes status after mcp_oauth_done from the agent callback origin', async () => {
+  it('refreshes status after mcp_oauth_done from an allowed origin', async () => {
     vi.mocked(fetchMcpOAuthConnections)
       .mockResolvedValueOnce([disconnected])
       .mockResolvedValue([{ ...disconnected, connected: true }]);
@@ -124,11 +124,38 @@ describe('OAuthConnections', () => {
       window,
       new MessageEvent('message', {
         data: { type: 'mcp_oauth_done', mcp_name: 'jira-mcp' },
-        origin: 'http://localhost:5002',
+        origin: 'https://oauth.example.com',
       }),
     );
 
     expect(await screen.findByRole('button', { name: /disconnect jira/i })).toBeInTheDocument();
+  });
+
+  it('ignores mcp_oauth_done from an untrusted origin', async () => {
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([disconnected]);
+    vi.mocked(startMcpOAuthConnect).mockResolvedValue({
+      authorize_url: 'https://oauth.example.com/auth',
+    });
+    vi.mocked(openMcpOAuthPopup).mockReturnValue({ origin: 'https://oauth.example.com' });
+
+    renderWithProviders(<OAuthConnections />);
+    await userEvent.click(await screen.findByRole('button', { name: /authenticate jira/i }));
+    await waitFor(() => {
+      expect(openMcpOAuthPopup).toHaveBeenCalled();
+    });
+    vi.mocked(fetchMcpOAuthConnections).mockClear();
+
+    fireEvent(
+      window,
+      new MessageEvent('message', {
+        data: { type: 'mcp_oauth_done', mcp_name: 'jira-mcp' },
+        origin: 'https://evil.example.com',
+      }),
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fetchMcpOAuthConnections).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /disconnect jira/i })).not.toBeInTheDocument();
   });
 
   it('refreshes status when the window regains focus after starting auth', async () => {

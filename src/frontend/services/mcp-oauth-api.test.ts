@@ -12,6 +12,7 @@ import { authenticatedFetch } from './authenticated-fetch';
 import {
   disconnectMcpOAuth,
   fetchMcpOAuthConnections,
+  openMcpOAuthPopup,
   startMcpOAuthConnect,
   verifyMcpOAuthConnected,
 } from './mcp-oauth-api';
@@ -121,6 +122,18 @@ describe('mcp-oauth-api', () => {
     );
   });
 
+  it('verifyMcpOAuthConnected returns false after a single disconnected status', async () => {
+    vi.mocked(authenticatedFetch).mockResolvedValue(
+      new Response(JSON.stringify({ connected: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(verifyMcpOAuthConnected('smartsheet-mcp')).resolves.toBe(false);
+    expect(authenticatedFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('verifyMcpOAuthConnected does not retry after a rate-limit error', async () => {
     vi.mocked(authenticatedFetch).mockRejectedValue(
       new Error('Rate limited. Retry after 5000ms'),
@@ -144,5 +157,51 @@ describe('mcp-oauth-api', () => {
       '/api/proxy/agent/mcp/sheet%20mcp/disconnect',
       { method: 'DELETE' },
     );
+  });
+});
+
+describe('openMcpOAuthPopup', () => {
+  let openSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    openSpy = vi.spyOn(window, 'open').mockReturnValue(window);
+    openSpy.mockClear();
+  });
+
+  it('opens https authorization URLs', () => {
+    const result = openMcpOAuthPopup('https://oauth.example.com/auth');
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://oauth.example.com/auth',
+      'mcp-oauth',
+      'width=600,height=700',
+    );
+    expect(result.origin).toBe('https://oauth.example.com');
+  });
+
+  it('opens http URLs on localhost', () => {
+    openMcpOAuthPopup('http://localhost:8080/auth');
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens http URLs on 127.0.0.1', () => {
+    openMcpOAuthPopup('http://127.0.0.1:9000/auth');
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects javascript URLs without opening a popup', () => {
+    expect(() => openMcpOAuthPopup('javascript:alert(1)')).toThrow(/invalid authorization url/i);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects data URLs without opening a popup', () => {
+    expect(() => openMcpOAuthPopup('data:text/html,hi')).toThrow(/invalid authorization url/i);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-local http URLs without opening a popup', () => {
+    expect(() => openMcpOAuthPopup('http://evil.example.com/auth')).toThrow(
+      /invalid authorization url/i,
+    );
+    expect(openSpy).not.toHaveBeenCalled();
   });
 });

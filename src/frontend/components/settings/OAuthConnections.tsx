@@ -73,11 +73,8 @@ export function OAuthConnections() {
     const handler = (event: MessageEvent) => {
       const data = event.data as { type?: string; mcp_name?: string } | null;
       if (data?.type !== 'mcp_oauth_done' || !data.mcp_name) return;
-      const pending = pendingMcpRef.current;
       const allowedOrigins = [window.location.origin, oauthOrigin].filter(Boolean);
-      const originOk =
-        allowedOrigins.includes(event.origin) || pending === data.mcp_name;
-      if (!originOk) return;
+      if (!allowedOrigins.includes(event.origin)) return;
       void refreshAfterAuth(data.mcp_name);
     };
 

@@ -19,9 +19,6 @@ export interface McpOAuthDisconnectResult {
   connected: boolean;
 }
 
-const STATUS_RETRY_MS = 400;
-const STATUS_MAX_RETRIES = 6;
-
 function mcpOAuthPath(mcpName: string, suffix: string): string {
   return `/mcp/${encodeURIComponent(mcpName)}${suffix}`;
 }
@@ -73,28 +70,34 @@ export async function startMcpOAuthConnect(
 }
 
 export async function verifyMcpOAuthConnected(mcpName: string): Promise<boolean> {
-  for (let attempt = 0; attempt < STATUS_MAX_RETRIES; attempt++) {
-    try {
-      const body = await mcpOAuthJson<{ connected?: boolean }>(
-        mcpOAuthPath(mcpName, '/status'),
-        { method: 'GET' },
-        'MCP OAuth status',
-      );
-      if (body.connected) return true;
-    } catch (err) {
-      if (err instanceof Error && /rate limited/i.test(err.message)) {
-        return false;
-      }
-    }
-    if (attempt < STATUS_MAX_RETRIES - 1) {
-      await new Promise((resolve) => setTimeout(resolve, STATUS_RETRY_MS));
-    }
+  try {
+    const body = await mcpOAuthJson<{ connected?: boolean }>(
+      mcpOAuthPath(mcpName, '/status'),
+      { method: 'GET' },
+      'MCP OAuth status',
+    );
+    return Boolean(body.connected);
+  } catch {
+    return false;
   }
-  return false;
+}
+
+function isAllowedAuthorizeUrl(url: URL): boolean {
+  if (url.protocol === 'https:') {
+    return true;
+  }
+  if (url.protocol !== 'http:') {
+    return false;
+  }
+  const host = url.hostname.toLowerCase();
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
 }
 
 export function openMcpOAuthPopup(authorizeUrl: string): { origin: string; popup: Window } {
   const url = new URL(authorizeUrl, window.location.origin);
+  if (!isAllowedAuthorizeUrl(url)) {
+    throw new Error('Invalid authorization URL');
+  }
   const popup = window.open(url.href, 'mcp-oauth', 'width=600,height=700');
   if (!popup) {
     throw new Error('Popup blocked by browser');
