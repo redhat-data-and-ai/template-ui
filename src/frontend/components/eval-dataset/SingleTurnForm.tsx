@@ -84,9 +84,11 @@ export function SingleTurnForm({
         <p className="text-xs text-muted-foreground">Use lowercase letters and underscores only</p>
       </div>
 
-      {/* Description (optional) */}
+      {/* Description */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-foreground">Description</label>
+        <label className="text-sm font-medium text-foreground">
+          Description <span className="text-red-500">*</span>
+        </label>
         <input
           type="text"
           value={description}

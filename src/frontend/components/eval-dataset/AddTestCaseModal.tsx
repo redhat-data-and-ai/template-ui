@@ -44,12 +44,6 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
     });
   }, [mode]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
   function handleSave() {
     setError('');
     if (!name.trim()) { setError('Test Case Name is required.'); return; }
@@ -57,6 +51,7 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
       setError('Name must contain only lowercase letters, digits, and underscores.');
       return;
     }
+    if (!description.trim()) { setError('Description is required.'); return; }
 
     const turns = mode === 'multi' ? multiTurns : [singleTurn];
     const hasEmptyTurn = turns.some((t) => !t.userMessage.trim() || !t.expectedResponse.trim());
@@ -98,7 +93,7 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="test-case-modal-backdrop"
     >
       <div className="relative w-full max-w-2xl max-h-[calc(100vh-4rem)] flex flex-col rounded-xl border border-border bg-background shadow-xl overflow-hidden">
         {/* Header */}

@@ -38,10 +38,23 @@ describe('AddTestCaseModal — save validation', () => {
     expect(screen.getByText(/lowercase letters, digits, and underscores/)).toBeInTheDocument();
   });
 
+  it('shows error and does not call onSave when description is empty', () => {
+    render(<AddTestCaseModal {...defaultProps} />);
+    fireEvent.change(screen.getByPlaceholderText('e.g. calculate_bmi_standard'), {
+      target: { value: 'valid_name' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Test Case' }));
+    expect(screen.getByText('Description is required.')).toBeInTheDocument();
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+
   it('shows error when user message or expected response is empty', () => {
     render(<AddTestCaseModal {...defaultProps} />);
     fireEvent.change(screen.getByPlaceholderText('e.g. calculate_bmi_standard'), {
       target: { value: 'valid_name' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Brief description of what this test case validates'), {
+      target: { value: 'Validates BMI calculation' },
     });
     // Don't fill in the turn fields — they start empty
     fireEvent.click(screen.getByRole('button', { name: 'Save Test Case' }));
@@ -62,14 +75,21 @@ describe('AddTestCaseModal — save validation', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save Test Case' }));
     expect(screen.queryByText('Test Case Name is required.')).not.toBeInTheDocument();
+    expect(screen.getByText('Description is required.')).toBeInTheDocument();
   });
 });
 
 describe('AddTestCaseModal — close behaviour', () => {
-  it('calls onClose when Escape key is pressed', () => {
+  it('does not close when clicking the backdrop', () => {
+    render(<AddTestCaseModal {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('test-case-modal-backdrop'));
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close when Escape is pressed', () => {
     render(<AddTestCaseModal {...defaultProps} />);
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(defaultProps.onClose).toHaveBeenCalledOnce();
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 
   it('calls onClose when the X button is clicked', () => {

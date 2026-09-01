@@ -1,4 +1,4 @@
-import { Database } from 'lucide-react';
+import { CheckCircle, Database } from 'lucide-react';
 import { buildAppPath } from '../../../lib/app-paths';
 import type { ActionState, EvalStatus } from './eval-types';
 
@@ -8,6 +8,7 @@ interface EvalControlsProps {
   triggerState: ActionState;
   forceMode: boolean;
   onForceModeChange: (force: boolean) => void;
+  hasDataset?: boolean;
 }
 
 function statusColor(s: EvalStatus) {
@@ -22,6 +23,7 @@ export function EvalControls({
   triggerState,
   forceMode,
   onForceModeChange,
+  hasDataset = false,
 }: EvalControlsProps) {
   return (
     <div className="space-y-2">
@@ -36,10 +38,17 @@ export function EvalControls({
 
         <button
           onClick={() => window.open(buildAppPath('/eval/dataset'), '_blank', 'noopener')}
+          aria-label={hasDataset ? 'Dataset (has test cases)' : 'Dataset'}
           className="flex items-center gap-2 px-4 py-2 rounded-md border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
         >
           <Database className="w-4 h-4" />
           Dataset
+          {hasDataset && (
+            <CheckCircle
+              className="w-4 h-4 text-emerald-600 dark:text-emerald-400"
+              aria-hidden="true"
+            />
+          )}
         </button>
 
         <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground/70 hover:text-foreground transition-colors select-none">

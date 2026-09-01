@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { buildAppPath } from '../../../lib/app-paths';
 import { useEvalDashboard } from '../../../hooks/useEvalDashboard';
+import { useDatasetPresence } from '../../../hooks/useDatasetPresence';
 import type { EvalRow } from './eval-types';
 import { EvalControls } from './EvalControls';
 import { EvalStatusBar } from './EvalStatusBar';
@@ -36,6 +37,7 @@ export function EvalDashboard() {
     authRequired,
     clearAuthRequired,
   } = useEvalDashboard();
+  const { hasCases } = useDatasetPresence();
 
   const [forceMode, setForceMode] = useState(false);
   const [reportData, setReportData] = useState<EvalRow | null>(null);
@@ -52,6 +54,7 @@ export function EvalDashboard() {
         triggerState={triggerState}
         forceMode={forceMode}
         onForceModeChange={setForceMode}
+        hasDataset={hasCases}
       />
 
       {authRequired.length > 0 && (
