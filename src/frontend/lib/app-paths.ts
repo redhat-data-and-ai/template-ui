@@ -1,3 +1,19 @@
+export function getAgentStorageScope(): string {
+  const basePath = globalThis.window?.APP_DATA?.basePath;
+  if (basePath && basePath !== '/') {
+    const parts = basePath.replace(/^\/|\/$/g, '').split('/');
+    if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+  }
+  const parts = globalThis.window?.location?.pathname?.split('/').filter(Boolean) ?? [];
+  if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+  return '';
+}
+
+export function scopedStorageKey(base: string): string {
+  const scope = getAgentStorageScope();
+  return scope ? `${base}:${scope}` : base;
+}
+
 function normalizeBasePath(value: string | undefined): string {
   const trimmed = (value || '').trim();
   if (!trimmed || trimmed === '/') return '/';
