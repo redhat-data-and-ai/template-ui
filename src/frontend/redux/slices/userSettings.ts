@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { scopedStorageKey } from '../../lib/app-paths';
 
 type Theme = 'light' | 'dark';
 
@@ -10,7 +11,7 @@ interface UserSettingsState {
   _userOverrides: { debugMode?: boolean };
 }
 
-const STORAGE_KEY = 'template-ui-settings';
+const STORAGE_KEY = scopedStorageKey('template-ui-settings');
 
 function loadSettings(): UserSettingsState {
   try {

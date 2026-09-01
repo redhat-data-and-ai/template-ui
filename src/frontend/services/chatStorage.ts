@@ -1,7 +1,8 @@
 import { ChatItem } from '../types/chat';
+import { scopedStorageKey } from '../lib/app-paths';
 
 class ChatStorageService {
-  private readonly CHATS_STORAGE_KEY = 'dataverse-ai-chats';
+  private readonly CHATS_STORAGE_KEY = scopedStorageKey('dataverse-ai-chats');
   private readonly MAX_CHATS = 50; // Limit to prevent localStorage bloat
 
   /**
