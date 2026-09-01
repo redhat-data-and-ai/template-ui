@@ -11,7 +11,7 @@ FROM registry.access.redhat.com/hi/nodejs:24.18.0-builder
 
 USER root
 
-ARG OPA_VERSION=1.18.2
+ARG OPA_VERSION=1.20.1
 RUN curl -fsSL "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static" \
     -o /usr/local/bin/opa && chmod 755 /usr/local/bin/opa
 

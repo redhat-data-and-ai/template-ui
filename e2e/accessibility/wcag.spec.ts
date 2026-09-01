@@ -7,7 +7,7 @@
  * Covers:
  *  - Home page (light + dark)
  *  - Chat page after a streamed response
- *  - Settings page — all 5 tab panels
+ *  - Settings page — all 6 tab panels
  */
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -115,7 +115,7 @@ test.describe('Chat page — WCAG 2.1 AA', () => {
 // active panel is in the visible DOM at a time.
 // ---------------------------------------------------------------------------
 
-const SETTINGS_TABS = ['Profile', 'Memories', 'Custom Rules', 'Appearance', 'Tool Approvals'] as const;
+const SETTINGS_TABS = ['Profile', 'Memories', 'Custom Rules', 'Appearance', 'Tool Approvals', 'MCP OAuth'] as const;
 
 test.describe('Settings page — WCAG 2.1 AA', () => {
   test.beforeEach(async ({ page }) => {

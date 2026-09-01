@@ -1,4 +1,5 @@
 import { ChatItem } from '../types/chat';
+import { scopedStorageKey } from '../lib/app-paths';
 
 function omitPrevProjectId(chats: ChatItem[]): ChatItem[] {
   return chats.map((chat) => {
@@ -9,7 +10,7 @@ function omitPrevProjectId(chats: ChatItem[]): ChatItem[] {
 }
 
 class ChatStorageService {
-  private readonly CHATS_STORAGE_KEY = 'dataverse-ai-chats';
+  private readonly CHATS_STORAGE_KEY = scopedStorageKey('dataverse-ai-chats');
   private readonly MAX_CHATS = 50; // Limit to prevent localStorage bloat
 
   /**

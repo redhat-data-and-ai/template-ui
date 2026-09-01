@@ -6,7 +6,11 @@ import {
   TextInput,
 } from '@patternfly/react-core';
 import { Bot, CheckCircle, Link2, XCircle } from 'lucide-react';
-import { buildAgentApiUrl } from '../lib/app-paths';
+import {
+  openMcpOAuthPopup,
+  startMcpOAuthConnect,
+  verifyMcpOAuthConnected,
+} from '../services/mcp-oauth-api';
 import type { InterruptInfo } from '../types/deep-agent';
 
 interface InterruptBannerProps {
@@ -50,30 +54,6 @@ function parseMcpAuthPayload(interrupt: InterruptInfo): InterruptInfo['payload']
   return null;
 }
 
-const STATUS_RETRY_MS = 400;
-const STATUS_MAX_RETRIES = 6;
-
-async function verifyMcpConnected(mcpName: string): Promise<boolean> {
-  for (let attempt = 0; attempt < STATUS_MAX_RETRIES; attempt++) {
-    try {
-      const resp = await fetch(
-        buildAgentApiUrl(`/mcp/${encodeURIComponent(mcpName)}/status`),
-        { credentials: 'include' },
-      );
-      if (resp.ok) {
-        const body = (await resp.json()) as { connected?: boolean };
-        if (body.connected) return true;
-      }
-    } catch {
-      // retry
-    }
-    if (attempt < STATUS_MAX_RETRIES - 1) {
-      await new Promise((resolve) => setTimeout(resolve, STATUS_RETRY_MS));
-    }
-  }
-  return false;
-}
-
 export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBannerProps) {
   const [response, setResponse] = useState('');
   const [oauthReady, setOauthReady] = useState(false);
@@ -84,7 +64,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
   const mcpAuth = parseMcpAuthPayload(interrupt);
 
   const verifyAndSetReady = useCallback(async (mcpName: string) => {
-    const connected = await verifyMcpConnected(mcpName);
+    const connected = await verifyMcpOAuthConnected(mcpName);
     if (connected) {
       setOauthReady(true);
       setConnectError(null);
@@ -123,25 +103,9 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
     setConnecting(true);
     setConnectError(null);
     try {
-      const connectUrl = buildAgentApiUrl(`/mcp/${encodeURIComponent(mcpAuth.mcp_name)}/connect`);
-      const resp = await fetch(connectUrl, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(text || `Connect failed (${resp.status})`);
-      }
-      const body = (await resp.json()) as { authorize_url?: string };
-      if (!body.authorize_url) {
-        throw new Error('No authorize_url returned');
-      }
-      const authorizeUrl = new URL(body.authorize_url, window.location.origin);
-      setOauthOrigin(authorizeUrl.origin);
-      const popup = window.open(authorizeUrl.href, 'mcp-oauth', 'width=600,height=700');
-      if (!popup) {
-        throw new Error('Popup blocked by browser');
-      }
+      const { authorize_url } = await startMcpOAuthConnect(mcpAuth.mcp_name);
+      const { origin } = openMcpOAuthPopup(authorize_url);
+      setOauthOrigin(origin);
     } catch (err) {
       setConnectError(err instanceof Error ? err.message : 'Connect failed');
     } finally {
