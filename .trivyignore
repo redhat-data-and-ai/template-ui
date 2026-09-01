@@ -4,3 +4,7 @@ CVE-2026-59873
 
 # Go stdlib in OPA static binary — fix depends on OPA upstream rebuilding with Go 1.24.13+.
 CVE-2025-68121
+
+# golang.org/x/crypto/ssh in OPA static binary — SSH auth bypass not reachable (OPA doesn't use SSH).
+# Fix requires OPA to bump golang.org/x/crypto to v0.55.0+. Current OPA v1.18.2 ships v0.54.0.
+CVE-2026-56854
