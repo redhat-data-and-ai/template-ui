@@ -271,7 +271,7 @@ export function useEvalDashboard(): EvalDashboardState {
         if (mountedRef.current) setTriggerState({ status: 'error', message: 'Network error — could not reach the eval service.' });
       }
     },
-    [fetchResults, refetchHistory, refetchTrends],
+    [refetchHistory, refetchTrends],
   );
 
   return {
