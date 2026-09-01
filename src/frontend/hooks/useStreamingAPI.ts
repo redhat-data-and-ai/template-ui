@@ -721,7 +721,7 @@ export function useStreamingAPI(threadId: string) {
                 }
                 setWasInterrupted(true);
               } else {
-                dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error' }));
+                dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error', errorMessage: error.message }));
                 dispatch(
                   updateStreamingState({
                     chatId: threadId,
@@ -1087,7 +1087,7 @@ export function useStreamingAPI(threadId: string) {
           dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: enrichInterrupt(interrupt) } }));
         },
         onError(error) {
-          dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error' }));
+          dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error', errorMessage: error.message }));
           resumeStreamHadError = true;
           // Queue decision to localStorage for replay when agent recovers
           let decisionQueued = false;
@@ -1222,7 +1222,7 @@ export function useStreamingAPI(threadId: string) {
             );
           },
           onError(error) {
-            dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+            dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error', errorMessage: error.message }));
             dispatch(
               updateStreamingState({
                 chatId: threadId,

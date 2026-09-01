@@ -89,7 +89,7 @@ describe('SettingsPage — accessibility', () => {
   it('tabs have role="tab" and aria-selected', () => {
     renderWithProviders(<SettingsPage />);
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.length).toBe(5);
+    expect(tabs.length).toBe(6);
     const selectedTabs = tabs.filter((t) => t.getAttribute('aria-selected') === 'true');
     expect(selectedTabs.length).toBe(1);
   });
