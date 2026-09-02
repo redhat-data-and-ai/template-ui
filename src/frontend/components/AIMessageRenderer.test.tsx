@@ -167,8 +167,8 @@ function renderStrict(ui: React.ReactElement) {
   return render(<StrictMode>{ui}</StrictMode>);
 }
 
-describe('AIMessageRenderer — MCP App auto-expand', () => {
-  it('expands when mcpApp arrives after the tool call (live stream)', async () => {
+describe('AIMessageRenderer — MCP App collapse behavior', () => {
+  it('stays collapsed when mcpApp arrives with content (finished tool)', async () => {
     const { rerender } = renderStrict(
       <AIMessageRenderer message={makeMsg({ tool_calls: [chartCall] })} />,
     );
@@ -189,9 +189,9 @@ describe('AIMessageRenderer — MCP App auto-expand', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /collapse tool call: show_chart/i })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
         'aria-expanded',
-        'true',
+        'false',
       );
     });
   });
@@ -217,24 +217,18 @@ describe('AIMessageRenderer — MCP App auto-expand', () => {
     });
   });
 
-  it('does not re-open after the user collapses, even on a later stream tick', async () => {
+  it('stays collapsed on later stream ticks after tool finishes', async () => {
     const withApp = makeMsg({
       tool_calls: [{ ...chartCall, mcpApp: MCP_APP, content: 'ok' }],
     });
     const { rerender } = renderStrict(<AIMessageRenderer message={withApp} />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /collapse tool call: show_chart/i })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
         'aria-expanded',
-        'true',
+        'false',
       );
     });
-
-    await userEvent.click(screen.getByRole('button', { name: /collapse tool call: show_chart/i }));
-    expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
 
     rerender(
       <StrictMode>
@@ -248,6 +242,107 @@ describe('AIMessageRenderer — MCP App auto-expand', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+  });
+});
+
+describe('AIMessageRenderer — auto-collapse on tool completion', () => {
+  it('auto-collapses a tool card once content is set', async () => {
+    const pendingMsg = makeMsg({ tool_calls: [CREATE_PR_TOOL_CALL] });
+
+    const { rerender } = renderStrict(
+      <AIMessageRenderer
+        message={pendingMsg}
+        pendingInterrupt={hitlInterrupt}
+        onInterruptResume={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /collapse tool call: github_create_pr/i })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    });
+
+    const finishedMsg = makeMsg({
+      tool_calls: [{ ...CREATE_PR_TOOL_CALL, content: 'PR created' }],
+    });
+    rerender(
+      <StrictMode>
+        <AIMessageRenderer message={finishedMsg} pendingInterrupt={null} onInterruptResume={vi.fn()} />
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /expand tool call: github_create_pr/i })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+  });
+
+  it('preserves manual expand after tool completes (user override)', async () => {
+    const finishedMsg = makeMsg({
+      tool_calls: [{ ...CREATE_PR_TOOL_CALL, content: 'PR created' }],
+    });
+
+    renderStrict(
+      <AIMessageRenderer message={finishedMsg} pendingInterrupt={null} onInterruptResume={vi.fn()} />,
+    );
+
+    expect(screen.getByRole('button', { name: /expand tool call: github_create_pr/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /expand tool call: github_create_pr/i }));
+
+    expect(screen.getByRole('button', { name: /collapse tool call: github_create_pr/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('manual collapse during approval suppresses re-expand', async () => {
+    const pendingMsg = makeMsg({ tool_calls: [CREATE_PR_TOOL_CALL] });
+
+    const { rerender } = renderStrict(
+      <AIMessageRenderer
+        message={pendingMsg}
+        pendingInterrupt={hitlInterrupt}
+        onInterruptResume={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /collapse tool call: github_create_pr/i })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /collapse tool call: github_create_pr/i }));
+    expect(screen.getByRole('button', { name: /expand tool call: github_create_pr/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+
+    rerender(
+      <StrictMode>
+        <AIMessageRenderer
+          message={pendingMsg}
+          pendingInterrupt={hitlInterrupt}
+          onInterruptResume={vi.fn()}
+        />
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /expand tool call: github_create_pr/i })).toHaveAttribute(
         'aria-expanded',
         'false',
       );
