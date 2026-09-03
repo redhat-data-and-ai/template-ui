@@ -588,4 +588,52 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     // The proxy must propagate the upstream 503 — not silently return 200
     expect(res.statusCode).toBe(503);
   });
+
+  it('forwards project_id into thread metadata without run configurable', async () => {
+    const agentSSE =
+      `event: messages/partial\ndata: [{"type":"ai","content":"Hello"}]\n\n`;
+    const mock = stubFetch(
+      okJson({ thread_id: 'th-proj' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: {
+        message: 'hello',
+        thread_id: 'th-proj',
+        user_id: 'u1',
+        project_id: 'proj-1',
+      },
+    });
+
+    const threadBody = JSON.parse(mock.mock.calls[0][1].body as string);
+    expect(threadBody.metadata.project_id).toBe('proj-1');
+    expect(threadBody.ifExists).toBe('do_nothing');
+    const runBody = JSON.parse(mock.mock.calls[1][1].body as string);
+    expect(runBody.config.configurable?.project_id).toBeUndefined();
+  });
+
+  it('rejects non-string project_id without calling the agent', async () => {
+    const mock = stubFetch(okJson({}));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: {
+        message: 'hello',
+        thread_id: 'th-proj',
+        user_id: 'u1',
+        project_id: { foo: 1 },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('project_id must be a string when provided');
+    expect(mock).not.toHaveBeenCalled();
+  });
 });

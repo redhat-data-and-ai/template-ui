@@ -6,6 +6,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { HomePage } from './pages/HomePage';
 import { ChatRoutePage } from './pages/ChatPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ProjectChatPage } from './pages/ProjectChatPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastNotifications } from './components/ToastNotifications';
 import { useThemeSync } from './hooks/useThemeSync';
@@ -102,6 +103,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/chat" element={<Navigate to="/" replace />} />
           <Route path="/chat/:threadId" element={<ChatRoutePage />} />
+          <Route path="/project/:projectId" element={<ProjectChatPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </AppLayout>

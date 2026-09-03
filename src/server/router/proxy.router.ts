@@ -45,6 +45,7 @@ interface StreamRequestBody {
   resume?: boolean;
   memories?: string[];
   rules?: string[];
+  project_id?: string | null;
 }
 
 /**
@@ -377,7 +378,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, user_id, resume: isResume, memories, rules } = request.body;
+      const { message, thread_id, user_id, resume: isResume, memories, rules, project_id } = request.body;
+
+      if (project_id != null && typeof project_id !== 'string') {
+        return reply.status(400).send({ error: 'project_id must be a string when provided' });
+      }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -398,7 +403,10 @@ async function proxyRoutes(fastify: FastifyInstance) {
           headers,
           body: JSON.stringify({
             threadId: thread_id,
-            metadata: { user_identity: user_id ?? 'anonymous' },
+            metadata: {
+              user_identity: user_id ?? 'anonymous',
+              ...(project_id ? { project_id } : {}),
+            },
             ifExists: 'do_nothing',
           }),
           signal: AbortSignal.timeout(cfg.agent.timeout_ms),

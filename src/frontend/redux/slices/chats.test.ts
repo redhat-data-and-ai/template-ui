@@ -7,6 +7,8 @@ import chatsReducer, {
   deleteChat,
   mergeToolResult,
   resolveAllPendingToolCalls,
+  selectChatsByProject,
+  setChats,
   setMessageFeedback,
   updateChat,
   updateLastMessageInChat,
@@ -14,6 +16,7 @@ import chatsReducer, {
   type ChatsState,
   type ChatItem,
 } from './chats';
+import { assignThreadToProjectThunk, deleteProjectThunk, unassignAllThreadsThunk } from './projects';
 
 /** Minimal fixture shape that matches the runtime duck-type expected by chats slice reducers. */
 type TestToolCall = { id: string; name: string; args: Record<string, unknown>; content?: string };
@@ -306,5 +309,133 @@ describe('chats slice — updateStreamingState', () => {
     expect(s.streamingStates['new-chat'].isLoading).toBe(true);
     // defaults are preserved
     expect(s.streamingStates['new-chat'].pendingInterrupt).toBeNull();
+  });
+});
+
+describe('chats slice — project assignment', () => {
+  it('selectChatsByProject returns chats in that project', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    s = chatsReducer(s, addChat(makeChat('c2', { project_id: 'p1' })));
+    const state = { chats: s };
+    expect(selectChatsByProject(state, 'p1').map((c) => c.id)).toEqual(['c2']);
+    expect(selectChatsByProject(state, 'p1')).toBe(selectChatsByProject(state, 'p1'));
+  });
+
+  it('optimistically sets project_id while assign is pending', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1', { project_id: null })));
+    s = chatsReducer(
+      s,
+      assignThreadToProjectThunk.pending('', { threadId: 'c1', projectId: 'p1' }),
+    );
+    expect(s.chats[0].project_id).toBe('p1');
+    expect(s.chats[0]._prevProjectId).toBeNull();
+  });
+
+  it('rolls back project_id when assign is rejected', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1', { project_id: 'p0' })));
+    s = chatsReducer(
+      s,
+      assignThreadToProjectThunk.pending('', { threadId: 'c1', projectId: 'p1' }),
+    );
+    s = chatsReducer(
+      s,
+      assignThreadToProjectThunk.rejected(new Error('fail'), '', { threadId: 'c1', projectId: 'p1' }),
+    );
+    expect(s.chats[0].project_id).toBe('p0');
+  });
+
+  it('rolls back to null when the chat had no project_id field', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    expect(s.chats[0].project_id).toBeUndefined();
+    s = chatsReducer(
+      s,
+      assignThreadToProjectThunk.pending('', { threadId: 'c1', projectId: 'p1' }),
+    );
+    s = chatsReducer(
+      s,
+      assignThreadToProjectThunk.rejected(new Error('fail'), '', { threadId: 'c1', projectId: 'p1' }),
+    );
+    expect(s.chats[0].project_id).toBeNull();
+  });
+
+  it('restores project_id on assign fulfilled after the chat list is replaced', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1', { project_id: null })));
+    s = chatsReducer(
+      s,
+      assignThreadToProjectThunk.pending('', { threadId: 'c1', projectId: 'p1' }),
+    );
+    s = chatsReducer(
+      s,
+      setChats([{ ...s.chats[0], project_id: null, _prevProjectId: null }]),
+    );
+    s = chatsReducer(
+      s,
+      assignThreadToProjectThunk.fulfilled(
+        { threadId: 'c1', projectId: 'p1' },
+        '',
+        { threadId: 'c1', projectId: 'p1' },
+      ),
+    );
+    expect(s.chats[0].project_id).toBe('p1');
+    expect(s.chats[0]._prevProjectId).toBeUndefined();
+  });
+
+  it('clears project_id for all project chats after unassign-all', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1', { project_id: 'p1' })));
+    s = chatsReducer(s, addChat(makeChat('c2', { project_id: 'p1' })));
+    s = chatsReducer(s, addChat(makeChat('c3', { project_id: 'p2' })));
+    s = chatsReducer(
+      s,
+      unassignAllThreadsThunk.fulfilled(
+        { projectId: 'p1' },
+        '',
+        'p1',
+      ),
+    );
+    expect(s.chats.find((c) => c.id === 'c1')?.project_id).toBeNull();
+    expect(s.chats.find((c) => c.id === 'c2')?.project_id).toBeNull();
+    expect(s.chats.find((c) => c.id === 'c3')?.project_id).toBe('p2');
+  });
+
+  it('clears project_id when a project is deleted with keepThreads', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1', { project_id: 'p1' })));
+    s = chatsReducer(
+      s,
+      deleteProjectThunk.fulfilled(
+        { projectId: 'p1', deletedThreadIds: [], keepThreads: true },
+        '',
+        { projectId: 'p1', keepThreads: true },
+      ),
+    );
+    expect(s.chats[0].project_id).toBeNull();
+    expect(s.chats).toHaveLength(1);
+  });
+
+  it('leaves chats in place when a project is hard-deleted', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1', { project_id: 'p1' })));
+    s = chatsReducer(
+      s,
+      deleteProjectThunk.fulfilled(
+        { projectId: 'p1', deletedThreadIds: ['c1'], keepThreads: false },
+        '',
+        { projectId: 'p1', keepThreads: false },
+      ),
+    );
+    expect(s.chats).toHaveLength(1);
+    expect(s.chats[0].project_id).toBe('p1');
+  });
+
+  it('clears project_id when delete reports the project missing', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1', { project_id: 'p1' })));
+    s = chatsReducer(
+      s,
+      deleteProjectThunk.fulfilled(
+        { projectId: 'p1', deletedThreadIds: [], keepThreads: false, missing: true },
+        '',
+        { projectId: 'p1', keepThreads: false },
+      ),
+    );
+    expect(s.chats).toHaveLength(1);
+    expect(s.chats[0].project_id).toBeNull();
   });
 });

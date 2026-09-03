@@ -1,6 +1,14 @@
 import { ChatItem } from '../types/chat';
 import { scopedStorageKey } from '../lib/app-paths';
 
+function omitPrevProjectId(chats: ChatItem[]): ChatItem[] {
+  return chats.map((chat) => {
+    const copy = { ...chat } as ChatItem & { _prevProjectId?: unknown };
+    delete copy._prevProjectId;
+    return copy;
+  });
+}
+
 class ChatStorageService {
   private readonly CHATS_STORAGE_KEY = scopedStorageKey('dataverse-ai-chats');
   private readonly MAX_CHATS = 50; // Limit to prevent localStorage bloat
@@ -10,7 +18,7 @@ class ChatStorageService {
    */
   saveChats(chats: ChatItem[]): boolean {
     try {
-      const limitedChats = chats.slice(0, this.MAX_CHATS);
+      const limitedChats = omitPrevProjectId(chats.slice(0, this.MAX_CHATS));
       localStorage.setItem(this.CHATS_STORAGE_KEY, JSON.stringify(limitedChats));
       return true;
     } catch (error) {
@@ -18,7 +26,9 @@ class ChatStorageService {
       
       // If storage is full, try to reduce and save again
       try {
-        const reducedChats = chats.slice(0, Math.floor(this.MAX_CHATS / 2));
+        const reducedChats = omitPrevProjectId(
+          chats.slice(0, Math.floor(this.MAX_CHATS / 2)),
+        );
         localStorage.setItem(this.CHATS_STORAGE_KEY, JSON.stringify(reducedChats));
         console.warn('localStorage was full, reduced chat history');
         return true;
@@ -60,7 +70,7 @@ class ChatStorageService {
       const parsedChats: ChatItem[] = JSON.parse(storedChats);
       
       // Validate and transform data
-      return parsedChats
+      return omitPrevProjectId(parsedChats)
         .filter(chat => chat.id && chat.title) // Filter invalid entries
         .map(chat => ({
           ...chat,

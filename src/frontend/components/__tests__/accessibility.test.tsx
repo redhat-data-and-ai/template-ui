@@ -425,7 +425,6 @@ describe('Sidebar — accessibility', () => {
     onNewChat: () => {},
     onSelectChat: () => {},
     onDeleteChat: () => {},
-    onDeleteAllChats: () => {},
     onRenameChat: () => {},
   };
 

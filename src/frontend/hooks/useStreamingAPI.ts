@@ -26,6 +26,9 @@ import {
 import { chatStorage } from '@/services/chatStorage';
 import { getThreadState, getThreadStateAndInterrupt } from '@/services/agent-rest';
 import { buildAppPath } from '@/lib/app-paths';
+import { addToast } from '@/redux/slices/toasts';
+import { assignThreadToProjectThunk } from '@/redux/slices/projects';
+import { isClientCreatedChat } from '@/services/newChatTracker';
 import { selectActiveRules, selectMemories } from '@/redux/slices/personalization';
 import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
@@ -455,7 +458,9 @@ export function useStreamingAPI(threadId: string) {
         token,
         memories: memories.map((m) => m.content),
         rules: activeRules.map((r) => r.content),
+        projectId: chatRef.current?.project_id,
       };
+      const wasClientCreated = isClientCreatedChat(threadId);
 
       let _lastOutcome: 'success' | 'cancelled' | 'failed' = 'failed';
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -881,7 +886,10 @@ export function useStreamingAPI(threadId: string) {
             },
           };
 
-          manager.stream(streamRequest, callbacks).then(() => {
+          manager.stream(
+            { ...streamRequest, projectId: chatRef.current?.project_id },
+            callbacks,
+          ).then(() => {
             if (!settled) {
               if (!streamEndedWithInterruptRef.current) {
                 dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
@@ -926,6 +934,17 @@ export function useStreamingAPI(threadId: string) {
 
         setRetryCount(attempt + 1);
         await new Promise<void>((r) => setTimeout(r, computeRetryDelayMs(attempt + 1)));
+      }
+
+      if (_lastOutcome === 'success' && wasClientCreated) {
+        const pid = chatRef.current?.project_id;
+        if (pid) {
+          void dispatch(assignThreadToProjectThunk({ threadId, projectId: pid }))
+            .unwrap()
+            .catch(() => {
+              dispatch(addToast({ title: 'Failed to move conversation', variant: 'danger' }));
+            });
+        }
       }
 
       // After all retries: start a fallback recovery poller ONLY if
