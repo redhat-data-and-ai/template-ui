@@ -22,14 +22,21 @@ A modern React-based frontend application with Fastify backend for interacting w
    npm install
    ```
 
-3. **Set up environment variables**
+3. **Install pre-commit** (recommended)
+   ```bash
+   pip install pre-commit && pre-commit install
+   ```
+
+   Hooks run `gitleaks` and `detect-private-key` on commit. Also enable [GitHub Secret Scanning](https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning) and [Push Protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection) on the repository for defense in depth.
+
+4. **Set up environment variables**
    ```bash
    cp env.template .env
    ```
    
    Edit `.env` and configure the required variables (see [Environment Configuration](#environment-configuration) below).
 
-4. **Start development server**
+5. **Start development server**
    ```bash
    npm run dev
    ```
@@ -155,7 +162,7 @@ These commands are equivalent to:
 - `make local` → `npm ci && npm run build && npm start`
 - `make clean` → `rm -rf node_modules dist`
 
-## ⚙️ Environment Configuration
+<h2 id="environment-configuration">⚙️ Environment Configuration</h2>
 
 Copy `env.template` to `.env` and configure the following variables:
 
