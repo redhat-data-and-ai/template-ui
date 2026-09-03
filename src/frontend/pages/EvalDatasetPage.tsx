@@ -134,9 +134,13 @@ export function EvalDatasetPage() {
 
   /** Optimistically removes a test case and syncs the deletion to the backend. */
   async function handleDelete(id: string) {
-    const previous = cases;
+    const deletedCase = cases.find((c) => c.id === id);
     const updated = cases.filter((c) => c.id !== id);
     setCases(updated);
+    const restoreCase = () => {
+      if (!deletedCase) return;
+      setCases((cur) => cur.some((c) => c.id === id) ? cur : [...cur, deletedCase]);
+    };
     const doDelete = async () => {
       try {
         const res = await fetch(buildAgentApiUrl('/evals/dataset'), {
@@ -146,12 +150,12 @@ export function EvalDatasetPage() {
           body: JSON.stringify({ cases: updated, judge_model: judgeModel || null }),
         });
         if (!res.ok) {
-          setCases(previous);
+          restoreCase();
           const err = await res.json().catch(() => ({}));
           setSaveError((err as { detail?: string }).detail ?? `Delete failed (${res.status})`);
         }
       } catch {
-        setCases(previous);
+        restoreCase();
         setSaveError('Network error — could not delete test case.');
       }
     };

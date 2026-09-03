@@ -133,7 +133,7 @@ export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
                   role="button"
                   aria-label={`View report for run at ${formatTimestamp(run.completed_at)}`}
                   onClick={() => handleRowClick(run)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(run); } }}
+                  onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); handleRowClick(run); } }}
                   className="border-t border-border cursor-pointer hover:bg-secondary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary transition-colors"
                   title="Click to view full report"
                 >

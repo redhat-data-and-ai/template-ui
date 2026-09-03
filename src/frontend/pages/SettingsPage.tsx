@@ -40,12 +40,16 @@ const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
 export function SettingsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const developerMode = useAppSelector(selectDeveloperMode);
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const param = searchParams.get('tab');
-    return param && VALID_TABS.has(param) ? (param as TabId) : 'profile';
+    if (param && VALID_TABS.has(param)) {
+      if (param === 'developer' && !developerMode) return 'profile';
+      return param as TabId;
+    }
+    return 'profile';
   });
   const tabRefs = useRef<Map<TabId, HTMLButtonElement>>(new Map());
-  const developerMode = useAppSelector(selectDeveloperMode);
   const visibleTabs = TABS.filter((t) => t.id !== 'developer' || developerMode);
 
   useEffect(() => {
