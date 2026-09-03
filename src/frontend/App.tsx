@@ -11,14 +11,13 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastNotifications } from './components/ToastNotifications';
 import { useThemeSync } from './hooks/useThemeSync';
 import { loadConfig, setBranding, setFeatures } from './redux/slices/config';
-import { setConfigDefaults, selectDeveloperMode } from './redux/slices/userSettings';
+import { setConfigDefaults } from './redux/slices/userSettings';
 import type { RootState, AppDispatch } from './redux/store';
 
 export default function App() {
   const dispatch = useDispatch<AppDispatch>();
   const { branding, loading, error } = useSelector((state: RootState) => state.config);
   const theme = useSelector((state: RootState) => state.userSettings.theme);
-  const developerMode = useSelector(selectDeveloperMode);
 
   useThemeSync();
 
@@ -105,7 +104,7 @@ export default function App() {
           <Route path="/chat" element={<Navigate to="/" replace />} />
           <Route path="/chat/:threadId" element={<ChatRoutePage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/eval/dataset" element={developerMode ? <EvalDatasetPage /> : <Navigate to="/settings" replace />} />
+          <Route path="/eval/dataset" element={<EvalDatasetPage />} />
         </Routes>
       </AppLayout>
       <ToastNotifications />
