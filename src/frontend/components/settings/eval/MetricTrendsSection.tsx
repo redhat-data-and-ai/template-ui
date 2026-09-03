@@ -14,6 +14,7 @@ interface MetricTrendsSectionProps {
   data: EvalTrendsResponse;
 }
 
+/** Toggleable section rendering metric trends as either sparkline cards or a combined line chart. */
 export function MetricTrendsSection({ data }: MetricTrendsSectionProps) {
   const [view, setView] = useState<View>('cards');
   const isDark = useDarkMode();

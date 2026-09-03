@@ -31,6 +31,7 @@ export interface EvalDashboardState {
   clearAuthRequired: () => void;
 }
 
+/** Orchestrates eval trigger, status polling, history, and trends into a single dashboard state object. */
 export function useEvalDashboard(): EvalDashboardState {
   const { state: evalState, refresh: refreshStatus } = useEvalStatus();
   const { data: history, refetch: refetchHistory } = useEvalHistory();
@@ -80,13 +81,16 @@ export function useEvalDashboard(): EvalDashboardState {
     }
   }, [triggerState.status, evalState.status]);
 
-  // Keep refreshStatus stable in a ref so trigger callback can use it without re-creating
+  // Keep refs stable so the trigger callback can read current values without re-creating.
+  // Assignments are in effects to avoid leaking values from discarded React 19 renders.
   const refreshStatusRef = useRef(refreshStatus);
-  refreshStatusRef.current = refreshStatus;
   const resultRef = useRef(result);
-  resultRef.current = result;
   const evalStatusRef = useRef(evalState.status);
-  evalStatusRef.current = evalState.status;
+  useEffect(() => {
+    refreshStatusRef.current = refreshStatus;
+    resultRef.current = result;
+    evalStatusRef.current = evalState.status;
+  });
 
   const isRunning =
     evalState.status === 'in_progress' ||

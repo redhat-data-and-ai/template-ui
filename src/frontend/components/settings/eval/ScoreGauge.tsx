@@ -1,3 +1,4 @@
+/** Renders a large SVG donut gauge displaying the overall eval score percentage. */
 export function ScoreGauge({ score }: { score: number }) {
   const pct = Math.round(score * 100);
   const r = 52;

@@ -7,6 +7,7 @@ interface SparklineChartProps {
   color?: string;
 }
 
+/** Renders a minimal Recharts line sparkline for an array of historical score values. */
 export function SparklineChart({
   data,
   width = 120,

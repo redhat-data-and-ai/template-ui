@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@patternfly/react-core';
 import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck, Code2, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -35,9 +35,15 @@ const TAB_CONTENT: Record<TabId, React.FC> = {
   developer: DeveloperSettings,
 };
 
+const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
+
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabId>('profile');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const param = searchParams.get('tab');
+    return param && VALID_TABS.has(param) ? (param as TabId) : 'profile';
+  });
   const tabRefs = useRef<Map<TabId, HTMLButtonElement>>(new Map());
   const developerMode = useAppSelector(selectDeveloperMode);
   const visibleTabs = TABS.filter((t) => t.id !== 'developer' || developerMode);

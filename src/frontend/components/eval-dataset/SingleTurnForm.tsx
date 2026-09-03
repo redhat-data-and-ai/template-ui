@@ -16,6 +16,7 @@ interface SingleTurnFormProps {
 }
 
 
+/** Form for editing a single-turn test case with tag selection, keywords, and optional tool-call expectations. */
 export function SingleTurnForm({
   name,
   tag,
@@ -31,35 +32,42 @@ export function SingleTurnForm({
   const isHitl = tag === 'hitl';
   const safeTurn = normTurn(turn);
 
+  /** Merges a partial update into the current turn and propagates via onTurnChange. */
   function updateTurn(patch: Partial<Turn>) {
     onTurnChange({ ...safeTurn, ...patch });
   }
 
+  /** Appends a new empty tool call to the current turn. */
   function addToolCall() {
     updateTurn({ expectedToolCalls: [...safeTurn.expectedToolCalls, emptyToolCall()] });
   }
 
+  /** Removes the tool call at the given index from the current turn. */
   function removeToolCall(i: number) {
     updateTurn({ expectedToolCalls: safeTurn.expectedToolCalls.filter((_, idx) => idx !== i) });
   }
 
+  /** Immutably patches the tool call at the given index. */
   function updateToolCall(i: number, patch: Partial<ToolCall>) {
     const calls = safeTurn.expectedToolCalls.map((tc, idx) => idx === i ? { ...tc, ...patch } : tc);
     updateTurn({ expectedToolCalls: calls });
   }
 
+  /** Appends a new empty argument row to the tool call at the given index. */
   function addArg(toolIdx: number) {
     updateToolCall(toolIdx, {
       arguments: [...safeTurn.expectedToolCalls[toolIdx].arguments, { key: '', value: '' }],
     });
   }
 
+  /** Removes the argument at argIdx from the tool call at toolIdx. */
   function removeArg(toolIdx: number, argIdx: number) {
     updateToolCall(toolIdx, {
       arguments: safeTurn.expectedToolCalls[toolIdx].arguments.filter((_, i) => i !== argIdx),
     });
   }
 
+  /** Immutably patches the argument at argIdx within the tool call at toolIdx. */
   function updateArg(toolIdx: number, argIdx: number, patch: Partial<ToolCallArg>) {
     const args = safeTurn.expectedToolCalls[toolIdx].arguments.map((a, i) =>
       i === argIdx ? { ...a, ...patch } : a,

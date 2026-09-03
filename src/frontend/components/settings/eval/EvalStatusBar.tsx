@@ -10,6 +10,7 @@ interface EvalStatusBarProps {
   isCached?: boolean;
 }
 
+/** Formats elapsed milliseconds into a human-readable duration string (e.g. '2m 15s'). */
 function formatElapsed(ms: number): string {
   const secs = Math.floor(ms / 1000);
   if (secs < 60) return `${secs}s`;
@@ -18,6 +19,7 @@ function formatElapsed(ms: number): string {
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'error', 'no_dataset']);
 
+/** Colored status banner showing eval progress, completion results, or error state. */
 export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredAt, isCached = false }: EvalStatusBarProps) {
   const [elapsed, setElapsed] = useState('');
   const isRunning = status === 'in_progress' || status === 'not_started';

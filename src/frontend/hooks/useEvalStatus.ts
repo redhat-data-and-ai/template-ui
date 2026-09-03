@@ -27,6 +27,7 @@ const POLL_ACTIVE_MS = 10_000;
 /** Set when the user triggers an eval so tab switches can resume polling. */
 const EVAL_STATUS_POLL_KEY = 'evalHasTriggered';
 
+/** Reads the sessionStorage flag that indicates whether eval polling should be active. */
 function readPollingFlag(): boolean {
   try {
     return sessionStorage.getItem(EVAL_STATUS_POLL_KEY) === '1';
@@ -35,6 +36,7 @@ function readPollingFlag(): boolean {
   }
 }
 
+/** Persists the eval-polling flag to sessionStorage so polling resumes after tab switches. */
 function writePollingFlag(): void {
   try {
     sessionStorage.setItem(EVAL_STATUS_POLL_KEY, '1');
@@ -60,6 +62,7 @@ export interface UseEvalStatusResult {
   refresh: () => void;
 }
 
+/** Polls the eval status endpoint and returns the latest EvalState with a manual refresh callback. */
 export function useEvalStatus(): UseEvalStatusResult {
   const [state, setState] = useState<EvalState>(INITIAL);
   const [polling, setPolling] = useState(readPollingFlag);

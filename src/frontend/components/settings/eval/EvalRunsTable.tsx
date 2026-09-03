@@ -8,6 +8,7 @@ interface EvalRunsTableProps {
   onViewReport: (result: EvalRow) => void;
 }
 
+/** Formats an ISO timestamp into a short locale-aware date-time string. */
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
@@ -19,6 +20,7 @@ function formatTimestamp(iso: string): string {
   });
 }
 
+/** Creates a temporary download link and saves an EvalRow as a JSON file. */
 function downloadJson(data: EvalRow, timestamp: string) {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json',
@@ -31,6 +33,7 @@ function downloadJson(data: EvalRow, timestamp: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Fetches the full eval result detail for a specific run by its completion timestamp. */
 async function fetchRunDetail(completedAt: string, signal: AbortSignal): Promise<EvalRow | null> {
   try {
     const res = await fetch(
@@ -46,6 +49,7 @@ async function fetchRunDetail(completedAt: string, signal: AbortSignal): Promise
 
 const PAGE_SIZE = 5;
 
+/** Paginated table of eval runs with click-to-view-report and JSON download. */
 export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
   const [loadingRow, setLoadingRow] = useState<string | null>(null);
   const [errorRow, setErrorRow] = useState<string | null>(null);
@@ -53,6 +57,13 @@ export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => { abortRef.current?.abort(); }, []);
+
+  useEffect(() => {
+    setPage((prev) => {
+      const maxPage = Math.max(0, Math.ceil(runs.length / PAGE_SIZE) - 1);
+      return prev > maxPage ? maxPage : prev;
+    });
+  }, [runs.length]);
 
   if (runs.length === 0) return null;
 
@@ -118,8 +129,12 @@ export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
               return (
                 <tr
                   key={`${page}_${i}`}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`View report for run at ${formatTimestamp(run.completed_at)}`}
                   onClick={() => handleRowClick(run)}
-                  className="border-t border-border cursor-pointer hover:bg-secondary/40 transition-colors"
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(run); } }}
+                  className="border-t border-border cursor-pointer hover:bg-secondary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary transition-colors"
                   title="Click to view full report"
                 >
                   <td className="px-3 py-2.5 text-foreground">

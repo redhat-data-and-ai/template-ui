@@ -10,6 +10,7 @@ interface CategoryCardProps {
   prevScore?: number | null;
 }
 
+/** Displays a category's pass rate, delta from previous run, and a sparkline trend chart. */
 export function CategoryCard({
   tag,
   latestScore,

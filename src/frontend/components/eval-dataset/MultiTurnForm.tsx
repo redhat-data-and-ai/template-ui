@@ -14,49 +14,59 @@ interface MultiTurnFormProps {
 }
 
 
+/** Form for editing a multi-turn test case with per-turn user message, expected response, keywords, and tool calls. */
 export function MultiTurnForm({ name, turns, description, onNameChange, onTurnsChange, onDescriptionChange }: MultiTurnFormProps) {
   const safeTurns = turns.map(normTurn);
   const toolCallTotal = safeTurns.reduce((sum, t) => sum + (t.toolCallEnabled ? Math.max(1, t.expectedToolCalls.length) : 0), 0);
 
+  /** Immutably patches a single turn at the given index and propagates via onTurnsChange. */
   function updateTurn(idx: number, patch: Partial<Turn>) {
     onTurnsChange(turns.map((t, i) => i === idx ? { ...t, ...patch } : t));
   }
 
+  /** Removes the turn at the given index from the turns array. */
   function removeTurn(idx: number) {
     onTurnsChange(turns.filter((_, i) => i !== idx));
   }
 
+  /** Appends a new empty turn to the turns array. */
   function addTurn() {
     onTurnsChange([...turns, emptyTurn()]);
   }
 
+  /** Appends a new empty tool call to the turn at index ti. */
   function addToolCall(ti: number) {
     const t = turns[ti];
     updateTurn(ti, { expectedToolCalls: [...t.expectedToolCalls, emptyToolCall()] });
   }
 
+  /** Removes the tool call at index ci from the turn at index ti. */
   function removeToolCall(ti: number, ci: number) {
     updateTurn(ti, { expectedToolCalls: turns[ti].expectedToolCalls.filter((_, i) => i !== ci) });
   }
 
+  /** Immutably patches the tool call at index ci within turn ti. */
   function updateToolCall(ti: number, ci: number, patch: Partial<ToolCall>) {
     updateTurn(ti, {
       expectedToolCalls: turns[ti].expectedToolCalls.map((tc, i) => i === ci ? { ...tc, ...patch } : tc),
     });
   }
 
+  /** Appends a new empty argument row to the tool call at (ti, ci). */
   function addArg(ti: number, ci: number) {
     updateToolCall(ti, ci, {
       arguments: [...turns[ti].expectedToolCalls[ci].arguments, { key: '', value: '' }],
     });
   }
 
+  /** Removes the argument at index ai from the tool call at (ti, ci). */
   function removeArg(ti: number, ci: number, ai: number) {
     updateToolCall(ti, ci, {
       arguments: turns[ti].expectedToolCalls[ci].arguments.filter((_, i) => i !== ai),
     });
   }
 
+  /** Immutably patches the argument at index ai within the tool call at (ti, ci). */
   function updateArg(ti: number, ci: number, ai: number, patch: Partial<ToolCallArg>) {
     updateToolCall(ti, ci, {
       arguments: turns[ti].expectedToolCalls[ci].arguments.map((a, i) => i === ai ? { ...a, ...patch } : a),
@@ -297,6 +307,7 @@ export function MultiTurnForm({ name, turns, description, onNameChange, onTurnsC
   );
 }
 
+/** Collapsible keyword editor for a single turn, supporting multiple AND-row entries. */
 function TurnKeywords({ keywords, onChange }: { keywords: string[]; onChange: (kw: string[]) => void }) {
   const [open, setOpen] = useState(false);
   const filled = keywords.filter(Boolean);

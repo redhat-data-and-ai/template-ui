@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Search, Database, Loader2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,7 @@ const TAG_OPTIONS: { value: CaseTag | 'all'; label: string }[] = [
   { value: 'multi_turn', label: 'multi_turn' },
 ];
 
+/** Full-page view for managing the eval dataset with search, tag filtering, CRUD operations, and model selection. */
 export function EvalDatasetPage() {
   const navigate = useNavigate();
   const [cases, setCases] = useState<TestCase[]>([]);
@@ -34,6 +35,7 @@ export function EvalDatasetPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [availableModels, setAvailableModels] = useState<AgentModel[]>([]);
   const [judgeModel, setJudgeModel] = useState<string>('');
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const loadDataset = useCallback(async () => {
     setLoading(true);
@@ -54,11 +56,14 @@ export function EvalDatasetPage() {
           setJudgeModel((data.judge_model as string | null) ?? defaultModel);
         } else {
           setJudgeModel(defaultModel);
+          setLoadError(`Failed to load dataset (${datasetRes.status}) — check your session and try again.`);
         }
       } else if (datasetRes.ok) {
         const data = await datasetRes.json();
         setCases((data.dataset?.cases as TestCase[]) ?? []);
         setJudgeModel(data.judge_model ?? '');
+      } else {
+        setLoadError(`Failed to load dataset (${datasetRes.status}) — check your session and try again.`);
       }
     } catch {
       setLoadError('Could not load dataset — check your connection and try again.');
@@ -80,31 +85,37 @@ export function EvalDatasetPage() {
     });
   }, [cases, search, tagFilter]);
 
+  /** Persists the current test cases and judge model to the agent backend. */
   async function handleSaveDataset() {
-    setSaving(true);
-    setSaveError('');
-    setSaveSuccess(false);
-    try {
-      const res = await fetch(buildAgentApiUrl('/evals/dataset'), {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cases, judge_model: judgeModel || null }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSaveError((err as { detail?: string }).detail ?? `Error ${res.status}`);
-      } else {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+    const doSave = async () => {
+      setSaving(true);
+      setSaveError('');
+      setSaveSuccess(false);
+      try {
+        const res = await fetch(buildAgentApiUrl('/evals/dataset'), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cases, judge_model: judgeModel || null }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          setSaveError((err as { detail?: string }).detail ?? `Error ${res.status}`);
+        } else {
+          setSaveSuccess(true);
+          setTimeout(() => setSaveSuccess(false), 3000);
+        }
+      } catch {
+        setSaveError('Network error — could not reach the agent backend.');
+      } finally {
+        setSaving(false);
       }
-    } catch {
-      setSaveError('Network error — could not reach the agent backend.');
-    } finally {
-      setSaving(false);
-    }
+    };
+    saveQueueRef.current = saveQueueRef.current.then(doSave, doSave);
+    return saveQueueRef.current;
   }
 
+  /** Upserts a test case into the local cases array and closes the modal. */
   function handleSave(tc: TestCase) {
     setCases((prev) => {
       const idx = prev.findIndex((c) => c.id === tc.id);
@@ -115,31 +126,37 @@ export function EvalDatasetPage() {
     setEditingCase(undefined);
   }
 
+  /** Opens the modal pre-populated with the test case matching the given id. */
   function handleEdit(id: string) {
     setEditingCase(cases.find((c) => c.id === id));
     setModalOpen(true);
   }
 
+  /** Optimistically removes a test case and syncs the deletion to the backend. */
   async function handleDelete(id: string) {
     const previous = cases;
     const updated = cases.filter((c) => c.id !== id);
     setCases(updated);
-    try {
-      const res = await fetch(buildAgentApiUrl('/evals/dataset'), {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cases: updated, judge_model: judgeModel || null }),
-      });
-      if (!res.ok) {
+    const doDelete = async () => {
+      try {
+        const res = await fetch(buildAgentApiUrl('/evals/dataset'), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cases: updated, judge_model: judgeModel || null }),
+        });
+        if (!res.ok) {
+          setCases(previous);
+          const err = await res.json().catch(() => ({}));
+          setSaveError((err as { detail?: string }).detail ?? `Delete failed (${res.status})`);
+        }
+      } catch {
         setCases(previous);
-        const err = await res.json().catch(() => ({}));
-        setSaveError((err as { detail?: string }).detail ?? `Delete failed (${res.status})`);
+        setSaveError('Network error — could not delete test case.');
       }
-    } catch {
-      setCases(previous);
-      setSaveError('Network error — could not delete test case.');
-    }
+    };
+    saveQueueRef.current = saveQueueRef.current.then(doDelete, doDelete);
+    return saveQueueRef.current;
   }
 
 

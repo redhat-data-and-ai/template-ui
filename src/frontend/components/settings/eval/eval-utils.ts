@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 
+/** Reactively tracks whether the document root has the `dark` CSS class. */
 export function useDarkMode(): boolean {
   const [isDark, setIsDark] = useState(
     () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
@@ -52,16 +53,19 @@ const METRIC_LABELS: Record<string, string> = {
 
 const toTitleCase = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+/** Converts a namespaced metric identifier (e.g. `custom:answer_correctness`) into a human-readable label. */
 export function friendlyMetricName(key: string): string {
   if (METRIC_LABELS[key]) return METRIC_LABELS[key];
   return toTitleCase(key.replace(/^(custom|geval|deepeval|nlp|ragas|script):/, ''));
 }
 
+/** Strips the trailing UUID suffix from a conversation key and converts underscores to title case. */
 export function friendlyConversationName(key: string): string {
   return toTitleCase(key.replace(/_[a-f0-9]{12}$/, ''));
 }
 
 
+/** Computes the rounded percentage-point change between two 0-1 scores and its direction. */
 export function computeDelta(
   current: number,
   previous: number,
@@ -72,6 +76,7 @@ export function computeDelta(
   return { value: 0, direction: 'same' };
 }
 
+/** Converts a snake_case tag string to Title Case for display. */
 export function friendlyTagName(tag: string): string {
   return toTitleCase(tag);
 }
@@ -95,6 +100,7 @@ export function isLiveEvalRun(opts: {
 const CACHED_RESULT_MESSAGE =
   'Result already exists — eval completed. Showing latest result.';
 
+/** Checks whether a value represents a truthy cached-result flag from the eval trigger response. */
 function isCachedFlag(value: unknown): boolean {
   return value === true || value === 'true' || value === 1;
 }

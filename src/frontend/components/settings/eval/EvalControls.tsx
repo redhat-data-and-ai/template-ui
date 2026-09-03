@@ -11,12 +11,14 @@ interface EvalControlsProps {
   hasDataset?: boolean;
 }
 
+/** Maps an EvalStatus to a Tailwind text-color class for status messages. */
 function statusColor(s: EvalStatus) {
   if (s === 'success') return 'text-emerald-600 dark:text-emerald-400';
   if (s === 'error') return 'text-red-600 dark:text-red-400';
   return 'text-muted-foreground';
 }
 
+/** Toolbar with the Evaluate button, dataset link, force-rerun toggle, and status feedback. */
 export function EvalControls({
   onTrigger,
   isRunning,
