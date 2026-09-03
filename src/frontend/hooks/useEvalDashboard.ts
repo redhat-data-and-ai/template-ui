@@ -90,7 +90,7 @@ export function useEvalDashboard(): EvalDashboardState {
 
   const isRunning =
     evalState.status === 'in_progress' ||
-    (hasTriggered && evalState.status === 'unknown');
+    (hasTriggered && evalState.status === 'unknown' && triggerState.status !== 'error');
 
   const fetchResults = useCallback(async () => {
     try {

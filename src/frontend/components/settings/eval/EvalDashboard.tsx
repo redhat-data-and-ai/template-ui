@@ -118,7 +118,7 @@ export function EvalDashboard() {
       <EvalStatusBar
         status={
           isLiveEvalRun({ evalStatus: evalState.status, triggerStatus: triggerState.status })
-          || (hasTriggered && evalState.status === 'unknown')
+          || (hasTriggered && evalState.status === 'unknown' && triggerState.status !== 'error')
             ? 'in_progress'
             : evalState.status
         }
