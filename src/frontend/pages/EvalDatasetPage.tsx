@@ -137,9 +137,24 @@ export function EvalDatasetPage() {
     const deletedCase = cases.find((c) => c.id === id);
     const updated = cases.filter((c) => c.id !== id);
     setCases(updated);
-    const restoreCase = () => {
+    const restoreAndSync = () => {
       if (!deletedCase) return;
-      setCases((cur) => cur.some((c) => c.id === id) ? cur : [...cur, deletedCase]);
+      let restored: TestCase[] = [];
+      setCases((cur) => {
+        restored = cur.some((c) => c.id === id) ? cur : [...cur, deletedCase];
+        return restored;
+      });
+      const doSync = async () => {
+        try {
+          await fetch(buildAgentApiUrl('/evals/dataset'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cases: restored, judge_model: judgeModel || null }),
+          });
+        } catch { /* best-effort sync */ }
+      };
+      saveQueueRef.current = saveQueueRef.current.then(doSync, doSync);
     };
     const doDelete = async () => {
       try {
@@ -150,12 +165,12 @@ export function EvalDatasetPage() {
           body: JSON.stringify({ cases: updated, judge_model: judgeModel || null }),
         });
         if (!res.ok) {
-          restoreCase();
+          restoreAndSync();
           const err = await res.json().catch(() => ({}));
           setSaveError((err as { detail?: string }).detail ?? `Delete failed (${res.status})`);
         }
       } catch {
-        restoreCase();
+        restoreAndSync();
         setSaveError('Network error — could not delete test case.');
       }
     };
