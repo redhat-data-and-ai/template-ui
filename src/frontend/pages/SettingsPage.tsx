@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@patternfly/react-core';
 import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck, Code2, KeyRound } from 'lucide-react';
@@ -12,13 +12,14 @@ import { DeveloperSettings } from '../components/settings/DeveloperSettings';
 import { useAppSelector } from '../redux/hooks';
 import { selectDeveloperMode } from '../redux/slices/userSettings';
 import { OAuthConnections } from '../components/settings/OAuthConnections';
+import type { RootState } from '../redux/store';
 
 type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals' | 'oauth' | 'developer';
 
 const TABS: { id: TabId; label: string; panelTitle?: string; icon: typeof User }[] = [
   { id: 'profile', label: 'Profile', icon: User },
-  { id: 'memories', label: 'Memories', icon: Brain },
-  { id: 'rules', label: 'Custom Rules', icon: ScrollText },
+  { id: 'rules', label: 'User Rules', icon: ScrollText },
+  { id: 'memories', label: 'Your Memories', icon: Brain },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'tool-approvals', label: 'Tool Approvals', icon: ShieldCheck },
   { id: 'oauth', label: 'MCP OAuth', icon: KeyRound },
@@ -41,6 +42,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const developerMode = useAppSelector(selectDeveloperMode);
+  const features = useAppSelector((state: RootState) => state.config.features);
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const param = searchParams.get('tab');
     if (param && VALID_TABS.has(param)) {
@@ -50,13 +52,21 @@ export function SettingsPage() {
     return 'profile';
   });
   const tabRefs = useRef<Map<TabId, HTMLButtonElement>>(new Map());
-  const visibleTabs = TABS.filter((t) => t.id !== 'developer' || developerMode);
+
+  const visibleTabs = useMemo(() => {
+    return TABS.filter((tab) => {
+      if (tab.id === 'developer') return developerMode;
+      if (tab.id === 'memories') return features?.memory_enabled !== false;
+      if (tab.id === 'rules') return features?.user_rules_enabled !== false;
+      return true;
+    });
+  }, [features, developerMode]);
 
   useEffect(() => {
-    if (activeTab === 'developer' && !developerMode) {
-      setActiveTab('profile');
+    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id);
     }
-  }, [developerMode, activeTab]);
+  }, [visibleTabs, activeTab]);
 
   const handleTabKeyDown = (e: React.KeyboardEvent, tabId: TabId) => {
     const tabIds = visibleTabs.map((t) => t.id);
@@ -102,45 +112,47 @@ export function SettingsPage() {
         <div className="max-w-4xl mx-auto px-6 py-6">
           <div className="flex flex-col sm:flex-row gap-6">
             {/* Tab navigation */}
-            <div
-              role="tablist"
-              aria-orientation="vertical"
-              aria-label="Settings sections"
-              className="sm:w-48 shrink-0 flex sm:flex-col gap-1"
-            >
-              {visibleTabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    id={`settings-tab-${tab.id}`}
-                    role="tab"
-                    aria-selected={isActive}
-                    aria-controls={`settings-panel-${tab.id}`}
-                    tabIndex={isActive ? 0 : -1}
-                    ref={(el) => {
-                      if (el) tabRefs.current.set(tab.id, el);
-                    }}
-                    onClick={() => setActiveTab(tab.id)}
-                    onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
-                    className={cn(
-                      'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer',
-                      isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
-                    )}
-                  >
-                    <Icon className="w-4 h-4" aria-hidden="true" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
+            <nav className="sm:w-48 shrink-0" aria-label="Settings sections">
+              <div
+                role="tablist"
+                aria-orientation="vertical"
+                aria-label="Settings"
+                className="flex sm:flex-col gap-1"
+              >
+                {visibleTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      id={`settings-tab-${tab.id}`}
+                      role="tab"
+                      aria-selected={isActive}
+                      aria-controls={`settings-panel-${tab.id}`}
+                      tabIndex={isActive ? 0 : -1}
+                      ref={(el) => {
+                        if (el) tabRefs.current.set(tab.id, el);
+                      }}
+                      onClick={() => setActiveTab(tab.id)}
+                      onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
+                      className={cn(
+                        'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer',
+                        isActive
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                      )}
+                    >
+                      <Icon className="w-4 h-4" aria-hidden="true" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-              {TABS.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const Content = TAB_CONTENT[tab.id];
                 return (
                   <div

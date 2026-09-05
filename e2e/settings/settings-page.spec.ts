@@ -59,8 +59,8 @@ test.describe('Settings page', () => {
   test('clicking Memories tab shows the Memories section', async ({ page }) => {
     const settings = new SettingsPage(page);
     await settings.goto();
-    await settings.clickTab('Memories');
-    await settings.expectTabContentVisible('Memories');
+    await settings.clickTab('Your Memories');
+    await settings.expectTabContentVisible('Your Memories');
   });
 
   test('clicking MCP OAuth tab shows the OAuth connections section', async ({ page }) => {

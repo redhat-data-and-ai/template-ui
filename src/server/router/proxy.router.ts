@@ -43,8 +43,6 @@ interface StreamRequestBody {
   session_id?: string;
   stream_tokens?: boolean;
   resume?: boolean;
-  memories?: string[];
-  rules?: string[];
 }
 
 /**
@@ -377,7 +375,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, user_id, resume: isResume, memories, rules } = request.body;
+      const { message, thread_id, user_id, resume: isResume } = request.body;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -388,6 +386,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
       }
       if (refreshToken) {
         headers['X-Refresh-Token'] = refreshToken;
+      }
+
+      const sessionUser = (request.session as any)?.user;
+      if (sessionUser) {
+        headers['X-User-ID'] = sessionUser.preferred_username || sessionUser.sub || sessionUser.email || '';
       }
 
       try {
@@ -428,14 +431,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           runBody.input = { messages: [{ role: 'human', content: message, id: randomUUID() }] };
         }
 
-        const configurable: Record<string, unknown> = {};
-        if (Array.isArray(memories) && memories.length > 0) configurable.user_memories = memories;
-        if (Array.isArray(rules) && rules.length > 0) configurable.user_rules = rules;
-        if (Object.keys(configurable).length > 0) {
-          runBody.config = { configurable, metadata: { trace_id: traceId } };
-        } else {
-          runBody.config = { metadata: { trace_id: traceId } };
-        }
+        runBody.config = { metadata: { trace_id: traceId } };
 
         const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);
         const runResp = await fetch(runUrl, {
@@ -916,6 +912,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
       }
       if (refreshToken) {
         headers['X-Refresh-Token'] = refreshToken;
+      }
+
+      const sessionUser = (request.session as any)?.user;
+      if (sessionUser) {
+        headers['X-User-ID'] = sessionUser.preferred_username || sessionUser.sub || sessionUser.email || '';
       }
 
       try {

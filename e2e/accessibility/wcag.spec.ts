@@ -115,7 +115,7 @@ test.describe('Chat page — WCAG 2.1 AA', () => {
 // active panel is in the visible DOM at a time.
 // ---------------------------------------------------------------------------
 
-const SETTINGS_TABS = ['Profile', 'Memories', 'Custom Rules', 'Appearance', 'Tool Approvals', 'MCP OAuth'] as const;
+const SETTINGS_TABS = ['Profile', 'Your Memories', 'User Rules', 'Appearance', 'Tool Approvals', 'MCP OAuth'] as const;
 
 test.describe('Settings page — WCAG 2.1 AA', () => {
   test.beforeEach(async ({ page }) => {

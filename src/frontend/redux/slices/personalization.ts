@@ -1,7 +1,8 @@
-import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { v4 as uuidv4 } from 'uuid';
-import { buildAgentApiUrl, scopedStorageKey } from '../../lib/app-paths';
+import { createAsyncThunk, createSelector, createSlice } from '@reduxjs/toolkit';
+import { buildAgentApiUrl } from '../../lib/app-paths';
 import { authenticatedFetch } from '../../services/authenticated-fetch';
+
+// ── Memory items (individual facts from LangGraph Store) ────────────
 
 export interface MemoryItem {
   id: string;
@@ -9,153 +10,214 @@ export interface MemoryItem {
   createdAt: string;
 }
 
+// ── Rules (PersonalizationRepository) ───────────────────────────────
+
 export interface RuleItem {
   id: string;
   content: string;
   isActive: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 interface PersonalizationState {
   memories: MemoryItem[];
   rules: RuleItem[];
+  memoriesLoading: boolean;
+  rulesLoading: boolean;
+  error: string | null;
 }
 
-const STORAGE_KEY = scopedStorageKey('template-ui-personalization');
+const initialState: PersonalizationState = {
+  memories: [],
+  rules: [],
+  memoriesLoading: false,
+  rulesLoading: false,
+  error: null,
+};
 
-function loadState(): PersonalizationState {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return { memories: [], rules: [] };
-}
+// ── Memory thunks ───────────────────────────────────────────────────
 
-function persist(state: PersonalizationState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* ignore */
-  }
-}
+export const fetchMemories = createAsyncThunk(
+  'personalization/fetchMemories',
+  async () => {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/memories'));
+    if (!resp.ok) throw new Error(`Failed to fetch memories: ${resp.status}`);
+    const data = await resp.json();
+    return data.map((m: { id: string; content: string; created_at: string }) => ({
+      id: m.id,
+      content: m.content,
+      createdAt: m.created_at,
+    })) as MemoryItem[];
+  },
+);
 
-function apiCreateMemory(id: string, content: string) {
-  authenticatedFetch(buildAgentApiUrl('/personalization/memories'), {
+export const deleteMemory = createAsyncThunk(
+  'personalization/deleteMemory',
+  async (memoryId: string) => {
+    const resp = await authenticatedFetch(
+      buildAgentApiUrl(`/personalization/memories/${encodeURIComponent(memoryId)}`),
+      { method: 'DELETE' },
+    );
+    if (!resp.ok && resp.status !== 404)
+      throw new Error(`Failed to delete memory: ${resp.status}`);
+    return memoryId;
+  },
+);
+
+export const deleteAllMemories = createAsyncThunk(
+  'personalization/deleteAllMemories',
+  async () => {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/memories'), {
+      method: 'DELETE',
+    });
+    if (!resp.ok) throw new Error(`Failed to delete all memories: ${resp.status}`);
+  },
+);
+
+// ── Rule thunks ─────────────────────────────────────────────────────
+
+export const fetchRules = createAsyncThunk('personalization/fetchRules', async () => {
+  const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/rules'));
+  if (!resp.ok) throw new Error(`Failed to fetch rules: ${resp.status}`);
+  const data = await resp.json();
+  return data.map(
+    (r: {
+      id: string;
+      content: string;
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+    }) => ({
+      id: r.id,
+      content: r.content,
+      isActive: r.is_active,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }),
+  ) as RuleItem[];
+});
+
+export const addRule = createAsyncThunk('personalization/addRule', async (content: string) => {
+  const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/rules'), {
     method: 'POST',
-    body: JSON.stringify({ id, content }),
-  }).catch(() => {});
-}
+    body: JSON.stringify({ content, is_active: true }),
+  });
+  if (!resp.ok) throw new Error(`Failed to create rule: ${resp.status}`);
+  const r = await resp.json();
+  return {
+    id: r.id,
+    content: r.content,
+    isActive: r.is_active,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  } as RuleItem;
+});
 
-function apiDeleteMemory(id: string) {
-  authenticatedFetch(buildAgentApiUrl(`/personalization/memories/${id}`), {
+export const removeRule = createAsyncThunk('personalization/removeRule', async (ruleId: string) => {
+  const resp = await authenticatedFetch(
+    buildAgentApiUrl(`/personalization/rules/${encodeURIComponent(ruleId)}`),
+    { method: 'DELETE' },
+  );
+  if (!resp.ok && resp.status !== 404) throw new Error(`Failed to delete rule: ${resp.status}`);
+  return ruleId;
+});
+
+export const deleteAllRules = createAsyncThunk('personalization/deleteAllRules', async () => {
+  const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/rules'), {
     method: 'DELETE',
-  }).catch(() => {});
-}
+  });
+  if (!resp.ok) throw new Error(`Failed to delete all rules: ${resp.status}`);
+});
 
-function apiCreateRule(id: string, content: string, isActive: boolean) {
-  authenticatedFetch(buildAgentApiUrl('/personalization/rules'), {
-    method: 'POST',
-    body: JSON.stringify({ id, content, is_active: isActive }),
-  }).catch(() => {});
-}
-
-function apiDeleteRule(id: string) {
-  authenticatedFetch(buildAgentApiUrl(`/personalization/rules/${id}`), {
-    method: 'DELETE',
-  }).catch(() => {});
-}
+// ── Slice ───────────────────────────────────────────────────────────
 
 const personalizationSlice = createSlice({
   name: 'personalization',
-  initialState: loadState(),
+  initialState,
   reducers: {
-    addMemory(state, action: PayloadAction<string>) {
-      const id = uuidv4();
-      state.memories.unshift({
-        id,
-        content: action.payload,
-        createdAt: new Date().toISOString(),
-      });
-      persist(state);
-      apiCreateMemory(id, action.payload);
+    resetPersonalization() {
+      return initialState;
     },
-    removeMemory(state, action: PayloadAction<string>) {
-      state.memories = state.memories.filter((m) => m.id !== action.payload);
-      persist(state);
-      apiDeleteMemory(action.payload);
-    },
-    clearMemories(state) {
-      const ids = state.memories.map((m) => m.id);
-      state.memories = [];
-      persist(state);
-      ids.forEach(apiDeleteMemory);
-    },
+  },
+  extraReducers: (builder) => {
+    builder
+      // Memories
+      .addCase(fetchMemories.pending, (state) => {
+        state.memoriesLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchMemories.fulfilled, (state, action) => {
+        state.memories = action.payload;
+        state.memoriesLoading = false;
+      })
+      .addCase(fetchMemories.rejected, (state, action) => {
+        state.memoriesLoading = false;
+        state.error = action.error.message || 'Failed to load memories';
+      })
+      .addCase(deleteMemory.fulfilled, (state, action) => {
+        state.memories = state.memories.filter((m) => m.id !== action.payload);
+      })
+      .addCase(deleteMemory.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to delete memory';
+      })
+      .addCase(deleteAllMemories.fulfilled, (state) => {
+        state.memories = [];
+      })
+      .addCase(deleteAllMemories.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to delete all memories';
+      })
 
-    addRule(state, action: PayloadAction<string>) {
-      const id = uuidv4();
-      state.rules.unshift({
-        id,
-        content: action.payload,
-        isActive: true,
-        createdAt: new Date().toISOString(),
+      // Rules (Preferences)
+      .addCase(fetchRules.pending, (state) => {
+        state.rulesLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchRules.fulfilled, (state, action) => {
+        state.rules = action.payload;
+        state.rulesLoading = false;
+      })
+      .addCase(fetchRules.rejected, (state, action) => {
+        state.rulesLoading = false;
+        state.error = action.error.message || 'Failed to load rules';
+      })
+      .addCase(addRule.fulfilled, (state, action) => {
+        state.rules.unshift(action.payload);
+      })
+      .addCase(addRule.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to create rule';
+      })
+      .addCase(removeRule.fulfilled, (state, action) => {
+        state.rules = state.rules.filter((r) => r.id !== action.payload);
+      })
+      .addCase(removeRule.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to delete rule';
+      })
+      .addCase(deleteAllRules.fulfilled, (state) => {
+        state.rules = [];
+      })
+      .addCase(deleteAllRules.rejected, (state, action) => {
+        state.error = action.error.message || 'Failed to delete all rules';
       });
-      persist(state);
-      apiCreateRule(id, action.payload, true);
-    },
-    updateRule(state, action: PayloadAction<{ id: string; content: string }>) {
-      const rule = state.rules.find((r) => r.id === action.payload.id);
-      if (rule) rule.content = action.payload.content;
-      persist(state);
-    },
-    toggleRule(state, action: PayloadAction<string>) {
-      const rule = state.rules.find((r) => r.id === action.payload);
-      if (rule) rule.isActive = !rule.isActive;
-      persist(state);
-    },
-    removeRule(state, action: PayloadAction<string>) {
-      state.rules = state.rules.filter((r) => r.id !== action.payload);
-      persist(state);
-      apiDeleteRule(action.payload);
-    },
-    clearRules(state) {
-      const ids = state.rules.map((r) => r.id);
-      state.rules = [];
-      persist(state);
-      ids.forEach(apiDeleteRule);
-    },
-    resetPersonalization(state) {
-      const memIds = state.memories.map((m) => m.id);
-      const ruleIds = state.rules.map((r) => r.id);
-      state.memories = [];
-      state.rules = [];
-      persist(state);
-      memIds.forEach(apiDeleteMemory);
-      ruleIds.forEach(apiDeleteRule);
-    },
   },
 });
 
-export const {
-  addMemory,
-  removeMemory,
-  clearMemories,
-  addRule,
-  updateRule,
-  toggleRule,
-  removeRule,
-  clearRules,
-  resetPersonalization,
-} = personalizationSlice.actions;
+export const { resetPersonalization } = personalizationSlice.actions;
+
+// ── Selectors ───────────────────────────────────────────────────────
 
 export const selectMemories = (state: { personalization: PersonalizationState }) =>
   state.personalization.memories;
 export const selectRules = (state: { personalization: PersonalizationState }) =>
   state.personalization.rules;
-export const selectActiveRules = createSelector(
-  selectRules,
-  (rules) => rules.filter((r) => r.isActive),
+export const selectActiveRules = createSelector(selectRules, (rules) =>
+  rules.filter((r) => r.isActive),
 );
+export const selectMemoriesLoading = (state: { personalization: PersonalizationState }) =>
+  state.personalization.memoriesLoading;
+export const selectRulesLoading = (state: { personalization: PersonalizationState }) =>
+  state.personalization.rulesLoading;
+export const selectPersonalizationError = (state: { personalization: PersonalizationState }) =>
+  state.personalization.error;
 
 export default personalizationSlice.reducer;
