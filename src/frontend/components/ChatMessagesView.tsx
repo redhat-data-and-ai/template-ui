@@ -113,8 +113,7 @@ function partitionMessageContent(content: unknown): { thinkingText: string; mark
 
 function getCopyableAiMessageText(content: unknown): string {
   const { thinkingText, markdownForDisplay } = partitionMessageContent(content);
-  const main =
-    markdownForDisplay.length > 0 ? markdownForDisplay : extractMessageText(content);
+  const main = markdownForDisplay || (thinkingText ? '' : extractMessageText(content));
   const body = thinkingText
     ? [thinkingText, main].filter((s) => s.length > 0).join('\n\n')
     : main;
