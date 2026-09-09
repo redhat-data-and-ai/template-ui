@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
 import { getSettings } from "../utils/settings.js";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
+import { toClientUserData } from "../utils/session-identity.js";
 
 interface StreamRequest {
   message: string;
@@ -64,6 +65,26 @@ async function apiRoutes(fastify: FastifyInstance) {
       violations,
       compliant: violations.length === 0,
     };
+  });
+
+  // Vite local serves HTML without session injection. Keep this off auth-check
+  // so a missing cookie returns 401 JSON instead of a /login redirect (429s SSO).
+  fastify.get("/me", async (request: FastifyRequest, reply: FastifyReply) => {
+    reply.header("Cache-Control", "no-store");
+    if (request.session?.user) {
+      return toClientUserData(request.session);
+    }
+    if (process.env.AUTH_ENABLED === "false") {
+      return toClientUserData({
+        user: {
+          preferred_username: "johnwick",
+          name: "John Wick",
+          displayName: "John",
+          email: "johnwick@redhat.com",
+        },
+      });
+    }
+    return reply.code(401).send({ error: "unauthenticated" });
   });
 
   // Protected routes — auth required

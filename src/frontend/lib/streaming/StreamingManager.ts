@@ -14,8 +14,6 @@ export interface StreamRequest {
   userId: string;
   apiUrl: string;
   token?: string;
-  memories?: string[];
-  rules?: string[];
   projectId?: string | null;
   resume?: boolean;
   resumeDecisions?: Array<{ type: 'approve' | 'reject' | 'edit'; message?: string }>;
@@ -146,8 +144,6 @@ export class StreamingManager {
         stream_tokens: true,
       };
       if (request.resume) body.resume = true;
-      if (request.memories?.length) body.memories = request.memories;
-      if (request.rules?.length) body.rules = request.rules;
       if (request.projectId) body.project_id = request.projectId;
 
       const response = await fetch(streamUrl, {
