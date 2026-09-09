@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, type DragEvent } from 'react';
 
-/** Drag-and-drop handlers for reassigning chat threads to projects in the sidebar. */
 export function useSidebarDragDrop(
   onAssign: (threadId: string, projectId: string | null) => Promise<boolean>,
 ) {

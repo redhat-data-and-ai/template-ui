@@ -38,18 +38,15 @@ const TAB_CONTENT: Record<TabId, React.FC> = {
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
 
-/** Tabbed settings page with role-gated developer and feature-gated memory tabs. */
 export function SettingsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const developerMode = useAppSelector(selectDeveloperMode);
-  const isDeveloper = (window.APP_DATA as { userRole?: string })?.userRole === 'developer';
-  const canSeeDeveloperTab = isDeveloper && developerMode;
   const features = useAppSelector((state: RootState) => state.config.features);
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const param = searchParams.get('tab');
     if (param && VALID_TABS.has(param)) {
-      if (param === 'developer' && !canSeeDeveloperTab) return 'profile';
+      if (param === 'developer' && !developerMode) return 'profile';
       return param as TabId;
     }
     return 'profile';
@@ -58,11 +55,11 @@ export function SettingsPage() {
 
   const visibleTabs = useMemo(() => {
     return TABS.filter((tab) => {
-      if (tab.id === 'developer') return canSeeDeveloperTab;
+      if (tab.id === 'developer') return developerMode;
       if (tab.id === 'memories') return features?.memory_enabled !== false;
       return true;
     });
-  }, [features, canSeeDeveloperTab]);
+  }, [features, developerMode]);
 
   useEffect(() => {
     if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeTab)) {

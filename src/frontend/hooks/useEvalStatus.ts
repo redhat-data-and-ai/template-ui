@@ -45,14 +45,6 @@ function writePollingFlag(): void {
   }
 }
 
-function clearPollingFlag(): void {
-  try {
-    sessionStorage.removeItem(EVAL_STATUS_POLL_KEY);
-  } catch {
-    // private mode / disabled storage
-  }
-}
-
 const INITIAL: EvalState = {
   status: 'unknown',
   message: '',
@@ -83,14 +75,6 @@ export function useEvalStatus(): UseEvalStatusResult {
         credentials: 'same-origin',
         signal: AbortSignal.timeout(8_000),
       });
-      if (res.status === 401 || res.status === 403) {
-        clearPollingFlag();
-        if (mounted.current) {
-          setPolling(false);
-          setState((prev) => ({ ...prev, status: 'error', message: 'Access denied' }));
-        }
-        return;
-      }
       if (!res.ok) return;
       const data = (await res.json()) as Record<string, unknown>;
       if (mounted.current) {
