@@ -932,8 +932,9 @@ export function ChatMessagesView({
     if (!wasLoading || isLoading) return;
     const lastAiMessage = [...messages].reverse().find((m) => m.type === 'ai');
     if (!lastAiMessage) return;
-    const text = getCopyableAiMessageText(lastAiMessage.content);
-    if (!text) return;
+    const { markdownForDisplay } = partitionMessageContent(lastAiMessage.content);
+    const text = markdownForDisplay || extractMessageText(lastAiMessage.content);
+    if (!text?.trim()) return;
     setSrAnnouncement('');
     const id = setTimeout(() => setSrAnnouncement(text), 50);
     return () => clearTimeout(id);
