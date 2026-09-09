@@ -91,7 +91,26 @@ describe('gateway mode group access (AUTH_ENABLED=false)', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('keeps developer bypass when there is no gateway token', async () => {
+  it('denies access when groups are configured but no gateway token is present', async () => {
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/evals/trigger',
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'access_denied',
+      message: 'You do not have access to this application.',
+    });
+  });
+
+  it('allows access when no groups are configured and no gateway token is present', async () => {
+    delete process.env.DEVELOPER_GROUP;
+    delete process.env.USER_GROUP;
+    resetSettings();
+
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

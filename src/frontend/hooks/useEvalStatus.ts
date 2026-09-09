@@ -85,7 +85,10 @@ export function useEvalStatus(): UseEvalStatusResult {
       });
       if (res.status === 401 || res.status === 403) {
         clearPollingFlag();
-        if (mounted.current) setPolling(false);
+        if (mounted.current) {
+          setPolling(false);
+          setState((prev) => ({ ...prev, status: 'error', message: 'Access denied' }));
+        }
         return;
       }
       if (!res.ok) return;

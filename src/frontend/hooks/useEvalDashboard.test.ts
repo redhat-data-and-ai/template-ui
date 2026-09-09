@@ -162,11 +162,10 @@ describe('useEvalDashboard — failed trigger', () => {
 
     const { result } = renderHook(() => useEvalDashboard());
 
-    await act(async () => {
-      await Promise.resolve();
+    await waitFor(() => {
+      expect(result.current.evalState.status).toBe('error');
     });
 
     expect(result.current.isRunning).toBe(false);
-    expect(result.current.evalState.status).not.toBe('in_progress');
   });
 });

@@ -116,8 +116,7 @@ async function authCheck(
         };
         request.session.role = resolveRole(decodeJwtPayload(gwToken));
       } else {
-        // No gateway JWT — local/test bypass
-        request.session.role = "developer";
+        request.session.role = resolveRole({});
       }
     }
 
@@ -128,12 +127,12 @@ async function authCheck(
 
     const role = request.session.role;
 
-    if (role === "denied") {
+    if (!role || role === "denied") {
       reply.status(403).send({ error: "access_denied", message: "You do not have access to this application." });
       return;
     }
 
-    const path = request.url.split("?")[0];
+    const path = new URL(request.url, "http://localhost").pathname;
     if (role === "viewer" && (path.startsWith("/eval") || path.includes("/evals"))) {
       reply.status(403).send({ error: "forbidden", message: "Eval access requires developer role." });
       return;

@@ -38,6 +38,7 @@ const TAB_CONTENT: Record<TabId, React.FC> = {
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
 
+/** Tabbed settings page with role-gated developer and feature-gated memory tabs. */
 export function SettingsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

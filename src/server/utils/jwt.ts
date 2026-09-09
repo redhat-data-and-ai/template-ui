@@ -42,7 +42,10 @@ export function resolveRole(
   if (devGroups.length === 0 && userGroups.length === 0) return "developer";
 
   const realmAccess = payload["realm_access"] as Record<string, unknown> | undefined;
-  const roles = ((realmAccess?.["roles"] as string[] | undefined) ?? []).map(r => r.toLowerCase());
+  const rawRoles = realmAccess?.["roles"];
+  const roles = (Array.isArray(rawRoles) ? rawRoles : [])
+    .filter((r): r is string => typeof r === "string")
+    .map((r) => r.toLowerCase());
 
   if (devGroups.length > 0 && roles.some((r) => devGroups.includes(r))) return "developer";
   if (userGroups.length > 0 && roles.some((r) => userGroups.includes(r))) return "viewer";

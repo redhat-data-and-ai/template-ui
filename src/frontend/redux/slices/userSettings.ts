@@ -114,8 +114,11 @@ export const {
   toggleAutoApproveAllTools,
 } = userSettingsSlice.actions;
 
+/** Select the active UI theme from user settings. */
 export const selectTheme = (state: { userSettings: UserSettingsState }) => state.userSettings.theme;
+/** Select whether debug mode is enabled. */
 export const selectDebugMode = (state: { userSettings: UserSettingsState }) => state.userSettings.debugMode;
+/** Select whether developer mode is enabled. */
 export const selectDeveloperMode = (state: { userSettings: UserSettingsState }) =>
   state.userSettings.developerMode;
 export const selectAlwaysAllowedTools = (state: { userSettings: UserSettingsState }) =>
