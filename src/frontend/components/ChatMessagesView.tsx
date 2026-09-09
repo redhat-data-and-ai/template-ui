@@ -118,7 +118,7 @@ function getCopyableAiMessageText(content: unknown): string {
   const body = thinkingText
     ? [thinkingText, main].filter((s) => s.length > 0).join('\n\n')
     : main;
-  if (!body) return body;
+  if (!body?.trim()) return '';
   return `${body}\n\n[AI-generated]`;
 }
 
