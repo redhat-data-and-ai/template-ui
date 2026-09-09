@@ -12,18 +12,21 @@ import { buildAppPath } from '../lib/app-paths';
 import { useEvalStatus } from '../hooks/useEvalStatus';
 import type { McpAuthRequired } from '../hooks/useEvalDashboard';
 
+/** Validates that a connect URL is a safe relative path without traversal sequences. */
 function isSafeConnectUrl(url: string): boolean {
   return /^\/[a-zA-Z0-9/_-]+$/.test(url) && !url.includes('..');
 }
 
+/** Opens an authorization popup only if the URL uses the HTTPS protocol. */
 function safeOpenAuthorize(url: string, target: string, features: string): void {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:') return;
-    window.open(url, target, features);
+    window.open(url, target, `${features},noopener`);
   } catch { /* invalid URL — ignore */ }
 }
 
+/** Sidebar panel for triggering eval runs and displaying status badges and a summary report modal. */
 export function EvalPanel() {
   const { state: eval_, refresh } = useEvalStatus();
   const [triggering, setTriggering] = useState(false);

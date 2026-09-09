@@ -5,6 +5,7 @@ export interface UseDatasetPresenceResult {
   hasCases: boolean;
 }
 
+/** Extracts the number of test cases from an untyped API response payload. */
 function caseCount(data: unknown): number {
   if (typeof data !== 'object' || data === null) return 0;
   const dataset = (data as { dataset?: unknown }).dataset;
@@ -13,22 +14,25 @@ function caseCount(data: unknown): number {
   return Array.isArray(cases) ? cases.length : 0;
 }
 
+/** Checks whether the eval dataset has any test cases, re-fetching on window focus. */
 export function useDatasetPresence(): UseDatasetPresenceResult {
   const [hasCases, setHasCases] = useState(false);
   const mounted = useRef(true);
+  const versionRef = useRef(0);
 
   const fetchPresence = useCallback(async () => {
+    const version = ++versionRef.current;
     try {
       const res = await fetch(buildAgentApiUrl('/evals/dataset'), {
         credentials: 'same-origin',
         signal: AbortSignal.timeout(8_000),
       });
       if (!res.ok) {
-        if (mounted.current) setHasCases(false);
+        if (mounted.current && version === versionRef.current) setHasCases(false);
         return;
       }
       const data: unknown = await res.json();
-      if (mounted.current) setHasCases(caseCount(data) > 0);
+      if (mounted.current && version === versionRef.current) setHasCases(caseCount(data) > 0);
     } catch {
       // network error — keep existing state
     }

@@ -5,6 +5,7 @@ interface ConversationSectionProps {
   byConversation: Record<string, ConvStats>;
 }
 
+/** Lists all conversations with their pass/fail counts and overall pass rate. */
 export function ConversationSection({ byConversation }: ConversationSectionProps) {
   return (
     <div className="space-y-2">

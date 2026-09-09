@@ -11,6 +11,7 @@ interface FullReportModalProps {
   onClose: () => void;
 }
 
+/** Full-screen modal displaying the complete eval report with metrics, conversations, and tag filtering. */
 export function FullReportModal({ result, prevScore, onClose }: FullReportModalProps) {
   const detail = result.results_detail;
   const byMetric = detail?.summary?.summary_stats?.by_metric;

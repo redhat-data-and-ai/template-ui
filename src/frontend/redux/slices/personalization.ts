@@ -1,6 +1,6 @@
 import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
-import { buildAgentApiUrl } from '../../lib/app-paths';
+import { buildAgentApiUrl, scopedStorageKey } from '../../lib/app-paths';
 import { authenticatedFetch } from '../../services/authenticated-fetch';
 
 export interface MemoryItem {
@@ -21,7 +21,7 @@ interface PersonalizationState {
   rules: RuleItem[];
 }
 
-const STORAGE_KEY = 'template-ui-personalization';
+const STORAGE_KEY = scopedStorageKey('template-ui-personalization');
 
 function loadState(): PersonalizationState {
   try {

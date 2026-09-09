@@ -21,15 +21,18 @@ const TAG_LABELS: Record<CaseTag, string> = {
   multi_turn: 'multi_turn',
 };
 
+/** Formats an ISO date string into a short locale-aware display string. */
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/** Counts the total number of expected tool calls across all turns in a test case. */
 function toolCallCount(testCase: TestCase): number {
   return testCase.turns.reduce((sum, t) => sum + (t.toolCallEnabled ? t.expectedToolCalls.length : 0), 0);
 }
 
+/** Renders the eval dataset as a table with inline tag badges, tool-call counts, and edit/delete actions. */
 export function EvalDatasetTable({ cases, onEdit, onDelete }: EvalDatasetTableProps) {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 

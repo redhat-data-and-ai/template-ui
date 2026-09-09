@@ -14,6 +14,7 @@ import { friendlyMetricName, useDarkMode } from './eval-utils';
 const CHART_COLORS_LIGHT = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed'];
 const CHART_COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
 
+/** Formats an axis tick label as time-only when all points share a date, otherwise as a short date. */
 function formatTickLabel(iso: string, allSameDay: boolean): string {
   const d = new Date(iso);
   if (allSameDay) {
@@ -22,6 +23,7 @@ function formatTickLabel(iso: string, allSameDay: boolean): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** Formats a tooltip label with both date and time for hover detail. */
 function formatTooltipLabel(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
@@ -37,6 +39,7 @@ interface TrendChartProps {
   data: EvalTrendsResponse;
 }
 
+/** Full-width Recharts line chart showing overall and per-metric score trends over time. */
 export function TrendChart({ data }: TrendChartProps) {
   const isDark = useDarkMode();
 
@@ -78,12 +81,12 @@ export function TrendChart({ data }: TrendChartProps) {
 
     for (const [metric, map] of metricMaps) {
       const val = map.get(ts);
-      if (val != null) point[friendlyMetricName(metric)] = Math.round(val * 100);
+      if (val != null) point[metric] = Math.round(val * 100);
     }
     return point;
   });
 
-  const allKeys = ['Overall', ...metricKeys.map(k => friendlyMetricName(k))];
+  const allKeys = ['Overall', ...metricKeys];
   const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const axisTickColor = isDark ? '#a1a1aa' : '#71717a';
 
@@ -118,10 +121,11 @@ export function TrendChart({ data }: TrendChartProps) {
               itemStyle={{ color: 'var(--foreground)' }}
               labelStyle={{ color: 'var(--foreground)', fontWeight: 600 }}
               labelFormatter={(label: string) => formatTooltipLabel(label)}
-              formatter={(value: number, name: string) => [`${value}%`, name]}
+              formatter={(value: number, name: string) => [`${value}%`, friendlyMetricName(name)]}
             />
             <Legend
               wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              formatter={(value: string) => friendlyMetricName(value)}
             />
             {allKeys.map((key, i) => (
               <Line

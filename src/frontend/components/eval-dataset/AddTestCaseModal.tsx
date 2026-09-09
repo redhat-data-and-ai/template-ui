@@ -17,10 +17,12 @@ type Mode = 'single' | 'multi';
 
 const MULTI_TAGS: CaseTag[] = ['multi_turn'];
 
+/** Determines whether a test case is single-turn or multi-turn based on its tag. */
 function modeFromCase(tc: TestCase): Mode {
   return MULTI_TAGS.includes(tc.tag) ? 'multi' : 'single';
 }
 
+/** Modal dialog for creating or editing a test case with single-turn and multi-turn modes. */
 export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseModalProps) {
   const isEditing = Boolean(initialCase);
   const [mode, setMode] = useState<Mode>(initialCase ? modeFromCase(initialCase) : 'single');
@@ -44,6 +46,7 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
     });
   }, [mode]);
 
+  /** Validates inputs, strips empty tool-call noise, and invokes onSave with the assembled TestCase. */
   function handleSave() {
     setError('');
     if (!name.trim()) { setError('Test Case Name is required.'); return; }
@@ -85,6 +88,7 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
     onSave(saved);
   }
 
+  /** Switches between single and multi-turn mode, skipping if already in the requested mode. */
   function handleModeSwitch(next: Mode) {
     if (next === mode) return;
     setMode(next);

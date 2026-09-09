@@ -98,4 +98,40 @@ describe("resolveRole", () => {
       "denied",
     );
   });
+
+  it("grants developer when DEVELOPER_GROUP is a comma-separated list and JWT matches one", () => {
+    process.env.DEVELOPER_GROUP = "admin, lightspeed-developer, super-dev";
+    process.env.USER_GROUP = "lightspeed-user";
+
+    expect(
+      resolveRole({ realm_access: { roles: ["lightspeed-developer"] } }),
+    ).toBe("developer");
+  });
+
+  it("grants viewer when USER_GROUP is a comma-separated list and JWT matches one", () => {
+    process.env.DEVELOPER_GROUP = "lightspeed-developer";
+    process.env.USER_GROUP = "lightspeed-user, basic-user, guest";
+
+    expect(
+      resolveRole({ realm_access: { roles: ["guest"] } }),
+    ).toBe("viewer");
+  });
+
+  it("denies when JWT matches none of the comma-separated groups", () => {
+    process.env.DEVELOPER_GROUP = "admin, lightspeed-developer";
+    process.env.USER_GROUP = "lightspeed-user, basic-user";
+
+    expect(resolveRole({ realm_access: { roles: ["other-role"] } })).toBe(
+      "denied",
+    );
+  });
+
+  it("prefers developer when JWT matches groups in both lists", () => {
+    process.env.DEVELOPER_GROUP = "admin, lightspeed-developer";
+    process.env.USER_GROUP = "lightspeed-user, admin";
+
+    expect(
+      resolveRole({ realm_access: { roles: ["admin"] } }),
+    ).toBe("developer");
+  });
 });

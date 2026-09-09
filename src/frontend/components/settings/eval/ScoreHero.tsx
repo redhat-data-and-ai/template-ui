@@ -5,6 +5,7 @@ interface ScoreHeroProps {
   prevScore: number | null;
 }
 
+/** Displays pass/fail/error counts with an optional trend delta versus the previous run. */
 export function ScoreHero({ data, prevScore }: ScoreHeroProps) {
   const score = data.eval_score ?? null;
 

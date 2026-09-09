@@ -12,6 +12,7 @@ interface MetricTrendCardProps {
   latestOverallAt?: string;
 }
 
+/** Card showing a metric's current pass rate, point delta, and a sparkline of historical values. */
 export function MetricTrendCard({ metricKey, points, color, latestOverallAt }: MetricTrendCardProps) {
   const sorted = [...points].sort(
     (a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime(),

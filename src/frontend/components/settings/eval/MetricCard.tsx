@@ -7,6 +7,7 @@ interface MetricCardProps {
   prevStats?: MetricStats;
 }
 
+/** Renders a small SVG donut chart showing the pass-rate percentage. */
 function MiniDonut({ pct, size = 40 }: { pct: number; size?: number }) {
   const r = (size - 8) / 2;
   const circ = 2 * Math.PI * r;
@@ -29,28 +30,33 @@ function MiniDonut({ pct, size = 40 }: { pct: number; size?: number }) {
   );
 }
 
+/** Displays a single metric's pass rate with a mini donut chart and pass/total count. */
 export function MetricCard({ metricKey, stats }: MetricCardProps) {
-  const rate =
-    (stats.pass_rate ?? 0) * (stats.pass_rate && stats.pass_rate <= 1 ? 100 : 1);
-  const pct = Math.round(rate);
+  const hasRate = stats.pass_rate != null;
+  const rate = hasRate
+    ? stats.pass_rate * (stats.pass_rate <= 1 ? 100 : 1)
+    : null;
+  const pct = rate != null ? Math.round(rate) : null;
   const total = (stats.pass ?? 0) + (stats.fail ?? 0);
 
-  const scoreCls = pct >= 70
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : pct >= 50
-      ? 'text-amber-600 dark:text-amber-400'
-      : 'text-red-600 dark:text-red-400';
+  const scoreCls = pct == null
+    ? 'text-muted-foreground'
+    : pct >= 70
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : pct >= 50
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-red-600 dark:text-red-400';
 
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2.5 flex items-center gap-3">
-      <MiniDonut pct={pct} />
+      <MiniDonut pct={pct ?? 0} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-sm font-medium text-foreground truncate">
             {friendlyMetricName(metricKey)}
           </span>
           <span className={`text-sm font-bold tabular-nums shrink-0 ${scoreCls}`}>
-            {pct}%
+            {pct != null ? `${pct}%` : 'N/A'}
           </span>
         </div>
         <span className="text-xs text-muted-foreground">

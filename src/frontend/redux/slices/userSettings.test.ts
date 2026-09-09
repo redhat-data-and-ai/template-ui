@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { scopedStorageKey } from '../../lib/app-paths';
 import userSettingsReducer, {
   addAlwaysAllowedTool,
   clearAlwaysAllowedTools,
@@ -11,9 +12,11 @@ import userSettingsReducer, {
   toggleTheme,
 } from './userSettings';
 
+const STORAGE_KEY = scopedStorageKey('template-ui-settings');
+
 function freshState() {
   // localStorage may have data from other tests; clear it first
-  localStorage.removeItem('template-ui-settings');
+  localStorage.removeItem(STORAGE_KEY);
   return userSettingsReducer(undefined, { type: '@@INIT' });
 }
 
@@ -26,7 +29,7 @@ describe('userSettings slice', () => {
   it('setTheme sets the theme and persists to localStorage', () => {
     const s = userSettingsReducer(freshState(), setTheme('light'));
     expect(s.theme).toBe('light');
-    const stored = JSON.parse(localStorage.getItem('template-ui-settings')!);
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(stored.theme).toBe('light');
   });
 
@@ -105,12 +108,12 @@ describe('userSettings slice', () => {
   // ── localStorage persistence ───────────────────────────────────────────────
   it('settings changes are persisted to localStorage', () => {
     userSettingsReducer(freshState(), addAlwaysAllowedTool('my_tool'));
-    const stored = JSON.parse(localStorage.getItem('template-ui-settings')!);
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(stored.alwaysAllowedTools).toContain('my_tool');
   });
 
   it('falls back to defaults when localStorage contains malformed JSON', async () => {
-    localStorage.setItem('template-ui-settings', '{this is not valid json}');
+    localStorage.setItem(STORAGE_KEY, '{this is not valid json}');
     // Re-import forces loadSettings() to run fresh with the malformed data in localStorage
     vi.resetModules();
     const { default: freshReducer } = await import('./userSettings');

@@ -17,10 +17,12 @@ const TAG_COLORS: Record<string, string> = {
   multi_turn: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
 };
 
+/** Returns Tailwind classes for a tag's badge color, falling back to blue for unknown tags. */
 function tagColor(tag: string): string {
   return TAG_COLORS[tag] ?? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
 }
 
+/** Renders a per-conversation metrics table grouped by turn, with result badges and scores. */
 function TurnTable({ convTurns }: { convTurns: Turn[] }) {
   const byTurn = useMemo(() => {
     const turnIndex = new Map<string, number>();
@@ -108,6 +110,7 @@ function TurnTable({ convTurns }: { convTurns: Turn[] }) {
   );
 }
 
+/** Expandable accordion of conversations with per-metric turn details and tag-based filtering. */
 export function ConversationDetailTable({
   turns,
   byConversation,

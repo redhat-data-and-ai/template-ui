@@ -479,9 +479,10 @@ interface AIMessageRendererProps {
 
 export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  // Track ids the user collapsed so stream updates don't re-open them.
-  const userCollapsedMcpIdsRef = useRef<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
+
+  const userExpandedRef = useRef<Set<string>>(new Set());
+  const userCollapsedRef = useRef<Set<string>>(new Set());
 
   const pendingToolNames = useMemo(
     () => {
@@ -493,63 +494,46 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
   );
 
   useEffect(() => {
-    if (!pendingToolNames.size) return;
-    const allToolCalls = (message as any).tool_calls;
-    if (!Array.isArray(allToolCalls)) return;
-    const visibleCalls = allToolCalls.filter(
-      (tc: any) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos',
-    );
-    setExpandedItems((prev) => {
-      const next = new Set(prev);
-      visibleCalls.forEach((tc: any, idx: number) => {
-        if (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) {
-          next.add(`${message.id}-${idx}`);
-        }
-      });
-      return next;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingToolNames, message.id]);
-
-  // Auto-expand regular tool cards that carry an MCP App so the interactive UI is visible.
-  useEffect(() => {
     const allToolCalls = (message as { tool_calls?: unknown[] }).tool_calls;
     if (!Array.isArray(allToolCalls)) return;
-    const regularCalls = allToolCalls.filter(
-      (tc) => tc && typeof tc === "object" && !isSubAgentToolCall(tc as never) && (tc as { name?: string }).name !== "write_todos",
+    const visibleCalls = allToolCalls.filter(
+      (tc) => tc && typeof tc === 'object' && !isSubAgentToolCall(tc as never) && (tc as { name?: string }).name !== 'write_todos',
     );
-    const idsToExpand: string[] = [];
-    regularCalls.forEach((tc, idx) => {
-      if (!parseMcpApp((tc as Record<string, unknown>).mcpApp)) return;
-      const itemId = `${message.id}-${idx}`;
-      if (userCollapsedMcpIdsRef.current.has(itemId)) return;
-      idsToExpand.push(itemId);
-    });
-    if (idsToExpand.length === 0) return;
+
     setExpandedItems((prev) => {
       const next = new Set(prev);
       let changed = false;
-      for (const itemId of idsToExpand) {
-        if (!next.has(itemId)) {
+
+      visibleCalls.forEach((tc: any, idx: number) => {
+        const itemId = `${message.id}-${idx}`;
+        const needsApproval = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !tc.content;
+        const isFinished = tc.content != null;
+
+        if (needsApproval && !next.has(itemId) && !userCollapsedRef.current.has(itemId)) {
           next.add(itemId);
           changed = true;
+        } else if (isFinished && next.has(itemId) && !userExpandedRef.current.has(itemId)) {
+          next.delete(itemId);
+          changed = true;
         }
-      }
+      });
+
       return changed ? next : prev;
     });
-  // message omitted: only re-run when id/key change (same pattern as pending-tool expand above).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message.id, messageKey]);
+  }, [pendingToolNames, message.id, messageKey]);
 
   const toggleExpand = (itemId: string) => {
     setExpandedItems(prev => {
       const next = new Set(prev);
       if (prev.has(itemId)) {
         next.delete(itemId);
-        userCollapsedMcpIdsRef.current.add(itemId);
+        userExpandedRef.current.delete(itemId);
+        userCollapsedRef.current.add(itemId);
       } else {
         next.add(itemId);
-        userCollapsedMcpIdsRef.current.delete(itemId);
+        userCollapsedRef.current.delete(itemId);
+        userExpandedRef.current.add(itemId);
       }
       return next;
     });
@@ -678,7 +662,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                           id={`tool-body-${itemId}`}
                           className={cn("border-t border-border", !isExpanded && "hidden")}
                         >
-                          <div className="px-4 pb-3">
+                          <div className="px-4 pb-3 max-h-72 overflow-y-auto">
                             {isExpanded && (
                               <>
                                 <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
@@ -734,59 +718,59 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                               </>
                             )}
                           </div>
+                        </div>
+                      )}
 
-                          {showButtons && onInterruptResume && (
-                            <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
-                              <button
-                                type="button"
-                                autoFocus
-                                onClick={() => {
-                                  if (totalActionRequests > 1 && onSingleDecision) {
-                                    onSingleDecision({ type: 'approve' });
-                                  } else {
-                                    onInterruptResume?.([{ type: 'approve' }]);
-                                  }
-                                }}
-                                aria-label={`Approve tool call: ${toolCall.name}`}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                                style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
-                              >
-                                <Check className="w-3 h-3" aria-hidden="true" />
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (totalActionRequests > 1 && onSingleDecision) {
-                                    onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
-                                  } else {
-                                    onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
-                                  }
-                                }}
-                                aria-label={`Reject tool call: ${toolCall.name}`}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
-                                style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
-                              >
-                                Reject
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onAlwaysAllow?.([toolCall.name]);
-                                  if (totalActionRequests > 1 && onSingleDecision) {
-                                    onSingleDecision({ type: 'approve' });
-                                  } else {
-                                    onInterruptResume?.([{ type: 'approve' }]);
-                                  }
-                                }}
-                                aria-label={`Always allow tool: ${toolCall.name}`}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
-                              >
-                                <ShieldCheck className="w-3 h-3" aria-hidden="true" />
-                                Always allow
-                              </button>
-                            </div>
-                          )}
+                      {showButtons && onInterruptResume && (
+                        <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
+                          <button
+                            type="button"
+                            autoFocus
+                            onClick={() => {
+                              if (totalActionRequests > 1 && onSingleDecision) {
+                                onSingleDecision({ type: 'approve' });
+                              } else {
+                                onInterruptResume?.([{ type: 'approve' }]);
+                              }
+                            }}
+                            aria-label={`Approve tool call: ${toolCall.name}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                            style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
+                          >
+                            <Check className="w-3 h-3" aria-hidden="true" />
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (totalActionRequests > 1 && onSingleDecision) {
+                                onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
+                              } else {
+                                onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
+                              }
+                            }}
+                            aria-label={`Reject tool call: ${toolCall.name}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
+                            style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
+                          >
+                            Reject
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onAlwaysAllow?.([toolCall.name]);
+                              if (totalActionRequests > 1 && onSingleDecision) {
+                                onSingleDecision({ type: 'approve' });
+                              } else {
+                                onInterruptResume?.([{ type: 'approve' }]);
+                              }
+                            }}
+                            aria-label={`Always allow tool: ${toolCall.name}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
+                          >
+                            <ShieldCheck className="w-3 h-3" aria-hidden="true" />
+                            Always allow
+                          </button>
                         </div>
                       )}
                     </div>
