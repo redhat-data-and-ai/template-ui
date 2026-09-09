@@ -8,6 +8,7 @@ export interface Thread {
   title?: string;
   messages: Message[];
   updatedAt?: string;
+  project_id?: string | null;
 }
 
 /**
@@ -182,6 +183,7 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
       title: t.metadata?.thread_name,
       messages: [],
       updatedAt: t.updated_at || t.created_at,
+      project_id: t.metadata?.project_id ?? null,
     }));
 }
 

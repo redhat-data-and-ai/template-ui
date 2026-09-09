@@ -11,25 +11,65 @@ import '@patternfly/patternfly/patternfly-addons.css';
 
 import './global.css';
 
-// Parse server-injected data from data attributes (CSP-safe, no inline scripts)
-const rootEl = document.getElementById('root')!;
-try {
-  const userData = rootEl.dataset.user;
-  const appData = rootEl.dataset.app;
-  (window as any).USER_DATA = userData ? JSON.parse(decodeURIComponent(userData)) : {};
-  (window as any).APP_DATA = appData ? JSON.parse(decodeURIComponent(appData)) : {};
-} catch (e) {
-  console.error('Failed to parse injected data:', e);
-  (window as any).USER_DATA = {};
-  (window as any).APP_DATA = {};
+type InjectedRecord = Record<string, unknown>;
+
+function parseInjected(rootEl: HTMLElement): { user: InjectedRecord; app: InjectedRecord } {
+  try {
+    const userData = rootEl.dataset.user;
+    const appData = rootEl.dataset.app;
+    return {
+      user: userData ? JSON.parse(decodeURIComponent(userData)) : {},
+      app: appData ? JSON.parse(decodeURIComponent(appData)) : {},
+    };
+  } catch (e) {
+    console.error('Failed to parse injected data:', e);
+    return { user: {}, app: {} };
+  }
 }
 
-createRoot(rootEl).render(
-  <StrictMode>
-    <BrowserRouter basename={getAppBasePath()}>
-      <Provider store={store}>
-        <App />
-      </Provider>
-    </BrowserRouter>
-  </StrictMode>
-);
+function isSparseUser(user: InjectedRecord): boolean {
+  return !user.preferred_username && !user.name && !user.email && !user.displayName && !user.sub;
+}
+
+async function loadSessionUser(injected: InjectedRecord): Promise<InjectedRecord | 'login'> {
+  if (!isSparseUser(injected)) return injected;
+  try {
+    const res = await fetch('/api/me', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+    });
+    if (res.status === 401) return 'login';
+    const contentType = res.headers.get('content-type') || '';
+    if (!res.ok || !contentType.includes('application/json')) return injected;
+    const body = await res.json();
+    return body && typeof body === 'object' ? (body as InjectedRecord) : injected;
+  } catch {
+    return injected;
+  }
+}
+
+async function boot() {
+  const rootEl = document.getElementById('root')!;
+  const injected = parseInjected(rootEl);
+  (window as any).APP_DATA = injected.app;
+  const sessionUser = await loadSessionUser(injected.user);
+  if (sessionUser === 'login') {
+    window.location.replace('/login');
+    return;
+  }
+  (window as any).USER_DATA = sessionUser;
+
+  createRoot(rootEl).render(
+    <StrictMode>
+      <BrowserRouter basename={getAppBasePath()}>
+        <Provider store={store}>
+          <App />
+        </Provider>
+      </BrowserRouter>
+    </StrictMode>
+  );
+}
+
+void boot();
+

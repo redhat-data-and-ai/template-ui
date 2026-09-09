@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Switch } from '@patternfly/react-core';
 import { Plus, Trash2, ScrollText, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import {
-  addRule,
+  addRuleAndPersist,
+  fetchRules,
+  persistClearRules,
+  persistRemoveRule,
+  persistRule,
+  setRuleActive,
   removeRule,
-  toggleRule,
   clearRules,
   selectRules,
 } from '../../redux/slices/personalization';
@@ -15,10 +19,14 @@ export function RulesEditor() {
   const rules = useAppSelector(selectRules);
   const [draft, setDraft] = useState('');
 
+  useEffect(() => {
+    dispatch(fetchRules());
+  }, [dispatch]);
+
   const handleAdd = () => {
     const text = draft.trim();
     if (!text) return;
-    dispatch(addRule(text));
+    void dispatch(addRuleAndPersist(text));
     setDraft('');
   };
 
@@ -82,7 +90,16 @@ export function RulesEditor() {
                   id={`rule-toggle-${rule.id}`}
                   aria-label={`Toggle rule: ${rule.content.substring(0, 50)}`}
                   isChecked={rule.isActive}
-                  onChange={() => dispatch(toggleRule(rule.id))}
+                  onChange={(_event, checked) => {
+                    dispatch(setRuleActive({ id: rule.id, isActive: checked }));
+                    void dispatch(
+                      persistRule({
+                        id: rule.id,
+                        content: rule.content,
+                        isActive: checked,
+                      }),
+                    );
+                  }}
                   className="mt-0.5"
                 />
                 <p
@@ -93,7 +110,10 @@ export function RulesEditor() {
                   {rule.content}
                 </p>
                 <button
-                  onClick={() => dispatch(removeRule(rule.id))}
+                  onClick={() => {
+                    dispatch(removeRule(rule.id));
+                    void dispatch(persistRemoveRule(rule.id));
+                  }}
                   className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                   aria-label={`Remove rule: ${rule.content.substring(0, 50)}`}
                 >
@@ -108,7 +128,10 @@ export function RulesEditor() {
                 variant="plain"
                 isDanger
                 size="sm"
-                onClick={() => dispatch(clearRules())}
+                onClick={() => {
+                  dispatch(clearRules());
+                  void dispatch(persistClearRules());
+                }}
               >
                 Clear all rules
               </Button>

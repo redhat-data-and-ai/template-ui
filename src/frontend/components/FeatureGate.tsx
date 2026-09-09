@@ -28,9 +28,9 @@ export function FeatureGate({ feature, children, fallback = null }: FeatureGateP
     switch (feature) {
       case 'auth':
         return features.auth_enabled ?? true;
-      case 'debug':
-        return true;
       case 'memory':
+        return features.memory_enabled ?? true;
+      case 'debug':
         return true;
       default:
         return true;

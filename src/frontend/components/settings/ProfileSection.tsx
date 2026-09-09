@@ -4,6 +4,7 @@ import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant } from
 import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
+import { loadProjectsThunk } from '../../redux/slices/projects';
 import { addToast } from '../../redux/slices/toasts';
 import { deleteThread } from '../../services/agent-rest';
 import { chatStorage } from '../../services/chatStorage';
@@ -16,9 +17,13 @@ export function ProfileSection() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const userData = useMemo(() => window.USER_DATA, []);
-  const displayName = userData?.displayName || userData?.name || 'User';
+  const username =
+    userData?.preferred_username ||
+    (typeof userData?.email === 'string' ? userData.email.split('@')[0] : '') ||
+    '';
+  const displayName =
+    userData?.displayName || userData?.name || userData?.given_name || username || 'User';
   const email = userData?.email || '';
-  const username = userData?.preferred_username || '';
 
   const handleDeleteAll = async () => {
     const ids = chats.map((c) => c.id);
@@ -28,6 +33,7 @@ export function ProfileSection() {
     setConfirmDelete(false);
 
     const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
+    void dispatch(loadProjectsThunk());
     const failures = results.filter((r) => !r).length;
 
     if (failures > 0 && failures < ids.length) {

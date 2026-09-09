@@ -1,7 +1,8 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
 import type { SubAgentInfo, InterruptInfo, TaskStep } from '../../types/deep-agent';
 import { withMcpAppArguments } from '../../types/mcp-apps';
+import { assignThreadToProjectThunk, deleteProjectThunk, unassignAllThreadsThunk } from './projects';
 
 export interface StreamingState {
   isLoading: boolean;
@@ -25,6 +26,8 @@ export interface ChatItem {
   messages: Message[];
   historicalActivities: Record<string, any[]>;
   feedback: Record<string, 'up' | 'down'>;
+  project_id?: string | null;
+  _prevProjectId?: string | null;
 }
 
 export interface ChatsState {
@@ -226,6 +229,50 @@ const chatsSlice = createSlice({
       return initialState;
     },
   },
+  extraReducers: (builder) => {
+    builder
+      .addCase(assignThreadToProjectThunk.pending, (state, action) => {
+        const { threadId, projectId } = action.meta.arg;
+        const chat = state.chats.find((c) => c.id === threadId);
+        if (chat) {
+          chat._prevProjectId = chat.project_id ?? null;
+          chat.project_id = projectId;
+        }
+      })
+      .addCase(assignThreadToProjectThunk.rejected, (state, action) => {
+        const { threadId } = action.meta.arg;
+        const chat = state.chats.find((c) => c.id === threadId);
+        if (chat && chat._prevProjectId !== undefined) {
+          chat.project_id = chat._prevProjectId;
+          delete chat._prevProjectId;
+        }
+      })
+      .addCase(assignThreadToProjectThunk.fulfilled, (state, action) => {
+        const { threadId, projectId } = action.meta.arg;
+        const chat = state.chats.find((c) => c.id === threadId);
+        if (chat) {
+          chat.project_id = projectId;
+          delete chat._prevProjectId;
+        }
+      })
+      .addCase(unassignAllThreadsThunk.fulfilled, (state, action) => {
+        const { projectId } = action.payload;
+        for (const chat of state.chats) {
+          if (chat.project_id === projectId) {
+            chat.project_id = null;
+          }
+        }
+      })
+      .addCase(deleteProjectThunk.fulfilled, (state, action) => {
+        if (!action.payload.keepThreads && !action.payload.missing) return;
+        const { projectId } = action.payload;
+        for (const chat of state.chats) {
+          if (chat.project_id === projectId) {
+            chat.project_id = null;
+          }
+        }
+      });
+  },
 });
 
 export const {
@@ -270,5 +317,10 @@ export function selectThreadsListHydrated(state: { chats: ChatsState }) {
 export function selectChatsError(state: { chats: ChatsState }) {
   return state.chats.error;
 }
+
+export const selectChatsByProject = createSelector(
+  [(state: { chats: ChatsState }) => state.chats.chats, (_state, projectId: string) => projectId],
+  (chats, projectId) => chats.filter((c) => c.project_id === projectId),
+);
 
 export default chatsSlice.reducer;

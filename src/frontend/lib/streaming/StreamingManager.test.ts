@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StreamingManager } from './StreamingManager';
 import type { StreamCallback } from './StreamingManager';
+import { markChatAsClientCreated, isClientCreatedChat } from '@/services/newChatTracker';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -241,5 +242,28 @@ describe('StreamingManager', () => {
 
     // chunk_id 0 was used in first stream; after cancel+reset it should work again
     expect(cb2.onToken).toHaveBeenCalledWith('Re-used');
+  });
+
+  it('includes project_id in the stream request body when provided', async () => {
+    const sseBody = makeTokenSSE('Hi', 0) + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(sseBody));
+
+    const manager = new StreamingManager();
+    await manager.stream({ ...BASE_REQUEST, projectId: 'proj-1' }, makeCallbacks());
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.project_id).toBe('proj-1');
+  });
+
+  it('unmarks a client-created chat after the stream HTTP response succeeds', async () => {
+    markChatAsClientCreated('thread-1');
+    const sseBody = makeTokenSSE('Hi', 0) + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(sseBody));
+
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, makeCallbacks());
+
+    expect(isClientCreatedChat('thread-1')).toBe(false);
   });
 });

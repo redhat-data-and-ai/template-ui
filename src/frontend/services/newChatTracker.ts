@@ -12,3 +12,7 @@ export function markChatAsClientCreated(chatId: string): void {
 export function isClientCreatedChat(chatId: string): boolean {
   return clientCreatedIds.has(chatId);
 }
+
+export function unmarkChatAsClientCreated(chatId: string): void {
+  clientCreatedIds.delete(chatId);
+}
