@@ -115,8 +115,11 @@ function getCopyableAiMessageText(content: unknown): string {
   const { thinkingText, markdownForDisplay } = partitionMessageContent(content);
   const main =
     markdownForDisplay.length > 0 ? markdownForDisplay : extractMessageText(content);
-  if (!thinkingText) return main;
-  return [thinkingText, main].filter((s) => s.length > 0).join('\n\n');
+  const body = thinkingText
+    ? [thinkingText, main].filter((s) => s.length > 0).join('\n\n')
+    : main;
+  if (!body) return body;
+  return `${body}\n\n[AI-generated]`;
 }
 
 type MdComponentProps = {
@@ -1060,18 +1063,24 @@ export function ChatMessagesView({
                     allDecisionsMade={globalAllDecisionsMade}
                     onSingleDecision={handleGlobalSingleDecision}
                   />
-                  {isLastAiInTurn && (
-                    <div className="pl-11 flex items-center gap-0.5 mt-1">
-                      <MessageCopyButton text={copyText} />
-                      <FeedbackButtons
-                        messageId={message.id ?? `msg-${messageIndex}`}
-                        chatId={chatId}
-                        traceId={traceId}
-                        userId={userId}
-                        existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
-                      />
-                    </div>
-                  )}
+                  <div className="pl-11 flex items-center gap-0.5 mt-1">
+                    {isLastAiInTurn && (
+                      <>
+                        <MessageCopyButton text={copyText} />
+                        <FeedbackButtons
+                          messageId={message.id ?? `msg-${messageIndex}`}
+                          chatId={chatId}
+                          traceId={traceId}
+                          userId={userId}
+                          existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                        />
+                      </>
+                    )}
+                    <span className="inline-flex items-center gap-1 ml-2 text-[11px] text-muted-foreground" aria-label="AI-generated content">
+                      <Bot className="w-2.5 h-2.5" aria-hidden="true" />
+                      AI-generated
+                    </span>
+                  </div>
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
                       <div className="text-[11px] text-muted-foreground">
