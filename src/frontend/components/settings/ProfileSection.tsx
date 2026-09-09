@@ -10,7 +10,6 @@ import { deleteThread } from '../../services/agent-rest';
 import { chatStorage } from '../../services/chatStorage';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
 
-/** Displays user profile info with sign-out and data-reset actions. */
 export function ProfileSection() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();

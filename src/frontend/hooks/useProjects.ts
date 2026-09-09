@@ -24,7 +24,6 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
-/** Manage project CRUD, thread assignment, and sidebar ordering. */
 export function useProjects() {
   const dispatch = useAppDispatch();
   const projects = useAppSelector(selectAllProjects);

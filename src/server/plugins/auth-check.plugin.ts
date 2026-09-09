@@ -1,7 +1,6 @@
 import fastifyPlugin from "fastify-plugin";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { getSettings } from "../utils/settings.js";
-import { decodeJwtPayload, resolveRole } from "../utils/jwt.js";
 
 declare module "fastify" {
   interface Session {
@@ -22,8 +21,6 @@ declare module "fastify" {
       scope: string;
     };
     redirectUri?: string;
-    /** ROVER role from JWT realm_access.roles (OIDC login or gateway token). */
-    role?: "developer" | "viewer" | "denied";
   }
 }
 function headerValue(request: FastifyRequest, name: string): string | undefined {
@@ -114,28 +111,12 @@ async function authCheck(
           refresh_token: "",
           scope: "openid",
         };
-        request.session.role = resolveRole(decodeJwtPayload(gwToken));
-      } else {
-        request.session.role = resolveRole({});
       }
     }
 
     if (!request.session?.user) {
       request.session.redirectUri = request.url;
       return reply.redirect(buildGatewayLoginUrl(request));
-    }
-
-    const role = request.session.role;
-
-    if (!role || role === "denied") {
-      reply.status(403).send({ error: "access_denied", message: "You do not have access to this application." });
-      return;
-    }
-
-    const path = new URL(request.url, "http://localhost").pathname;
-    if (role === "viewer" && (path.startsWith("/eval") || path.includes("/evals"))) {
-      reply.status(403).send({ error: "forbidden", message: "Eval access requires developer role." });
-      return;
     }
 
     next();
