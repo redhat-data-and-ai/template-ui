@@ -106,4 +106,26 @@ describe('useEvalStatus', () => {
       vi.mocked(fetch).mock.calls.every((call) => String(call[0]).includes('/evals/status')),
     ).toBe(true);
   });
+
+  it('clears the poll flag and does not stay in_progress when status is 403', async () => {
+    sessionStorage.setItem('evalHasTriggered', '1');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        jsonResponse(
+          { detail: 'Access denied: DEVELOPER_GROUP is not configured.' },
+          403,
+        ),
+      ),
+    );
+
+    const { result } = renderHook(() => useEvalStatus());
+
+    await waitFor(() => {
+      expect(vi.mocked(fetch)).toHaveBeenCalled();
+    });
+
+    expect(result.current.state.status).not.toBe('in_progress');
+    expect(sessionStorage.getItem('evalHasTriggered')).toBeNull();
+  });
 });

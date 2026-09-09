@@ -94,6 +94,7 @@ export function useEvalDashboard(): EvalDashboardState {
 
   const isRunning =
     evalState.status === 'in_progress' ||
+    triggerState.status === 'loading' ||
     (hasTriggered && evalState.status === 'unknown' && triggerState.status !== 'error');
 
   const fetchResults = useCallback(async () => {
@@ -171,6 +172,19 @@ export function useEvalDashboard(): EvalDashboardState {
       setTriggeredAt(Date.now());
       setHasTriggered(true);
       sessionStorage.setItem('evalHasTriggered', '1');
+
+      const abortOptimisticRun = (next: ActionState) => {
+        if (!mountedRef.current) return;
+        setTriggerState(next);
+        setTriggeredAt(null);
+        setHasTriggered(false);
+        try {
+          sessionStorage.removeItem('evalHasTriggered');
+        } catch {
+          // private mode / disabled storage
+        }
+      };
+
       try {
         const res = await fetch(buildAppPath(path), {
           method: 'POST',
@@ -184,7 +198,7 @@ export function useEvalDashboard(): EvalDashboardState {
           const authReq = (data.auth_required ?? (data.detail as Record<string, unknown>)?.auth_required) as Array<{ name: string; connect_url: string }> | undefined;
           if (authReq?.length) {
             setAuthRequired(authReq);
-            setTriggerState({ status: 'idle', message: '' });
+            abortOptimisticRun({ status: 'idle', message: '' });
             return;
           }
         }
@@ -201,7 +215,7 @@ export function useEvalDashboard(): EvalDashboardState {
             typeof (data.detail as Record<string, unknown>)?.message === 'string'
               ? (data.detail as Record<string, unknown>).message as string
               : typeof data.detail === 'string' ? data.detail : null;
-          if (mountedRef.current) setTriggerState({
+          abortOptimisticRun({
             status: 'error',
             message: errFriendly[res.status] ?? backendMsg ?? `Trigger failed (${res.status}) — check the agent logs.`,
           });
@@ -272,7 +286,7 @@ export function useEvalDashboard(): EvalDashboardState {
           }
         }, 2000);
       } catch {
-        if (mountedRef.current) setTriggerState({ status: 'error', message: 'Network error — could not reach the eval service.' });
+        abortOptimisticRun({ status: 'error', message: 'Network error — could not reach the eval service.' });
       }
     },
     [refetchHistory, refetchTrends],

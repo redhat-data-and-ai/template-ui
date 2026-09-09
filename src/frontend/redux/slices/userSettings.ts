@@ -72,6 +72,10 @@ const userSettingsSlice = createSlice({
       }
       persistSettings(state);
     },
+    setDeveloperMode(state, action: PayloadAction<boolean>) {
+      state.developerMode = action.payload;
+      persistSettings(state);
+    },
     addAlwaysAllowedTool(state, action: PayloadAction<string>) {
       if (!state.alwaysAllowedTools.includes(action.payload)) {
         state.alwaysAllowedTools.push(action.payload);
@@ -84,10 +88,6 @@ const userSettingsSlice = createSlice({
     },
     clearAlwaysAllowedTools(state) {
       state.alwaysAllowedTools = [];
-      persistSettings(state);
-    },
-    setDeveloperMode(state, action: PayloadAction<boolean>) {
-      state.developerMode = action.payload;
       persistSettings(state);
     },
     setAutoApproveAllTools(state, action: PayloadAction<boolean>) {
@@ -114,13 +114,16 @@ export const {
   toggleAutoApproveAllTools,
 } = userSettingsSlice.actions;
 
+/** Select the active UI theme from user settings. */
 export const selectTheme = (state: { userSettings: UserSettingsState }) => state.userSettings.theme;
+/** Select whether debug mode is enabled. */
 export const selectDebugMode = (state: { userSettings: UserSettingsState }) => state.userSettings.debugMode;
+/** Select whether developer mode is enabled. */
+export const selectDeveloperMode = (state: { userSettings: UserSettingsState }) =>
+  state.userSettings.developerMode;
 export const selectAlwaysAllowedTools = (state: { userSettings: UserSettingsState }) =>
   state.userSettings.alwaysAllowedTools;
 export const selectAutoApproveAllTools = (state: { userSettings: UserSettingsState }) =>
   state.userSettings.autoApproveAllTools;
-export const selectDeveloperMode = (state: { userSettings: UserSettingsState }) =>
-  state.userSettings.developerMode;
 
 export default userSettingsSlice.reducer;

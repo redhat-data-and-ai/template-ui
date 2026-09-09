@@ -2,6 +2,7 @@ import oauthPlugin from "@fastify/oauth2";
 import { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 import { getSettings } from "../utils/settings.js";
+import { decodeJwtPayload, resolveRole } from "../utils/jwt.js";
 import { resolveSessionIdentity, safePostLoginRedirect } from "../utils/session-identity.js";
 
 import { OAuth2Namespace } from "@fastify/oauth2";
@@ -141,6 +142,14 @@ async function routes(fastify: FastifyInstance) {
       });
       (request as any).session.user = identity.user;
       (request as any).session.token = tokenSet.token;
+
+      // Resolve ROVER group role from JWT — try access_token first, fall back to id_token
+      // (access_token may be opaque or lack realm_access.roles in some SSO configs)
+      let payload = decodeJwtPayload(tokenSet.token.access_token);
+      if (!payload.realm_access && tokenSet.token.id_token) {
+        payload = decodeJwtPayload(tokenSet.token.id_token);
+      }
+      (request as any).session.role = resolveRole(payload);
 
       return reply.redirect(defaultRedirect);
     } catch (error) {

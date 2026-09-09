@@ -64,6 +64,7 @@ function formatExpiresAt(expiresAt: unknown): string | undefined {
   return undefined;
 }
 
+/** Merge SSO userinfo, JWT claims, and session data into a canonical identity object. */
 export function resolveSessionIdentity(session?: SessionLike | null) {
   const user = { ...(session?.user || {}) };
   const accessToken = asString(session?.token?.access_token);
@@ -115,6 +116,7 @@ export function resolveXUserIdFromSession(session?: SessionLike | null): string 
   return id.preferred_username || id.sub || id.email || "default";
 }
 
+/** Build the user-data payload injected into the client-side APP_DATA global. */
 export function toClientUserData(session?: SessionLike | null) {
   const id = resolveSessionIdentity(session);
   return {
