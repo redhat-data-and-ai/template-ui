@@ -56,12 +56,14 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
   const StatusIcon = config.icon;
 
   const interruptValue = pendingInterrupt?.value;
-  const needsApproval = !!(
-    typeof interruptValue === 'object'
-    && interruptValue !== null
-    && 'action_requests' in interruptValue
-    && interruptValue.action_requests?.some((r) => r.name === 'task' || r.name === name)
-  ) && toolCall.content == null;
+  const requests = (typeof interruptValue === 'object' && interruptValue !== null)
+    ? (interruptValue.action_requests ?? [])
+    : [];
+  const isLaunchApproval = requests.some((r) => r.name === 'task' || r.name === name);
+  const isInnerToolApproval = requests.length > 0 && !isLaunchApproval;
+  const needsApproval = (isLaunchApproval || isInnerToolApproval) && toolCall.content == null;
+  const alwaysAllowNames = isLaunchApproval ? [name] : requests.map((r) => r.name);
+  const innerToolLabel = requests.map((r) => r.name).join(', ') || name;
 
   useEffect(() => {
     if (needsApproval) {
@@ -153,20 +155,40 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                 </div>
               )}
 
-              {needsApproval && !isApproving && (isCurrentApproval !== false) && (onSingleDecision || onInterruptResume) && (
-                <div role="alert" aria-live="assertive" aria-label={`Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
+              {isInnerToolApproval && needsApproval && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Tool
+                  </p>
+                  {requests.map((r) => (
+                    <div key={r.name} className="space-y-1.5">
+                      <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{r.name}</code>
+                      {r.args && Object.keys(r.args).length > 0 && (
+                        <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                          {JSON.stringify(r.args, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {needsApproval && !isApproving && (isInnerToolApproval || isCurrentApproval !== false) && (onSingleDecision || onInterruptResume) && (
+                <div role="alert" aria-live="assertive" aria-label={isInnerToolApproval ? `Tool ${innerToolLabel} requires approval` : `Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
                   <button
                     type="button"
                     autoFocus
                     onClick={() => {
                       setIsApproving(true);
-                      if (onSingleDecision) {
+                      if (isInnerToolApproval) {
+                        onInterruptResume?.(requests.map(() => ({ type: 'approve' as const })));
+                      } else if (onSingleDecision) {
                         onSingleDecision({ type: 'approve' });
                       } else {
                         onInterruptResume?.([{ type: 'approve' }]);
                       }
                     }}
-                    aria-label={`Approve sub-agent action: ${name}`}
+                    aria-label={isInnerToolApproval ? `Approve tool: ${innerToolLabel}` : `Approve sub-agent action: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                     style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
                   >
@@ -177,13 +199,15 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     type="button"
                     onClick={() => {
                       setIsApproving(true);
-                      if (onSingleDecision) {
+                      if (isInnerToolApproval) {
+                        onInterruptResume?.(requests.map(() => ({ type: 'reject' as const, message: 'User rejected this action.' })));
+                      } else if (onSingleDecision) {
                         onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
                       } else {
                         onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
                       }
                     }}
-                    aria-label={`Reject sub-agent action: ${name}`}
+                    aria-label={isInnerToolApproval ? `Reject tool: ${innerToolLabel}` : `Reject sub-agent action: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
                     style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
                   >
@@ -193,14 +217,16 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     type="button"
                     onClick={() => {
                       setIsApproving(true);
-                      onAlwaysAllow?.([name]);
-                      if (onSingleDecision) {
+                      onAlwaysAllow?.(alwaysAllowNames);
+                      if (isInnerToolApproval) {
+                        onInterruptResume?.(requests.map(() => ({ type: 'approve' as const })));
+                      } else if (onSingleDecision) {
                         onSingleDecision({ type: 'approve' });
                       } else {
                         onInterruptResume?.([{ type: 'approve' }]);
                       }
                     }}
-                    aria-label={`Always allow sub-agent: ${name}`}
+                    aria-label={isInnerToolApproval ? `Always allow tool: ${innerToolLabel}` : `Always allow sub-agent: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
                   >
                     <ShieldCheck className="w-3 h-3" aria-hidden="true" />
