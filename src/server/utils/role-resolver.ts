@@ -9,8 +9,7 @@ export type UserRole =
   | "admins"
   | "builders"
   | "users"
-  | "denied"
-  | null;
+  | "denied";
 
 let startupWarningLogged = false;
 
@@ -42,8 +41,8 @@ export async function resolveRole(userId: string): Promise<UserRole> {
   return role;
 }
 
-/** Returns true if the role has access to developer/eval features. null = AUTH_ENABLED=false (dev mode, full access). */
+/** Returns true if the role has access to developer/eval features. */
 export function isPrivilegedRole(role: UserRole): boolean {
-  if (role === null) return true;
+  if (role == null) return false;
   return PRIVILEGED_ROLES.has(role);
 }

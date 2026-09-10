@@ -53,8 +53,12 @@ process.on("SIGTERM", () => {
 
 async function start() {
   const { setupServer, startConfigWatcher } = await import("./server.js");
+  const { startPromptMdWatcher } = await import("./utils/prompt-md.js");
   const fastify = await setupServer();
   const port = Number(process.env.PORT) || 8080;
+
+  const stopPromptMdWatcher = startPromptMdWatcher();
+  console.log("[Server] PROMPT.md watcher started");
 
   // Start config watcher for hot reload
   // UI_CONFIG_PATH is set by deployer via ConfigMap mount, defaults to local path
@@ -63,10 +67,11 @@ async function start() {
     const stopWatcher = startConfigWatcher(configPath, fastify);
     console.log(`[Server] Config watcher started on ${configPath}`);
 
-    // Cleanup watcher on shutdown
+    // Cleanup watchers on shutdown
     process.on("SIGTERM", () => {
       console.log("[Server] Shutting down config watcher");
       stopWatcher();
+      stopPromptMdWatcher();
     });
   } catch (error) {
     console.warn(`[Server] Could not start config watcher on ${configPath}:`, error);

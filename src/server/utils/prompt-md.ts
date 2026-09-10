@@ -85,32 +85,48 @@ export function loadPromptMdConfig(): PromptMdConfig {
 /** Watch PROMPT.md for changes and invalidate the cached config. Returns a cleanup function. */
 export function startPromptMdWatcher(): () => void {
   const filePath = PROMPT_MD_PATH;
-  if (watcher) {
-    watcher.close();
-    watcher = null;
-  }
-
+  let stopped = false;
   let debounceTimer: NodeJS.Timeout | null = null;
 
-  try {
-    watcher = watch(filePath, (eventType) => {
-      if (eventType !== "change") return;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        console.log("[PromptMd] File changed, reloading config");
-        cached = null;
-        loadPromptMdConfig();
-      }, 100);
-    });
-
-    watcher.on("error", () => {
-      /* file may not exist in dev */
-    });
-  } catch {
-    /* file may not exist — that's fine */
+  function invalidate() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      console.log("[PromptMd] File changed, reloading config");
+      cached = null;
+      loadPromptMdConfig();
+    }, 100);
   }
 
+  function registerWatcher() {
+    if (stopped) return;
+    if (watcher) {
+      watcher.close();
+      watcher = null;
+    }
+
+    try {
+      watcher = watch(filePath, (eventType) => {
+        invalidate();
+        if (eventType === "rename") {
+          registerWatcher();
+        }
+      });
+
+      watcher.on("error", () => {
+        if (watcher) {
+          watcher.close();
+          watcher = null;
+        }
+      });
+    } catch {
+      /* file may not exist — that's fine */
+    }
+  }
+
+  registerWatcher();
+
   return () => {
+    stopped = true;
     if (debounceTimer) clearTimeout(debounceTimer);
     if (watcher) {
       watcher.close();

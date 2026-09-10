@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { Client } from "ldapts";
 import { getRedisClient } from "./redis.js";
 import type { GroupRoleMapping } from "./prompt-md.js";
@@ -70,10 +71,14 @@ async function ensureBound(): Promise<Client | null> {
     parseInt(process.env.LDAP_CONNECT_TIMEOUT || "10", 10) * 1000;
 
   try {
+    const tlsOptions: Record<string, unknown> = {};
+    if (process.env.LDAP_CA_CERT) {
+      tlsOptions.ca = fs.readFileSync(process.env.LDAP_CA_CERT);
+    }
     ldapClient = new Client({
       url: ldapUrl,
       connectTimeout,
-      tlsOptions: { rejectUnauthorized: false },
+      tlsOptions,
     });
     await ldapClient.bind(bindDn, password);
     bindFailed = false;
@@ -163,10 +168,7 @@ export async function isUserInGroup(
           if (
             memberLower === userId.toLowerCase() ||
             memberLower ===
-              `${userAttr}=${userId.toLowerCase()},ou=users,${baseDn}` ||
-            memberLower.startsWith(
-              `${userAttr}=${userId.toLowerCase()},`,
-            )
+              `${userAttr}=${userId.toLowerCase()},ou=users,${baseDn}`
           ) {
             found = true;
             break;
@@ -184,6 +186,10 @@ export async function isUserInGroup(
       `[LDAP] Search failed for group ${groupCn}:`,
       (err as Error).message,
     );
+    if (ldapClient) {
+      try { await ldapClient.unbind(); } catch { /* ignore */ }
+      ldapClient = null;
+    }
     bindFailed = true;
     return false;
   }

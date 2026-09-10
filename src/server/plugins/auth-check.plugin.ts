@@ -136,14 +136,14 @@ async function authCheck(
           request.session.roleResolvedAt = Date.now();
         } catch (err) {
           console.error("[AuthCheck] Role resolution failed:", (err as Error).message);
-          request.session.role = null;
+          request.session.role = "denied";
         }
       }
 
       const role = request.session.role;
       const path = request.url.split("?")[0];
 
-      if (role === "denied") {
+      if (role === "denied" || role == null) {
         return reply.code(403).send({
           error: "access_denied",
           message: "You are not authorized to access this application.",
