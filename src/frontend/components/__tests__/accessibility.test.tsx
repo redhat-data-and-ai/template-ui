@@ -259,38 +259,32 @@ describe('InputForm — accessibility', () => {
 
   it('passes axe audit', async () => {
     const { container } = render(
-      <InputForm onSubmit={noop} onCancel={noop} isLoading={false} hasHistory={false} />,
+      <InputForm onSubmit={noop} onCancel={noop} isLoading={false} />,
     );
     expect(await axe(container)).toHaveNoViolations();
   });
 
   it('textarea has accessible label "Type a message"', () => {
     render(
-      <InputForm onSubmit={noop} onCancel={noop} isLoading={false} hasHistory={false} />,
+      <InputForm onSubmit={noop} onCancel={noop} isLoading={false} />,
     );
     expect(screen.getByRole('textbox', { name: /type a message/i })).toBeInTheDocument();
   });
 
   it('send button has accessible label', () => {
     render(
-      <InputForm onSubmit={noop} onCancel={noop} isLoading={false} hasHistory={false} />,
+      <InputForm onSubmit={noop} onCancel={noop} isLoading={false} />,
     );
     expect(screen.getByRole('button', { name: /send message/i })).toBeInTheDocument();
   });
 
   it('cancel button has accessible label during loading', () => {
     render(
-      <InputForm onSubmit={noop} onCancel={noop} isLoading={true} hasHistory={false} />,
+      <InputForm onSubmit={noop} onCancel={noop} isLoading={true} />,
     );
     expect(screen.getByRole('button', { name: /cancel streaming/i })).toBeInTheDocument();
   });
 
-  it('New Chat button has accessible label when history exists', () => {
-    render(
-      <InputForm onSubmit={noop} onCancel={noop} isLoading={false} hasHistory={true} />,
-    );
-    expect(screen.getByRole('button', { name: /new chat/i })).toBeInTheDocument();
-  });
 });
 
 // ---------------------------------------------------------------------------

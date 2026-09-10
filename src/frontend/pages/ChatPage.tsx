@@ -619,7 +619,6 @@ export function ChatPage({ threadId }: { threadId: string }) {
               onSubmit={handleSubmit}
               onEditMessage={handleEditMessage}
               onCancel={handleCancel}
-              onNewChat={handleNewChat}
               liveActivityEvents={processedEventsTimeline}
               historicalActivities={historicalActivities}
               isRateLimited={rateLimit.isRateLimited}
