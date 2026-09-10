@@ -24,7 +24,6 @@ declare module "fastify" {
 
 /**
  * Reject cross-origin POST requests that lack a same-origin Origin header.
- * Defends cookie-authenticated mutations against CSRF.
  */
 function verifyCsrfOrigin(request: FastifyRequest, reply: FastifyReply): boolean {
   const origin = request.headers.origin;
