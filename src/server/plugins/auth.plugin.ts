@@ -1,5 +1,5 @@
 import oauthPlugin from "@fastify/oauth2";
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
 import { getSettings } from "../utils/settings.js";
 import { resolveSessionIdentity, safePostLoginRedirect } from "../utils/session-identity.js";
@@ -20,6 +20,26 @@ declare module "fastify" {
   interface FastifyInstance {
     redhatSSO: OAuth2Namespace;
   }
+}
+
+/**
+ * Reject cross-origin POST requests that lack a same-origin Origin header.
+ * Defends cookie-authenticated mutations against CSRF.
+ */
+function verifyCsrfOrigin(request: FastifyRequest, reply: FastifyReply): boolean {
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  try {
+    const allowed = new URL(`${request.protocol}://${request.hostname}`).origin;
+    if (new URL(origin).origin !== allowed) {
+      reply.code(403).send({ error: "cross_origin_denied", message: "Cross-origin request rejected" });
+      return false;
+    }
+  } catch {
+    reply.code(403).send({ error: "invalid_origin", message: "Invalid Origin header" });
+    return false;
+  }
+  return true;
 }
 
 /** Auth-only limiter: this plugin is wrapped with fp(), so global:true would apply app-wide. */
@@ -139,8 +159,15 @@ async function routes(fastify: FastifyInstance) {
         user: userInfo,
         token: tokenSet.token,
       });
+
+      const previousSub = (request as any).session.user?.sub;
       (request as any).session.user = identity.user;
       (request as any).session.token = tokenSet.token;
+
+      if (previousSub && previousSub !== identity.user.sub) {
+        (request as any).session.consentApproved = false;
+        delete (request as any).session.consentGrantedAt;
+      }
 
       if ((request as any).session.consentApproved) {
         return reply.redirect(defaultRedirect);
@@ -155,6 +182,7 @@ async function routes(fastify: FastifyInstance) {
   });
 
   fastify.post("/auth/consent/approve", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
+    if (!verifyCsrfOrigin(request, reply)) return;
     const session = (request as any).session;
     if (!session?.user) {
       return reply.code(401).send({ error: "Not authenticated" });
@@ -178,6 +206,7 @@ async function routes(fastify: FastifyInstance) {
   });
 
   fastify.post("/auth/consent/revoke", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
+    if (!verifyCsrfOrigin(request, reply)) return;
     const session = (request as any).session;
     if (!session?.user) {
       return reply.code(401).send({ error: "Not authenticated" });

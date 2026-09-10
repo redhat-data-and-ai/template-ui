@@ -19,10 +19,11 @@ export function AuthorizationSettings() {
       const response = await fetch('/auth/consent/status', {
         credentials: 'include',
       });
-      if (response.ok) {
-        const data = await response.json();
-        setConsentStatus(data);
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
       }
+      const data = await response.json();
+      setConsentStatus(data);
     } catch {
       setError('Failed to load authorization status');
     } finally {
