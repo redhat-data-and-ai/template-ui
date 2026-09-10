@@ -142,11 +142,51 @@ async function routes(fastify: FastifyInstance) {
       (request as any).session.user = identity.user;
       (request as any).session.token = tokenSet.token;
 
-      return reply.redirect(defaultRedirect);
+      if ((request as any).session.consentApproved) {
+        return reply.redirect(defaultRedirect);
+      }
+
+      (request as any).session.postConsentRedirect = defaultRedirect;
+      return reply.redirect("/consent");
     } catch (error) {
       console.error(error);
       return reply.send({ message: "Some error occured!" });
     }
+  });
+
+  fastify.post("/auth/consent/approve", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
+    const session = (request as any).session;
+    if (!session?.user) {
+      return reply.code(401).send({ error: "Not authenticated" });
+    }
+
+    session.consentApproved = true;
+    session.consentGrantedAt = new Date().toISOString();
+
+    const redirectUrl = session.postConsentRedirect ?? "/";
+    delete session.postConsentRedirect;
+
+    return reply.send({ message: "Consent approved", redirectUrl });
+  });
+
+  fastify.get("/auth/consent/status", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
+    const session = (request as any).session;
+    return reply.send({
+      hasConsent: !!session?.consentApproved,
+      grantedAt: session?.consentGrantedAt ?? null,
+    });
+  });
+
+  fastify.post("/auth/consent/revoke", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
+    const session = (request as any).session;
+    if (!session?.user) {
+      return reply.code(401).send({ error: "Not authenticated" });
+    }
+
+    session.consentApproved = false;
+    delete session.consentGrantedAt;
+
+    return reply.send({ message: "Consent revoked" });
   });
 }
 

@@ -5,6 +5,7 @@ import { AnnouncementBanner } from '../components/AnnouncementBanner';
 import { AppLayout } from './components/layout/AppLayout';
 import { HomePage } from './pages/HomePage';
 import { ChatRoutePage } from './pages/ChatPage';
+import { ConsentPage } from './pages/ConsentPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProjectChatPage } from './pages/ProjectChatPage';
 import { EvalDatasetPage } from './pages/EvalDatasetPage';
@@ -100,19 +101,24 @@ export default function App() {
       }}
     >
       <AnnouncementBanner />
-      <AppLayout>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/chat" element={<Navigate to="/" replace />} />
-          <Route path="/chat/:threadId" element={<ChatRoutePage />} />
-          <Route path="/project/:projectId" element={<ProjectChatPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route
-            path="/eval/dataset"
-            element={isPrivilegedUser() ? <EvalDatasetPage /> : <Navigate to="/" replace />}
-          />
-        </Routes>
-      </AppLayout>
+      <Routes>
+        <Route path="/consent" element={<ConsentPage />} />
+        <Route path="/*" element={
+          <AppLayout>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/chat" element={<Navigate to="/" replace />} />
+              <Route path="/chat/:threadId" element={<ChatRoutePage />} />
+              <Route path="/project/:projectId" element={<ProjectChatPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route
+                path="/eval/dataset"
+                element={isPrivilegedUser() ? <EvalDatasetPage /> : <Navigate to="/" replace />}
+              />
+            </Routes>
+          </AppLayout>
+        } />
+      </Routes>
       <ToastNotifications />
     </ErrorBoundary>
   );
