@@ -27,7 +27,10 @@ declare module "fastify" {
  */
 function verifyCsrfOrigin(request: FastifyRequest, reply: FastifyReply): boolean {
   const origin = request.headers.origin;
-  if (!origin) return true;
+  if (!origin) {
+    reply.code(403).send({ error: "missing_origin", message: "Origin header is required" });
+    return false;
+  }
   try {
     const allowed = new URL(`${request.protocol}://${request.host}`).origin;
     if (new URL(origin).origin !== allowed) {
