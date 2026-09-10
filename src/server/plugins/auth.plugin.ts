@@ -268,7 +268,7 @@ async function routes(fastify: FastifyInstance) {
 
     const token = session.token?.access_token;
     try {
-      await fetch(`${getAgentHost()}/personalization/consent`, {
+      const resp = await fetch(`${getAgentHost()}/personalization/consent`, {
         method: "DELETE",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -276,8 +276,13 @@ async function routes(fastify: FastifyInstance) {
         },
         signal: AbortSignal.timeout(5000),
       });
+      if (!resp.ok) {
+        fastify.log.error({ status: resp.status }, "Agent consent revoke returned non-2xx");
+        return reply.code(502).send({ error: "revoke_failed", message: "Failed to revoke consent on the agent" });
+      }
     } catch (err) {
-      fastify.log.warn({ err }, "Agent consent revoke failed");
+      fastify.log.error({ err }, "Agent consent revoke failed");
+      return reply.code(502).send({ error: "revoke_failed", message: "Agent unreachable during consent revocation" });
     }
 
     session.consentApproved = false;
