@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, AlertTriangle, CheckCircle, Lock } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle } from 'lucide-react';
 
 export function ConsentPage() {
   const navigate = useNavigate();
