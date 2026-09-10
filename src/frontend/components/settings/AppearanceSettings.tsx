@@ -1,5 +1,6 @@
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { selectTheme, setTheme, selectDeveloperMode, setDeveloperMode } from '../../redux/slices/userSettings';
+import { isPrivilegedUser } from '../../lib/role-utils';
 import { Sun, Moon, Monitor } from 'lucide-react';
 
 type ThemeOption = 'light' | 'dark';
@@ -53,28 +54,30 @@ export function AppearanceSettings() {
         </div>
       </div>
 
-      <div>
-        <h3 className="text-sm font-medium text-foreground mb-1">Developer Mode</h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          Show the Developer tab with advanced tools and agent evaluation.
-        </p>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={developerMode}
-          aria-label="Enable Developer Mode"
-          onClick={() => dispatch(setDeveloperMode(!developerMode))}
-          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
-            developerMode ? 'bg-primary' : 'bg-muted'
-          }`}
-        >
-          <span
-            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-              developerMode ? 'translate-x-4' : 'translate-x-1'
+      {isPrivilegedUser() && (
+        <div>
+          <h3 className="text-sm font-medium text-foreground mb-1">Developer Mode</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Show the Developer tab with advanced tools and agent evaluation.
+          </p>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={developerMode}
+            aria-label="Enable Developer Mode"
+            onClick={() => dispatch(setDeveloperMode(!developerMode))}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
+              developerMode ? 'bg-primary' : 'bg-muted'
             }`}
-          />
-        </button>
-      </div>
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                developerMode ? 'translate-x-4' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      )}
 
       <div>
         <h3 className="text-sm font-medium text-foreground mb-1">Interface Density</h3>

@@ -12,6 +12,7 @@ import { DeveloperSettings } from '../components/settings/DeveloperSettings';
 import { useAppSelector } from '../redux/hooks';
 import { selectDeveloperMode } from '../redux/slices/userSettings';
 import { OAuthConnections } from '../components/settings/OAuthConnections';
+import { isPrivilegedUser } from '../lib/role-utils';
 import type { RootState } from '../redux/store';
 
 type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals' | 'oauth' | 'developer';
@@ -55,7 +56,7 @@ export function SettingsPage() {
 
   const visibleTabs = useMemo(() => {
     return TABS.filter((tab) => {
-      if (tab.id === 'developer') return developerMode;
+      if (tab.id === 'developer') return isPrivilegedUser() && developerMode;
       if (tab.id === 'memories') return features?.memory_enabled !== false;
       return true;
     });

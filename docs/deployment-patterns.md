@@ -1,12 +1,13 @@
 # Template UI — Deployment Patterns
 
-This guide covers five customization areas a developer needs to understand before deploying or forking template-ui:
+This guide covers six customization areas a developer needs to understand before deploying or forking template-ui:
 
 1. [Branding Customization](#1-branding-customization)
 2. [Feature Flag Reference](#2-feature-flag-reference)
 3. [Runtime Config Examples](#3-runtime-config-examples)
 4. [Agent Endpoint Switching](#4-agent-endpoint-switching)
 5. [OPA Policy Examples](#5-opa-policy-examples)
+6. [LDAP Access Control](#6-ldap-access-control)
 
 For the full config schema with every key and its env-var override, see [`config/ui/README.md`](../config/ui/README.md).
 
@@ -482,6 +483,109 @@ Expected output:
 
 ---
 
+## 6. LDAP Access Control
+
+Role-based access control is driven by LDAP group membership, configured via the YAML front matter in `config/ui/PROMPT.md`. The SSO user ID (from the JWT `preferred_username`) is compared against LDAP group members to resolve the user's role.
+
+### Role hierarchy
+
+The highest matching role wins:
+
+| Role | Priority | Chat | Developer Page | Dataset Page | Eval Actions |
+|---|---|---|---|---|---|
+| `owners` | 4 | Yes | Yes | Yes | Yes |
+| `admins` | 3 | Yes | Yes | Yes | Yes |
+| `builders` | 2 | Yes | Yes | Yes | Yes |
+| `users` | 1 | Yes | No | No | No |
+| `denied` | — | 403 | 403 | 403 | 403 |
+
+### PROMPT.md front matter
+
+Groups and accessibility are defined in the YAML front matter of `config/ui/PROMPT.md`:
+
+```yaml
+---
+name: my-agent
+accessibility: public
+groups:
+  - role: owners
+    group: aif-team-keystone-owners
+  - role: admins
+    group: aif-team-keystone-admins
+  - role: builders
+    group: aif-team-keystone-builders
+  - role: users
+    group: aif-team-keystone-users
+---
+```
+
+### Behavior matrix
+
+| PROMPT.md config | User in a group | User not in any group |
+|---|---|---|
+| No `groups` defined | Chat only (everyone gets `users` role) | Chat only |
+| `groups` defined, `accessibility: private` (default) | Gets their resolved role | `denied` — 403 on all pages |
+| `groups` defined, `accessibility: public` | Gets their resolved role | `users` — chat only |
+
+Key points:
+- **No groups in PROMPT.md** → LDAP is never queried. Everyone authenticated via SSO gets chat access. Developer page, dataset page, and eval actions are hidden for all users.
+- **`accessibility: private`** (default when not specified) → Users must be a member of at least one configured LDAP group to access the app. Non-members are denied entirely.
+- **`accessibility: public`** → Chat is open to all SSO-authenticated users. Developer page, dataset page, and eval actions remain restricted to `owners`, `admins`, and `builders` only.
+- **`AUTH_ENABLED=false`** (local dev) → Role resolution is skipped entirely. All features are accessible.
+
+### What is restricted
+
+The following UI surfaces and API endpoints are restricted to `owners`, `admins`, and `builders` only. Users with the `users` role (or no group membership) see only the chat interface.
+
+**UI elements hidden for `users` role:**
+- **Developer Mode toggle** — Hidden in Settings > Appearance.
+- **Developer tab** — Hidden in the Settings page.
+- **Dataset page** — Redirects to `/`.
+
+**Server-side enforcement:**
+All eval API endpoints (`/api/proxy/agent/evals/*`) return 403 for the `users` role, so access is enforced even if the UI is bypassed.
+
+### Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `LDAP_URL` | When groups defined | — | LDAP server URL (e.g., `ldaps://ldap.example.com`). Base DN is derived from hostname. |
+| `LDAP_BASE_UID` | When groups defined | — | Service account uid for LDAP bind. Expanded to `uid=<value>,ou=users,<base DN>` unless it contains a comma. |
+| `LDAP_PASSWORD` | When groups defined | — | Service account password. Source from a k8s Secret in production. |
+| `LDAP_GROUP_SEARCH_BASE` | No | `ou=adhoc,ou=managedGroups,<base DN>` | Override the LDAP subtree searched for groups. |
+| `LDAP_CACHE_TTL_SECONDS` | No | `300` | How long LDAP membership results are cached in Redis. |
+
+### Caching
+
+LDAP query results are cached at two levels:
+
+1. **Redis cache** — Each group membership check is cached with key `ldap:membership:{userId}:{groupCn}` and the configured TTL (default 300s). Shared across all pods.
+2. **Session cache** — The resolved role and a timestamp are stored in the user's session. The role is re-resolved when the timestamp exceeds the cache TTL.
+
+The first request for a user queries LDAP (~200ms). Subsequent requests within the TTL window are served from cache (~1ms).
+
+### Failure modes
+
+| Scenario | Behavior |
+|---|---|
+| `LDAP_URL` not set but groups defined | Fail-closed: all users denied. Warning logged at startup. |
+| LDAP server unreachable | Cached results served during TTL. After expiry, new lookups return `denied`. |
+| Redis unavailable | Falls back to in-memory cache (per-pod, not shared). |
+| PROMPT.md file missing | Same as no groups — chat only, no developer/eval access. |
+
+### Implementation files
+
+| File | Purpose |
+|---|---|
+| `src/server/utils/prompt-md.ts` | Parses PROMPT.md YAML front matter for groups and accessibility |
+| `src/server/utils/ldap-client.ts` | LDAP queries with Redis + in-memory caching |
+| `src/server/utils/role-resolver.ts` | Orchestrates PROMPT.md config + LDAP lookup into a role |
+| `src/server/plugins/auth-check.plugin.ts` | Server-side role enforcement in the preHandler hook |
+| `src/server/router/client.router.ts` | Injects `userRole` into the HTML for client-side gating |
+| `src/frontend/lib/role-utils.ts` | Client-side `isPrivilegedUser()` helper |
+
+---
+
 ## Summary
 
 | Topic | Where to start |
@@ -491,3 +595,4 @@ Expected output:
 | Full runtime config | `config/ui/examples/production.yaml` |
 | Agent endpoint | `AGENT_ENDPOINT` env var or `agent.endpoint` in settings.yaml |
 | OPA policies | `config/compliance/README.md` + `config/ui/examples/production.yaml` |
+| LDAP access control | `config/ui/PROMPT.md` front matter + LDAP env vars in `.env` |
