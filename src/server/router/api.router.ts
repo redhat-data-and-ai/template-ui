@@ -72,17 +72,23 @@ async function apiRoutes(fastify: FastifyInstance) {
   fastify.get("/me", async (request: FastifyRequest, reply: FastifyReply) => {
     reply.header("Cache-Control", "no-store");
     if (request.session?.user) {
-      return toClientUserData(request.session);
+      return {
+        ...toClientUserData(request.session),
+        userRole: request.session.role ?? null,
+      };
     }
     if (process.env.AUTH_ENABLED === "false") {
-      return toClientUserData({
-        user: {
-          preferred_username: "johnwick",
-          name: "John Wick",
-          displayName: "John",
-          email: "johnwick@redhat.com",
-        },
-      });
+      return {
+        ...toClientUserData({
+          user: {
+            preferred_username: "johnwick",
+            name: "John Wick",
+            displayName: "John",
+            email: "johnwick@redhat.com",
+          },
+        }),
+        userRole: null,
+      };
     }
     return reply.code(401).send({ error: "unauthenticated" });
   });
