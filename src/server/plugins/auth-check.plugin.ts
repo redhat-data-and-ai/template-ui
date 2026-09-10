@@ -4,6 +4,11 @@ import { getSettings } from "../utils/settings.js";
 import { resolveRole, type UserRole } from "../utils/role-resolver.js";
 import { safePostLoginRedirect } from "../utils/session-identity.js";
 
+function getAgentHost(): string {
+  const cfg = getSettings();
+  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+}
+
 declare module "fastify" {
   interface Session {
     user?: {
@@ -170,6 +175,25 @@ async function authCheck(
           error: "forbidden",
           message: "Insufficient permissions for this resource.",
         });
+      }
+    }
+
+    if (!request.session.consentApproved) {
+      const token = request.session.token?.access_token;
+      if (token) {
+        try {
+          const resp = await fetch(`${getAgentHost()}/personalization/consent`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(3000),
+          });
+          if (resp.ok) {
+            const data = (await resp.json()) as { has_consent?: boolean; granted_at?: string };
+            if (data.has_consent) {
+              request.session.consentApproved = true;
+              request.session.consentGrantedAt = data.granted_at;
+            }
+          }
+        } catch { /* agent unreachable — stay with session state */ }
       }
     }
 

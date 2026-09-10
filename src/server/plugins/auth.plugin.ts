@@ -4,6 +4,26 @@ import fp from "fastify-plugin";
 import { getSettings } from "../utils/settings.js";
 import { resolveSessionIdentity, safePostLoginRedirect } from "../utils/session-identity.js";
 
+function getAgentHost(): string {
+  const cfg = getSettings();
+  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+}
+
+/**
+ * Check consent status from the agent's Postgres-backed API.
+ * Returns { has_consent, granted_at } or null on failure.
+ */
+async function fetchAgentConsent(accessToken: string): Promise<{ has_consent: boolean; granted_at: string | null } | null> {
+  try {
+    const resp = await fetch(`${getAgentHost()}/personalization/consent`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (resp.ok) return (await resp.json()) as { has_consent: boolean; granted_at: string | null };
+  } catch { /* agent unreachable — fall through */ }
+  return null;
+}
+
 import { OAuth2Namespace } from "@fastify/oauth2";
 
 type UserInfo = {
@@ -162,19 +182,18 @@ async function routes(fastify: FastifyInstance) {
         token: tokenSet.token,
       });
 
-      const previousSub = (request as any).session.user?.sub;
       (request as any).session.user = identity.user;
       (request as any).session.token = tokenSet.token;
 
-      if (previousSub && previousSub !== identity.user.sub) {
-        (request as any).session.consentApproved = false;
-        delete (request as any).session.consentGrantedAt;
-      }
-
-      if ((request as any).session.consentApproved) {
+      const agentConsent = await fetchAgentConsent(tokenSet.token.access_token);
+      if (agentConsent?.has_consent) {
+        (request as any).session.consentApproved = true;
+        (request as any).session.consentGrantedAt = agentConsent.granted_at;
         return reply.redirect(defaultRedirect);
       }
 
+      (request as any).session.consentApproved = false;
+      delete (request as any).session.consentGrantedAt;
       (request as any).session.postConsentRedirect = defaultRedirect;
       return reply.redirect("/consent");
     } catch (error) {
@@ -190,8 +209,26 @@ async function routes(fastify: FastifyInstance) {
       return reply.code(401).send({ error: "Not authenticated" });
     }
 
-    session.consentApproved = true;
-    session.consentGrantedAt = new Date().toISOString();
+    const token = session.token?.access_token;
+    try {
+      const resp = await fetch(`${getAgentHost()}/personalization/consent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "X-User-ID": session.user.preferred_username || session.user.sub || "",
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!resp.ok) throw new Error(`Agent returned ${resp.status}`);
+      const data = (await resp.json()) as { granted_at?: string };
+      session.consentApproved = true;
+      session.consentGrantedAt = data.granted_at;
+    } catch (err) {
+      session.consentApproved = true;
+      session.consentGrantedAt = new Date().toISOString();
+      fastify.log.warn({ err }, "Agent consent store failed, session-only fallback");
+    }
 
     const redirectUrl = session.postConsentRedirect ?? "/";
     delete session.postConsentRedirect;
@@ -201,10 +238,25 @@ async function routes(fastify: FastifyInstance) {
 
   fastify.get("/auth/consent/status", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
     const session = (request as any).session;
-    return reply.send({
-      hasConsent: !!session?.consentApproved,
-      grantedAt: session?.consentGrantedAt ?? null,
-    });
+
+    if (session?.consentApproved) {
+      return reply.send({
+        hasConsent: true,
+        grantedAt: session.consentGrantedAt ?? null,
+      });
+    }
+
+    const token = session?.token?.access_token;
+    if (token) {
+      const agentConsent = await fetchAgentConsent(token);
+      if (agentConsent?.has_consent) {
+        session.consentApproved = true;
+        session.consentGrantedAt = agentConsent.granted_at;
+        return reply.send({ hasConsent: true, grantedAt: agentConsent.granted_at });
+      }
+    }
+
+    return reply.send({ hasConsent: false, grantedAt: null });
   });
 
   fastify.post("/auth/consent/revoke", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
@@ -212,6 +264,20 @@ async function routes(fastify: FastifyInstance) {
     const session = (request as any).session;
     if (!session?.user) {
       return reply.code(401).send({ error: "Not authenticated" });
+    }
+
+    const token = session.token?.access_token;
+    try {
+      await fetch(`${getAgentHost()}/personalization/consent`, {
+        method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "X-User-ID": session.user.preferred_username || session.user.sub || "",
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (err) {
+      fastify.log.warn({ err }, "Agent consent revoke failed");
     }
 
     session.consentApproved = false;
