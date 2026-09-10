@@ -29,7 +29,7 @@ function verifyCsrfOrigin(request: FastifyRequest, reply: FastifyReply): boolean
   const origin = request.headers.origin;
   if (!origin) return true;
   try {
-    const allowed = new URL(`${request.protocol}://${request.hostname}`).origin;
+    const allowed = new URL(`${request.protocol}://${request.host}`).origin;
     if (new URL(origin).origin !== allowed) {
       reply.code(403).send({ error: "cross_origin_denied", message: "Cross-origin request rejected" });
       return false;
