@@ -2,7 +2,6 @@ import { loadPromptMdConfig } from "./prompt-md.js";
 import {
   resolveUserRole,
   PRIVILEGED_ROLES,
-  type LdapRole,
 } from "./ldap-client.js";
 
 export type UserRole =
