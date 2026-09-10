@@ -2,6 +2,7 @@ import fastifyPlugin from "fastify-plugin";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { getSettings } from "../utils/settings.js";
 import { resolveRole, type UserRole } from "../utils/role-resolver.js";
+import { safePostLoginRedirect } from "../utils/session-identity.js";
 
 declare module "fastify" {
   interface Session {
@@ -178,7 +179,7 @@ async function authCheck(
         if (path.startsWith("/api/") || path.startsWith("/v1/")) {
           return reply.code(403).send({ error: "consent_required", message: "User consent is required" });
         }
-        request.session.postConsentRedirect = request.url;
+        request.session.postConsentRedirect = safePostLoginRedirect(request.url);
         return reply.redirect("/consent");
       }
     }
