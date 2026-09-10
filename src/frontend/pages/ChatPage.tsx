@@ -509,10 +509,6 @@ export function ChatPage({ threadId }: { threadId: string }) {
     }
   }, [agentHealth.status, threadId, thread, dispatch, currentChat]);
 
-  const handleNewChat = useCallback(() => {
-    navigate('/');
-  }, [navigate]);
-
   const handleExportMarkdown = useCallback(() => {
     if (!currentChat || thread.messages.length === 0) return;
     const title = currentChat.title || 'Chat';
