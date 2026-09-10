@@ -509,10 +509,6 @@ export function ChatPage({ threadId }: { threadId: string }) {
     }
   }, [agentHealth.status, threadId, thread, dispatch, currentChat]);
 
-  const handleNewChat = useCallback(() => {
-    navigate('/');
-  }, [navigate]);
-
   const handleExportMarkdown = useCallback(() => {
     if (!currentChat || thread.messages.length === 0) return;
     const title = currentChat.title || 'Chat';
@@ -619,7 +615,6 @@ export function ChatPage({ threadId }: { threadId: string }) {
               onSubmit={handleSubmit}
               onEditMessage={handleEditMessage}
               onCancel={handleCancel}
-              onNewChat={handleNewChat}
               liveActivityEvents={processedEventsTimeline}
               historicalActivities={historicalActivities}
               isRateLimited={rateLimit.isRateLimited}
