@@ -15,7 +15,7 @@ let startupWarningLogged = false;
 
 /**
  * Resolve a user's role from PROMPT.md groups + LDAP membership.
- * Returns null only when AUTH_ENABLED=false (local dev — full access).
+ * When AUTH_ENABLED=false, the caller assigns "owners" directly (local dev — full access).
  * No groups in PROMPT.md → 'users' (chat only, no developer/eval/dataset).
  * When accessibility is 'public' and user is not in any group, returns 'users' (chat-only access).
  * When accessibility is 'private' and user is not in any group, returns 'denied' (no access).

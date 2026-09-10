@@ -114,6 +114,8 @@ async function authCheck(
           scope: "openid",
         };
       }
+
+      request.session.role = "owners";
     }
 
     if (!request.session?.user) {
