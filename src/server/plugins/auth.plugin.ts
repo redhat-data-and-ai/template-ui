@@ -52,7 +52,8 @@ function verifyCsrfOrigin(request: FastifyRequest, reply: FastifyReply): boolean
     return false;
   }
   try {
-    const proto = (request.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() || request.protocol;
+    const fwdProto = (request.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim();
+    const proto = (fwdProto === "https" || fwdProto === "http") ? fwdProto : request.protocol;
     const allowed = new URL(`${proto}://${request.host}`).origin;
     if (new URL(origin).origin !== allowed) {
       reply.code(403).send({ error: "cross_origin_denied", message: "Cross-origin request rejected" });
