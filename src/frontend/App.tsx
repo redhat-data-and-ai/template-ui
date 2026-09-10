@@ -10,6 +10,7 @@ import { ProjectChatPage } from './pages/ProjectChatPage';
 import { EvalDatasetPage } from './pages/EvalDatasetPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastNotifications } from './components/ToastNotifications';
+import { isPrivilegedUser } from './lib/role-utils';
 import { useThemeSync } from './hooks/useThemeSync';
 import { loadConfig, setBranding, setFeatures } from './redux/slices/config';
 import { setConfigDefaults } from './redux/slices/userSettings';
@@ -106,7 +107,10 @@ export default function App() {
           <Route path="/chat/:threadId" element={<ChatRoutePage />} />
           <Route path="/project/:projectId" element={<ProjectChatPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/eval/dataset" element={<EvalDatasetPage />} />
+          <Route
+            path="/eval/dataset"
+            element={isPrivilegedUser() ? <EvalDatasetPage /> : <Navigate to="/" replace />}
+          />
         </Routes>
       </AppLayout>
       <ToastNotifications />

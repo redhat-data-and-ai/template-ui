@@ -1,6 +1,7 @@
 import fastifyPlugin from "fastify-plugin";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { getSettings } from "../utils/settings.js";
+import { resolveRole, type UserRole } from "../utils/role-resolver.js";
 
 declare module "fastify" {
   interface Session {
@@ -21,6 +22,8 @@ declare module "fastify" {
       scope: string;
     };
     redirectUri?: string;
+    role?: UserRole;
+    roleResolvedAt?: number;
   }
 }
 function headerValue(request: FastifyRequest, name: string): string | undefined {
@@ -60,9 +63,8 @@ async function authCheck(
     });
   }
 
-  instance.addHook("preHandler", (request: FastifyRequest, reply: FastifyReply, next: () => void) => {
+  instance.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
     if (shouldSkipAuth(request)) {
-      next();
       return;
     }
 
@@ -119,7 +121,45 @@ async function authCheck(
       return reply.redirect(buildGatewayLoginUrl(request));
     }
 
-    next();
+    if (process.env.AUTH_ENABLED !== "false") {
+      const cacheTtl = parseInt(process.env.LDAP_CACHE_TTL_SECONDS || "300", 10) * 1000;
+      const needsResolve =
+        request.session.role === undefined ||
+        !request.session.roleResolvedAt ||
+        Date.now() - request.session.roleResolvedAt > cacheTtl;
+
+      if (needsResolve) {
+        try {
+          request.session.role = await resolveRole(
+            request.session.user.preferred_username || request.session.user.email || request.session.user.sub,
+          );
+          request.session.roleResolvedAt = Date.now();
+        } catch (err) {
+          console.error("[AuthCheck] Role resolution failed:", (err as Error).message);
+          request.session.role = null;
+        }
+      }
+
+      const role = request.session.role;
+      const path = request.url.split("?")[0];
+
+      if (role === "denied") {
+        return reply.code(403).send({
+          error: "access_denied",
+          message: "You are not authorized to access this application.",
+        });
+      }
+
+      if (
+        role === "users" &&
+        (path.startsWith("/api/proxy/agent/evals") || path === "/eval/dataset")
+      ) {
+        return reply.code(403).send({
+          error: "forbidden",
+          message: "Insufficient permissions for this resource.",
+        });
+      }
+    }
   });
 }
 
