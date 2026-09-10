@@ -237,6 +237,7 @@ async function routes(fastify: FastifyInstance) {
   });
 
   fastify.get("/auth/consent/status", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
     const session = (request as any).session;
 
     if (session?.consentApproved) {
