@@ -126,8 +126,8 @@ export function HomePage() {
               </button>
             </div>
           </form>
-          <p className="text-xs text-muted-foreground text-center mt-2">
-            AI can make mistakes. Please review AI-generated content prior to use.
+          <p className="text-sm text-muted-foreground text-center mt-2">
+            You are interacting with an AI tool. Always review AI-generated content prior to use.
           </p>
         </div>
       </div>

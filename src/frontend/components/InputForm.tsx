@@ -124,6 +124,9 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           </button>
         </div>
       )}
+      <p className="text-sm text-muted-foreground text-center mt-2">
+        You are interacting with an AI tool. Always review AI-generated content prior to use.
+      </p>
     </form>
   );
 });

@@ -113,10 +113,12 @@ function partitionMessageContent(content: unknown): { thinkingText: string; mark
 
 function getCopyableAiMessageText(content: unknown): string {
   const { thinkingText, markdownForDisplay } = partitionMessageContent(content);
-  const main =
-    markdownForDisplay.length > 0 ? markdownForDisplay : extractMessageText(content);
-  if (!thinkingText) return main;
-  return [thinkingText, main].filter((s) => s.length > 0).join('\n\n');
+  const main = markdownForDisplay || (thinkingText ? '' : extractMessageText(content));
+  const body = thinkingText
+    ? [thinkingText, main].filter((s) => s.length > 0).join('\n\n')
+    : main;
+  if (!body?.trim()) return '';
+  return `${body}\n\n[AI-generated]`;
 }
 
 type MdComponentProps = {
@@ -930,8 +932,9 @@ export function ChatMessagesView({
     if (!wasLoading || isLoading) return;
     const lastAiMessage = [...messages].reverse().find((m) => m.type === 'ai');
     if (!lastAiMessage) return;
-    const text = getCopyableAiMessageText(lastAiMessage.content);
-    if (!text) return;
+    const { markdownForDisplay } = partitionMessageContent(lastAiMessage.content);
+    const text = markdownForDisplay || extractMessageText(lastAiMessage.content);
+    if (!text?.trim()) return;
     setSrAnnouncement('');
     const id = setTimeout(() => setSrAnnouncement(text), 50);
     return () => clearTimeout(id);
@@ -1060,18 +1063,24 @@ export function ChatMessagesView({
                     allDecisionsMade={globalAllDecisionsMade}
                     onSingleDecision={handleGlobalSingleDecision}
                   />
-                  {isLastAiInTurn && (
-                    <div className="pl-11 flex items-center gap-0.5 mt-1">
-                      <MessageCopyButton text={copyText} />
-                      <FeedbackButtons
-                        messageId={message.id ?? `msg-${messageIndex}`}
-                        chatId={chatId}
-                        traceId={traceId}
-                        userId={userId}
-                        existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
-                      />
-                    </div>
-                  )}
+                  <div className="pl-11 flex items-center gap-0.5 mt-1">
+                    {isLastAiInTurn && (
+                      <>
+                        <MessageCopyButton text={copyText} />
+                        <FeedbackButtons
+                          messageId={message.id ?? `msg-${messageIndex}`}
+                          chatId={chatId}
+                          traceId={traceId}
+                          userId={userId}
+                          existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                        />
+                      </>
+                    )}
+                    <span className="inline-flex items-center gap-1 ml-2 text-[11px] text-muted-foreground" aria-label="AI-generated content">
+                      <Bot className="w-2.5 h-2.5" aria-hidden="true" />
+                      AI-generated
+                    </span>
+                  </div>
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
                       <div className="text-[11px] text-muted-foreground">
