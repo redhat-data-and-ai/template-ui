@@ -4,7 +4,7 @@ import { Alert } from "@patternfly/react-core";
 import { buildAppPath } from '../lib/app-paths';
 
 interface InputFormProps {
-  onSubmit: (inputValue: string) => void;
+  onSubmit: (inputValue: string) => void | boolean | Promise<void | boolean>;
   onCancel: () => void;
   onNewChat?: () => void;
   isLoading: boolean;
@@ -26,12 +26,18 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
   ref,
 ) {
   const [internalInputValue, setInternalInputValue] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInternalSubmit = (e?: FormEvent) => {
+  const handleInternalSubmit = async (e?: FormEvent) => {
     if (e) e.preventDefault();
-    if (!internalInputValue.trim()) return;
-    onSubmit(internalInputValue);
-    setInternalInputValue("");
+    if (!internalInputValue.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const accepted = await Promise.resolve(onSubmit(internalInputValue));
+      if (accepted !== false) setInternalInputValue("");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -41,7 +47,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
     }
   };
 
-  const isSubmitDisabled = !internalInputValue.trim() || isLoading || isRateLimited;
+  const isSubmitDisabled = !internalInputValue.trim() || isLoading || isRateLimited || isSubmitting;
 
   return (
     <form
