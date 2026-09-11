@@ -22,17 +22,14 @@ elif [ -n "$CUSTOM_CA_URL" ]; then
 fi
 
 if [ -n "$CA_PEM" ]; then
-  BUNDLE_PATH="/tmp/.ca-bundle.pem"
+  BUNDLE_PATH="$(mktemp /tmp/ca-bundle-XXXXXXXXXX.pem)"
+  chmod 600 "$BUNDLE_PATH"
 
   if [ -f /etc/pki/tls/certs/ca-bundle.crt ]; then
-    cp /etc/pki/tls/certs/ca-bundle.crt "$BUNDLE_PATH"
+    cat /etc/pki/tls/certs/ca-bundle.crt > "$BUNDLE_PATH"
   elif [ -f /etc/ssl/certs/ca-certificates.crt ]; then
-    cp /etc/ssl/certs/ca-certificates.crt "$BUNDLE_PATH"
-  else
-    touch "$BUNDLE_PATH"
+    cat /etc/ssl/certs/ca-certificates.crt > "$BUNDLE_PATH"
   fi
-
-  chmod u+w "$BUNDLE_PATH"
   cat "$CA_PEM" >> "$BUNDLE_PATH"
   [ "$CA_PEM" = "/tmp/custom-ca.pem" ] && rm -f /tmp/custom-ca.pem
 
