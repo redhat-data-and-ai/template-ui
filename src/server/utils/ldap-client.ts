@@ -135,64 +135,71 @@ export async function isUserInGroup(
   const cached = await cacheGet(cacheKey);
   if (cached !== null) return cached;
 
-  const client = await ensureBound();
-  if (!client) return false;
-
   const searchBase = getGroupSearchBase();
   const ldapUrl = process.env.LDAP_URL || "";
   const baseDn = deriveBaseDn(ldapUrl);
   const memberAttrs = getMemberAttrs();
   const userAttr = process.env.LDAP_USER_ATTR || "uid";
 
-  try {
-    const { searchEntries } = await client.search(searchBase, {
-      scope: "sub",
-      filter: `(cn=${groupCn})`,
-      attributes: memberAttrs,
-    });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const client = await ensureBound();
+    if (!client) return false;
 
-    let found = false;
-    for (const entry of searchEntries) {
-      for (const attr of memberAttrs) {
-        const values = entry[attr];
-        if (!values) continue;
-        const memberList = Array.isArray(values) ? values : [values];
-        for (const member of memberList) {
-          const memberStr =
-            typeof member === "string"
-              ? member
-              : member instanceof Buffer
-                ? member.toString("utf-8")
-                : String(member);
-          const memberLower = memberStr.toLowerCase();
-          if (
-            memberLower === userId.toLowerCase() ||
-            memberLower ===
-              `${userAttr}=${userId.toLowerCase()},ou=users,${baseDn}`
-          ) {
-            found = true;
-            break;
+    try {
+      const { searchEntries } = await client.search(searchBase, {
+        scope: "sub",
+        filter: `(cn=${groupCn})`,
+        attributes: memberAttrs,
+      });
+
+      let found = false;
+      for (const entry of searchEntries) {
+        for (const attr of memberAttrs) {
+          const values = entry[attr];
+          if (!values) continue;
+          const memberList = Array.isArray(values) ? values : [values];
+          for (const member of memberList) {
+            const memberStr =
+              typeof member === "string"
+                ? member
+                : member instanceof Buffer
+                  ? member.toString("utf-8")
+                  : String(member);
+            const memberLower = memberStr.toLowerCase();
+            if (
+              memberLower === userId.toLowerCase() ||
+              memberLower ===
+                `${userAttr}=${userId.toLowerCase()},ou=users,${baseDn}`
+            ) {
+              found = true;
+              break;
+            }
           }
+          if (found) break;
         }
         if (found) break;
       }
-      if (found) break;
-    }
 
-    await cacheSet(cacheKey, found);
-    return found;
-  } catch (err) {
-    console.error(
-      `[LDAP] Search failed for group ${groupCn}:`,
-      (err as Error).message,
-    );
-    if (ldapClient) {
-      try { await ldapClient.unbind(); } catch { /* ignore */ }
-      ldapClient = null;
+      await cacheSet(cacheKey, found);
+      return found;
+    } catch (err) {
+      console.error(
+        `[LDAP] Search failed for group ${groupCn}:`,
+        (err as Error).message,
+      );
+      if (ldapClient) {
+        try { await ldapClient.unbind(); } catch { /* ignore */ }
+        ldapClient = null;
+      }
+      bindFailed = true;
+      if (attempt === 0) {
+        console.log("[LDAP] Retrying with fresh connection");
+        continue;
+      }
+      return false;
     }
-    bindFailed = true;
-    return false;
   }
+  return false;
 }
 
 /** Resolve a user's highest-priority role by checking LDAP group membership against the provided mappings. Returns 'denied' if no groups match. */
