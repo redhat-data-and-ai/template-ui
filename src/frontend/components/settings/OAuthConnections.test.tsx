@@ -65,9 +65,26 @@ describe('OAuthConnections', () => {
     expect(screen.queryByRole('button', { name: /disconnect jira/i })).not.toBeInTheDocument();
   });
 
-  it('falls back to the MCP name when description is empty', async () => {
+  it('prefers display_name over description when present', async () => {
     vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
-      { ...connected, description: '', mcp_name: 'plain-mcp' },
+      { ...connected, display_name: 'Friendly Name', description: 'Long description' },
+    ]);
+    renderWithProviders(<OAuthConnections />);
+    expect(await screen.findByText('Friendly Name')).toBeInTheDocument();
+    expect(screen.queryByText('Long description')).not.toBeInTheDocument();
+  });
+
+  it('falls back to description when display_name is empty', async () => {
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
+      { ...connected, display_name: '', description: 'Smartsheet' },
+    ]);
+    renderWithProviders(<OAuthConnections />);
+    expect(await screen.findByText('Smartsheet')).toBeInTheDocument();
+  });
+
+  it('falls back to the MCP name when both display_name and description are empty', async () => {
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
+      { ...connected, display_name: '', description: '', mcp_name: 'plain-mcp' },
     ]);
     renderWithProviders(<OAuthConnections />);
     expect(await screen.findByText('plain-mcp')).toBeInTheDocument();

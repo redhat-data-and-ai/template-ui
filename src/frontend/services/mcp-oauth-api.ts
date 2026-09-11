@@ -11,6 +11,7 @@ export interface McpOAuthConnection {
   mcp_name: string;
   auth_mode: string;
   description: string;
+  display_name?: string;
   connected: boolean;
 }
 
