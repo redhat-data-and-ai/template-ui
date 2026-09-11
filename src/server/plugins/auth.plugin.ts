@@ -52,7 +52,9 @@ function verifyCsrfOrigin(request: FastifyRequest, reply: FastifyReply): boolean
     return false;
   }
   try {
-    const allowed = new URL(`${request.protocol}://${request.host}`).origin;
+    const fwdProto = (request.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim();
+    const proto = (fwdProto === "https" || fwdProto === "http") ? fwdProto : request.protocol;
+    const allowed = new URL(`${proto}://${request.host}`).origin;
     if (new URL(origin).origin !== allowed) {
       reply.code(403).send({ error: "cross_origin_denied", message: "Cross-origin request rejected" });
       return false;
@@ -203,7 +205,7 @@ async function routes(fastify: FastifyInstance) {
   });
 
   fastify.post("/auth/consent/approve", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
-    if (!verifyCsrfOrigin(request, reply)) return;
+    if (!verifyCsrfOrigin(request, reply)) return reply;
     const session = (request as any).session;
     if (!session?.user) {
       return reply.code(401).send({ error: "Not authenticated" });
@@ -261,7 +263,7 @@ async function routes(fastify: FastifyInstance) {
   });
 
   fastify.post("/auth/consent/revoke", AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
-    if (!verifyCsrfOrigin(request, reply)) return;
+    if (!verifyCsrfOrigin(request, reply)) return reply;
     const session = (request as any).session;
     if (!session?.user) {
       return reply.code(401).send({ error: "Not authenticated" });
