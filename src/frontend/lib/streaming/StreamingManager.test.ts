@@ -72,7 +72,7 @@ describe('StreamingManager', () => {
     const manager = new StreamingManager();
     await manager.stream(BASE_REQUEST, callbacks);
 
-    expect(callbacks.onToken).toHaveBeenCalledWith('Hello');
+    expect(callbacks.onToken).toHaveBeenCalledWith('Hello', undefined);
     expect(callbacks.onDone).toHaveBeenCalledOnce();
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
@@ -124,7 +124,7 @@ describe('StreamingManager', () => {
     await manager.stream(BASE_REQUEST, callbacks);
 
     expect(callbacks.onToken).toHaveBeenCalledTimes(1);
-    expect(callbacks.onToken).toHaveBeenCalledWith('First');
+    expect(callbacks.onToken).toHaveBeenCalledWith('First', undefined);
   });
 
   // ── HTTP error → onError + status 'error' ────────────────────────────────
@@ -241,7 +241,7 @@ describe('StreamingManager', () => {
     await manager.stream(BASE_REQUEST, cb2);
 
     // chunk_id 0 was used in first stream; after cancel+reset it should work again
-    expect(cb2.onToken).toHaveBeenCalledWith('Re-used');
+    expect(cb2.onToken).toHaveBeenCalledWith('Re-used', undefined);
   });
 
   it('includes project_id in the stream request body when provided', async () => {
