@@ -62,6 +62,17 @@ describe('mcp-oauth-api', () => {
     await expect(fetchMcpOAuthConnections()).rejects.toThrow(/boom/);
   });
 
+  it('fetchMcpOAuthConnections rejects a payload without a connections array', async () => {
+    vi.mocked(authenticatedFetch).mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(fetchMcpOAuthConnections()).rejects.toThrow(/invalid payload/i);
+  });
+
   it('disconnectMcpOAuth DELETEs the per-MCP disconnect route', async () => {
     vi.mocked(authenticatedFetch).mockResolvedValue(
       new Response(JSON.stringify({ mcp_name: 'smartsheet-mcp', connected: false }), {

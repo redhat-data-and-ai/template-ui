@@ -30,6 +30,7 @@ import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAgentHealth } from '../hooks/useAgentHealth';
+import { usePreStreamGate } from '../hooks/usePreStreamGate';
 import {
   downloadFile,
   exportAsJSON,
@@ -65,6 +66,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   const thread = useStreamingAPI(threadId);
   const rateLimit = useRateLimitState();
+  const { ensureReady, modal } = usePreStreamGate();
 
   const [streamAnnouncement, setStreamAnnouncement] = useState('');
   const prevIsLoadingForAnnounce = useRef<boolean | null>(null);
@@ -184,19 +186,28 @@ export function ChatPage({ threadId }: { threadId: string }) {
     if (!prompt || initialPromptSent.current || hydrating || thread.isLoading) return;
     if (!currentChat || currentChat.messages.length > 0) return;
 
-    initialPromptSent.current = true;
-    navigate(location.pathname, { replace: true, state: {} });
+    let cancelled = false;
+    void (async () => {
+      if (cancelled) return;
+      initialPromptSent.current = true;
+      navigate(location.pathname, { replace: true, state: {} });
+      if (cancelled) return;
 
-    const userMessage: Message = {
-      id: `msg-${Date.now()}`,
-      type: 'human',
-      content: prompt,
+      const userMessage: Message = {
+        id: `msg-${Date.now()}`,
+        type: 'human',
+        content: prompt,
+      };
+      try {
+        await thread.submit({ messages: [userMessage] });
+        hasFinalizeEventOccurredRef.current = true;
+      } catch (err) {
+        console.error('Failed to auto-send initial prompt:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    thread.submit({ messages: [userMessage] }).then(() => {
-      hasFinalizeEventOccurredRef.current = true;
-    }).catch((err) => {
-      console.error('Failed to auto-send initial prompt:', err);
-    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, hydrating, thread.isLoading]);
 
@@ -268,12 +279,12 @@ export function ChatPage({ threadId }: { threadId: string }) {
     pendingMcpModelContextRef.current = formatMcpModelContext(update);
   }, []);
 
-  const handleSubmit = useCallback(
+  const submitUserTurn = useCallback(
     async (inputValue: string) => {
-      if (!threadId || !currentChat) return;
+      if (!threadId || !currentChat) return false;
 
       const trimmed = inputValue.trim();
-      if (!trimmed) return;
+      if (!trimmed) return false;
 
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
@@ -295,20 +306,37 @@ export function ChatPage({ threadId }: { threadId: string }) {
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
+        return true;
       } catch (err) {
         console.error('Failed to submit message:', err);
         dispatch(addToast({ title: 'Failed to send message', message: 'Please try again.', variant: 'danger' }));
+        return false;
       }
     },
-    [threadId, currentChat, dispatch]
+    [threadId, currentChat, dispatch],
+  );
+
+  const handleSubmit = useCallback(
+    async (inputValue: string) => {
+      if (!(await ensureReady())) return false;
+      return submitUserTurn(inputValue);
+    },
+    [ensureReady, submitUserTurn],
+  );
+
+  const sendUserMessage = useCallback(
+    async (text: string) => {
+      await submitUserTurn(text);
+    },
+    [submitUserTurn],
   );
 
   const chatActions = useMemo(
     () => ({
-      sendUserMessage: handleSubmit,
+      sendUserMessage,
       setMcpModelContext,
     }),
-    [handleSubmit, setMcpModelContext],
+    [sendUserMessage, setMcpModelContext],
   );
 
   const handleCancel = useCallback(() => {
@@ -317,11 +345,13 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   const handleEditMessage = useCallback(
     async (messageIndex: number, newContent: string) => {
-      if (!threadId || !currentChat) return;
+      if (!threadId || !currentChat) return false;
       const trimmed = newContent.trim();
-      if (trimmed === '') return;
+      if (trimmed === '') return false;
+      if (!(await ensureReady())) return false;
 
-      const truncated = thread.messages.slice(0, messageIndex);
+      const currentThread = threadRef.current;
+      const truncated = currentThread.messages.slice(0, messageIndex);
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
         type: 'human',
@@ -330,16 +360,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
       const nextMessages = [...truncated, userMessage];
 
       try {
-        await thread.submit({ messages: nextMessages });
+        await currentThread.submit({ messages: nextMessages });
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
+        return true;
       } catch (err) {
         console.error('Failed to edit message:', err);
         dispatch(addToast({ title: 'Failed to send edited message', message: 'Please try again.', variant: 'danger' }));
+        return false;
       }
     },
-    [thread, threadId, currentChat, dispatch],
+    [threadId, currentChat, dispatch, ensureReady],
   );
 
   const handleRetry = useCallback(() => {
@@ -349,6 +381,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   const handleStreamRetry = useCallback(async () => {
     if (!threadId || !currentChat) return;
+    if (!(await ensureReady())) return;
     const currentThread = threadRef.current;
     if (currentThread.messages.length === 0) return;
     const mcpModelContext = pendingMcpModelContextRef.current;
@@ -364,7 +397,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
       console.error('Failed to retry:', err);
       dispatch(addToast({ title: 'Failed to retry', message: 'Please try again.', variant: 'danger' }));
     }
-  }, [threadId, currentChat, dispatch]);
+  }, [threadId, currentChat, dispatch, ensureReady]);
 
   const handleInterruptResume = useCallback(
     async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
@@ -537,32 +570,41 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   if (chatsLoading || hydrating) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <Spinner size="lg" aria-label="Loading chat" />
-        <p className="text-muted-foreground">{hydrating ? 'Loading messages...' : 'Loading chat...'}</p>
-      </div>
+      <>
+        {modal}
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <Spinner size="lg" aria-label="Loading chat" />
+          <p className="text-muted-foreground">{hydrating ? 'Loading messages...' : 'Loading chat...'}</p>
+        </div>
+      </>
     );
   }
 
   if (threadId && !currentChat) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
-        <p className="text-muted-foreground">The requested chat could not be found.</p>
-        <Button variant="primary" onClick={() => navigate('/')}>Go Home</Button>
-      </div>
+      <>
+        {modal}
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
+          <p className="text-muted-foreground">The requested chat could not be found.</p>
+          <Button variant="primary" onClick={() => navigate('/')}>Go Home</Button>
+        </div>
+      </>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <h1 className="text-2xl text-destructive font-bold">Error</h1>
-        <p className="text-destructive">{error}</p>
-        <Button variant="danger" onClick={() => window.location.reload()}>
-          Retry
-        </Button>
-      </div>
+      <>
+        {modal}
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <h1 className="text-2xl text-destructive font-bold">Error</h1>
+          <p className="text-destructive">{error}</p>
+          <Button variant="danger" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
+      </>
     );
   }
 
@@ -571,8 +613,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
   );
 
   return (
-    <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
-      <ChatActionsProvider value={chatActions}>
+    <>
+      {modal}
+      <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
+        <ChatActionsProvider value={chatActions}>
         <div aria-live="polite" className="sr-only">
           {streamAnnouncement}
         </div>
@@ -648,8 +692,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
             </div>
           )}
         </div>
-      </ChatActionsProvider>
-    </ChatErrorBoundary>
+        </ChatActionsProvider>
+      </ChatErrorBoundary>
+    </>
   );
 }
 
