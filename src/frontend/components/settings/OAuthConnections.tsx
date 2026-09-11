@@ -13,7 +13,7 @@ import {
 
 function displayName(connection: McpOAuthConnection): string {
   const dn = (connection.display_name ?? '').trim();
-  return dn || connection.mcp_name;
+  return dn || connection.mcp_name || (connection.description ?? '').trim();
 }
 
 export function OAuthConnections() {

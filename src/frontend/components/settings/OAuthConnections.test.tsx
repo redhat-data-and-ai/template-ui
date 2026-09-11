@@ -78,10 +78,10 @@ describe('OAuthConnections', () => {
 
   it('falls back to mcp_name when display_name is empty', async () => {
     vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
-      { ...connected, display_name: '', mcp_name: 'plain-mcp' },
+      { ...connected, display_name: '', mcp_name: 'smartsheet-mcp' },
     ]);
     renderWithProviders(<OAuthConnections />);
-    expect(await screen.findByText('plain-mcp')).toBeInTheDocument();
+    expect(await screen.findByText('smartsheet-mcp')).toBeInTheDocument();
   });
 
   it('falls back to mcp_name when display_name is missing', async () => {
