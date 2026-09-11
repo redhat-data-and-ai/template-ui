@@ -22,21 +22,23 @@ elif [ -n "$CUSTOM_CA_URL" ]; then
 fi
 
 if [ -n "$CA_PEM" ]; then
-  BUNDLE_PATH="/opt/app-root/src/.ca-bundle.pem"
+  BUNDLE_PATH="$(mktemp /tmp/ca-bundle-XXXXXXXXXX.pem)"
+  chmod 600 "$BUNDLE_PATH"
 
   if [ -f /etc/pki/tls/certs/ca-bundle.crt ]; then
-    cp /etc/pki/tls/certs/ca-bundle.crt "$BUNDLE_PATH"
+    cat /etc/pki/tls/certs/ca-bundle.crt > "$BUNDLE_PATH"
   elif [ -f /etc/ssl/certs/ca-certificates.crt ]; then
-    cp /etc/ssl/certs/ca-certificates.crt "$BUNDLE_PATH"
-  else
-    touch "$BUNDLE_PATH"
+    cat /etc/ssl/certs/ca-certificates.crt > "$BUNDLE_PATH"
   fi
-
-  chmod u+w "$BUNDLE_PATH"
   cat "$CA_PEM" >> "$BUNDLE_PATH"
   [ "$CA_PEM" = "/tmp/custom-ca.pem" ] && rm -f /tmp/custom-ca.pem
 
   export NODE_EXTRA_CA_CERTS="$BUNDLE_PATH"
+
+  # Let ldap-client.ts pick up the same bundle when LDAP_CA_CERT is unset
+  if [ -z "$LDAP_CA_CERT" ]; then
+    export LDAP_CA_CERT="$BUNDLE_PATH"
+  fi
 
   echo "INFO: Custom CA bundle configured at $BUNDLE_PATH" >&2
 fi
