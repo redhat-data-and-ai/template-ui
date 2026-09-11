@@ -8,11 +8,16 @@ CA_PEM=""
 if [ -n "$CUSTOM_CA_PATH" ] && [ -f "$CUSTOM_CA_PATH" ]; then
   CA_PEM="$CUSTOM_CA_PATH"
 elif [ -n "$CUSTOM_CA_URL" ]; then
+  case "$CUSTOM_CA_URL" in
+    https://*) ;;
+    *) echo "ERROR: CUSTOM_CA_URL must use https://" >&2; exec "$@" ;;
+  esac
+  CA_URL_REDACTED="${CUSTOM_CA_URL%%\?*}"
   if curl -fso /tmp/custom-ca.pem "$CUSTOM_CA_URL"; then
     CA_PEM="/tmp/custom-ca.pem"
-    echo "INFO: Successfully fetched CA from $CUSTOM_CA_URL" >&2
+    echo "INFO: Successfully fetched CA from $CA_URL_REDACTED" >&2
   else
-    echo "WARN: Failed to fetch CA from $CUSTOM_CA_URL, continuing with defaults" >&2
+    echo "WARN: Failed to fetch CA from $CA_URL_REDACTED, continuing with defaults" >&2
   fi
 fi
 

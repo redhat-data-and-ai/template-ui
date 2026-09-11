@@ -187,11 +187,11 @@ export async function isUserInGroup(
         `[LDAP] Search failed for group ${groupCn}:`,
         (err as Error).message,
       );
-      if (ldapClient) {
-        try { await ldapClient.unbind(); } catch { /* ignore */ }
+      if (ldapClient === client) {
+        try { await client.unbind(); } catch { /* ignore */ }
         ldapClient = null;
+        bindFailed = true;
       }
-      bindFailed = true;
       if (attempt === 0) {
         console.log("[LDAP] Retrying with fresh connection");
         continue;
