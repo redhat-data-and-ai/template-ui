@@ -34,10 +34,12 @@ RUN mkdir -p config/ui && chown -R 1001:0 config && chown -R 1001:0 /opt/app-roo
 
 USER 1001
 
-RUN npm ci && npm run build
+COPY --chown=1001:0 entrypoint.sh ./
+RUN chmod +x entrypoint.sh && npm ci && npm run build
 
 # Config will be mounted here at runtime from PVC
 # Override UI_CONFIG_PATH in deployment.yaml if using a custom mount location
 ENV UI_CONFIG_PATH=/app/config/ui/settings.yaml
 
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["node", "dist/server/index.js"]
