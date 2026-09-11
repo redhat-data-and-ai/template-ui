@@ -25,14 +25,16 @@ import {
 const connected: McpOAuthConnection = {
   mcp_name: 'smartsheet-mcp',
   auth_mode: 'oauth',
-  description: 'Smartsheet',
+  description: 'Smartsheet tools',
+  display_name: 'Smartsheet',
   connected: true,
 };
 
 const disconnected: McpOAuthConnection = {
   mcp_name: 'jira-mcp',
   auth_mode: 'dcr',
-  description: 'Jira',
+  description: 'Jira tools',
+  display_name: 'Jira',
   connected: false,
 };
 
@@ -74,20 +76,20 @@ describe('OAuthConnections', () => {
     expect(screen.queryByText('Long description')).not.toBeInTheDocument();
   });
 
-  it('falls back to description when display_name is empty', async () => {
+  it('falls back to mcp_name when display_name is empty', async () => {
     vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
-      { ...connected, display_name: '', description: 'Smartsheet' },
-    ]);
-    renderWithProviders(<OAuthConnections />);
-    expect(await screen.findByText('Smartsheet')).toBeInTheDocument();
-  });
-
-  it('falls back to the MCP name when both display_name and description are empty', async () => {
-    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
-      { ...connected, display_name: '', description: '', mcp_name: 'plain-mcp' },
+      { ...connected, display_name: '', mcp_name: 'plain-mcp' },
     ]);
     renderWithProviders(<OAuthConnections />);
     expect(await screen.findByText('plain-mcp')).toBeInTheDocument();
+  });
+
+  it('falls back to mcp_name when display_name is missing', async () => {
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
+      { ...connected, display_name: undefined, description: 'Some description', mcp_name: 'raw-key' },
+    ]);
+    renderWithProviders(<OAuthConnections />);
+    expect(await screen.findByText('raw-key')).toBeInTheDocument();
   });
 
   it('disconnects an MCP and refreshes status', async () => {
