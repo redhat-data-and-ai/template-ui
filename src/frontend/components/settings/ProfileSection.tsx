@@ -4,17 +4,20 @@ import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant } from
 import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
+import { selectDeveloperMode, setDeveloperMode } from '../../redux/slices/userSettings';
 import { loadProjectsThunk } from '../../redux/slices/projects';
 import { addToast } from '../../redux/slices/toasts';
 import { deleteThread } from '../../services/agent-rest';
 import { chatStorage } from '../../services/chatStorage';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
+import { isPrivilegedUser } from '../../lib/role-utils';
 
 export function ProfileSection() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const chats = useAppSelector(selectAllChats);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const developerMode = useAppSelector(selectDeveloperMode);
 
   const userData = useMemo(() => window.USER_DATA, []);
   const username =
@@ -76,6 +79,35 @@ export function ProfileSection() {
           <span className="text-muted-foreground">Authenticated via SSO</span>
         </div>
       </div>
+
+      {isPrivilegedUser() && (
+        <div className="pt-4 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-foreground">Developer Mode</h3>
+              <p className="text-xs text-muted-foreground">
+                Show the Developer tab with advanced tools and agent evaluation.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={developerMode}
+              aria-label="Enable Developer Mode"
+              onClick={() => dispatch(setDeveloperMode(!developerMode))}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
+                developerMode ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                  developerMode ? 'translate-x-4' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
 
       {chats.length > 0 && (
         <div className="pt-4 border-t border-border">
