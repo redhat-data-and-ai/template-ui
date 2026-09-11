@@ -17,7 +17,10 @@ export interface PromptMdConfig {
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPT_MD_PATH = resolve(__dirname, "../../../config/ui/PROMPT.md");
+const configDir = process.env.UI_CONFIG_PATH
+  ? dirname(process.env.UI_CONFIG_PATH)
+  : resolve(__dirname, "../../../config/ui");
+const PROMPT_MD_PATH = resolve(configDir, "PROMPT.md");
 
 let cached: PromptMdConfig | null = null;
 let watcher: FSWatcher | null = null;
