@@ -1,14 +1,11 @@
 import { forwardRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { SquarePen, ArrowUp, StopCircle } from "lucide-react";
+import { ArrowUp, StopCircle } from "lucide-react";
 import { Alert } from "@patternfly/react-core";
-import { buildAppPath } from '../lib/app-paths';
 
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
   onCancel: () => void;
-  onNewChat?: () => void;
   isLoading: boolean;
-  hasHistory: boolean;
   isRateLimited?: boolean;
   rateLimitRemainingSeconds?: number;
 }
@@ -17,9 +14,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
   {
   onSubmit,
   onCancel,
-  onNewChat,
   isLoading,
-  hasHistory,
   isRateLimited = false,
   rateLimitRemainingSeconds = 0,
   },
@@ -112,18 +107,6 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           )}
         </div>
       </div>
-      {hasHistory && (
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => onNewChat ? onNewChat() : (globalThis.location.href = buildAppPath('/'))}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted"
-          >
-            <SquarePen size={12} />
-            New Chat
-          </button>
-        </div>
-      )}
       <p className="text-sm text-muted-foreground text-center mt-2">
         You are interacting with an AI tool. Always review AI-generated content prior to use.
       </p>

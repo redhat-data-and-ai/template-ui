@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@patternfly/react-core';
-import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck, Code2, KeyRound } from 'lucide-react';
+import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck, Shield, Code2, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ProfileSection } from '../components/settings/ProfileSection';
 import { MemoryList } from '../components/settings/MemoryList';
@@ -9,12 +9,14 @@ import { RulesEditor } from '../components/settings/RulesEditor';
 import { AppearanceSettings } from '../components/settings/AppearanceSettings';
 import { AlwaysAllowedTools } from '../components/settings/AlwaysAllowedTools';
 import { DeveloperSettings } from '../components/settings/DeveloperSettings';
+import { AuthorizationSettings } from '../components/settings/AuthorizationSettings';
 import { useAppSelector } from '../redux/hooks';
 import { selectDeveloperMode } from '../redux/slices/userSettings';
 import { OAuthConnections } from '../components/settings/OAuthConnections';
+import { isPrivilegedUser } from '../lib/role-utils';
 import type { RootState } from '../redux/store';
 
-type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals' | 'oauth' | 'developer';
+type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals' | 'authorization' | 'oauth' | 'developer';
 
 const TABS: { id: TabId; label: string; panelTitle?: string; icon: typeof User }[] = [
   { id: 'profile', label: 'Profile', icon: User },
@@ -22,6 +24,7 @@ const TABS: { id: TabId; label: string; panelTitle?: string; icon: typeof User }
   { id: 'rules', label: 'Custom Rules', icon: ScrollText },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'tool-approvals', label: 'Tool Approvals', icon: ShieldCheck },
+  { id: 'authorization', label: 'Authorization', icon: Shield },
   { id: 'oauth', label: 'MCP OAuth', icon: KeyRound },
   { id: 'developer', label: 'Developer', icon: Code2 },
 ];
@@ -32,6 +35,7 @@ const TAB_CONTENT: Record<TabId, React.FC> = {
   rules: RulesEditor,
   appearance: AppearanceSettings,
   'tool-approvals': AlwaysAllowedTools,
+  authorization: AuthorizationSettings,
   oauth: OAuthConnections,
   developer: DeveloperSettings,
 };
@@ -55,7 +59,7 @@ export function SettingsPage() {
 
   const visibleTabs = useMemo(() => {
     return TABS.filter((tab) => {
-      if (tab.id === 'developer') return developerMode;
+      if (tab.id === 'developer') return isPrivilegedUser() && developerMode;
       if (tab.id === 'memories') return features?.memory_enabled !== false;
       return true;
     });

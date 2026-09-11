@@ -817,7 +817,6 @@ interface ChatMessagesViewProps {
   onSubmit: (inputValue: string) => void;
   onRetry?: () => void;
   onCancel: () => void;
-  onNewChat?: () => void;
   liveActivityEvents: ProcessedEvent[];
   historicalActivities: Record<string, ProcessedEvent[]>;
   isRateLimited?: boolean;
@@ -848,7 +847,6 @@ export function ChatMessagesView({
   onSubmit,
   onRetry,
   onCancel,
-  onNewChat,
   isRateLimited = false,
   rateLimitRemainingSeconds = 0,
   mcpEvents = [],
@@ -1156,8 +1154,6 @@ export function ChatMessagesView({
             onSubmit={onSubmit}
             isLoading={isLoading}
             onCancel={onCancel}
-            onNewChat={onNewChat}
-            hasHistory={messages.length > 0}
             isRateLimited={isRateLimited}
             rateLimitRemainingSeconds={rateLimitRemainingSeconds}
           />

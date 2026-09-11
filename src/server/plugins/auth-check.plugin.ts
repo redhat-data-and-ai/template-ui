@@ -1,6 +1,13 @@
 import fastifyPlugin from "fastify-plugin";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { getSettings } from "../utils/settings.js";
+import { resolveRole, type UserRole } from "../utils/role-resolver.js";
+import { safePostLoginRedirect } from "../utils/session-identity.js";
+
+function getAgentHost(): string {
+  const cfg = getSettings();
+  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+}
 
 declare module "fastify" {
   interface Session {
@@ -21,6 +28,11 @@ declare module "fastify" {
       scope: string;
     };
     redirectUri?: string;
+    role?: UserRole;
+    roleResolvedAt?: number;
+    consentApproved?: boolean;
+    consentGrantedAt?: string;
+    postConsentRedirect?: string;
   }
 }
 function headerValue(request: FastifyRequest, name: string): string | undefined {
@@ -42,6 +54,7 @@ function shouldSkipAuth(request: FastifyRequest): boolean {
     path.startsWith("/dist/") ||
     path === "/favicon.ico" ||
     path === "/login" ||
+    path === "/consent" ||
     path === "/api/health/agent" ||
     path === "/sandbox_proxy.html" ||
     path === "/sandbox_proxy.js"
@@ -60,9 +73,8 @@ async function authCheck(
     });
   }
 
-  instance.addHook("preHandler", (request: FastifyRequest, reply: FastifyReply, next: () => void) => {
+  instance.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
     if (shouldSkipAuth(request)) {
-      next();
       return;
     }
 
@@ -112,6 +124,13 @@ async function authCheck(
           scope: "openid",
         };
       }
+
+      request.session.role = "owners";
+
+      if (!request.session.consentApproved) {
+        request.session.consentApproved = true;
+        request.session.consentGrantedAt = new Date().toISOString();
+      }
     }
 
     if (!request.session?.user) {
@@ -119,7 +138,75 @@ async function authCheck(
       return reply.redirect(buildGatewayLoginUrl(request));
     }
 
-    next();
+    if (process.env.AUTH_ENABLED !== "false") {
+      const cacheTtl = parseInt(process.env.LDAP_CACHE_TTL_SECONDS || "300", 10) * 1000;
+      const needsResolve =
+        request.session.role === undefined ||
+        !request.session.roleResolvedAt ||
+        Date.now() - request.session.roleResolvedAt > cacheTtl;
+
+      if (needsResolve) {
+        try {
+          request.session.role = await resolveRole(
+            request.session.user.preferred_username || request.session.user.email || request.session.user.sub,
+          );
+          request.session.roleResolvedAt = Date.now();
+        } catch (err) {
+          console.error("[AuthCheck] Role resolution failed:", (err as Error).message);
+          request.session.role = "denied";
+        }
+      }
+
+      const role = request.session.role;
+      const path = request.url.split("?")[0];
+
+      if (role === "denied" || role == null) {
+        return reply.code(403).send({
+          error: "access_denied",
+          message: "You are not authorized to access this application.",
+        });
+      }
+
+      if (
+        role === "users" &&
+        (path.startsWith("/api/proxy/agent/evals") || path === "/eval/dataset")
+      ) {
+        return reply.code(403).send({
+          error: "forbidden",
+          message: "Insufficient permissions for this resource.",
+        });
+      }
+    }
+
+    if (!request.session.consentApproved) {
+      const token = request.session.token?.access_token;
+      if (token) {
+        try {
+          const resp = await fetch(`${getAgentHost()}/personalization/consent`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(3000),
+          });
+          if (resp.ok) {
+            const data = (await resp.json()) as { has_consent?: boolean; granted_at?: string };
+            if (data.has_consent) {
+              request.session.consentApproved = true;
+              request.session.consentGrantedAt = data.granted_at;
+            }
+          }
+        } catch { /* agent unreachable — stay with session state */ }
+      }
+    }
+
+    if (!request.session.consentApproved) {
+      const path = request.url.split("?")[0];
+      if (path !== "/consent") {
+        if (path.startsWith("/api/") || path.startsWith("/v1/")) {
+          return reply.code(403).send({ error: "consent_required", message: "User consent is required" });
+        }
+        request.session.postConsentRedirect = safePostLoginRedirect(request.url);
+        return reply.redirect("/consent");
+      }
+    }
   });
 }
 
