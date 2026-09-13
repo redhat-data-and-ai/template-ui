@@ -26,7 +26,7 @@ import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
 import { McpAppHostFromToolCall } from "./McpAppHost";
 import { TodoStrip } from "./TodoStrip";
-import { FeedbackButtons } from "./FeedbackButtons";
+import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButtons";
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
 
@@ -193,6 +193,44 @@ function MessageCopyButton({ text }: { text: string }) {
     >
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
+  );
+}
+
+function MessageActionsRow({
+  isLastAiInTurn,
+  copyText,
+  messageId,
+  chatId,
+  traceId,
+  userId,
+  existingFeedback,
+}: {
+  isLastAiInTurn: boolean;
+  copyText: string;
+  messageId: string;
+  chatId: string;
+  traceId: string | null;
+  userId?: string;
+  existingFeedback: 'up' | 'down' | null;
+}) {
+  const fb = useFeedback({ messageId, traceId, chatId, userId, existingFeedback });
+
+  return (
+    <>
+      <div className="pl-11 flex items-center gap-0.5 mt-1">
+        {isLastAiInTurn && (
+          <>
+            <MessageCopyButton text={copyText} />
+            <FeedbackButtons fb={fb} />
+          </>
+        )}
+        <span className="inline-flex items-center gap-1 ml-2 text-[11px] text-muted-foreground" aria-label="AI-generated content">
+          <Bot className="w-2.5 h-2.5" aria-hidden="true" />
+          AI-generated
+        </span>
+      </div>
+      <FeedbackCommentBox fb={fb} />
+    </>
   );
 }
 
@@ -1061,24 +1099,15 @@ export function ChatMessagesView({
                     allDecisionsMade={globalAllDecisionsMade}
                     onSingleDecision={handleGlobalSingleDecision}
                   />
-                  <div className="pl-11 flex items-center gap-0.5 mt-1">
-                    {isLastAiInTurn && (
-                      <>
-                        <MessageCopyButton text={copyText} />
-                        <FeedbackButtons
-                          messageId={message.id ?? `msg-${messageIndex}`}
-                          chatId={chatId}
-                          traceId={traceId}
-                          userId={userId}
-                          existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
-                        />
-                      </>
-                    )}
-                    <span className="inline-flex items-center gap-1 ml-2 text-[11px] text-muted-foreground" aria-label="AI-generated content">
-                      <Bot className="w-2.5 h-2.5" aria-hidden="true" />
-                      AI-generated
-                    </span>
-                  </div>
+                  <MessageActionsRow
+                    isLastAiInTurn={isLastAiInTurn}
+                    copyText={copyText}
+                    messageId={message.id ?? `msg-${messageIndex}`}
+                    chatId={chatId}
+                    traceId={traceId}
+                    userId={userId}
+                    existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                  />
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
                       <div className="text-[11px] text-muted-foreground">
