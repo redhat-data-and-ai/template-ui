@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 
 import { cn } from '../lib/utils';
@@ -41,6 +41,7 @@ export function useFeedback({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [comment, setComment] = useState('');
+  const inFlightRef = useRef(false);
 
   const effectiveTraceId = traceId || chatId;
   const locked = !!existingFeedback;
@@ -48,7 +49,8 @@ export function useFeedback({
 
   const doSendFeedback = useCallback(
     async (direction: 'up' | 'down', feedbackComment?: string) => {
-      if (!effectiveTraceId || locked) return;
+      if (!effectiveTraceId || locked || inFlightRef.current) return;
+      inFlightRef.current = true;
       setIsSubmitting(true);
       try {
         await submitFeedback({
@@ -61,6 +63,8 @@ export function useFeedback({
           userId: userId || 'anonymous',
         });
         dispatch(setMessageFeedback({ chatId, messageId, feedback: direction }));
+        setShowCommentInput(false);
+        setComment('');
         if (direction === 'down') {
           dispatch(
             addToast({
@@ -80,8 +84,7 @@ export function useFeedback({
         );
       } finally {
         setIsSubmitting(false);
-        setShowCommentInput(false);
-        setComment('');
+        inFlightRef.current = false;
       }
     },
     [effectiveTraceId, locked, dispatch, chatId, messageId, userId],

@@ -606,6 +606,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     currentStreamingMsgId = peekId;
                     textEmittedForCurrentMsg = false;
                     prevPartial = '';
+                  } else if (!peekId) {
+                    currentStreamingMsgId = '';
                   }
                 }
 

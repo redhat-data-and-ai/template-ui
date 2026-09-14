@@ -229,7 +229,7 @@ function MessageActionsRow({
           AI-generated
         </span>
       </div>
-      <FeedbackCommentBox fb={fb} />
+      {isLastAiInTurn && <FeedbackCommentBox fb={fb} />}
     </>
   );
 }
