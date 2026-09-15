@@ -2,7 +2,7 @@ import type { Message } from '@langchain/langgraph-sdk';
 import type { HITLInterruptValue } from '@/types/deep-agent';
 
 export type SSEChunk =
-  | { type: 'token'; content: string; chunk_id: number }
+  | { type: 'token'; content: string; chunk_id: number; message_id?: string }
   | { type: 'draft_discard'; chunk_id: number }
   | { type: 'message'; content: Message; chunk_id: number }
   | { type: 'interrupt'; content: { value: HITLInterruptValue | string; resumable: boolean }; chunk_id: number };
@@ -49,7 +49,8 @@ function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
 
   if (type === 'token') {
     if (typeof contentUnknown !== 'string') return null;
-    return { type: 'token', content: contentUnknown, chunk_id: chunkIdRaw };
+    const msgId = typeof parsed.message_id === 'string' ? parsed.message_id : undefined;
+    return { type: 'token', content: contentUnknown, chunk_id: chunkIdRaw, message_id: msgId };
   }
 
   if (type === 'interrupt') {
