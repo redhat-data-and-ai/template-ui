@@ -5,8 +5,12 @@ import { markChatAsClientCreated, isClientCreatedChat } from '@/services/newChat
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeTokenSSE(content: string, chunkId: number): string {
-  return `data: ${JSON.stringify({ type: 'token', content, chunk_id: chunkId })}\n\n`;
+function makeTokenSSE(content: string, chunkId: number, messageId?: string): string {
+  const payload: Record<string, unknown> = { type: 'token', content, chunk_id: chunkId };
+  if (messageId !== undefined) {
+    payload.message_id = messageId;
+  }
+  return `data: ${JSON.stringify(payload)}\n\n`;
 }
 
 function makeInterruptSSE(value: object | string, chunkId: number): string {
@@ -265,5 +269,16 @@ describe('StreamingManager', () => {
     await manager.stream(BASE_REQUEST, makeCallbacks());
 
     expect(isClientCreatedChat('thread-1')).toBe(false);
+  });
+
+  it('forwards message_id from token SSE to onToken callback', async () => {
+    const sseBody = makeTokenSSE('Hello', 0, 'server-msg-uuid') + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(sseBody));
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onToken).toHaveBeenCalledWith('Hello', 'server-msg-uuid');
   });
 });

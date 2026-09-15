@@ -155,6 +155,91 @@ describe('AIMessageRenderer — HITL approval (production path for HITLInterrupt
   });
 });
 
+const SUBAGENT_TASK = {
+  id: 'tc-task',
+  name: 'task',
+  args: { subagent_type: 'researcher', description: 'Look up the requested data' },
+};
+
+const innerToolInterrupt: InterruptInfo = {
+  value: {
+    action_requests: [{
+      name: 'lookup_records',
+      args: { query: 'example' },
+    }],
+    review_configs: [{
+      action_name: 'lookup_records',
+      allowed_decisions: ['approve', 'reject'],
+    }],
+  },
+  resumable: true,
+};
+
+describe('AIMessageRenderer — nested subagent HITL', () => {
+  it('shows approval buttons when a running subagent pauses on an inner tool', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({ tool_calls: [SUBAGENT_TASK] })}
+        pendingInterrupt={innerToolInterrupt}
+        onInterruptResume={vi.fn()}
+        onAlwaysAllow={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /approve tool: lookup_records/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reject tool: lookup_records/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /always allow tool: lookup_records/i })).toBeInTheDocument();
+    expect(screen.getByText('lookup_records')).toBeInTheDocument();
+  });
+
+  it('resumes with approve when the inner-tool Approve is clicked', async () => {
+    const onInterruptResume = vi.fn();
+    render(
+      <AIMessageRenderer
+        message={makeMsg({ tool_calls: [SUBAGENT_TASK] })}
+        pendingInterrupt={innerToolInterrupt}
+        onInterruptResume={onInterruptResume}
+        onAlwaysAllow={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /approve tool: lookup_records/i }));
+    expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }]);
+  });
+
+  it('Always allow records the inner tool name, not the subagent', async () => {
+    const onInterruptResume = vi.fn();
+    const onAlwaysAllow = vi.fn();
+    render(
+      <AIMessageRenderer
+        message={makeMsg({ tool_calls: [SUBAGENT_TASK] })}
+        pendingInterrupt={innerToolInterrupt}
+        onInterruptResume={onInterruptResume}
+        onAlwaysAllow={onAlwaysAllow}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /always allow tool: lookup_records/i }));
+    expect(onAlwaysAllow).toHaveBeenCalledWith(['lookup_records']);
+    expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }]);
+  });
+
+  it('does not show inner-tool approval on a completed subagent', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          tool_calls: [{ ...SUBAGENT_TASK, content: 'done' }],
+        })}
+        pendingInterrupt={innerToolInterrupt}
+        onInterruptResume={vi.fn()}
+        onAlwaysAllow={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /approve tool: lookup_records/i })).not.toBeInTheDocument();
+  });
+});
+
 const MCP_APP = { server: 'charts', resourceUri: 'ui://charts/app.html' };
 
 const chartCall = {
