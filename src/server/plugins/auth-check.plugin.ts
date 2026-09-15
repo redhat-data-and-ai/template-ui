@@ -144,7 +144,7 @@ async function authCheck(
       return reply.redirect(buildGatewayLoginUrl(request));
     }
 
-    if (ldapConfigured()) {
+    if (process.env.AUTH_ENABLED !== "false" || ldapConfigured()) {
       const cacheTtl = parseInt(process.env.LDAP_CACHE_TTL_SECONDS || "300", 10) * 1000;
       const needsResolve =
         request.session.role === undefined ||
