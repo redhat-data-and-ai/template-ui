@@ -23,6 +23,11 @@ beforeAll(async () => {
   await import('./index.js');
 });
 
+// TypeScript's NodeJS.Process overloads don't expose an `uncaughtException`
+// emit signature, but the event is perfectly valid at runtime. Cast once here.
+const emitUncaught = (err: Error) =>
+  (process as NodeJS.EventEmitter).emit('uncaughtException', err, 'uncaughtException');
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -39,7 +44,7 @@ describe('server/index — uncaughtException handler', () => {
     const err = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5002'), {
       code: 'ECONNREFUSED',
     });
-    process.emit('uncaughtException', err, 'uncaughtException');
+    emitUncaught(err);
 
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('Network error'),
@@ -53,7 +58,7 @@ describe('server/index — uncaughtException handler', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
     const err = Object.assign(new Error('socket error'), { code: 'UND_ERR_SOCKET' });
-    process.emit('uncaughtException', err, 'uncaughtException');
+    emitUncaught(err);
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Network error'), expect.any(String));
     expect(exitSpy).not.toHaveBeenCalled();
@@ -63,7 +68,7 @@ describe('server/index — uncaughtException handler', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-    process.emit('uncaughtException', new Error('fetch failed'), 'uncaughtException');
+    emitUncaught(new Error('fetch failed'));
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Network error'), expect.any(String));
     expect(exitSpy).not.toHaveBeenCalled();
@@ -73,7 +78,7 @@ describe('server/index — uncaughtException handler', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-    process.emit('uncaughtException', new Error('socket hang up'), 'uncaughtException');
+    emitUncaught(new Error('socket hang up'));
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Network error'), expect.any(String));
     expect(exitSpy).not.toHaveBeenCalled();
@@ -84,11 +89,7 @@ describe('server/index — uncaughtException handler', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-    process.emit(
-      'uncaughtException',
-      new Error('TypeError: cannot read property'),
-      'uncaughtException',
-    );
+    emitUncaught(new Error('TypeError: cannot read property'));
 
     // shutdownTracing().finally(() => exit(1)) is async — flush the microtask queue
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1));
