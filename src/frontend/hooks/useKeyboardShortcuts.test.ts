@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { useKeyboardShortcuts, type KeyboardShortcutsConfig } from './useKeyboardShortcuts';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 
 function fireKeydown(key: string, opts: Partial<KeyboardEvent> = {}) {
   const event = new KeyboardEvent('keydown', {

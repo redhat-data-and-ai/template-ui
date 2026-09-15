@@ -77,9 +77,7 @@ describe('personalization slice — rules toggle', () => {
   });
 
   it('persistRule POSTs the toggled flag then refetches from the API', async () => {
-    let callCount = 0;
     vi.mocked(authenticatedFetch).mockImplementation(async (input: any, init?: any) => {
-      callCount++;
       if (init?.method === 'POST') {
         return new Response('{}', { status: 201 });
       }
@@ -313,9 +311,7 @@ describe('personalization slice — async thunks', () => {
 
   describe('persistRemoveRule', () => {
     it('DELETEs the rule then refetches', async () => {
-      let callCount = 0;
       vi.mocked(authenticatedFetch).mockImplementation(async (_input: any, init?: any) => {
-        callCount++;
         if (init?.method === 'DELETE') {
           return new Response('', { status: 200 });
         }

@@ -60,7 +60,7 @@ describe('useRefreshableToken', () => {
       }),
     }));
 
-    const { result } = renderHook(() => useRefreshableToken());
+    renderHook(() => useRefreshableToken());
 
     await act(async () => {
       vi.advanceTimersByTime(1000);
