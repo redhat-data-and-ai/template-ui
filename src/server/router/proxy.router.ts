@@ -606,6 +606,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     currentStreamingMsgId = peekId;
                     textEmittedForCurrentMsg = false;
                     prevPartial = '';
+                  } else if (!peekId) {
+                    currentStreamingMsgId = '';
                   }
                 }
 
@@ -639,7 +641,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   );
                   if (!isEchoOfPrior) {
                     const delta = nextPartial.slice(prevPartial.length);
-                    reply.raw.write(`data: ${JSON.stringify({ type: 'token', content: delta, chunk_id: chunkId })}\n\n`);
+                    const tokenPayload: Record<string, unknown> = { type: 'token', content: delta, chunk_id: chunkId };
+                    if (currentStreamingMsgId) {
+                      tokenPayload.message_id = currentStreamingMsgId;
+                    }
+                    reply.raw.write(`data: ${JSON.stringify(tokenPayload)}\n\n`);
                     chunkId++;
                     hasEmittedTextTokens = true;
                     textEmittedForCurrentMsg = true;
