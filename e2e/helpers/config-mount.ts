@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { setLocalStorageSettings } from './local-storage';
 
 export interface BrandingColors {
   primary: string;
@@ -52,6 +53,7 @@ export async function mountConfig(
   features: FeaturesOverride = {},
   agentHealth: 'healthy' | 'unhealthy' | 'unknown' = 'healthy',
 ): Promise<void> {
+  await setLocalStorageSettings(page, { autoApproveAllTools: true });
   await page.route('**/api/config/branding', (route) =>
     route.fulfill({
       status: 200,

@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { Send } from 'lucide-react';
+import { usePreStreamGate } from '../hooks/usePreStreamGate';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
 
@@ -16,32 +17,45 @@ export function HomePage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');
+  const inputValueRef = useRef(inputValue);
+  inputValueRef.current = inputValue;
+  const { ensureReady, modal } = usePreStreamGate();
+  const launchedRef = useRef(false);
 
   const userData = useMemo(() => window.USER_DATA, []);
   const userDisplayName = userData?.displayName || userData?.given_name;
 
   const startChat = useCallback(
-    (initialPrompt?: string) => {
-      const newChatId = uuidv4();
-      const newChat: ChatItem = {
-        id: newChatId,
-        title: initialPrompt?.substring(0, 40) || 'New Chat',
-        timestamp: new Date().toISOString(),
-        preview: initialPrompt || 'Start a new conversation',
-        messages: [],
-        historicalActivities: {},
-        feedback: {},
-      };
-      dispatch(addChat(newChat));
-      navigate(`/chat/${newChatId}`, { state: { initialPrompt: initialPrompt } });
+    async (initialPrompt?: string) => {
+      if (!(await ensureReady())) return;
+      const prompt = (initialPrompt ?? inputValueRef.current).trim();
+      if (!prompt) return;
+      if (launchedRef.current) return;
+      launchedRef.current = true;
+      try {
+        const newChatId = uuidv4();
+        const newChat: ChatItem = {
+          id: newChatId,
+          title: prompt.substring(0, 40),
+          timestamp: new Date().toISOString(),
+          preview: prompt,
+          messages: [],
+          historicalActivities: {},
+          feedback: {},
+        };
+        dispatch(addChat(newChat));
+        navigate(`/chat/${newChatId}`, { state: { initialPrompt: prompt } });
+      } catch {
+        launchedRef.current = false;
+      }
     },
-    [dispatch, navigate],
+    [dispatch, ensureReady, navigate],
   );
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputValue.trim()) return;
-    startChat(inputValue.trim());
+    void startChat();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -80,7 +94,7 @@ export function HomePage() {
                 <div key={prompt} role="listitem">
                   <button
                     type="button"
-                    onClick={() => startChat(prompt)}
+                    onClick={() => void startChat(prompt)}
                     aria-label={`Start chat: ${prompt}`}
                     className="w-full text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer"
                   >
@@ -131,6 +145,7 @@ export function HomePage() {
           </p>
         </div>
       </div>
+      {modal}
     </div>
   );
 }
