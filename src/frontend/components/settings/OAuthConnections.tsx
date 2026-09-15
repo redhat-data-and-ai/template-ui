@@ -12,8 +12,8 @@ import {
 } from '../../services/mcp-oauth-api';
 
 function displayName(connection: McpOAuthConnection): string {
-  const description = (connection.description ?? '').trim();
-  return description || connection.mcp_name;
+  const dn = (connection.display_name ?? '').trim();
+  return dn || connection.mcp_name || (connection.description ?? '').trim();
 }
 
 export function OAuthConnections() {
