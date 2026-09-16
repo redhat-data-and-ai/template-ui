@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, AlertTriangle, CheckCircle } from 'lucide-react';
+import { buildAppPath } from '../lib/app-paths';
 
 export function ConsentPage() {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ export function ConsentPage() {
     setError(null);
 
     try {
-      const response = await fetch('/auth/consent/approve', {
+      const response = await fetch(buildAppPath('/auth/consent/approve'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

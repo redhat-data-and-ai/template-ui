@@ -89,6 +89,14 @@ async function authCheck(
       const gwToken = headerValue(request, "x-auth-access-token") || headerValue(request, "x-token");
 
       if (gwEmail) {
+        // Reset all user-scoped session state when the gateway identity changes
+        if (request.session.user?.email && request.session.user.email !== gwEmail) {
+          request.session.consentApproved = false;
+          delete request.session.consentGrantedAt;
+          delete request.session.token;
+          delete request.session.role;
+          delete request.session.roleResolvedAt;
+        }
         request.session.user = {
           email: gwEmail,
           email_verified: true,
@@ -133,7 +141,7 @@ async function authCheck(
         request.session.role = "owners";
       }
 
-      if (!request.session.consentApproved) {
+      if (!gwEmail && !request.session.consentApproved) {
         request.session.consentApproved = true;
         request.session.consentGrantedAt = new Date().toISOString();
       }
@@ -205,12 +213,13 @@ async function authCheck(
 
     if (!request.session.consentApproved) {
       const path = request.url.split("?")[0];
+      const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
       if (path !== "/consent") {
         if (path.startsWith("/api/") || path.startsWith("/v1/")) {
           return reply.code(403).send({ error: "consent_required", message: "User consent is required" });
         }
         request.session.postConsentRedirect = safePostLoginRedirect(request.url);
-        return reply.redirect("/consent");
+        return reply.redirect(`${basePath}/consent`);
       }
     }
   });
