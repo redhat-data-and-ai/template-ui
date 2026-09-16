@@ -11,6 +11,7 @@ export interface McpOAuthConnection {
   mcp_name: string;
   auth_mode: string;
   description: string;
+  display_name?: string;
   connected: boolean;
 }
 
@@ -19,10 +20,12 @@ export interface McpOAuthDisconnectResult {
   connected: boolean;
 }
 
+/** Builds a URL path segment for a specific MCP server's OAuth endpoint. */
 function mcpOAuthPath(mcpName: string, suffix: string): string {
   return `/mcp/${encodeURIComponent(mcpName)}${suffix}`;
 }
 
+/** Sends an authenticated request to the MCP OAuth BFF and returns the parsed JSON response. */
 async function mcpOAuthJson<T>(
   path: string,
   init: RequestInit,
@@ -36,6 +39,7 @@ async function mcpOAuthJson<T>(
   return (await response.json()) as T;
 }
 
+/** Fetches the list of all MCP OAuth/DCR connections for the current user. */
 export async function fetchMcpOAuthConnections(): Promise<McpOAuthConnection[]> {
   const body = await mcpOAuthJson<{ connections?: McpOAuthConnection[] }>(
     '/mcp/oauth/connections',
@@ -45,6 +49,7 @@ export async function fetchMcpOAuthConnections(): Promise<McpOAuthConnection[]> 
   return Array.isArray(body.connections) ? body.connections : [];
 }
 
+/** Revokes the OAuth tokens for a specific MCP server connection. */
 export async function disconnectMcpOAuth(
   mcpName: string,
 ): Promise<McpOAuthDisconnectResult> {
@@ -55,6 +60,7 @@ export async function disconnectMcpOAuth(
   );
 }
 
+/** Initiates the OAuth connect flow and returns the authorization URL to redirect to. */
 export async function startMcpOAuthConnect(
   mcpName: string,
 ): Promise<{ authorize_url: string }> {
@@ -69,6 +75,7 @@ export async function startMcpOAuthConnect(
   return { authorize_url: body.authorize_url };
 }
 
+/** Checks whether a specific MCP server has an active OAuth connection. */
 export async function verifyMcpOAuthConnected(mcpName: string): Promise<boolean> {
   try {
     const body = await mcpOAuthJson<{ connected?: boolean }>(
@@ -82,6 +89,7 @@ export async function verifyMcpOAuthConnected(mcpName: string): Promise<boolean>
   }
 }
 
+/** Validates that the authorize URL uses HTTPS or is a localhost HTTP address. */
 function isAllowedAuthorizeUrl(url: URL): boolean {
   if (url.protocol === 'https:') {
     return true;
@@ -93,6 +101,7 @@ function isAllowedAuthorizeUrl(url: URL): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host === '::1';
 }
 
+/** Opens a popup window for the OAuth authorization flow and returns its origin and handle. */
 export function openMcpOAuthPopup(authorizeUrl: string): { origin: string; popup: Window } {
   const url = new URL(authorizeUrl, window.location.origin);
   if (!isAllowedAuthorizeUrl(url)) {

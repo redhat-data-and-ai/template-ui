@@ -24,6 +24,7 @@ export function useAgentHealth(): AgentHealthState {
   const [status, setStatus] = useState<AgentHealthStatus>('unknown');
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const mounted = useRef(true);
+  const intervalRef = useRef<number | null>(null);
 
   const check = useCallback(async () => {
     const controller = new AbortController();
@@ -57,13 +58,38 @@ export function useAgentHealth(): AgentHealthState {
 
   useEffect(() => {
     mounted.current = true;
-    void check();
-    const id = window.setInterval(() => {
-      void check();
-    }, POLL_MS);
+
+    const startPolling = () => {
+      if (intervalRef.current === null) {
+        void check();
+        intervalRef.current = window.setInterval(() => void check(), POLL_MS);
+      }
+    };
+
+    const stopPolling = () => {
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        startPolling();
+      }
+    };
+
+    if (!document.hidden) {
+      startPolling();
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       mounted.current = false;
-      window.clearInterval(id);
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [check]);
 
