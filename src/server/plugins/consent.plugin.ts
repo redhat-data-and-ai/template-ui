@@ -51,7 +51,7 @@ async function consentRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/auth/consent/approve", CONSENT_RATE_LIMIT, async (request, reply) => {
-    if (!verifyCsrfOrigin(request, reply)) return reply;
+    if (process.env.AUTH_ENABLED !== "false" && !verifyCsrfOrigin(request, reply)) return reply;
     const session = (request as any).session;
     if (!session?.user) {
       return reply.code(401).send({ error: "Not authenticated" });
@@ -105,7 +105,7 @@ async function consentRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/auth/consent/revoke", CONSENT_RATE_LIMIT, async (request, reply) => {
-    if (!verifyCsrfOrigin(request, reply)) return reply;
+    if (process.env.AUTH_ENABLED !== "false" && !verifyCsrfOrigin(request, reply)) return reply;
     const session = (request as any).session;
     if (!session?.user) {
       return reply.code(401).send({ error: "Not authenticated" });

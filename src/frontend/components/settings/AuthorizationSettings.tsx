@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { buildAppPath } from '../../lib/app-paths';
 
 interface ConsentStatus {
   hasConsent: boolean;
@@ -16,7 +17,7 @@ export function AuthorizationSettings() {
 
   const fetchConsentStatus = useCallback(async () => {
     try {
-      const response = await fetch('/auth/consent/status', {
+      const response = await fetch(buildAppPath('/auth/consent/status'), {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -40,7 +41,7 @@ export function AuthorizationSettings() {
     setError(null);
 
     try {
-      const response = await fetch('/auth/consent/revoke', {
+      const response = await fetch(buildAppPath('/auth/consent/revoke'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
