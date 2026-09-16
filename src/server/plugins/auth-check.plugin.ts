@@ -89,6 +89,11 @@ async function authCheck(
       const gwToken = headerValue(request, "x-auth-access-token") || headerValue(request, "x-token");
 
       if (gwEmail) {
+        // Reset consent if the gateway identity changed (SSO user switch)
+        if (request.session.user?.email && request.session.user.email !== gwEmail) {
+          request.session.consentApproved = false;
+          delete request.session.consentGrantedAt;
+        }
         request.session.user = {
           email: gwEmail,
           email_verified: true,
