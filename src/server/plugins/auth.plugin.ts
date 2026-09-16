@@ -1,5 +1,5 @@
 import oauthPlugin from "@fastify/oauth2";
-import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 import { getSettings } from "../utils/settings.js";
 import { resolveSessionIdentity, safePostLoginRedirect } from "../utils/session-identity.js";
