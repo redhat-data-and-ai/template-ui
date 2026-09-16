@@ -61,6 +61,10 @@ function shouldSkipAuth(request: FastifyRequest): boolean {
   );
 }
 
+function ldapConfigured(): boolean {
+  return !!(process.env.LDAP_URL && process.env.LDAP_BASE_UID && process.env.LDAP_PASSWORD);
+}
+
 async function authCheck(
   instance: FastifyInstance,
   _options: Record<string, unknown>,
@@ -125,7 +129,9 @@ async function authCheck(
         };
       }
 
-      request.session.role = "owners";
+      if (!ldapConfigured()) {
+        request.session.role = "owners";
+      }
 
       if (!request.session.consentApproved) {
         request.session.consentApproved = true;
@@ -138,7 +144,7 @@ async function authCheck(
       return reply.redirect(buildGatewayLoginUrl(request));
     }
 
-    if (process.env.AUTH_ENABLED !== "false") {
+    if (process.env.AUTH_ENABLED !== "false" || ldapConfigured()) {
       const cacheTtl = parseInt(process.env.LDAP_CACHE_TTL_SECONDS || "300", 10) * 1000;
       const needsResolve =
         request.session.role === undefined ||
