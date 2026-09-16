@@ -25,14 +25,16 @@ import {
 const connected: McpOAuthConnection = {
   mcp_name: 'smartsheet-mcp',
   auth_mode: 'oauth',
-  description: 'Smartsheet',
+  description: 'Smartsheet tools',
+  display_name: 'Smartsheet',
   connected: true,
 };
 
 const disconnected: McpOAuthConnection = {
   mcp_name: 'jira-mcp',
   auth_mode: 'dcr',
-  description: 'Jira',
+  description: 'Jira tools',
+  display_name: 'Jira',
   connected: false,
 };
 
@@ -65,12 +67,29 @@ describe('OAuthConnections', () => {
     expect(screen.queryByRole('button', { name: /disconnect jira/i })).not.toBeInTheDocument();
   });
 
-  it('falls back to the MCP name when description is empty', async () => {
+  it('prefers display_name over description when present', async () => {
     vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
-      { ...connected, description: '', mcp_name: 'plain-mcp' },
+      { ...connected, display_name: 'Friendly Name', description: 'Long description' },
     ]);
     renderWithProviders(<OAuthConnections />);
-    expect(await screen.findByText('plain-mcp')).toBeInTheDocument();
+    expect(await screen.findByText('Friendly Name')).toBeInTheDocument();
+    expect(screen.queryByText('Long description')).not.toBeInTheDocument();
+  });
+
+  it('falls back to mcp_name when display_name is empty', async () => {
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
+      { ...connected, display_name: '', mcp_name: 'smartsheet-mcp' },
+    ]);
+    renderWithProviders(<OAuthConnections />);
+    expect(await screen.findByText('smartsheet-mcp')).toBeInTheDocument();
+  });
+
+  it('falls back to mcp_name when display_name is missing', async () => {
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([
+      { ...connected, display_name: undefined, description: 'Some description', mcp_name: 'raw-key' },
+    ]);
+    renderWithProviders(<OAuthConnections />);
+    expect(await screen.findByText('raw-key')).toBeInTheDocument();
   });
 
   it('disconnects an MCP and refreshes status', async () => {

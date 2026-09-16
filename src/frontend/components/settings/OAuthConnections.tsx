@@ -11,11 +11,13 @@ import {
   type McpOAuthConnection,
 } from '../../services/mcp-oauth-api';
 
+/** Returns a human-readable label for the connection, preferring display_name, then mcp_name, then description. */
 function displayName(connection: McpOAuthConnection): string {
-  const description = (connection.description ?? '').trim();
-  return description || connection.mcp_name;
+  const dn = (connection.display_name ?? '').trim();
+  return dn || connection.mcp_name || (connection.description ?? '').trim();
 }
 
+/** Settings panel for managing OAuth/DCR connections to MCP servers. */
 export function OAuthConnections() {
   const dispatch = useAppDispatch();
   const [connections, setConnections] = useState<McpOAuthConnection[] | null>(null);
