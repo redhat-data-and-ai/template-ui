@@ -205,12 +205,13 @@ async function authCheck(
 
     if (!request.session.consentApproved) {
       const path = request.url.split("?")[0];
+      const basePath = (process.env.BASE_PATH || "").replace(/\/+$/, "");
       if (path !== "/consent") {
         if (path.startsWith("/api/") || path.startsWith("/v1/")) {
           return reply.code(403).send({ error: "consent_required", message: "User consent is required" });
         }
         request.session.postConsentRedirect = safePostLoginRedirect(request.url);
-        return reply.redirect("/consent");
+        return reply.redirect(`${basePath}/consent`);
       }
     }
   });
