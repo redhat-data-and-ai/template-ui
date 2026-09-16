@@ -133,7 +133,7 @@ async function authCheck(
         request.session.role = "owners";
       }
 
-      if (!request.session.consentApproved) {
+      if (!gwEmail && !request.session.consentApproved) {
         request.session.consentApproved = true;
         request.session.consentGrantedAt = new Date().toISOString();
       }
