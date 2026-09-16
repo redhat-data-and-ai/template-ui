@@ -93,6 +93,7 @@ async function authCheck(
         if (request.session.user?.email && request.session.user.email !== gwEmail) {
           request.session.consentApproved = false;
           delete request.session.consentGrantedAt;
+          delete request.session.token;
         }
         request.session.user = {
           email: gwEmail,
