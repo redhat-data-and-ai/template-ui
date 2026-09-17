@@ -49,7 +49,10 @@ export function AlwaysAllowedTools() {
       </div>
 
       {/* Individual Always-Allowed Tools Section */}
-      <div className={autoApproveAll ? 'opacity-50 pointer-events-none' : ''}>
+      <div
+        className={autoApproveAll ? 'pointer-events-none' : ''}
+        aria-disabled={autoApproveAll || undefined}
+      >
         <h3 className="text-sm font-semibold mb-3">Individual Tool Permissions</h3>
         {tools.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">

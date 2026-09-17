@@ -46,7 +46,10 @@ export async function fetchMcpOAuthConnections(): Promise<McpOAuthConnection[]> 
     { method: 'GET' },
     'List MCP OAuth connections',
   );
-  return Array.isArray(body.connections) ? body.connections : [];
+  if (!Array.isArray(body.connections)) {
+    throw new Error('List MCP OAuth connections failed (invalid payload)');
+  }
+  return body.connections;
 }
 
 /** Revokes the OAuth tokens for a specific MCP server connection. */

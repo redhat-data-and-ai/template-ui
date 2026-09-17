@@ -51,6 +51,7 @@ test.describe('Error states', () => {
         const text = liveRegion?.textContent ?? '';
         return text.includes('Response complete') || text.includes('Stream error');
       },
+      undefined,
       { timeout: 15_000 },
     );
 
@@ -81,6 +82,7 @@ test.describe('Error states', () => {
         const liveRegion = document.querySelector('.sr-only[aria-live="polite"]');
         return liveRegion?.textContent?.includes('Stream error');
       },
+      undefined,
       { timeout: 15_000 },
     );
   });
