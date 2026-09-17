@@ -107,12 +107,30 @@ interface FeaturesConfig {
   auth_enabled: boolean;
   mcp_dcr_enabled: boolean;
   mcp_apps_enabled: boolean;
+  /** Hide the Projects sidebar/route for agents that don't back project-scoped threads (e.g. simple-rest agents). */
+  projects_enabled: boolean;
+  /** Hide the Evals dashboard/dataset UI for agents that don't expose an evals API (e.g. simple-rest agents). */
+  evals_enabled: boolean;
 }
+
+/**
+ * Which wire protocol the BFF proxy (`src/server/router/proxy.router.ts`) speaks
+ * to the agent engine, via `src/server/adapters/`:
+ *
+ * - "langgraph" (default): a LangGraph Platform-compatible engine ("Aegra") —
+ *   POST /threads, POST /threads/{id}/runs/stream (SSE), GET /threads/{id}/state,
+ *   POST /threads/search, HITL interrupts, sub-agents.
+ * - "simple-rest": a plain custom REST + NDJSON agent (e.g. Harbor Agent) —
+ *   GET /health, POST /v1/stream (NDJSON), GET /v1/threads, GET /v1/history/{id},
+ *   DELETE /v1/threads/{id}, POST /v1/feedback. No HITL/sub-agent support.
+ */
+export type AgentProtocol = 'langgraph' | 'simple-rest';
 
 interface AgentConfig {
   endpoint: string;
   timeout_ms: number;
   streaming: boolean;
+  protocol: AgentProtocol;
 }
 
 interface AuthConfig {
@@ -163,11 +181,14 @@ const DEFAULTS: UISettings = {
     mcp_dcr_enabled: true,
     mcp_apps_enabled: true,
     memory_enabled: true,
+    projects_enabled: true,
+    evals_enabled: true,
   },
   agent: {
     endpoint: "",
     timeout_ms: 30000,
     streaming: true,
+    protocol: "langgraph",
   },
   auth: {
     enabled: true,
@@ -319,6 +340,12 @@ function validateConfig(config: UISettings): void {
   if (typeof config.features.mcp_apps_enabled !== "boolean") {
     throw new Error("Config validation error: features.mcp_apps_enabled must be boolean");
   }
+  if (typeof config.features.projects_enabled !== "boolean") {
+    throw new Error("Config validation error: features.projects_enabled must be boolean");
+  }
+  if (typeof config.features.evals_enabled !== "boolean") {
+    throw new Error("Config validation error: features.evals_enabled must be boolean");
+  }
 
   // Agent config validation
   if (config.agent.endpoint && !isValidUrl(config.agent.endpoint)) {
@@ -331,6 +358,11 @@ function validateConfig(config: UISettings): void {
   }
   if (typeof config.agent.streaming !== "boolean") {
     throw new Error("Config validation error: agent.streaming must be boolean");
+  }
+  if (config.agent.protocol !== "langgraph" && config.agent.protocol !== "simple-rest") {
+    throw new Error(
+      `Config validation error: agent.protocol must be "langgraph" or "simple-rest" (got '${config.agent.protocol}')`,
+    );
   }
 
   // Auth config validation
@@ -406,6 +438,12 @@ function applyEnvOverrides(config: UISettings): void {
   if (process.env.FEATURE_MCP_APPS_ENABLED !== undefined) {
     config.features.mcp_apps_enabled = process.env.FEATURE_MCP_APPS_ENABLED === "true";
   }
+  if (process.env.FEATURE_PROJECTS_ENABLED !== undefined) {
+    config.features.projects_enabled = process.env.FEATURE_PROJECTS_ENABLED === "true";
+  }
+  if (process.env.FEATURE_EVALS_ENABLED !== undefined) {
+    config.features.evals_enabled = process.env.FEATURE_EVALS_ENABLED === "true";
+  }
   // Agent overrides
   if (process.env.AGENT_ENDPOINT) {
     config.agent.endpoint = process.env.AGENT_ENDPOINT;
@@ -414,6 +452,12 @@ function applyEnvOverrides(config: UISettings): void {
     const timeout = Number.parseInt(process.env.AGENT_TIMEOUT_MS, 10);
     if (!Number.isNaN(timeout)) {
       config.agent.timeout_ms = timeout;
+    }
+  }
+  if (process.env.AGENT_PROTOCOL) {
+    const protocol = process.env.AGENT_PROTOCOL.trim();
+    if (protocol === "langgraph" || protocol === "simple-rest") {
+      config.agent.protocol = protocol;
     }
   }
 
