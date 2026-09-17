@@ -2,7 +2,13 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { getSettings } from '../utils/settings.js';
 import authCheckPlugin from '../plugins/auth-check.plugin.js';
-import { resolveXUserId, ensureFreshTokens, sessionExpiredReply, getAgentHost } from '../adapters/shared.js';
+import {
+  resolveXUserId,
+  ensureFreshTokens,
+  sessionExpiredReply,
+  getAgentHost,
+  buildForwardedQueryString,
+} from '../adapters/shared.js';
 import { langgraphAdapter } from '../adapters/langgraph.adapter.js';
 import { simpleRestAdapter } from '../adapters/simple-rest.adapter.js';
 import type { AgentAdapter, StreamRequestBody } from '../adapters/types.js';
@@ -100,8 +106,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
     }
 
     const method = options?.method ?? request.method;
-    const queryString = new URLSearchParams(request.query as Record<string, string>).toString();
-    const agentUrl = `${getAgentHost()}/${agentPath.replace(/^\//, '')}${queryString ? `?${queryString}` : ''}`;
+    const queryString = buildForwardedQueryString(request.query as Record<string, unknown>);
+    const agentUrl = `${getAgentHost()}/${agentPath.replace(/^\//, '')}${queryString}`;
     fastify.log.info({ traceId, method, agentUrl }, 'Proxying request to agent');
 
     try {
@@ -254,8 +260,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
       headers['X-User-ID'] = resolveXUserId(request);
 
       try {
-        const queryString = new URLSearchParams(request.query as Record<string, string>).toString();
-        const agentUrl = `${getAgentHost()}/${path}${queryString ? `?${queryString}` : ''}`;
+        const queryString = buildForwardedQueryString(request.query as Record<string, unknown>);
+        const agentUrl = `${getAgentHost()}/${path}${queryString}`;
         fastify.log.info({ traceId, method: request.method, agentUrl }, 'Proxying request to agent');
 
         const fetchOptions: RequestInit = {

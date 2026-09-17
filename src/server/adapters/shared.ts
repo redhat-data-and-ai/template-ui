@@ -20,32 +20,45 @@ export function resolveXUserId(request: { session?: { user?: { preferred_usernam
   return resolveXUserIdFromSession(request.session);
 }
 
-/** In-memory LRU cache for thread state responses (avoids repeated agent-side deserialization). */
+/**
+ * In-memory LRU cache for thread state responses (avoids repeated agent-side
+ * deserialization). Keyed by `${userId}:${threadId}`, never by `threadId`
+ * alone — thread IDs are not secret, so an unscoped cache would let one
+ * authenticated session read a HIT containing another user's cached thread
+ * state. Callers MUST resolve and authenticate the caller (e.g. via
+ * `ensureFreshTokens` + `resolveXUserId`) *before* checking the cache.
+ */
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
 const CACHE_TTL_MS = 3_000; // 3s — short TTL for recovery polling compatibility
 const CACHE_MAX_ENTRIES = 50;
 
-export function getCachedThreadState(threadId: string): string | null {
-  const entry = THREAD_STATE_CACHE.get(threadId);
+function threadStateCacheKey(userId: string, threadId: string): string {
+  return `${userId}:${threadId}`;
+}
+
+export function getCachedThreadState(userId: string, threadId: string): string | null {
+  const key = threadStateCacheKey(userId, threadId);
+  const entry = THREAD_STATE_CACHE.get(key);
   if (!entry) return null;
   if (Date.now() - entry.ts > CACHE_TTL_MS) {
-    THREAD_STATE_CACHE.delete(threadId);
+    THREAD_STATE_CACHE.delete(key);
     return null;
   }
   return entry.body;
 }
 
-export function setCachedThreadState(threadId: string, body: string): void {
+export function setCachedThreadState(userId: string, threadId: string, body: string): void {
+  const key = threadStateCacheKey(userId, threadId);
   if (THREAD_STATE_CACHE.size >= CACHE_MAX_ENTRIES) {
     const oldest = THREAD_STATE_CACHE.keys().next().value;
     if (oldest) THREAD_STATE_CACHE.delete(oldest);
   }
-  THREAD_STATE_CACHE.set(threadId, { body, ts: Date.now() });
+  THREAD_STATE_CACHE.set(key, { body, ts: Date.now() });
 }
 
 /** Invalidate cache when a new run completes on a thread. */
-export function invalidateThreadStateCache(threadId: string): void {
-  THREAD_STATE_CACHE.delete(threadId);
+export function invalidateThreadStateCache(userId: string, threadId: string): void {
+  THREAD_STATE_CACHE.delete(threadStateCacheKey(userId, threadId));
 }
 
 export interface TokenPair {

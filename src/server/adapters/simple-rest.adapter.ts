@@ -59,6 +59,9 @@ interface HarborThreadMessage {
   created_at?: string;
 }
 
+/** Max size of a single unterminated NDJSON line buffer before we abort the stream (1 MiB). */
+const MAX_NDJSON_LINE_LENGTH = 1024 * 1024;
+
 function agentHeaders(accessToken: string | null): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -178,6 +181,20 @@ async function handleStream(
       if (chunkDone) break;
 
       buffer += decoder.decode(chunkValue, { stream: true });
+      if (buffer.length > MAX_NDJSON_LINE_LENGTH) {
+        // Guard against unbounded memory growth: a slow/misbehaving agent
+        // could send one extremely long line (no '\n') for the entire
+        // request timeout window, growing `buffer` indefinitely in the
+        // meantime. Bail out instead of continuing to accumulate.
+        fastify.log.error(
+          { traceId, bufferLength: buffer.length },
+          'Harbor Agent NDJSON line exceeded max buffer size — aborting stream',
+        );
+        write({ type: 'error', message: 'Agent response exceeded maximum buffer size.' });
+        done = true;
+        reader.cancel().catch(() => {});
+        break;
+      }
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
 
@@ -330,7 +347,7 @@ async function getThreadState(
   const threadId = request.params.threadId;
 
   try {
-    const agentResp = await fetch(`${getAgentHost()}/v1/history/${threadId}`, {
+    const agentResp = await fetch(`${getAgentHost()}/v1/history/${encodeURIComponent(threadId)}`, {
       method: 'GET',
       headers: { 'X-Trace-ID': traceId, ...agentHeaders(accessToken) },
       signal: AbortSignal.timeout(cfg.agent.timeout_ms),
@@ -368,7 +385,7 @@ async function deleteThread(
   }
 
   try {
-    const agentResp = await fetch(`${getAgentHost()}/v1/threads/${request.params.threadId}`, {
+    const agentResp = await fetch(`${getAgentHost()}/v1/threads/${encodeURIComponent(request.params.threadId)}`, {
       method: 'DELETE',
       headers: { 'X-Trace-ID': traceId, ...agentHeaders(accessToken) },
       signal: AbortSignal.timeout(cfg.agent.timeout_ms),

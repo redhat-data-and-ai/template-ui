@@ -327,7 +327,7 @@ async function handleStream(
     fastify.log.info({ traceId }, 'Thread ready');
 
     // ── 2. Start a streaming run on that thread ──
-    const runUrl = `${getAgentHost()}/threads/${thread_id}/runs/stream`;
+    const runUrl = `${getAgentHost()}/threads/${encodeURIComponent(thread_id)}/runs/stream`;
     fastify.log.info({ traceId, runUrl }, 'Starting streaming run');
 
     const runBody: Record<string, unknown> = {
@@ -587,7 +587,7 @@ async function handleStream(
 
       try {
         const stateResp = await fetch(
-          `${getAgentHost()}/threads/${thread_id}/state`,
+          `${getAgentHost()}/threads/${encodeURIComponent(thread_id)}/state`,
           {
             method: 'GET',
             headers,
@@ -631,7 +631,7 @@ async function handleStream(
       }
 
       fastify.log.info({ traceId, chunkId, streamEndedNormally }, 'Stream complete');
-      invalidateThreadStateCache(thread_id);
+      invalidateThreadStateCache(xUserId, thread_id);
       reply.raw.end('data: [DONE]\n\n');
     }
   } catch (error: unknown) {
@@ -667,18 +667,12 @@ async function getThreadState(
   reply: FastifyReply,
 ): Promise<void> {
   const threadId = request.params.threadId;
-
-  const cached = getCachedThreadState(threadId);
-  if (cached) {
-    fastify.log.info({ threadId }, 'Thread state cache HIT');
-    reply.header('Content-Type', 'application/json');
-    reply.header('X-Cache', 'HIT');
-    reply.status(200).send(cached);
-    return;
-  }
-
   const cfg = getSettings();
   const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
+
+  // Authenticate the caller BEFORE touching the cache — thread state is
+  // cached per-user (see shared.ts), so an unauthenticated or wrong-user
+  // request must never be able to reach a cache HIT for someone else's data.
   const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
 
   if (refreshFailed) {
@@ -690,12 +684,23 @@ async function getThreadState(
     return;
   }
 
+  const xUserId = resolveXUserId(request);
+
+  const cached = getCachedThreadState(xUserId, threadId);
+  if (cached) {
+    fastify.log.info({ threadId }, 'Thread state cache HIT');
+    reply.header('Content-Type', 'application/json');
+    reply.header('X-Cache', 'HIT');
+    reply.status(200).send(cached);
+    return;
+  }
+
   const headers: Record<string, string> = { 'X-Trace-ID': traceId };
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
   if (refreshToken) headers['X-Refresh-Token'] = refreshToken;
 
   try {
-    const agentResponse = await fetch(`${getAgentHost()}/threads/${threadId}/state`, {
+    const agentResponse = await fetch(`${getAgentHost()}/threads/${encodeURIComponent(threadId)}/state`, {
       method: 'GET',
       headers,
       signal: AbortSignal.timeout(cfg.agent.timeout_ms),
@@ -709,7 +714,7 @@ async function getThreadState(
     const responseBody = await agentResponse.text();
 
     if (agentResponse.ok) {
-      setCachedThreadState(threadId, responseBody);
+      setCachedThreadState(xUserId, threadId, responseBody);
       reply.header('X-Cache', 'MISS');
     }
 
@@ -725,8 +730,14 @@ async function deleteThread(
   request: FastifyRequest<{ Params: { threadId: string } }>,
   reply: FastifyReply,
 ): Promise<void> {
-  await forwardJsonToAgent(fastify, request, reply, `threads/${request.params.threadId}`, { method: 'DELETE' });
-  invalidateThreadStateCache(request.params.threadId);
+  await forwardJsonToAgent(
+    fastify,
+    request,
+    reply,
+    `threads/${encodeURIComponent(request.params.threadId)}`,
+    { method: 'DELETE' },
+  );
+  invalidateThreadStateCache(resolveXUserId(request), request.params.threadId);
 }
 
 async function submitFeedback(
@@ -775,7 +786,13 @@ async function getThreadFeedback(
   request: FastifyRequest<{ Params: { threadId: string } }>,
   reply: FastifyReply,
 ): Promise<void> {
-  await forwardJsonToAgent(fastify, request, reply, `feedback/${request.params.threadId}`, { method: 'GET' });
+  await forwardJsonToAgent(
+    fastify,
+    request,
+    reply,
+    `feedback/${encodeURIComponent(request.params.threadId)}`,
+    { method: 'GET' },
+  );
 }
 
 export const langgraphAdapter: AgentAdapter = {

@@ -571,10 +571,18 @@ export function getSettings(): UISettings {
 
   const fromFile = loadYaml(configPath);
 
-  // Deep merge defaults with file config
+  // Deep-clone DEFAULTS before merging: deepMerge() only recurses into keys
+  // that are present in `fromFile`, so any top-level section absent from the
+  // YAML (e.g. no `agent:` block at all) falls through as the *same*
+  // reference to DEFAULTS's nested object. Without cloning first,
+  // applyEnvOverrides() below — or any later per-request cache/state
+  // mutation — would then permanently corrupt the shared DEFAULTS singleton,
+  // and a later resetSettings() reload would start from already-mutated
+  // defaults instead of pristine ones.
+  const defaultsClone = structuredClone(DEFAULTS);
   _settings = fromFile
-    ? deepMerge(DEFAULTS as unknown as Record<string, unknown>, fromFile) as unknown as UISettings
-    : { ...DEFAULTS };
+    ? deepMerge(defaultsClone as unknown as Record<string, unknown>, fromFile) as unknown as UISettings
+    : defaultsClone;
 
   // Apply environment variable overrides
   applyEnvOverrides(_settings);

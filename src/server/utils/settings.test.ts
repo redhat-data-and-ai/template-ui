@@ -453,4 +453,22 @@ features:
 
     expect(settings.agent.protocol).toBe("langgraph");
   });
+
+  it("should not leak an env-var override into DEFAULTS across a resetSettings() reload", () => {
+    // Regression test: settings used to build `_settings` via `{ ...DEFAULTS }`
+    // (no YAML file case), a shallow copy that shares the *same* nested
+    // `features`/`agent` object references as the module-level DEFAULTS
+    // singleton. applyEnvOverrides() then assigned directly into
+    // `_settings.features.projects_enabled`, which — because of the shared
+    // reference — silently mutated DEFAULTS itself. A later resetSettings()
+    // reload would then incorrectly inherit that mutated value forever,
+    // even with the env var removed.
+    process.env.FEATURE_PROJECTS_ENABLED = "false";
+    expect(getSettings().features.projects_enabled).toBe(false);
+
+    delete process.env.FEATURE_PROJECTS_ENABLED;
+    resetSettings();
+
+    expect(getSettings().features.projects_enabled).toBe(true);
+  });
 });
