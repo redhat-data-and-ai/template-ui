@@ -128,11 +128,12 @@ async function authCheck(
       }
 
       if (gwToken) {
+        const gwRefreshToken = headerValue(request, "x-auth-refresh-token") || "";
         request.session.token = {
           access_token: gwToken,
           expires_at: Date.now() + 3600_000,
           id_token: "",
-          refresh_token: "",
+          refresh_token: gwRefreshToken,
           scope: "openid",
         };
       }
