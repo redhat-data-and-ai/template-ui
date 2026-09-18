@@ -33,7 +33,12 @@ const CACHE_TTL_MS = 3_000; // 3s — short TTL for recovery polling compatibili
 const CACHE_MAX_ENTRIES = 50;
 
 function threadStateCacheKey(userId: string, threadId: string): string {
-  return `${userId}:${threadId}`;
+  // Encode each component independently before joining: userId (derived from
+  // preferred_username/sub, which are IdP-controlled) and threadId (an
+  // unvalidated route param) could otherwise both contain the ':' separator,
+  // letting (userId="a:b", threadId="c") and (userId="a", threadId="b:c")
+  // collide on the same raw string key.
+  return `${encodeURIComponent(userId)}:${encodeURIComponent(threadId)}`;
 }
 
 export function getCachedThreadState(userId: string, threadId: string): string | null {

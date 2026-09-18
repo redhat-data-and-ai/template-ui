@@ -39,4 +39,16 @@ describe('thread-state cache — per-user isolation', () => {
     expect(getCachedThreadState('alice', 'thread-3')).toBeNull();
     expect(getCachedThreadState('bob', 'thread-3')).toBe('{"owner":"bob"}');
   });
+
+  it('does not collide when the separator character appears inside userId or threadId', () => {
+    // Regression test: (userId="a:b", threadId="c") and (userId="a", threadId="b:c")
+    // used to join to the identical raw string "a:b:c" before components were
+    // encoded independently. preferred_username/sub (userId) is IdP-controlled
+    // and threadId is an unvalidated route param, so both can contain ':'.
+    setCachedThreadState('a:b', 'c', '{"owner":"a:b"}');
+    setCachedThreadState('a', 'b:c', '{"owner":"a"}');
+
+    expect(getCachedThreadState('a:b', 'c')).toBe('{"owner":"a:b"}');
+    expect(getCachedThreadState('a', 'b:c')).toBe('{"owner":"a"}');
+  });
 });

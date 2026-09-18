@@ -297,6 +297,89 @@ describe('GET /api/proxy/agent/feedback/:threadId — simple-rest adapter', () =
   });
 });
 
+// ── Auth guard — search/state/delete/feedback must reject tokenless sessions ──
+//
+// Regression coverage: handleStream already rejected a missing access token
+// when AUTH_ENABLED=true, but searchThreads, getThreadState, deleteThread, and
+// submitFeedback did not, so they would forward requests to Harbor Agent
+// without an Authorization header instead of rejecting the caller (CWE-862).
+
+describe('simple-rest adapter — auth guard when AUTH_ENABLED=true and no token', () => {
+  beforeEach(() => {
+    process.env.AUTH_ENABLED = 'true';
+    resetSettings();
+  });
+
+  it('POST /api/proxy/agent/threads/search returns 401 without calling the agent', async () => {
+    const mock = stubFetch(okJson([]));
+    const server = await buildTestServer();
+    const res = await server.inject({ method: 'POST', url: '/api/proxy/agent/threads/search', payload: {} });
+
+    expect(res.statusCode).toBe(401);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/proxy/agent/threads/:id/state returns 401 without calling the agent', async () => {
+    const mock = stubFetch(okJson({ messages: [] }));
+    const server = await buildTestServer();
+    const res = await server.inject({ method: 'GET', url: '/api/proxy/agent/threads/t1/state' });
+
+    expect(res.statusCode).toBe(401);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it('DELETE /api/proxy/agent/threads/:id returns 401 without calling the agent', async () => {
+    const mock = stubFetch(new Response(null, { status: 204 }));
+    const server = await buildTestServer();
+    const res = await server.inject({ method: 'DELETE', url: '/api/proxy/agent/threads/t1' });
+
+    expect(res.statusCode).toBe(401);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/proxy/agent/feedback returns 401 without calling the agent', async () => {
+    const mock = stubFetch(okJson({ success: true }));
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/feedback',
+      payload: { trace_id: 'trace-1', value: 5, thread_id: 't1' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(mock).not.toHaveBeenCalled();
+  });
+});
+
+// ── NDJSON buffer cap — must not trip on many complete small records ─────────
+
+describe('POST /api/proxy/agent/v1/stream — NDJSON buffer cap edge case', () => {
+  it('does not abort when one chunk contains many complete small records totaling over the cap', async () => {
+    // Regression test: the cap used to be checked against the pre-split buffer,
+    // so a single chunk full of complete (newline-terminated) small records
+    // that together exceeded 1 MiB would spuriously abort the stream even
+    // though no individual unterminated line was anywhere near the cap.
+    const smallLine = JSON.stringify({ type: 'token', content: 'x' });
+    // ~1 MiB+ of complete, newline-terminated lines delivered in a single chunk.
+    const lineCount = Math.ceil((1024 * 1024) / (smallLine.length + 1)) + 100;
+    const lines = Array.from({ length: lineCount }, () => smallLine);
+    lines.push('[DONE]');
+
+    stubFetch(makeNdjsonResponse(lines));
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th1', user_id: 'u1' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('exceeded maximum buffer size');
+    expect(res.body).toContain('[DONE]');
+  });
+});
+
 // ── Adapter selection ──────────────────────────────────────────────────────────
 
 describe('agent.protocol selection', () => {

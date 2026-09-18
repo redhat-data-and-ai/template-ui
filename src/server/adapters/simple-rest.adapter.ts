@@ -181,6 +181,13 @@ async function handleStream(
       if (chunkDone) break;
 
       buffer += decoder.decode(chunkValue, { stream: true });
+      const lines = buffer.split('\n');
+      // Only the trailing, not-yet-newline-terminated remainder can grow
+      // unbounded — complete lines above are processed and discarded below.
+      // Checking the cap on the *split* remainder (not the pre-split buffer)
+      // means a chunk containing many complete small records that happens to
+      // total over the cap doesn't spuriously trip this.
+      buffer = lines.pop() ?? '';
       if (buffer.length > MAX_NDJSON_LINE_LENGTH) {
         // Guard against unbounded memory growth: a slow/misbehaving agent
         // could send one extremely long line (no '\n') for the entire
@@ -195,8 +202,6 @@ async function handleStream(
         reader.cancel().catch(() => {});
         break;
       }
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
 
       for (const rawLine of lines) {
         if (clientGone) break;
@@ -300,6 +305,10 @@ async function searchThreads(
     sessionExpiredReply(reply);
     return;
   }
+  if (!accessToken && process.env.AUTH_ENABLED === 'true') {
+    reply.status(401).send({ error: 'Not authenticated' });
+    return;
+  }
 
   try {
     const agentResp = await fetch(`${getAgentHost()}/v1/threads`, {
@@ -343,6 +352,10 @@ async function getThreadState(
     sessionExpiredReply(reply);
     return;
   }
+  if (!accessToken && process.env.AUTH_ENABLED === 'true') {
+    reply.status(401).send({ error: 'Not authenticated' });
+    return;
+  }
 
   const threadId = request.params.threadId;
 
@@ -383,6 +396,10 @@ async function deleteThread(
     sessionExpiredReply(reply);
     return;
   }
+  if (!accessToken && process.env.AUTH_ENABLED === 'true') {
+    reply.status(401).send({ error: 'Not authenticated' });
+    return;
+  }
 
   try {
     const agentResp = await fetch(`${getAgentHost()}/v1/threads/${encodeURIComponent(request.params.threadId)}`, {
@@ -408,6 +425,10 @@ async function submitFeedback(
 
   if (refreshFailed) {
     sessionExpiredReply(reply);
+    return;
+  }
+  if (!accessToken && process.env.AUTH_ENABLED === 'true') {
+    reply.status(401).send({ error: 'Not authenticated' });
     return;
   }
 
