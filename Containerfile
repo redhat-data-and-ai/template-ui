@@ -42,4 +42,4 @@ RUN chmod +x entrypoint.sh && npm ci && npm run build
 ENV UI_CONFIG_PATH=/app/config/ui/settings.yaml
 
 ENTRYPOINT ["./entrypoint.sh"]
-CMD ["node", "dist/server/index.js"]
+CMD ["node", "--max-http-header-size=32768", "dist/server/index.js"]
