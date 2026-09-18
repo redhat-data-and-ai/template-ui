@@ -338,4 +338,137 @@ branding:
       "Config validation error: branding.colors.dark.background must be a valid hex color (got 'invalid')"
     );
   });
+
+  it("should default agent.protocol to 'langgraph' and projects/evals feature flags to true", () => {
+    const settings = getSettings();
+    expect(settings.agent.protocol).toBe("langgraph");
+    expect(settings.features.projects_enabled).toBe(true);
+    expect(settings.features.evals_enabled).toBe(true);
+  });
+
+  it("should accept 'simple-rest' as a valid agent.protocol from YAML", () => {
+    const yaml = `
+branding:
+  logo_url: "/test.svg"
+  title: "Test"
+  colors:
+    light:
+      primary: "#ff0000"
+      accent: "#00ff00"
+      background: "#ffffff"
+      foreground: "#000000"
+    dark:
+      primary: "#ff00ff"
+      accent: "#00ffff"
+      background: "#000000"
+      foreground: "#ffffff"
+agent:
+  protocol: "simple-rest"
+features:
+  projects_enabled: false
+  evals_enabled: false
+`;
+
+    writeFileSync(testConfigPath, yaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    const settings = getSettings();
+    expect(settings.agent.protocol).toBe("simple-rest");
+    expect(settings.features.projects_enabled).toBe(false);
+    expect(settings.features.evals_enabled).toBe(false);
+  });
+
+  it("should throw error for an unrecognized agent.protocol", () => {
+    const invalidYaml = `
+branding:
+  logo_url: "/test.svg"
+  title: "Test"
+  colors:
+    light:
+      primary: "#ff0000"
+      accent: "#00ff00"
+      background: "#ffffff"
+      foreground: "#000000"
+    dark:
+      primary: "#ff00ff"
+      accent: "#00ffff"
+      background: "#000000"
+      foreground: "#ffffff"
+agent:
+  protocol: "graphql"
+`;
+
+    writeFileSync(testConfigPath, invalidYaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    expect(() => getSettings()).toThrow(
+      "Config validation error: agent.protocol must be \"langgraph\" or \"simple-rest\" (got 'graphql')"
+    );
+  });
+
+  it("should throw error for invalid projects_enabled/evals_enabled types", () => {
+    const invalidYaml = `
+branding:
+  logo_url: "/test.svg"
+  title: "Test"
+  colors:
+    light:
+      primary: "#ff0000"
+      accent: "#00ff00"
+      background: "#ffffff"
+      foreground: "#000000"
+    dark:
+      primary: "#ff00ff"
+      accent: "#00ffff"
+      background: "#000000"
+      foreground: "#ffffff"
+features:
+  projects_enabled: "nope"
+`;
+
+    writeFileSync(testConfigPath, invalidYaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    expect(() => getSettings()).toThrow(
+      "Config validation error: features.projects_enabled must be boolean"
+    );
+  });
+
+  it("should apply AGENT_PROTOCOL, FEATURE_PROJECTS_ENABLED, and FEATURE_EVALS_ENABLED env overrides", () => {
+    process.env.AGENT_PROTOCOL = "simple-rest";
+    process.env.FEATURE_PROJECTS_ENABLED = "false";
+    process.env.FEATURE_EVALS_ENABLED = "false";
+
+    const settings = getSettings();
+
+    expect(settings.agent.protocol).toBe("simple-rest");
+    expect(settings.features.projects_enabled).toBe(false);
+    expect(settings.features.evals_enabled).toBe(false);
+  });
+
+  it("should ignore an unrecognized AGENT_PROTOCOL env override and keep the YAML/default value", () => {
+    process.env.AGENT_PROTOCOL = "graphql";
+
+    const settings = getSettings();
+
+    expect(settings.agent.protocol).toBe("langgraph");
+  });
+
+  it("should not leak an env-var override into DEFAULTS across a resetSettings() reload", () => {
+    // Regression test: settings used to build `_settings` via `{ ...DEFAULTS }`
+    // (no YAML file case), a shallow copy that shares the *same* nested
+    // `features`/`agent` object references as the module-level DEFAULTS
+    // singleton. applyEnvOverrides() then assigned directly into
+    // `_settings.features.projects_enabled`, which — because of the shared
+    // reference — silently mutated DEFAULTS itself. A later resetSettings()
+    // reload would then incorrectly inherit that mutated value forever,
+    // even with the env var removed.
+    process.env.FEATURE_PROJECTS_ENABLED = "false";
+    expect(getSettings().features.projects_enabled).toBe(false);
+
+    delete process.env.FEATURE_PROJECTS_ENABLED;
+    resetSettings();
+
+    expect(getSettings().features.projects_enabled).toBe(true);
+  });
 });
