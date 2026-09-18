@@ -392,7 +392,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
 
   return (
     <div className="flex items-end gap-3 justify-end group/msg">
-      <div className="flex flex-col items-end max-w-[85%] sm:max-w-[75%]">
+      <div className={cn("flex flex-col items-end", isEditing ? "w-full sm:w-[75%]" : "max-w-[85%] sm:max-w-[75%]")}>
         <div
           className={cn(
             "relative rounded-2xl rounded-br-sm break-words px-4 py-3 bg-primary text-primary-foreground shadow-card",
