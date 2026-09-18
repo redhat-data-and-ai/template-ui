@@ -434,16 +434,17 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
             </div>
           )}
         </div>
-        {canEdit && !isEditing && (
+        {!isEditing && (
           <div className="mt-2 opacity-0 transition-opacity group-hover/msg:opacity-100">
             <MessageCopyButton text={plain} />
             <button
               type="button"
               onClick={() => startEdit()}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-muted/40 hover:text-muted-foreground"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-muted/40 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-40"
               aria-label="Edit message"
+              disabled={!canEdit}
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
