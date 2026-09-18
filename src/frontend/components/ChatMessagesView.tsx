@@ -395,8 +395,8 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
       <div className="flex flex-col items-end max-w-[85%] sm:max-w-[75%]">
         <div
           className={cn(
-            "relative rounded-2xl rounded-br-sm break-words w-full px-4 py-3 bg-primary text-primary-foreground shadow-card",
-            isEditing && "w-full",
+            "relative rounded-2xl rounded-br-sm break-words px-4 py-3 bg-primary text-primary-foreground shadow-card",
+            isEditing ? "w-full" : "w-fit",
           )}
         >
           {isEditing ? (
@@ -436,6 +436,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
         </div>
         {canEdit && !isEditing && (
           <div className="mt-2 opacity-0 transition-opacity group-hover/msg:opacity-100">
+            <MessageCopyButton text={plain} />
             <button
               type="button"
               onClick={() => startEdit()}
