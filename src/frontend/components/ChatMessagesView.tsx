@@ -392,57 +392,61 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
 
   return (
     <div className="flex items-end gap-3 justify-end group/msg">
-      <div
-        className={cn(
-          "relative rounded-2xl rounded-br-sm break-words max-w-[85%] sm:max-w-[75%] px-4 py-3 bg-primary text-primary-foreground shadow-card",
-          isEditing && "w-full sm:w-[75%]",
-        )}
-      >
-        {isEditing ? (
-          <div className="space-y-2">
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              className="w-full min-h-[88px] rounded-lg border border-primary-foreground/35 bg-primary-foreground/10 p-2.5 text-sm text-primary-foreground placeholder:text-primary-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary-foreground/40"
-              aria-label="Edit message"
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => saveEdit()}
-                aria-label="Save edited message"
-                className="rounded-md bg-primary-foreground px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-foreground/90"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={() => cancelEdit()}
-                aria-label="Cancel editing message"
-                className="rounded-md border border-primary-foreground/40 px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-foreground/10"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => startEdit()}
-                className="absolute right-3 top-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md text-primary-foreground/80 opacity-0 transition-opacity hover:bg-primary-foreground/15 hover:text-primary-foreground group-hover/msg:opacity-100"
+      <div className={cn("flex flex-col items-end", isEditing ? "w-full sm:w-[75%]" : "max-w-[85%] sm:max-w-[75%]")}>
+        <div
+          className={cn(
+            "relative rounded-2xl rounded-br-sm break-words px-4 py-3 bg-primary text-primary-foreground shadow-card",
+            isEditing ? "w-full" : "w-fit",
+          )}
+        >
+          {isEditing ? (
+            <div className="space-y-2">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                className="w-full min-h-[88px] rounded-lg border border-primary-foreground/35 bg-primary-foreground/10 p-2.5 text-sm text-primary-foreground placeholder:text-primary-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary-foreground/40"
                 aria-label="Edit message"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            )}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => saveEdit()}
+                  aria-label="Save edited message"
+                  className="rounded-md bg-primary-foreground px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-foreground/90"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cancelEdit()}
+                  aria-label="Cancel editing message"
+                  className="rounded-md border border-primary-foreground/40 px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-foreground/10"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
             <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {plain}
               </ReactMarkdown>
             </div>
-          </>
+          )}
+        </div>
+        {!isEditing && (
+          <div className="mt-2 opacity-0 transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+            <MessageCopyButton text={plain} />
+            <button
+              type="button"
+              onClick={() => startEdit()}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-muted/40 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-40"
+              aria-label="Edit message"
+              disabled={!canEdit}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
       </div>
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
