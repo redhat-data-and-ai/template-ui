@@ -303,41 +303,59 @@ describe('GET /api/proxy/agent/feedback/:threadId — simple-rest adapter', () =
 // when AUTH_ENABLED=true, but searchThreads, getThreadState, deleteThread, and
 // submitFeedback did not, so they would forward requests to Harbor Agent
 // without an Authorization header instead of rejecting the caller (CWE-862).
-
-describe('simple-rest adapter — auth guard when AUTH_ENABLED=true and no token', () => {
+// The `!accessToken && AUTH_ENABLED === 'true'` guard added to those four
+// handlers mirrors the pre-existing one in handleStream/langgraph.adapter.ts.
+//
+// Note on what these tests actually exercise: the app's global preHandler
+// auth-check hook (auth-check.plugin.ts) redirects any request with no
+// session at all (302 → /login) *before* it ever reaches these route
+// handlers — same as every other authenticated route in this app (see
+// proxy.test.ts's "auth guard" describes). So a plain unauthenticated
+// server.inject() call can only ever observe that outer redirect, not the
+// in-handler guard itself. The in-handler guard's own target scenario — a
+// session with `session.user` set but no stored `session.token` (e.g. a
+// stale/cleared token on an otherwise-authenticated session) — isn't
+// reachable without forging session store state, which no test in this repo
+// does; the equally-real pre-existing guards in handleStream and
+// langgraph.adapter.ts have the same gap. These tests instead confirm the
+// routes remain protected end-to-end (redirect, not silently forwarded).
+describe('simple-rest adapter — unauthenticated requests are blocked before reaching the agent', () => {
   beforeEach(() => {
     process.env.AUTH_ENABLED = 'true';
     resetSettings();
   });
 
-  it('POST /api/proxy/agent/threads/search returns 401 without calling the agent', async () => {
+  it('POST /api/proxy/agent/threads/search redirects to /login without calling the agent', async () => {
     const mock = stubFetch(okJson([]));
     const server = await buildTestServer();
     const res = await server.inject({ method: 'POST', url: '/api/proxy/agent/threads/search', payload: {} });
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers['location']).toContain('/login');
     expect(mock).not.toHaveBeenCalled();
   });
 
-  it('GET /api/proxy/agent/threads/:id/state returns 401 without calling the agent', async () => {
+  it('GET /api/proxy/agent/threads/:id/state redirects to /login without calling the agent', async () => {
     const mock = stubFetch(okJson({ messages: [] }));
     const server = await buildTestServer();
     const res = await server.inject({ method: 'GET', url: '/api/proxy/agent/threads/t1/state' });
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers['location']).toContain('/login');
     expect(mock).not.toHaveBeenCalled();
   });
 
-  it('DELETE /api/proxy/agent/threads/:id returns 401 without calling the agent', async () => {
+  it('DELETE /api/proxy/agent/threads/:id redirects to /login without calling the agent', async () => {
     const mock = stubFetch(new Response(null, { status: 204 }));
     const server = await buildTestServer();
     const res = await server.inject({ method: 'DELETE', url: '/api/proxy/agent/threads/t1' });
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers['location']).toContain('/login');
     expect(mock).not.toHaveBeenCalled();
   });
 
-  it('POST /api/proxy/agent/feedback returns 401 without calling the agent', async () => {
+  it('POST /api/proxy/agent/feedback redirects to /login without calling the agent', async () => {
     const mock = stubFetch(okJson({ success: true }));
     const server = await buildTestServer();
     const res = await server.inject({
@@ -346,7 +364,8 @@ describe('simple-rest adapter — auth guard when AUTH_ENABLED=true and no token
       payload: { trace_id: 'trace-1', value: 5, thread_id: 't1' },
     });
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers['location']).toContain('/login');
     expect(mock).not.toHaveBeenCalled();
   });
 });
