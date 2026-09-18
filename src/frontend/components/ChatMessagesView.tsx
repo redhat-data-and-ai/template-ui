@@ -435,7 +435,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
           )}
         </div>
         {!isEditing && (
-          <div className="mt-2 opacity-0 transition-opacity group-hover/msg:opacity-100">
+          <div className="mt-2 opacity-0 transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
             <MessageCopyButton text={plain} />
             <button
               type="button"
