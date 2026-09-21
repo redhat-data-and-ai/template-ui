@@ -63,6 +63,8 @@ export function useRefreshableToken() {
           }
           const data = await response.json();
           if (data.message === "RefreshedToken") {
+            window.USER_DATA.accessToken = data.token.access_token;
+            window.USER_DATA.expiresAt = data.token.expires_at;
             setToken(data.token.access_token);
             setExpiresAt(data.token.expires_at);
           }

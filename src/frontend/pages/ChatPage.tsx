@@ -120,10 +120,17 @@ export function ChatPage({ threadId }: { threadId: string }) {
       .then(([{ messages: msgs, interrupt: pendingInterrupt }, feedbackMap]) => {
         if (cancelled) return;
         if (msgs.length > 0) {
+          const localMessages = thread.messages;
+          const lastLocal = localMessages[localMessages.length - 1];
+          const merged =
+            lastLocal?.type === 'human' &&
+            !msgs.some((m) => m.type === 'human' && m.content === lastLocal.content)
+              ? [...msgs, lastLocal]
+              : msgs;
           dispatch(updateChat({
             id: chatId,
             updates: {
-              messages: msgs,
+              messages: merged,
               title: (() => {
                 const first = msgs.find(m => m.type === 'human');
                 const content = first ? String(first.content) : '';
@@ -131,7 +138,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
               })(),
             },
           }));
-          thread.setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
+          thread.setMessages(merged.map(m => JSON.parse(JSON.stringify(m))));
           if (needsServerRefresh) {
             dispatch(updateStreamingState({
               chatId,
