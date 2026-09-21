@@ -403,21 +403,30 @@ async function proxyRoutes(fastify: FastifyInstance) {
       headers['X-User-ID'] = xUserId;
 
       try {
-        // ── 1. Ensure the thread exists (idempotent) ──
+        // ── 1. Ensure the thread exists (idempotent, retry once on 401) ──
+        const createThread = async () => {
+          return fetch(`${getAgentHost()}/threads`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              threadId: thread_id,
+              metadata: {
+                user_identity: xUserId,
+                ...(project_id ? { project_id } : {}),
+              },
+              ifExists: 'do_nothing',
+            }),
+            signal: AbortSignal.timeout(cfg.agent.timeout_ms),
+          });
+        };
+
         fastify.log.info({ traceId, thread_id }, 'Creating thread');
-        const threadResp = await fetch(`${getAgentHost()}/threads`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            threadId: thread_id,
-            metadata: {
-              user_identity: xUserId,
-              ...(project_id ? { project_id } : {}),
-            },
-            ifExists: 'do_nothing',
-          }),
-          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
-        });
+        let threadResp = await createThread();
+
+        if (threadResp.status === 401) {
+          fastify.log.warn({ traceId }, 'Thread creation got 401, retrying once');
+          threadResp = await createThread();
+        }
 
         if (!threadResp.ok) {
           const body = await threadResp.text();
