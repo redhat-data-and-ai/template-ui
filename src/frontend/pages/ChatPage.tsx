@@ -124,7 +124,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
           const lastLocal = localMessages[localMessages.length - 1];
           const merged =
             lastLocal?.type === 'human' &&
-            !msgs.some((m) => m.type === 'human' && m.content === lastLocal.content)
+            !msgs.some((m) => m.type === 'human' && m.id === lastLocal.id)
               ? [...msgs, lastLocal]
               : msgs;
           dispatch(updateChat({
