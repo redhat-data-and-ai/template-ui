@@ -121,11 +121,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
         if (cancelled) return;
         if (msgs.length > 0) {
           const localMessages = thread.messages;
-          const lastLocal = localMessages[localMessages.length - 1];
+          const lastHuman = [...localMessages].reverse().find((m) => m.type === 'human');
           const merged =
-            lastLocal?.type === 'human' &&
-            !msgs.some((m) => m.type === 'human' && m.id === lastLocal.id)
-              ? [...msgs, lastLocal]
+            lastHuman &&
+            !msgs.some((m) => m.type === 'human' && m.id === lastHuman.id)
+              ? [...msgs, lastHuman]
               : msgs;
           dispatch(updateChat({
             id: chatId,
