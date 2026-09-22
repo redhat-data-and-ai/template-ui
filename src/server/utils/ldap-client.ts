@@ -94,12 +94,13 @@ async function doBind(): Promise<Client | null> {
 async function ensureBound(): Promise<Client | null> {
   if (!process.env.LDAP_URL) return null;
 
+  if (bindPromise) return bindPromise;
+
   if (ldapClient && !bindFailed) {
     if (ldapClient.isConnected) return ldapClient;
     ldapClient = null;
   }
 
-  if (bindPromise) return bindPromise;
   bindPromise = doBind();
   try {
     return await bindPromise;
