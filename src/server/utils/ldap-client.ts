@@ -18,6 +18,7 @@ const memoryCache = new Map<string, { result: boolean; ts: number }>();
 
 let ldapClient: Client | null = null;
 let bindFailed = false;
+let bindPromise: Promise<Client | null> | null = null;
 
 function getCacheTtl(): number {
   return parseInt(process.env.LDAP_CACHE_TTL_SECONDS || "300", 10) * 1000;
@@ -59,11 +60,9 @@ function getMemberAttrs(): string[] {
   return ["member", "uniqueMember", "memberUid"];
 }
 
-async function ensureBound(): Promise<Client | null> {
+async function doBind(): Promise<Client | null> {
   const ldapUrl = process.env.LDAP_URL;
   if (!ldapUrl) return null;
-
-  if (ldapClient && !bindFailed) return ldapClient;
 
   const password = process.env.LDAP_PASSWORD || "";
   const bindDn = getBindDn();
@@ -79,6 +78,7 @@ async function ensureBound(): Promise<Client | null> {
       url: ldapUrl,
       connectTimeout,
       tlsOptions,
+      autoRebind: true,
     });
     await ldapClient.bind(bindDn, password);
     bindFailed = false;
@@ -88,6 +88,24 @@ async function ensureBound(): Promise<Client | null> {
     bindFailed = true;
     ldapClient = null;
     return null;
+  }
+}
+
+async function ensureBound(): Promise<Client | null> {
+  if (!process.env.LDAP_URL) return null;
+
+  if (bindPromise) return bindPromise;
+
+  if (ldapClient && !bindFailed) {
+    if (ldapClient.isConnected) return ldapClient;
+    ldapClient = null;
+  }
+
+  bindPromise = doBind();
+  try {
+    return await bindPromise;
+  } finally {
+    bindPromise = null;
   }
 }
 
