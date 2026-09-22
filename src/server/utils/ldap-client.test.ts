@@ -8,6 +8,7 @@ const mocks = {
 
 vi.mock('ldapts', () => ({
   Client: class MockClient {
+    isConnected = true;
     constructor(_opts?: any) {}
     bind(...args: any[]) { return mocks.bind(...args); }
     search(...args: any[]) { return mocks.search(...args); }
