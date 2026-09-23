@@ -106,8 +106,8 @@ export default function App() {
         <Route path="/*" element={
           <AppLayout>
             <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/chat" element={<Navigate to="/" replace />} />
+              <Route path="/" element={<Navigate to="/chat" replace />} />
+              <Route path="/chat" element={<HomePage />} />
               <Route path="/chat/:threadId" element={<ChatRoutePage />} />
               <Route path="/project/:projectId" element={<ProjectChatPage />} />
               <Route path="/settings" element={<SettingsPage />} />
