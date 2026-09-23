@@ -91,6 +91,21 @@ export async function setupServer(): Promise<FastifyInstance> {
       }
     }
 
+    const imgSrc = [...csp.img_src];
+    for (const url of [cfg.branding.logo_url, cfg.branding.favicon_url]) {
+      if (url) {
+        try {
+          const parsed = new URL(url);
+          const origin = `${parsed.protocol}//${parsed.host}`;
+          if (origin !== "'self'" && !imgSrc.includes(origin)) {
+            imgSrc.push(origin);
+          }
+        } catch {
+          // relative path — already covered by 'self'
+        }
+      }
+    }
+
     await fastify.register(import("@fastify/helmet"), {
       crossOriginEmbedderPolicy: cfg.security.helmet.cross_origin_embedder_policy,
       // MCP Apps sandbox (ext-apps / sandbox_proxy.js) learns the host from
@@ -103,7 +118,7 @@ export async function setupServer(): Promise<FastifyInstance> {
           defaultSrc: csp.default_src,
           scriptSrc: csp.script_src,
           styleSrc: csp.style_src,
-          imgSrc: csp.img_src,
+          imgSrc: imgSrc,
           connectSrc: connectSrc,
           fontSrc: csp.font_src,
           objectSrc: csp.object_src,
