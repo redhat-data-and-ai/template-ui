@@ -95,9 +95,10 @@ export async function setupServer(): Promise<FastifyInstance> {
     for (const url of [cfg.branding.logo_url, cfg.branding.favicon_url]) {
       if (url) {
         try {
-          const parsed = new URL(url);
+          const resolved = url.startsWith('//') ? `https:${url}` : url;
+          const parsed = new URL(resolved);
           const origin = `${parsed.protocol}//${parsed.host}`;
-          if (origin !== "'self'" && !imgSrc.includes(origin)) {
+          if (!imgSrc.includes(origin)) {
             imgSrc.push(origin);
           }
         } catch {
