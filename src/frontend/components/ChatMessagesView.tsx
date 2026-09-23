@@ -21,6 +21,8 @@ import {
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
+import { markdownSanitizeSchema } from "../lib/markdown-sanitize";
 import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
@@ -348,9 +350,7 @@ const mdComponents = {
       {children}
     </td>
   ),
-  img: ({ className, alt, ...props }: MdComponentProps) => (
-    <img className={cn("w-full h-auto rounded-lg", className)} alt={(alt as string) ?? ''} {...props} />
-  ),
+  img: () => null,
 };
 
 interface HumanMessageBubbleProps {
@@ -438,7 +438,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
               </button>
             )}
             <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
                 {plain}
               </ReactMarkdown>
             </div>
@@ -495,7 +495,7 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
           )}
           {bodyMd.length > 0 && (
             <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{bodyMd}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
             </div>
           )}
           {customData && <CustomDataRenderer data={customData} />}
