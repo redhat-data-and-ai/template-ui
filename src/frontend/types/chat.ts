@@ -8,6 +8,8 @@ export interface ChatItem {
   preview: string;
   messages: Message[];
   historicalActivities?: Record<string, ProcessedEvent[]>;
+  feedback?: Record<string, 'up' | 'down'>;
+  project_id?: string | null;
 }
 
 export interface ChatState {
@@ -34,4 +36,22 @@ export interface SidebarChatItem {
   title: string;
   timestamp: Date;
   preview: string;
+  project_id?: string | null;
+}
+
+export interface Project {
+  project_id: string;
+  project_name: string;
+  project_description: string | null;
+  username: string;
+  created_at: string;
+  updated_at: string;
+  thread_count: number;
+}
+
+export interface SidebarProject {
+  id: string;
+  name: string;
+  description: string | null;
+  threadCount: number;
 }

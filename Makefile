@@ -1,4 +1,9 @@
-.PHONY: dev clean local deploy undeploy
+.PHONY: dev clean local local-down container container-down deploy undeploy e2e opa-build
+
+# Detect npm/node path (supports nvm, system install, etc)
+NPM := $(shell command -v npm 2>/dev/null || echo /Users/sodutta/.nvm/versions/node/v24.18.0/bin/npm)
+NODE_DIR := $(dir $(NPM))
+export PATH := $(NODE_DIR):$(PATH)
 
 # OpenShift namespace (can be overridden: make deploy openshift NAMESPACE=my-project)
 NAMESPACE ?= $(shell oc project -q 2>/dev/null)
@@ -19,21 +24,47 @@ install:
 	else \
 		echo ".env file already exists, skipping copy"; \
 	fi
-	@npm ci
+	@$(NPM) ci
+
+opa-check:
+	@which opa > /dev/null || (echo "Error: opa CLI not found. Install from https://www.openpolicyagent.org/docs/latest/#running-opa" && exit 1)
+	opa check config/compliance/
+	@echo "OPA policy syntax OK"
 
 clean:
+	@echo "Stopping containers and removing volumes..."
+	@export PODMAN_COMPOSE_SILENT=true && podman-compose down -v 2>/dev/null || true
+	@pkill -f "node.*dist/server" 2>/dev/null || true
+	@pkill -f "npm.*start" 2>/dev/null || true
 	rm -rf node_modules dist
 
+## Run Playwright e2e tests
+e2e:
+	npm run build
+	npx playwright install chromium --with-deps 2>/dev/null || npx playwright install chromium
+	npx playwright test
+
 dev:
-	npm run dev
+	$(NPM) run dev
 
 local:
-	npm run build
-	npm start
+	@which podman-compose > /dev/null || (echo "Error: podman-compose not found. Please install podman-compose." && exit 1)
+	@echo "Starting Redis..."
+	@export PODMAN_COMPOSE_SILENT=true && podman-compose up -d redis
+	@echo "Waiting for Redis..."
+	@COUNTER=0; until podman exec template-ui-redis redis-cli ping 2>/dev/null | grep -q PONG || [ $$COUNTER -gt 30 ]; do sleep 1; COUNTER=$$((COUNTER + 1)); done; \
+	if [ $$COUNTER -gt 30 ]; then echo "Error: Redis did not become ready on localhost:6380"; exit 1; fi
+	$(NPM) run build
+	PORT=8080 $(NPM) start
+
+local-down:
+	@export PODMAN_COMPOSE_SILENT=true && podman-compose stop redis
 	
 container:
-	export PODMAN_COMPOSE_SILENT=true
-	podman-compose --no-ansi up --build --force-recreate --remove-orphans  --timeout=60
+	@export PODMAN_COMPOSE_SILENT=true && podman-compose --no-ansi up --build --force-recreate --remove-orphans --timeout=60
+
+container-down:
+	@export PODMAN_COMPOSE_SILENT=true && podman-compose down
 
 # Deployment targets
 deploy:

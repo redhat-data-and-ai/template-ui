@@ -1,0 +1,19 @@
+# Blue theme branding example
+# Copy to config/ui/settings.yaml (or point UI_CONFIG_PATH at this file) to apply.
+# All other settings inherit from built-in defaults.
+
+branding:
+  title: "My Agent"
+  logo_url: "/dist/frontend/redhat-logo.svg"
+  favicon_url: "/dist/frontend/redhat-logo.svg"
+  colors:
+    light:
+      primary: "#0066cc"   # IBM Blue 60
+      accent: "#0043ce"    # IBM Blue 70
+      background: "#f4f7fb"
+      foreground: "#161616"
+    dark:
+      primary: "#4589ff"   # IBM Blue 50
+      accent: "#82cfff"    # IBM Blue 30
+      background: "#001141"
+      foreground: "#f4f4f4"

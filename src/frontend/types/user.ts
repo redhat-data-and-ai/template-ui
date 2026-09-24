@@ -16,9 +16,16 @@ export interface UserData {
   sub: string;
 }
 
+import type { BrandingConfig, FeaturesConfig } from '../services/config.service';
+
 export interface AppData {
   apiUrl: string;
   refreshableToken: string;
+  agentName: string;
+  basePath?: string;
+  branding?: BrandingConfig;
+  features?: FeaturesConfig;
+  userRole?: 'owners' | 'admins' | 'builders' | 'users' | null;
 }
 
 // Extend the Window interface to include USER_DATA and APP_DATA

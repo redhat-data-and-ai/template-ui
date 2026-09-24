@@ -1,0 +1,9 @@
+id: no-dangerously-set-innerhtml
+language: typescript
+message: "dangerouslySetInnerHTML is an XSS risk; use a sanitizer or avoid raw HTML"
+severity: error
+rule:
+  kind: jsx_attribute
+  has:
+    kind: property_identifier
+    regex: "^dangerouslySetInnerHTML$"

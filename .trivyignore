@@ -1,0 +1,11 @@
+# tar 7.5.15 ships in the base image's system npm, not our app dependencies.
+# Fix depends on base image update (registry.access.redhat.com/hi/nodejs).
+CVE-2026-59873
+
+# Go stdlib in OPA static binary — fix depends on OPA upstream rebuilding with Go 1.24.13+.
+CVE-2025-68121
+
+# golang.org/x/crypto/ssh auth bypass in OPA binary — OPA doesn't use SSH.
+# Latest OPA (1.20.1) still ships x/crypto v0.54.0; fix needs v0.55.0.
+# Remove when OPA releases a version with the fix.
+CVE-2026-56854

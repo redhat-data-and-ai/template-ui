@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: template-ui
+  labels:
+    app: template-ui
+    component: ui
+spec:
+  to:
+    kind: Service
+    name: template-ui
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+

@@ -1,0 +1,8 @@
+id: no-direct-env-access
+language: typescript
+message: "Use a validated config module instead of direct process.env access"
+severity: warning
+rule:
+  any:
+    - pattern: process.env[$KEY]
+    - pattern: process.env.$VAR

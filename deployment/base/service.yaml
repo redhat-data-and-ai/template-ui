@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: template-ui
+  labels:
+    app: template-ui
+    component: ui
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: template-ui
+    component: ui
+

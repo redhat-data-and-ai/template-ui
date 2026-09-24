@@ -25,7 +25,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         onSubmit={handleSubmit}
         isLoading={isLoading}
         onCancel={onCancel}
-        hasHistory={false}
       />
     </div>
     {/* <p className="text-xs text-neutral-500">

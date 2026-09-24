@@ -1,0 +1,30 @@
+# Minimal configuration — auth disabled, suitable for local development.
+# Copy to config/ui/settings.yaml and ensure FEATURE_AUTH_ENABLED / AUTH_ENABLED is not set (or set to false).
+#
+# With this config:
+#   - No SSO credentials are required.
+#   - The dummy user developer@redhat.com is injected automatically.
+#   - The server still validates all other config fields on startup.
+
+branding:
+  title: "Local Dev Agent"
+
+features:
+  auth_enabled: false       # Bypasses SSO; uses dummy user developer@redhat.com
+  debug_mode_default: true  # Opens the debug panel by default (useful during development)
+  mcp_apps_enabled: true
+
+agent:
+  endpoint: ""              # Falls back to AGENT_HOST env var (default: http://localhost:5002)
+  timeout_ms: 60000         # Longer timeout while iterating on agent responses locally
+  streaming: true
+
+security:
+  rate_limit:
+    enabled: false          # Disable rate-limiting during development
+  session:
+    secure_cookie: false    # HTTP is fine for localhost
+    max_age_days: 7
+
+logging:
+  level: "debug"

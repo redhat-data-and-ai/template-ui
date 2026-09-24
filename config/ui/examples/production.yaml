@@ -1,0 +1,83 @@
+# Production-hardened configuration example.
+# Copy to config/ui/settings.yaml and supply secrets via environment variables.
+#
+# Required environment variables (never put these in YAML):
+#   COOKIE_SIGN            — random string >= 32 chars
+#   SSO_CLIENT_ID          — OIDC client ID
+#   SSO_CLIENT_SECRET      — OIDC client secret
+#   SSO_ISSUER_HOST        — e.g. https://sso.example.com/realms/myrealm
+#   SSO_CALLBACK_URL       — e.g. https://myagent.example.com/auth/callback/oidc
+#   AGENT_HOST             — e.g. http://my-agent-engine:8082
+#
+# Optional environment overrides (can also be set here or via ConfigMap):
+#   BRANDING_TITLE         — override the agent title without editing this file
+#   AGENT_ENDPOINT         — override the agent URL at runtime (no restart needed)
+
+branding:
+  title: "Production Agent"
+  logo_url: "/dist/frontend/redhat-logo.svg"
+  favicon_url: "/dist/frontend/redhat-logo.svg"
+  colors:
+    light:
+      primary: "#0066cc"
+      accent: "#a60000"
+      background: "#ffffff"
+      foreground: "#1a1a1a"
+    dark:
+      primary: "#4dabf7"
+      accent: "#f56e6e"
+      background: "#0a1628"
+      foreground: "#f0f4f8"
+
+features:
+  auth_enabled: true          # SSO enabled; credentials injected via env vars by agent-engine
+  debug_mode_default: false   # Never expose debug panel to end-users by default
+
+agent:
+  endpoint: ""                # Set via AGENT_HOST or AGENT_ENDPOINT env var
+  timeout_ms: 30000
+  streaming: true
+
+# OPA policy enforcement — blocks startup if any rule is violated
+platform:
+  opa:
+    enabled: true
+    policy_path: "config/compliance"   # Relative to project root
+    fail_on_violation: true            # Prevent startup on policy violations
+    approved_auth_providers:
+      - "oidc"                         # Only OIDC allowed in production
+    internal_endpoint_suffixes:
+      - ".svc.cluster.local"           # Agent must be an in-cluster service
+      - ".internal.example.com"
+    max_session_ttl_days: 7            # Enforce short session lifetime
+    restrict_debug_mode: true          # debug_mode_default must be false
+    restricted_features: []
+    max_rate_limit: 500                # Cap rate limit to 500 req/min maximum
+
+security:
+  rate_limit:
+    enabled: true
+    max: 200
+    window: "1 minute"
+    exclude_paths:
+      - "/api/health"
+      - "/_health"
+  session:
+    secure_cookie: true       # HTTPS only — required in production
+    max_age_days: 7
+    http_only: true
+    same_site: "lax"          # lax allows OAuth2 callback flows
+  helmet:
+    enabled: true
+    cross_origin_embedder_policy: false
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  body_limit: 1048576         # 1 MB
+
+logging:
+  level: "warn"               # Reduce log volume in production
+
+cors:
+  origin: "https://myagent.example.com"   # Lock down to the production domain

@@ -23,3 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 .env
+ROADMAP.md
+
+# Playwright
+playwright-report/
+test-results/
+
+# Coverage
+coverage/
+dump.rdb

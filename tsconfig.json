@@ -27,5 +27,6 @@
     "noUncheckedSideEffectImports": false,
     "noImplicitAny": false
   },
-  "include": ["src","vite.config.ts","vite-env.d.ts"]
+  "include": ["src","vite.config.ts","vite-env.d.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts", "src/**/*.spec.tsx", "src/frontend/test-utils"]
 }

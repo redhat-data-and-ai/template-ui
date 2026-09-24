@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 
 // https://vitejs.dev/config/
+const proxyTarget = `http://127.0.0.1:${process.env.PORT || 8080}`;
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
@@ -28,20 +30,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // Proxy API requests to the backend server
       "/api": {
-        target: "http://127.0.0.1:8080", // Backend server port (matches env.template)
-        changeOrigin: true,
-        // Optionally rewrite path if needed (e.g., remove /api prefix if backend doesn't expect it)
-        // rewrite: (path) => path.replace(/^\/api/, ''),
-      },
-      // Also proxy the /stream endpoint for Server-Sent Events
-      "/api/v1/stream": {
-        target: "http://127.0.0.1:8080",
+        target: proxyTarget,
         changeOrigin: true,
       },
-      "/auth/refresh": {
-        target: "http://127.0.0.1:8080",
+      "/auth": {
+        target: proxyTarget,
+        changeOrigin: true,
+      },
+      "/login": {
+        target: proxyTarget,
         changeOrigin: true,
       },
     },
