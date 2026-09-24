@@ -159,6 +159,7 @@ async function routes(fastify: FastifyInstance) {
     };
 
     reply.type("text/html");
+    reply.header("Cache-Control", "no-store");
     return reply.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
