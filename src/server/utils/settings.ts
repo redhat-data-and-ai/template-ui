@@ -186,7 +186,7 @@ const DEFAULTS: UISettings = {
         default_src: ["'self'"],
         script_src: ["'self'"],
         style_src: ["'self'", "'unsafe-inline'"],
-        img_src: ["'self'", "data:", "blob:", "https:"],
+        img_src: ["'self'", "data:", "blob:"],
         connect_src: ["'self'"],
         font_src: ["'self'", "data:"],
         object_src: ["'none'"],
