@@ -43,13 +43,13 @@ async function apiRoutes(fastify: FastifyInstance) {
 
   fastify.get("/config/branding", async (_request, reply) => {
     const cfg = getSettings();
-    reply.header("Cache-Control", "public, max-age=3600");
+    reply.header("Cache-Control", "no-store");
     return cfg.branding;
   });
 
   fastify.get("/config/features", async (_request, reply) => {
     const cfg = getSettings();
-    reply.header("Cache-Control", "public, max-age=3600");
+    reply.header("Cache-Control", "no-store");
     return cfg.features;
   });
 
