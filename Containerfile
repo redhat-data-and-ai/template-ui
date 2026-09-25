@@ -40,6 +40,7 @@ RUN chmod +x entrypoint.sh && npm ci && npm run build
 # Config will be mounted here at runtime from PVC
 # Override UI_CONFIG_PATH in deployment.yaml if using a custom mount location
 ENV UI_CONFIG_PATH=/app/config/ui/settings.yaml
+ENV NODE_OPTIONS="--max-old-space-size=384"
 
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["node", "dist/server/index.js"]
