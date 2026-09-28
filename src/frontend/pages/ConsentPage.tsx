@@ -33,12 +33,6 @@ export function ConsentPage() {
     }
   };
 
-  const handleDeny = () => {
-    setError(
-      'You must approve the authorization to continue using this application.',
-    );
-  };
-
   return (
     <div className="w-full min-h-screen bg-background flex items-center justify-center p-4">
       <div className="max-w-3xl w-full bg-card rounded-xl shadow-elevated border border-border animate-fadeInUp">
@@ -127,25 +121,17 @@ export function ConsentPage() {
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={handleDeny}
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2.5 rounded-lg border border-border text-foreground bg-secondary hover:bg-secondary/70 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
-            >
-              Deny
-            </button>
-            <button
-              type="button"
               onClick={handleApprove}
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-70 disabled:cursor-not-allowed font-medium text-sm flex items-center justify-center gap-2"
+              className="w-full px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-70 disabled:cursor-not-allowed font-medium text-sm flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground" />
-                  Approving…
+                  Acknowledging…
                 </>
               ) : (
-                'Approve & Continue'
+                'Acknowledge & Proceed'
               )}
             </button>
           </div>
@@ -153,10 +139,8 @@ export function ConsentPage() {
           {/* Footer */}
           <div className="mt-6 pt-4 border-t border-border">
             <p className="text-xs text-muted-foreground text-center leading-relaxed">
-              By approving, you allow this agent to use your authenticated
-              session to interact with connected platforms on your behalf. Your
-              queries and results may be logged for governance and product
-              improvement purposes.
+              By acknowledging, you allow this agent to use your authenticated
+              session to interact with connected platforms on your behalf.
             </p>
           </div>
         </div>
