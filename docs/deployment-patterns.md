@@ -202,10 +202,10 @@ Full example at [`config/ui/examples/production.yaml`](../config/ui/examples/pro
 - OPA enabled with `fail_on_violation: true`
 - `logging.level: "warn"` to reduce log volume
 
-The OpenShift deployment manifests at `deployment/openshift/` are pre-wired to inject all required env vars from a ConfigMap and Secret. Fill in `deployment/openshift/configmap.yaml` and `deployment/openshift/secret.yaml`, then apply:
+The deployment manifests use a kustomize base+overlays layout. The base resources (Deployment, Service, ConfigMap, Secret) live in `deployment/base/`, with environment-specific overlays in `deployment/overlays/openshift/` and `deployment/overlays/kind/`. Fill in `deployment/base/configmap.yaml` and `deployment/base/secret.yaml`, then apply:
 
 ```bash
-kubectl apply -k deployment/openshift/
+oc apply -k deployment/overlays/openshift/
 ```
 
 ### Multi-agent deployment
@@ -270,7 +270,7 @@ export AGENT_ENDPOINT=https://prod-agent.example.com
 
 ### Kubernetes ConfigMap pattern
 
-The OpenShift ConfigMap at `deployment/openshift/configmap.yaml` currently uses `AGENT_HOST`:
+The ConfigMap at `deployment/base/configmap.yaml` currently uses `AGENT_HOST`:
 
 ```yaml
 data:

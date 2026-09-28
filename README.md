@@ -227,10 +227,10 @@ template-ui/
 │       ├── data.json       # Static external data for OPA policies
 │       └── README.md       # OPA policy authoring guide
 ├── deployment/
-│   ├── openshift/          # OpenShift BuildConfig, ImageStream, Route, ConfigMap, Secret
+│   ├── base/               # Shared base resources (Deployment, Service, ConfigMap, Secret)
 │   └── overlays/
-│       ├── kind/           # Kind cluster overlay (NodePort, no TLS)
-│       └── openshift/      # OpenShift overlay
+│       ├── kind/           # Kind cluster overlay (Ingress, local image)
+│       └── openshift/      # OpenShift overlay (BuildConfig, ImageStream, Route)
 ├── docs/
 │   └── deployment-patterns.md  # Branding, feature flags, runtime config, agent endpoint, OPA
 ├── public/                 # Static assets served directly
