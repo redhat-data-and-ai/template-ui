@@ -12,6 +12,8 @@ import {
 import { getToolIcon } from "../lib/toolIcons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
+import { markdownSanitizeSchema } from "../lib/markdown-sanitize";
 
 interface StreamEventRendererProps {
   events: StreamEvent[];
@@ -101,7 +103,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
                   {isLoading && <Loader2 className="w-3 h-3 text-purple-400 animate-spin" />}
                 </div>
                 <div className="text-sm text-purple-200/80 italic">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]}>
                     {typeof event.content === "string"
                       ? event.content
                       : JSON.stringify(event.content)}
@@ -200,7 +202,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
                   AI Response
                 </div>
                 <div className="text-sm text-neutral-200 prose prose-sm prose-invert max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]}>
                     {typeof event.content === "string"
                       ? event.content
                       : JSON.stringify(event.content)}
