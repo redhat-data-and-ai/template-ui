@@ -83,7 +83,7 @@ export function EvalDatasetPage() {
   }, [cases, search, tagFilter]);
 
   /** Persists the given test cases and judge model to the agent backend. */
-  function saveDataset(casesToSave: TestCase[]) {
+  function saveDataset(casesToSave: TestCase[], model: string) {
     const doSave = async () => {
       setSaveError('');
       try {
@@ -91,7 +91,7 @@ export function EvalDatasetPage() {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cases: casesToSave, judge_model: judgeModel || null }),
+          body: JSON.stringify({ cases: casesToSave, judge_model: model || null }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -112,7 +112,7 @@ export function EvalDatasetPage() {
       return [...cases, tc];
     })();
     setCases(updated);
-    saveDataset(updated);
+    saveDataset(updated, judgeModel);
     setModalOpen(false);
     setEditingCase(undefined);
   }
@@ -192,7 +192,7 @@ export function EvalDatasetPage() {
               <div className="relative">
                 <select
                   value={judgeModel}
-                  onChange={(e) => setJudgeModel(e.target.value)}
+                  onChange={(e) => { setJudgeModel(e.target.value); saveDataset(cases, e.target.value); }}
                   className="appearance-none rounded-md border border-border bg-background pl-3 pr-7 py-1 text-xs text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
                 >
                   {availableModels.map((m) => (
