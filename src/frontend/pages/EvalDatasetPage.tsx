@@ -30,9 +30,7 @@ export function EvalDatasetPage() {
   const [tagFilter, setTagFilter] = useState<CaseTag | 'all'>('all');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [availableModels, setAvailableModels] = useState<AgentModel[]>([]);
   const [judgeModel, setJudgeModel] = useState<string>('');
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -85,43 +83,37 @@ export function EvalDatasetPage() {
     });
   }, [cases, search, tagFilter]);
 
-  /** Persists the current test cases and judge model to the agent backend. */
-  async function handleSaveDataset() {
+  /** Persists the given test cases and judge model to the agent backend. */
+  function saveDataset(casesToSave: TestCase[]) {
     const doSave = async () => {
-      setSaving(true);
       setSaveError('');
-      setSaveSuccess(false);
       try {
         const res = await fetch(buildAgentApiUrl('/evals/dataset'), {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cases, judge_model: judgeModel || null }),
+          body: JSON.stringify({ cases: casesToSave, judge_model: judgeModel || null }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           setSaveError((err as { detail?: string }).detail ?? `Error ${res.status}`);
-        } else {
-          setSaveSuccess(true);
-          setTimeout(() => setSaveSuccess(false), 3000);
         }
       } catch {
         setSaveError('Network error — could not reach the agent backend.');
-      } finally {
-        setSaving(false);
       }
     };
     saveQueueRef.current = saveQueueRef.current.then(doSave, doSave);
-    return saveQueueRef.current;
   }
 
-  /** Upserts a test case into the local cases array and closes the modal. */
+  /** Upserts a test case into the local cases array, autosaves, and closes the modal. */
   function handleSave(tc: TestCase) {
-    setCases((prev) => {
-      const idx = prev.findIndex((c) => c.id === tc.id);
-      if (idx >= 0) return prev.map((c) => c.id === tc.id ? tc : c);
-      return [...prev, tc];
-    });
+    const updated = (() => {
+      const idx = cases.findIndex((c) => c.id === tc.id);
+      if (idx >= 0) return cases.map((c) => c.id === tc.id ? tc : c);
+      return [...cases, tc];
+    })();
+    setCases(updated);
+    saveDataset(updated);
     setModalOpen(false);
     setEditingCase(undefined);
   }
@@ -292,25 +284,9 @@ export function EvalDatasetPage() {
                       ? `Showing ${filtered.length} of ${cases.length} cases`
                       : `${cases.length} test case${cases.length !== 1 ? 's' : ''} in dataset`}
                   </p>
-                  <div className="flex items-center gap-3">
-                    {saveError && (
-                      <p className="text-xs text-red-600">{saveError}</p>
-                    )}
-                    {saveSuccess && (
-                      <p className="text-xs text-emerald-600">Dataset saved.</p>
-                    )}
-                    <button
-                      onClick={handleSaveDataset}
-                      disabled={saving}
-                      className={cn(
-                        'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium text-white transition-colors',
-                        saving ? 'bg-primary/60 cursor-not-allowed' : 'bg-primary hover:bg-primary/90',
-                      )}
-                    >
-                      {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      {saving ? 'Saving…' : 'Save Dataset'}
-                    </button>
-                  </div>
+                  {saveError && (
+                    <p className="text-xs text-red-600">{saveError}</p>
+                  )}
                 </div>
               )}
             </>
