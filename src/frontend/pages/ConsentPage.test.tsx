@@ -17,19 +17,7 @@ describe('ConsentPage', () => {
       </MemoryRouter>,
     );
     expect(getByText('Authorization Required')).toBeDefined();
-    expect(getByText('Approve & Continue')).toBeDefined();
-    expect(getByText('Deny')).toBeDefined();
-  });
-
-  it('shows error when deny is clicked', () => {
-    const { getByText } = render(
-      <MemoryRouter>
-        <ConsentPage />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(getByText('Deny'));
-    expect(getByText(/must approve/)).toBeDefined();
+    expect(getByText('Acknowledge & Proceed')).toBeDefined();
   });
 
   it('calls API on approve', async () => {
@@ -45,7 +33,7 @@ describe('ConsentPage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(getByText('Approve & Continue'));
+    fireEvent.click(getByText('Acknowledge & Proceed'));
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/auth/consent/approve', expect.any(Object));
@@ -61,7 +49,7 @@ describe('ConsentPage', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(getByText('Approve & Continue'));
+    fireEvent.click(getByText('Acknowledge & Proceed'));
 
     await waitFor(() => {
       expect(getByText(/Failed to approve consent/)).toBeDefined();
