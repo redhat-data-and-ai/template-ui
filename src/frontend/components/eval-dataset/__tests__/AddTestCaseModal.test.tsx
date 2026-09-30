@@ -19,29 +19,29 @@ describe('AddTestCaseModal — save validation', () => {
     expect(defaultProps.onSave).not.toHaveBeenCalled();
   });
 
-  it('shows error when name contains spaces or special characters', () => {
+  it('shows error when name contains invalid characters', () => {
     render(<AddTestCaseModal {...defaultProps} />);
-    fireEvent.change(screen.getByPlaceholderText('e.g. calculate_bmi_standard'), {
-      target: { value: 'Invalid Name!' },
+    fireEvent.change(screen.getByPlaceholderText('e.g. calculate-bmi-standard'), {
+      target: { value: 'ab' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save Test Case' }));
-    expect(screen.getByText(/lowercase letters, digits, and underscores/)).toBeInTheDocument();
+    expect(screen.getByText(/Must start and end with alphanumeric/)).toBeInTheDocument();
     expect(defaultProps.onSave).not.toHaveBeenCalled();
   });
 
-  it('shows error when name contains uppercase letters', () => {
+  it('shows error when name is too short', () => {
     render(<AddTestCaseModal {...defaultProps} />);
-    fireEvent.change(screen.getByPlaceholderText('e.g. calculate_bmi_standard'), {
-      target: { value: 'MyCase' },
+    fireEvent.change(screen.getByPlaceholderText('e.g. calculate-bmi-standard'), {
+      target: { value: 'ab' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save Test Case' }));
-    expect(screen.getByText(/lowercase letters, digits, and underscores/)).toBeInTheDocument();
+    expect(screen.getByText(/3–20 characters/)).toBeInTheDocument();
   });
 
   it('shows error and does not call onSave when description is empty', () => {
     render(<AddTestCaseModal {...defaultProps} />);
-    fireEvent.change(screen.getByPlaceholderText('e.g. calculate_bmi_standard'), {
-      target: { value: 'valid_name' },
+    fireEvent.change(screen.getByPlaceholderText('e.g. calculate-bmi-standard'), {
+      target: { value: 'valid-name' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save Test Case' }));
     expect(screen.getByText('Description is required.')).toBeInTheDocument();
@@ -50,8 +50,8 @@ describe('AddTestCaseModal — save validation', () => {
 
   it('shows error when user message or expected response is empty', () => {
     render(<AddTestCaseModal {...defaultProps} />);
-    fireEvent.change(screen.getByPlaceholderText('e.g. calculate_bmi_standard'), {
-      target: { value: 'valid_name' },
+    fireEvent.change(screen.getByPlaceholderText('e.g. calculate-bmi-standard'), {
+      target: { value: 'valid-name' },
     });
     fireEvent.change(screen.getByPlaceholderText('Brief description of what this test case validates'), {
       target: { value: 'Validates BMI calculation' },
@@ -70,8 +70,8 @@ describe('AddTestCaseModal — save validation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Test Case' }));
     expect(screen.getByText('Test Case Name is required.')).toBeInTheDocument();
     // Fill name and attempt again — error changes
-    fireEvent.change(screen.getByPlaceholderText('e.g. calculate_bmi_standard'), {
-      target: { value: 'valid_name' },
+    fireEvent.change(screen.getByPlaceholderText('e.g. calculate-bmi-standard'), {
+      target: { value: 'valid-name' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save Test Case' }));
     expect(screen.queryByText('Test Case Name is required.')).not.toBeInTheDocument();
@@ -115,7 +115,7 @@ describe('AddTestCaseModal — mode switching', () => {
   it('does not show mode toggle in edit mode', () => {
     const initialCase = {
       id: 'case-1',
-      name: 'my_case',
+      name: 'my-case',
       description: '',
       tag: 'non_hitl' as const,
       turns: [{

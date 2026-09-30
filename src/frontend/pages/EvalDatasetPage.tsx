@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Search, Database, Loader2, ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { buildAgentApiUrl } from '@/lib/app-paths';
 import type { TestCase, CaseTag } from '../components/eval-dataset/eval-dataset-types';
 import { EvalDatasetTable } from '../components/eval-dataset/EvalDatasetTable';
