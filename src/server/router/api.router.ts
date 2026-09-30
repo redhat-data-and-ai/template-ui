@@ -54,17 +54,11 @@ async function apiRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/config/compliance", async (_request, reply) => {
-    if (!fastify.hasDecorator("opa")) {
-      return { enabled: false, violations: [] };
+    if (!fastify.hasDecorator("compliance")) {
+      return { status: "disabled" };
     }
-    const violations = fastify.opa.evaluate();
     reply.header("Cache-Control", "no-store");
-    return {
-      enabled: true,
-      loaded: fastify.opa.engine.isLoaded(),
-      violations,
-      compliant: violations.length === 0,
-    };
+    return fastify.compliance;
   });
 
   // Vite local serves HTML without session injection. Keep this off auth-check
