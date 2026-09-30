@@ -1,4 +1,4 @@
-import { watchFile, unwatchFile, statSync } from 'node:fs';
+import { watchFile, unwatchFile } from 'node:fs';
 import { resetSettings, getSettings } from './settings.js';
 
 let debounceTimer: NodeJS.Timeout | null = null;
