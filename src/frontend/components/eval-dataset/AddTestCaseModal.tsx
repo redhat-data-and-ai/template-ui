@@ -50,8 +50,8 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
   function handleSave() {
     setError('');
     if (!name.trim()) { setError('Test Case Name is required.'); return; }
-    if (!/^[a-z0-9_]+$/.test(name.trim())) {
-      setError('Name must contain only lowercase letters, digits, and underscores.');
+    if (!/^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$/.test(name.trim())) {
+      setError('Name must be 3–20 characters: lowercase letters, numbers, and hyphens. Must start and end with alphanumeric.');
       return;
     }
     if (!description.trim()) { setError('Description is required.'); return; }
@@ -163,22 +163,20 @@ export function AddTestCaseModal({ initialCase, onSave, onClose }: AddTestCaseMo
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-border px-5 py-3.5 flex items-center justify-between">
-          <div>
-            {error && <p className="text-xs text-red-600">{error}</p>}
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="shrink-0 border-t border-border px-5 py-3.5 space-y-2">
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
+              className="whitespace-nowrap px-4 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="px-4 py-2 rounded-md bg-primary text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+              className="whitespace-nowrap px-4 py-2 rounded-md bg-primary text-sm font-medium text-white hover:bg-primary/90 transition-colors"
             >
               {isEditing ? 'Update Test Case' : 'Save Test Case'}
             </button>

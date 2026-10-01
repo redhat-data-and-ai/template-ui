@@ -84,15 +84,16 @@ export function MultiTurnForm({ name, turns, description, onNameChange, onTurnsC
           <input
             type="text"
             value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder="e.g. multi_turn_onboarding_flow"
+            onChange={(e) => onNameChange(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+            placeholder="e.g. multi-turn-onboarding"
+            maxLength={20}
             className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
           <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
             multi_turn
           </span>
         </div>
-        <p className="text-xs text-muted-foreground">Use lowercase letters and underscores only</p>
+        <p className="text-xs text-muted-foreground">3–20 chars, lowercase alphanumeric and hyphens, must start and end with alphanumeric</p>
       </div>
 
       {/* Description */}
