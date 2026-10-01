@@ -85,11 +85,12 @@ export function SingleTurnForm({
         <input
           type="text"
           value={name}
-          onChange={(e) => onNameChange(e.target.value)}
-          placeholder="e.g. calculate_bmi_standard"
+          onChange={(e) => onNameChange(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+          placeholder="e.g. calculate-bmi-standard"
+          maxLength={20}
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
-        <p className="text-xs text-muted-foreground">Use lowercase letters and underscores only</p>
+        <p className="text-xs text-muted-foreground">3–20 chars, lowercase alphanumeric and hyphens, must start and end with alphanumeric</p>
       </div>
 
       {/* Description */}
