@@ -1,12 +1,13 @@
-import { watch, FSWatcher } from 'node:fs';
+import { watchFile, unwatchFile } from 'node:fs';
 import { resetSettings, getSettings } from './settings.js';
 
-let watcher: FSWatcher | null = null;
 let debounceTimer: NodeJS.Timeout | null = null;
+let watchedPath: string | null = null;
 
 /**
  * Watch a config file for changes and reload settings.
  *
+ * Uses stat-based polling
  * @param configPath - Path to the settings.yaml file to watch
  * @param onReload - Callback invoked after settings are reloaded
  * @returns Cleanup function to stop watching
@@ -15,16 +16,18 @@ export function watchConfig(
   configPath: string,
   onReload: (settings: any) => void,
 ): () => void {
-  // Close existing watcher if any
-  if (watcher) {
-    watcher.close();
-    watcher = null;
+  // Stop watching previous path if any
+  if (watchedPath) {
+    unwatchFile(watchedPath);
+    watchedPath = null;
   }
 
-  console.log(`[ConfigWatcher] Starting watch on ${configPath}`);
+  console.log(`[ConfigWatcher] Starting poll-based watch on ${configPath}`);
 
-  watcher = watch(configPath, (eventType, _filename) => {
-    if (eventType !== 'change') {
+  watchedPath = configPath;
+
+  watchFile(configPath, { interval: 5000 }, (curr, prev) => {
+    if (curr.mtimeMs === prev.mtimeMs) {
       return;
     }
 
@@ -54,10 +57,6 @@ export function watchConfig(
     }, 100); // 100ms debounce
   });
 
-  watcher.on('error', (error) => {
-    console.error('[ConfigWatcher] Watch error:', error);
-  });
-
   // Return cleanup function
   return () => {
     console.log('[ConfigWatcher] Stopping watch');
@@ -65,9 +64,9 @@ export function watchConfig(
       clearTimeout(debounceTimer);
       debounceTimer = null;
     }
-    if (watcher) {
-      watcher.close();
-      watcher = null;
+    if (watchedPath) {
+      unwatchFile(watchedPath);
+      watchedPath = null;
     }
   };
 }
