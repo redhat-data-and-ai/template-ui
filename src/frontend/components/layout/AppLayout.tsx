@@ -440,8 +440,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         </PageToggleButton>
       </MastheadToggle>
       <MastheadMain>
-        <MastheadBrand>
-          <div className="flex items-center gap-2">
+        <MastheadBrand onClick={() => navigate('/')}>
+          <div className="flex items-center gap-2 cursor-pointer">
             {branding?.logo_url ? (
               <img
                 src={branding.logo_url}
