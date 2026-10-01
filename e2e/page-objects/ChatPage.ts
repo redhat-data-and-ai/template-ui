@@ -22,6 +22,7 @@ export class ChatPage {
         const liveRegion = document.querySelector('.sr-only[aria-live="polite"]');
         return liveRegion?.textContent?.includes('Response complete');
       },
+      undefined,
       { timeout },
     );
   }

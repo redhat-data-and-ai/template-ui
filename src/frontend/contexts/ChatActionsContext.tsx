@@ -6,7 +6,7 @@ export interface McpModelContextUpdate {
 }
 
 export interface ChatActions {
-  /** Send a user message and trigger a model turn (same path as the composer). */
+  /** Send a user message and trigger a model turn (MCP Apps). Not gated. */
   sendUserMessage: (text: string) => Promise<void>;
   /**
    * Overwrite pending MCP App model context for the next turn.

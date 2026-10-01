@@ -358,7 +358,7 @@ interface HumanMessageBubbleProps {
   messageIndex: number;
   isLastHuman: boolean;
   isLoading?: boolean;
-  onEditMessage?: (messageIndex: number, newContent: string) => void;
+  onEditMessage?: (messageIndex: number, newContent: string) => void | boolean | Promise<void | boolean>;
 }
 
 const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
@@ -383,11 +383,11 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
     setDraft('');
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     const trimmed = draft.trim();
     if (trimmed === '' || !onEditMessage) return;
-    onEditMessage(messageIndex, trimmed);
-    setIsEditing(false);
+    const accepted = await onEditMessage(messageIndex, trimmed);
+    if (accepted !== false) setIsEditing(false);
   };
 
   return (
@@ -856,7 +856,7 @@ interface ChatMessagesViewProps {
   onAlwaysAllow?: (toolNames: string[]) => void;
   interruptContent?: React.ReactNode;
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
-  onSubmit: (inputValue: string) => void;
+  onSubmit: (inputValue: string) => void | boolean | Promise<void | boolean>;
   onRetry?: () => void;
   onCancel: () => void;
   liveActivityEvents: ProcessedEvent[];
@@ -868,7 +868,7 @@ interface ChatMessagesViewProps {
   traceId: string | null;
   userId?: string;
   messageFeedback?: Record<string, 'up' | 'down'>;
-  onEditMessage?: (messageIndex: number, newContent: string) => void;
+  onEditMessage?: (messageIndex: number, newContent: string) => void | boolean | Promise<void | boolean>;
   lastResponseTiming?: {
     timeToFirstTokenMs: number | null;
     totalDurationMs: number;

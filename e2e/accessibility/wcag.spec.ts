@@ -12,6 +12,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mountConfig } from '../helpers/config-mount';
+import { setLocalStorageSettings } from '../helpers/local-storage';
 import { mockAgentStream } from '../helpers/sse-mock';
 import { HomePage } from '../page-objects/HomePage';
 import { ChatPage } from '../page-objects/ChatPage';
@@ -45,10 +46,7 @@ test.describe('Home page — WCAG 2.1 AA', () => {
 
   test('light mode has no violations', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
-    // Force light theme class
-    await page.addInitScript(() => {
-      localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'light' }));
-    });
+    await setLocalStorageSettings(page, { theme: 'light' });
     await page.goto('/');
     await page.waitForSelector('textarea', { state: 'visible' });
     const violations = await runAxe(page);
@@ -57,9 +55,7 @@ test.describe('Home page — WCAG 2.1 AA', () => {
 
   test('dark mode has no violations', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.addInitScript(() => {
-      localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'dark' }));
-    });
+    await setLocalStorageSettings(page, { theme: 'dark' });
     await page.goto('/');
     await page.waitForSelector('textarea', { state: 'visible' });
     const violations = await runAxe(page);
@@ -79,9 +75,7 @@ test.describe('Chat page — WCAG 2.1 AA', () => {
 
   test('light mode — after AI response has no violations', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.addInitScript(() => {
-      localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'light' }));
-    });
+    await setLocalStorageSettings(page, { theme: 'light' });
     const home = new HomePage(page);
     const chat = new ChatPage(page);
 
@@ -95,9 +89,7 @@ test.describe('Chat page — WCAG 2.1 AA', () => {
 
   test('dark mode — after AI response has no violations', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.addInitScript(() => {
-      localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'dark' }));
-    });
+    await setLocalStorageSettings(page, { theme: 'dark' });
     const home = new HomePage(page);
     const chat = new ChatPage(page);
 
@@ -124,9 +116,7 @@ test.describe('Settings page — WCAG 2.1 AA', () => {
 
   for (const tab of SETTINGS_TABS) {
     test(`light mode — ${tab} tab has no violations`, async ({ page }) => {
-      await page.addInitScript(() => {
-        localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'light' }));
-      });
+      await setLocalStorageSettings(page, { theme: 'light' });
       const settings = new SettingsPage(page);
       await settings.goto();
       await settings.selectTab(tab);
@@ -137,9 +127,7 @@ test.describe('Settings page — WCAG 2.1 AA', () => {
     });
 
     test(`dark mode — ${tab} tab has no violations`, async ({ page }) => {
-      await page.addInitScript(() => {
-        localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'dark' }));
-      });
+      await setLocalStorageSettings(page, { theme: 'dark' });
       const settings = new SettingsPage(page);
       await settings.goto();
       await settings.selectTab(tab);
