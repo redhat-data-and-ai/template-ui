@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Page,
@@ -440,22 +440,24 @@ export function AppLayout({ children }: AppLayoutProps) {
         </PageToggleButton>
       </MastheadToggle>
       <MastheadMain>
-        <MastheadBrand onClick={() => navigate('/')}>
-          <div className="flex items-center gap-2 cursor-pointer">
-            {branding?.logo_url ? (
-              <img
-                src={branding.logo_url}
-                alt={branding.title || 'Logo'}
-                className="h-5 w-auto"
-                style={{ height: '1.25rem', width: 'auto', maxHeight: '1.25rem' }}
-              />
-            ) : (
-              <RedHatLogo className="h-5 w-auto" style={{ color: '#ee0000' }} />
-            )}
-            <span className="text-base font-semibold text-foreground">
-              {branding?.title || window.APP_DATA?.agentName || 'Agent'}
-            </span>
-          </div>
+        <MastheadBrand>
+          <Link to="/" className="flex items-center gap-2 no-underline text-inherit" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="flex items-center gap-2">
+              {branding?.logo_url ? (
+                <img
+                  src={branding.logo_url}
+                  alt={branding.title || 'Logo'}
+                  className="h-5 w-auto"
+                  style={{ height: '1.25rem', width: 'auto', maxHeight: '1.25rem' }}
+                />
+              ) : (
+                <RedHatLogo className="h-5 w-auto" style={{ color: '#ee0000' }} />
+              )}
+              <span className="text-base font-semibold text-foreground">
+                {branding?.title || window.APP_DATA?.agentName || 'Agent'}
+              </span>
+            </div>
+          </Link>
         </MastheadBrand>
       </MastheadMain>
       <MastheadContent>
