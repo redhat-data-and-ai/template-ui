@@ -71,7 +71,7 @@
     "@opentelemetry/propagator-jaeger": ">=2.9.0",
     "js-cookie": ">=3.0.7",
     "langsmith": ">=0.6.0",
-    "proxy-addr": ">=2.0.8"
+    "proxy-addr": "^2.0.8"
   },
   "engines": {
     "node": ">=22.13.0"
