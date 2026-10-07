@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, waitFor } from '@testing-library/react';
+import { render, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ConsentPage } from './ConsentPage';
 
@@ -40,7 +40,8 @@ describe('ConsentPage', () => {
     });
   });
 
-  it('shows error on API failure', async () => {
+  it('shows error on API failure after retries', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
 
     const { getByText } = render(
@@ -51,8 +52,12 @@ describe('ConsentPage', () => {
 
     fireEvent.click(getByText('Acknowledge & Proceed'));
 
-    await waitFor(() => {
-      expect(getByText(/Failed to approve consent/)).toBeDefined();
-    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+
+    expect(getByText(/Failed to approve consent/)).toBeDefined();
+
+    vi.useRealTimers();
   });
 });
