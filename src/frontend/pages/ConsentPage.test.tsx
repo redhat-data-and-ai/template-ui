@@ -10,6 +10,11 @@ vi.mock('react-router-dom', async (importOriginal) => {
 });
 
 describe('ConsentPage', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
   it('renders authorization page', () => {
     const { getByText } = render(
       <MemoryRouter>
@@ -42,7 +47,8 @@ describe('ConsentPage', () => {
 
   it('shows error on API failure after retries', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false });
+    vi.stubGlobal('fetch', mockFetch);
 
     const { getByText } = render(
       <MemoryRouter>
@@ -57,7 +63,6 @@ describe('ConsentPage', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
 
     expect(getByText(/Failed to approve consent/)).toBeDefined();
-
-    vi.useRealTimers();
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 });
