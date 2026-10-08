@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, waitFor } from '@testing-library/react';
+import { render, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ConsentPage } from './ConsentPage';
 
@@ -10,6 +10,11 @@ vi.mock('react-router-dom', async (importOriginal) => {
 });
 
 describe('ConsentPage', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
   it('renders authorization page', () => {
     const { getByText } = render(
       <MemoryRouter>
@@ -40,8 +45,10 @@ describe('ConsentPage', () => {
     });
   });
 
-  it('shows error on API failure', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+  it('shows error on API failure after retries', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false });
+    vi.stubGlobal('fetch', mockFetch);
 
     const { getByText } = render(
       <MemoryRouter>
@@ -51,8 +58,11 @@ describe('ConsentPage', () => {
 
     fireEvent.click(getByText('Acknowledge & Proceed'));
 
-    await waitFor(() => {
-      expect(getByText(/Failed to approve consent/)).toBeDefined();
-    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+
+    expect(getByText(/Failed to approve consent/)).toBeDefined();
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 });

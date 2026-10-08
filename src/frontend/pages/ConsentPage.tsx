@@ -12,25 +12,40 @@ export function ConsentPage() {
     setIsSubmitting(true);
     setError(null);
 
-    try {
-      const response = await fetch(buildAppPath('/auth/consent/approve'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({}),
-      });
+    const maxRetries = 3;
+    const baseDelay = 1000;
 
-      if (!response.ok) {
+    for(let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(buildAppPath('/auth/consent/approve'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({}),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          navigate(data.redirectUrl ?? '/', { replace: true });
+          return;
+        }
+
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, baseDelay * 2 ** attempt));
+          continue;
+        }
+
         throw new Error('Failed to approve consent');
+      } catch (err) {
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, baseDelay * 2 ** attempt));
+          continue;
+        }
+        setError(err instanceof Error ? err.message : 'An error occurred');
       }
-
-      const data = await response.json();
-      navigate(data.redirectUrl ?? '/', { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsSubmitting(false);
     }
+
+    setIsSubmitting(false);
   };
 
   return (
