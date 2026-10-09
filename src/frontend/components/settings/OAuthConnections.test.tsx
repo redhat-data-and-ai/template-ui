@@ -60,11 +60,12 @@ function renderWithDeveloperMode(ui: React.ReactElement) {
       },
     },
   });
-  return render(
+  const result = render(
     <Provider store={store}>
       <MemoryRouter>{ui}</MemoryRouter>
     </Provider>,
   );
+  return { ...result, store };
 }
 
 const connected: McpOAuthConnection = {
@@ -289,11 +290,20 @@ describe('OAuthConnections', () => {
       client_id: 'new-client-id',
     });
 
-    renderWithDeveloperMode(<OAuthConnections />);
+    const { store } = renderWithDeveloperMode(<OAuthConnections />);
     await userEvent.click(await screen.findByRole('button', { name: /re-register jira/i }));
 
     await waitFor(() => {
       expect(reregisterMcpOAuth).toHaveBeenCalledWith('jira-mcp');
+    });
+
+    await waitFor(() => {
+      const toasts = store.getState().toasts.toasts;
+      expect(toasts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ title: 'Re-registered Jira', variant: 'success' }),
+        ]),
+      );
     });
   });
 });
