@@ -1,10 +1,19 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent, render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Provider } from 'react-redux';
+import { MemoryRouter } from 'react-router-dom';
+import { configureStore } from '@reduxjs/toolkit';
 import { renderWithProviders } from '../../test-utils/render';
 import { OAuthConnections } from './OAuthConnections';
 import type { McpOAuthConnection } from '../../services/mcp-oauth-api';
+import chatsReducer from '../../redux/slices/chats';
+import configReducer from '../../redux/slices/config';
+import personalizationReducer from '../../redux/slices/personalization';
+import toastsReducer from '../../redux/slices/toasts';
+import userSettingsReducer from '../../redux/slices/userSettings';
+import projectsReducer from '../../redux/slices/projects';
 
 vi.mock('../../services/mcp-oauth-api', () => ({
   fetchMcpOAuthConnections: vi.fn(),
@@ -12,15 +21,51 @@ vi.mock('../../services/mcp-oauth-api', () => ({
   startMcpOAuthConnect: vi.fn(),
   verifyMcpOAuthConnected: vi.fn(),
   openMcpOAuthPopup: vi.fn(),
+  reregisterMcpOAuth: vi.fn(),
+}));
+
+vi.mock('../../lib/role-utils', () => ({
+  isPrivilegedUser: vi.fn(() => false),
 }));
 
 import {
   disconnectMcpOAuth,
   fetchMcpOAuthConnections,
   openMcpOAuthPopup,
+  reregisterMcpOAuth,
   startMcpOAuthConnect,
   verifyMcpOAuthConnected,
 } from '../../services/mcp-oauth-api';
+
+import { isPrivilegedUser } from '../../lib/role-utils';
+
+function renderWithDeveloperMode(ui: React.ReactElement) {
+  const store = configureStore({
+    reducer: {
+      chats: chatsReducer,
+      config: configReducer,
+      personalization: personalizationReducer,
+      toasts: toastsReducer,
+      userSettings: userSettingsReducer,
+      projects: projectsReducer,
+    },
+    preloadedState: {
+      userSettings: {
+        theme: 'dark' as const,
+        debugMode: false,
+        developerMode: true,
+        alwaysAllowedTools: [],
+        autoApproveAllTools: false,
+        _userOverrides: {},
+      },
+    },
+  });
+  return render(
+    <Provider store={store}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </Provider>,
+  );
+}
 
 const connected: McpOAuthConnection = {
   mcp_name: 'smartsheet-mcp',
@@ -45,6 +90,8 @@ describe('OAuthConnections', () => {
     vi.mocked(startMcpOAuthConnect).mockReset();
     vi.mocked(openMcpOAuthPopup).mockReset();
     vi.mocked(verifyMcpOAuthConnected).mockReset();
+    vi.mocked(reregisterMcpOAuth).mockReset();
+    vi.mocked(isPrivilegedUser).mockReturnValue(false);
   });
 
   it('shows an empty state when no OAuth MCPs are configured', async () => {
@@ -199,5 +246,54 @@ describe('OAuthConnections', () => {
     vi.mocked(fetchMcpOAuthConnections).mockRejectedValue(new Error('agent down'));
     renderWithProviders(<OAuthConnections />);
     expect(await screen.findByText(/agent down/i)).toBeInTheDocument();
+  });
+
+  it('hides Re-register button when developer mode is off', async () => {
+    vi.mocked(isPrivilegedUser).mockReturnValue(true);
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([disconnected]);
+    renderWithProviders(<OAuthConnections />);
+    expect(await screen.findByText('Jira')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /re-register jira/i })).not.toBeInTheDocument();
+  });
+
+  it('hides Re-register button when user is not privileged', async () => {
+    vi.mocked(isPrivilegedUser).mockReturnValue(false);
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([disconnected]);
+    renderWithDeveloperMode(<OAuthConnections />);
+    expect(await screen.findByText('Jira')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /re-register jira/i })).not.toBeInTheDocument();
+  });
+
+  it('shows Re-register button for DCR MCP when developer mode is on and user is privileged', async () => {
+    vi.mocked(isPrivilegedUser).mockReturnValue(true);
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([disconnected]);
+    renderWithDeveloperMode(<OAuthConnections />);
+    expect(await screen.findByText('Jira')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /re-register jira/i })).toBeInTheDocument();
+  });
+
+  it('hides Re-register button for non-DCR (oauth) MCP even in developer mode', async () => {
+    vi.mocked(isPrivilegedUser).mockReturnValue(true);
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([connected]);
+    renderWithDeveloperMode(<OAuthConnections />);
+    expect(await screen.findByText('Smartsheet')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /re-register smartsheet/i })).not.toBeInTheDocument();
+  });
+
+  it('calls reregisterMcpOAuth and shows success toast', async () => {
+    vi.mocked(isPrivilegedUser).mockReturnValue(true);
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([disconnected]);
+    vi.mocked(reregisterMcpOAuth).mockResolvedValue({
+      mcp_name: 'jira-mcp',
+      re_registered: true,
+      client_id: 'new-client-id',
+    });
+
+    renderWithDeveloperMode(<OAuthConnections />);
+    await userEvent.click(await screen.findByRole('button', { name: /re-register jira/i }));
+
+    await waitFor(() => {
+      expect(reregisterMcpOAuth).toHaveBeenCalledWith('jira-mcp');
+    });
   });
 });
