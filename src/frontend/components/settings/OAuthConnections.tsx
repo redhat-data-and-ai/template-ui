@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Spinner } from '@patternfly/react-core';
-import { KeyRound, Link2, Unplug } from 'lucide-react';
-import { useAppDispatch } from '../../redux/hooks';
+import { KeyRound, Link2, RefreshCw, Unplug } from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { addToast } from '../../redux/slices/toasts';
+import { selectDeveloperMode } from '../../redux/slices/userSettings';
+import { isPrivilegedUser } from '../../lib/role-utils';
 import {
   disconnectMcpOAuth,
   fetchMcpOAuthConnections,
   openMcpOAuthPopup,
+  reregisterMcpOAuth,
   startMcpOAuthConnect,
   type McpOAuthConnection,
 } from '../../services/mcp-oauth-api';
@@ -20,6 +23,8 @@ function displayName(connection: McpOAuthConnection): string {
 /** Settings panel for managing OAuth/DCR connections to MCP servers. */
 export function OAuthConnections() {
   const dispatch = useAppDispatch();
+  const developerMode = useAppSelector(selectDeveloperMode);
+  const showReregister = isPrivilegedUser() && developerMode;
   const [connections, setConnections] = useState<McpOAuthConnection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyMcp, setBusyMcp] = useState<string | null>(null);
@@ -143,6 +148,26 @@ export function OAuthConnections() {
     }
   };
 
+  const handleReregister = async (connection: McpOAuthConnection) => {
+    setBusyMcp(connection.mcp_name);
+    try {
+      await reregisterMcpOAuth(connection.mcp_name);
+      dispatch(
+        addToast({
+          title: `Re-registered ${displayName(connection)}`,
+          variant: 'success',
+        }),
+      );
+      await load();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Re-register failed';
+      setError(message);
+      dispatch(addToast({ title: message, variant: 'danger' }));
+    } finally {
+      setBusyMcp(null);
+    }
+  };
+
   if (connections === null && !error) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
@@ -179,20 +204,21 @@ export function OAuthConnections() {
   }
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <p className="text-sm text-muted-foreground">
         Manage OAuth connections for MCP servers. Disconnecting clears tokens stored for this
         agent; you can authenticate again at any time.
       </p>
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <ul className="space-y-3">
+      <ul style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {connections.map((connection) => {
           const name = displayName(connection);
           const busy = busyMcp === connection.mcp_name;
           return (
             <li
               key={connection.mcp_name}
-              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-3"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-border bg-muted/30"
+              style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground break-words">{name}</p>
@@ -211,13 +237,27 @@ export function OAuthConnections() {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0 sm:justify-end">
+              <div className="flex items-center gap-1.5 shrink-0 sm:justify-end flex-wrap">
                 {connection.connected ? (
                   <>
+                    {showReregister && connection.auth_mode === 'dcr' && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="!px-2.5 !py-1 text-xs"
+                        icon={<RefreshCw className="w-3 h-3" />}
+                        isLoading={busy}
+                        aria-label={`Re-register ${name}`}
+                        onClick={() => void handleReregister(connection)}
+                      >
+                        Re-register
+                      </Button>
+                    )}
                     <Button
                       variant="secondary"
                       size="sm"
-                      icon={<Link2 className="w-3.5 h-3.5" />}
+                      className="!px-2.5 !py-1 text-xs"
+                      icon={<Link2 className="w-3 h-3" />}
                       isLoading={busy}
                       aria-label={`Re-authenticate ${name}`}
                       onClick={() => void handleAuthenticate(connection.mcp_name)}
@@ -227,7 +267,8 @@ export function OAuthConnections() {
                     <Button
                       variant="danger"
                       size="sm"
-                      icon={<Unplug className="w-3.5 h-3.5" />}
+                      className="!px-2.5 !py-1 text-xs"
+                      icon={<Unplug className="w-3 h-3" />}
                       isLoading={busy}
                       aria-label={`Disconnect ${name}`}
                       onClick={() => void handleDisconnect(connection)}
@@ -236,16 +277,32 @@ export function OAuthConnections() {
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<Link2 className="w-3.5 h-3.5" />}
-                    isLoading={busy}
-                    aria-label={`Authenticate ${name}`}
-                    onClick={() => void handleAuthenticate(connection.mcp_name)}
-                  >
-                    Authenticate
-                  </Button>
+                  <>
+                    {showReregister && connection.auth_mode === 'dcr' && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="!px-2.5 !py-1 text-xs"
+                        icon={<RefreshCw className="w-3 h-3" />}
+                        isLoading={busy}
+                        aria-label={`Re-register ${name}`}
+                        onClick={() => void handleReregister(connection)}
+                      >
+                        Re-register
+                      </Button>
+                    )}
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="!px-2.5 !py-1 text-xs"
+                      icon={<Link2 className="w-3 h-3" />}
+                      isLoading={busy}
+                      aria-label={`Authenticate ${name}`}
+                      onClick={() => void handleAuthenticate(connection.mcp_name)}
+                    >
+                      Authenticate
+                    </Button>
+                  </>
                 )}
               </div>
             </li>
