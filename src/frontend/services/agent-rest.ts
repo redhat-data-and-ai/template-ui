@@ -215,10 +215,32 @@ async function fetchThreadStateRaw(threadId: string): Promise<Record<string, unk
     const resp = await authenticatedFetch(stateUrl, {
       headers: getAuthHeaders(),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      let errorDetail = `Thread state request failed (status: ${resp.status})`;
+      try {
+        const body = await resp.json() as Record<string, unknown>;
+        if (typeof body?.message === 'string' && body.message.length > 0) {
+          errorDetail = body.message;
+        } else if (typeof body?.error === 'string' && body.error.length > 0) {
+          errorDetail = body.error;
+        } else if (typeof body?.detail === 'string' && body.detail.length > 0) {
+          errorDetail = body.detail;
+        }
+      }
+      catch {
+        // Non-JSON error response
+      }
+      console.warn('[agent-rest] fetchThreadStateRaw error:', errorDetail);
+      const err: Error & { status?: number } = new Error(errorDetail);
+      err.status = resp.status;
+      throw err;
+    }
     return await resp.json() as Record<string, unknown>;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof Error && (error as any).status) {
+      throw error;  // Re-throw structured errors from !resp.ok branch
+    }
+    return null;  // Network errors still return null
   }
 }
 

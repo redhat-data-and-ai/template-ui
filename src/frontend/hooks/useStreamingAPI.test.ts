@@ -11,7 +11,7 @@ import personalizationReducer from '../redux/slices/personalization';
 import toastsReducer from '../redux/slices/toasts';
 import userSettingsReducer, { addAlwaysAllowedTool } from '../redux/slices/userSettings';
 import projectsReducer from '../redux/slices/projects';
-import { useStreamingAPI, RECOVERY_POLL_TIMEOUT_MS, _startRecoveryPolling } from './useStreamingAPI';
+import { useStreamingAPI, RECOVERY_POLL_TIMEOUT_MS, _startRecoveryPolling, isNonRecoverableHttpStatus } from './useStreamingAPI';
 import * as projectsApi from '../services/projects-api';
 import { markChatAsClientCreated, unmarkChatAsClientCreated } from '../services/newChatTracker';
 
@@ -27,7 +27,7 @@ vi.mock('../services/projects-api', () => ({
 
 // ── Store factory ─────────────────────────────────────────────────────────────
 
-function makeStore(preloadedState?: Record<string, unknown>) {
+function makeStore() {
   return configureStore({
     reducer: {
       chats: chatsReducer,
@@ -37,13 +37,12 @@ function makeStore(preloadedState?: Record<string, unknown>) {
       userSettings: userSettingsReducer,
       projects: projectsReducer,
     },
-    preloadedState,
   });
 }
 
 function makeWrapper(store: ReturnType<typeof makeStore>) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return React.createElement(Provider, { store }, children);
+    return React.createElement(Provider, { store, children });
   };
 }
 
@@ -248,7 +247,7 @@ describe('useStreamingAPI — initial state and stop()', () => {
     const fetchMock = vi.fn(
       () => new Promise(() => { /* never resolves */ }),
     );
-    vi.mocked(fetch).mockImplementation(fetchMock);
+    vi.mocked(fetch).mockImplementation(fetchMock as unknown as typeof fetch);
 
     const { result } = renderHook(() => useStreamingAPI(THREAD_ID), {
       wrapper: makeWrapper(store),
@@ -268,7 +267,7 @@ describe('useStreamingAPI — initial state and stop()', () => {
     act(() => void submitBeforeAssign({ messages: [userMessage] }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
     expect(JSON.parse(init.body).project_id).toBe('p-new');
 
     act(() => result.current.stop());
@@ -355,6 +354,50 @@ describe('useStreamingAPI — initial state and stop()', () => {
   });
 });
 
+// ── isNonRecoverableHttpStatus ────────────────────────────────────────────────
+
+describe('isNonRecoverableHttpStatus', () => {
+  it('treats 400 (Bad Request) as non-recoverable', () => {
+    expect(isNonRecoverableHttpStatus(400)).toBe(true);
+  });
+
+  it('treats 401 (Unauthorized) as non-recoverable', () => {
+    expect(isNonRecoverableHttpStatus(401)).toBe(true);
+  });
+
+  it('treats 404 (Not Found) as non-recoverable', () => {
+    expect(isNonRecoverableHttpStatus(404)).toBe(true);
+  });
+
+  it('treats 422 (Unprocessable Entity) as non-recoverable', () => {
+    expect(isNonRecoverableHttpStatus(422)).toBe(true);
+  });
+
+  it('treats 429 (Too Many Requests) as non-recoverable (4xx)', () => {
+    expect(isNonRecoverableHttpStatus(429)).toBe(true);
+  });
+
+  it('treats 500 (Internal Server Error) as non-recoverable', () => {
+    expect(isNonRecoverableHttpStatus(500)).toBe(true);
+  });
+
+  it('treats 502 (Bad Gateway) as recoverable', () => {
+    expect(isNonRecoverableHttpStatus(502)).toBe(false);
+  });
+
+  it('treats 503 (Service Unavailable) as recoverable', () => {
+    expect(isNonRecoverableHttpStatus(503)).toBe(false);
+  });
+
+  it('treats 504 (Gateway Timeout) as recoverable', () => {
+    expect(isNonRecoverableHttpStatus(504)).toBe(false);
+  });
+
+  it('treats 200 (OK) as recoverable (not an error status)', () => {
+    expect(isNonRecoverableHttpStatus(200)).toBe(false);
+  });
+});
+
 // ── Recovery timeout independence ────────────────────────────────────────────
 
 vi.mock('@/services/agent-rest', () => ({
@@ -411,6 +454,104 @@ describe('_startRecoveryPolling — deadline fires independently of pending requ
     expect(state.error).toBe('Agent is unavailable. Please try again.');
 
     expect(onRecovered).not.toHaveBeenCalled();
+  });
+
+  it('uses originalErrorMessage in the timeout error when provided', () => {
+    const intervalRef = { current: null } as React.MutableRefObject<ReturnType<typeof setInterval> | null>;
+    const deadlineRef = { current: null } as React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    const wasInterruptedRef = { current: false };
+    const onRecovered = vi.fn();
+
+    _startRecoveryPolling(
+      THREAD_ID,
+      store.dispatch,
+      onRecovered,
+      intervalRef,
+      deadlineRef,
+      wasInterruptedRef,
+      5000,
+      RECOVERY_POLL_TIMEOUT_MS,
+      'Model configuration is invalid',
+    );
+
+    // Advance past the deadline
+    vi.advanceTimersByTime(RECOVERY_POLL_TIMEOUT_MS + 1000);
+
+    const state = selectStreamingState(store.getState(), THREAD_ID);
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBe('Model configuration is invalid');
+    expect(onRecovered).not.toHaveBeenCalled();
+  });
+
+  it('stops polling immediately when getThreadStateAndInterrupt throws with .status', async () => {
+    const { getThreadStateAndInterrupt } = await import('@/services/agent-rest');
+    const mockedFn = vi.mocked(getThreadStateAndInterrupt);
+
+    const serverError = new Error('Model not found');
+    (serverError as any).status = 500;
+    mockedFn.mockRejectedValueOnce(serverError);
+
+    const intervalRef = { current: null } as React.MutableRefObject<ReturnType<typeof setInterval> | null>;
+    const deadlineRef = { current: null } as React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    const wasInterruptedRef = { current: false };
+    const onRecovered = vi.fn();
+
+    _startRecoveryPolling(
+      THREAD_ID,
+      store.dispatch,
+      onRecovered,
+      intervalRef,
+      deadlineRef,
+      wasInterruptedRef,
+      5000,
+      RECOVERY_POLL_TIMEOUT_MS,
+    );
+
+    // Trigger the first poll and let the rejected promise settle
+    await vi.advanceTimersByTimeAsync(5001);
+
+    // Server error should have stopped polling immediately
+    expect(intervalRef.current).toBeNull();
+
+    const state = selectStreamingState(store.getState(), THREAD_ID);
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBe('Model not found');
+    expect(onRecovered).not.toHaveBeenCalled();
+  });
+
+  it('keeps polling when getThreadStateAndInterrupt throws with a recoverable status (503)', async () => {
+    const { getThreadStateAndInterrupt } = await import('@/services/agent-rest');
+    const mockedFn = vi.mocked(getThreadStateAndInterrupt);
+
+    const transientError = new Error('Service Unavailable');
+    (transientError as any).status = 503;
+    mockedFn.mockRejectedValueOnce(transientError);
+
+    const intervalRef = { current: null } as React.MutableRefObject<ReturnType<typeof setInterval> | null>;
+    const deadlineRef = { current: null } as React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    const wasInterruptedRef = { current: false };
+    const onRecovered = vi.fn();
+
+    _startRecoveryPolling(
+      THREAD_ID,
+      store.dispatch,
+      onRecovered,
+      intervalRef,
+      deadlineRef,
+      wasInterruptedRef,
+      5000,
+      RECOVERY_POLL_TIMEOUT_MS,
+    );
+
+    // Trigger the first poll — 503 should NOT stop polling
+    await vi.advanceTimersByTimeAsync(5001);
+
+    // Interval should still be running
+    expect(intervalRef.current).not.toBeNull();
+
+    // State should NOT have been set to error
+    const state = selectStreamingState(store.getState(), THREAD_ID);
+    expect(state.error).toBeNull();
   });
 
   it('discards a pending result that resolves after the poller is cancelled', async () => {
