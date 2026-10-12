@@ -75,6 +75,17 @@ export async function startMcpOAuthConnect(
   return { authorize_url: body.authorize_url };
 }
 
+/** Re-registers DCR client credentials for an MCP server (developer-only). */
+export async function reregisterMcpOAuth(
+  mcpName: string,
+): Promise<{ mcp_name: string; re_registered: boolean; client_id: string }> {
+  return mcpOAuthJson<{ mcp_name: string; re_registered: boolean; client_id: string }>(
+    mcpOAuthPath(mcpName, '/reregister'),
+    { method: 'POST' },
+    'Re-register MCP DCR',
+  );
+}
+
 /** Checks whether a specific MCP server has an active OAuth connection. */
 export async function verifyMcpOAuthConnected(mcpName: string): Promise<boolean> {
   try {
