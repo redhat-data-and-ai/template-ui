@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { addToast } from '../../redux/slices/toasts';
 import { selectDeveloperMode } from '../../redux/slices/userSettings';
 import { isPrivilegedUser } from '../../lib/role-utils';
+import type { RootState } from '../../redux/store';
 import {
   disconnectMcpOAuth,
   fetchMcpOAuthConnections,
@@ -24,7 +25,8 @@ function displayName(connection: McpOAuthConnection): string {
 export function OAuthConnections() {
   const dispatch = useAppDispatch();
   const developerMode = useAppSelector(selectDeveloperMode);
-  const showReregister = isPrivilegedUser() && developerMode;
+  const mcpDcrEnabled = useAppSelector((state: RootState) => state.config.features?.mcp_dcr_enabled ?? false);
+  const showReregister = isPrivilegedUser() && developerMode && mcpDcrEnabled;
   const [connections, setConnections] = useState<McpOAuthConnection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyMcp, setBusyMcp] = useState<string | null>(null);

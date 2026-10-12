@@ -58,6 +58,17 @@ function renderWithDeveloperMode(ui: React.ReactElement) {
         autoApproveAllTools: false,
         _userOverrides: {},
       },
+      config: {
+        branding: null,
+        features: {
+          debug_mode_default: false,
+          auth_enabled: false,
+          memory_enabled: true,
+          mcp_dcr_enabled: true,
+        },
+        loading: false,
+        error: null,
+      },
     },
   });
   const result = render(
@@ -279,6 +290,49 @@ describe('OAuthConnections', () => {
     renderWithDeveloperMode(<OAuthConnections />);
     expect(await screen.findByText('Smartsheet')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /re-register smartsheet/i })).not.toBeInTheDocument();
+  });
+
+  it('hides Re-register button when mcp_dcr_enabled feature flag is off', async () => {
+    vi.mocked(isPrivilegedUser).mockReturnValue(true);
+    vi.mocked(fetchMcpOAuthConnections).mockResolvedValue([disconnected]);
+    const store = configureStore({
+      reducer: {
+        chats: chatsReducer,
+        config: configReducer,
+        personalization: personalizationReducer,
+        toasts: toastsReducer,
+        userSettings: userSettingsReducer,
+        projects: projectsReducer,
+      },
+      preloadedState: {
+        userSettings: {
+          theme: 'dark' as const,
+          debugMode: false,
+          developerMode: true,
+          alwaysAllowedTools: [],
+          autoApproveAllTools: false,
+          _userOverrides: {},
+        },
+        config: {
+          branding: null,
+          features: {
+            debug_mode_default: false,
+            auth_enabled: false,
+            memory_enabled: true,
+            mcp_dcr_enabled: false,
+          },
+          loading: false,
+          error: null,
+        },
+      },
+    });
+    render(
+      <Provider store={store}>
+        <MemoryRouter><OAuthConnections /></MemoryRouter>
+      </Provider>,
+    );
+    expect(await screen.findByText('Jira')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /re-register jira/i })).not.toBeInTheDocument();
   });
 
   it('calls reregisterMcpOAuth and shows success toast', async () => {
