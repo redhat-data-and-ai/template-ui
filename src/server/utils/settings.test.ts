@@ -338,4 +338,47 @@ branding:
       "Config validation error: branding.colors.dark.background must be a valid hex color (got 'invalid')"
     );
   });
+
+  it("defaults quick_prompts to an empty list when the key is omitted", () => {
+    const yaml = `
+branding:
+  title: "Test"
+`;
+
+    writeFileSync(testConfigPath, yaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    expect(getSettings().quick_prompts).toEqual([]);
+  });
+
+  it("loads quick_prompts from settings.yaml", () => {
+    const yaml = `
+quick_prompts:
+  - "What is our refund policy?"
+  - "Summarize the latest incident"
+`;
+
+    writeFileSync(testConfigPath, yaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    expect(getSettings().quick_prompts).toEqual([
+      "What is our refund policy?",
+      "Summarize the latest incident",
+    ]);
+  });
+
+  it("rejects quick_prompts that are not a list of strings", () => {
+    const yaml = `
+quick_prompts:
+  - "Valid question"
+  - 12
+`;
+
+    writeFileSync(testConfigPath, yaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    expect(() => getSettings()).toThrow(
+      "Config validation error: quick_prompts entries must be non-empty strings",
+    );
+  });
 });
