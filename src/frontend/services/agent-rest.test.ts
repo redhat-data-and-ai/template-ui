@@ -152,10 +152,33 @@ describe('agent-rest', () => {
       expect(msgs[0].content).toBe('Block content');
     });
 
-    it('returns empty array on non-ok response', async () => {
+    it('throws with .status on non-ok response (error surfaces to caller)', async () => {
       vi.mocked(authenticatedFetch).mockResolvedValue(new Response('', { status: 500 }));
-      const msgs = await getThreadState('t1');
-      expect(msgs).toEqual([]);
+      try {
+        await getThreadState('t1');
+        expect.unreachable('Expected getThreadState to throw');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toContain('Thread state request failed');
+        expect(err.status).toBe(500);
+      }
+    });
+
+    it('extracts error message from JSON body on non-ok response', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(JSON.stringify({ message: 'Model configuration is invalid' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      try {
+        await getThreadState('t1');
+        expect.unreachable('Expected getThreadState to throw');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toBe('Model configuration is invalid');
+        expect(err.status).toBe(500);
+      }
     });
 
     it('returns empty array on network error', async () => {
@@ -291,6 +314,23 @@ describe('agent-rest', () => {
 
       expect(await getThreadPendingInterrupt('t1')).toBeNull();
     });
+
+    it('throws with .status on non-ok HTTP response', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(JSON.stringify({ message: 'Agent not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      try {
+        await getThreadPendingInterrupt('t1');
+        expect.unreachable('Expected getThreadPendingInterrupt to throw');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toBe('Agent not found');
+        expect(err.status).toBe(404);
+      }
+    });
   });
 
   describe('getThreadStateAndInterrupt', () => {
@@ -329,6 +369,29 @@ describe('agent-rest', () => {
       const result = await getThreadStateAndInterrupt('t1');
       expect(result.messages).toHaveLength(1);
       expect(result.interrupt).toBeNull();
+    });
+
+    it('throws with .status on non-ok HTTP response', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(JSON.stringify({ message: 'Internal server error' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      try {
+        await getThreadStateAndInterrupt('t1');
+        expect.unreachable('Expected getThreadStateAndInterrupt to throw');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toBe('Internal server error');
+        expect(err.status).toBe(500);
+      }
+    });
+
+    it('still returns fallback on network error (no .status)', async () => {
+      vi.mocked(authenticatedFetch).mockRejectedValue(new Error('ECONNREFUSED'));
+      const result = await getThreadStateAndInterrupt('t1');
+      expect(result).toEqual({ messages: [], interrupt: null });
     });
   });
 });
