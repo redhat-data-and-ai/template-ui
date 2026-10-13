@@ -27,6 +27,7 @@ agent:
 
 # Home-page quick prompts. Leave empty to keep the built-in prompts.
 quick_prompts: []
+
 platform:
   opa:
     enabled: false
