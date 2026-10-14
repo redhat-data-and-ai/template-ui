@@ -87,18 +87,27 @@ export function HomePage() {
               Let&apos;s try some quick prompts <span aria-hidden="true">🚀</span>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="list" aria-label="Quick prompt suggestions">
-              {prompts.map((prompt) => (
-                <div key={prompt} role="listitem">
-                  <button
-                    type="button"
-                    onClick={() => startChat(prompt)}
-                    aria-label={`Start chat: ${prompt}`}
-                    className="w-full text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer"
+              {prompts.map((prompt, index) => {
+                const isLastOfOddCount = prompts.length % 2 === 1 && index === prompts.length - 1;
+                return (
+                  <div
+                    key={prompt}
+                    role="listitem"
+                    className={isLastOfOddCount ? 'sm:col-span-2 sm:flex sm:justify-center' : undefined}
                   >
-                    <p className="text-sm text-foreground/90">{prompt}</p>
-                  </button>
-                </div>
-              ))}
+                    <button
+                      type="button"
+                      onClick={() => startChat(prompt)}
+                      aria-label={`Start chat: ${prompt}`}
+                      className={`text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer w-full ${
+                        isLastOfOddCount ? 'sm:w-[calc(50%-0.3125rem)]' : ''
+                      }`}
+                    >
+                      <p className="text-sm text-foreground/90">{prompt}</p>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
