@@ -104,8 +104,29 @@ async function isAgentReachable(): Promise<boolean> {
   }
 }
 
+/**
+ * Classify HTTP status codes as non-recoverable (won't fix themselves by retrying).
+ * 4xx errors are client errors, 500 is usually a config/code bug.
+ * 502, 503, 504 are transient — keep polling.
+ */
+export function isNonRecoverableHttpStatus(status: number): boolean {
+  if (status >= 400 && status < 500) return true;
+  if (status === 500) return true;
+  return false;
+}
+
 function isRecoverableStreamError(error: Error): boolean {
   if (error.name === 'AbortError') return false;
+
+  // Check .status property first (set by StreamingManager)
+  const status = (error as any).status;
+  if (typeof status === 'number') {
+    if (status === 429) return true;
+    if (status >= 400 && status < 500) return false;
+    if (status >= 500) return true;
+  }
+
+  // Fallback: check message for legacy format
   const msg = error.message;
   const httpMatch = msg.match(/HTTP error! status:\s*(\d+)/i);
   if (httpMatch) {
@@ -154,6 +175,7 @@ export function _startRecoveryPolling(
   wasInterruptedRef: React.MutableRefObject<boolean>,
   pollIntervalMs: number,
   timeoutMs: number,
+  originalErrorMessage?: string,
 ) {
   if (intervalRef.current) clearInterval(intervalRef.current);
   if (deadlineRef.current) clearTimeout(deadlineRef.current);
@@ -173,7 +195,7 @@ export function _startRecoveryPolling(
         isConnected: false,
         isReconnecting: false,
         reconnectAttempt: 0,
-        error: 'Agent is unavailable. Please try again.',
+        error: originalErrorMessage || 'Agent is unavailable. Please try again.',
       },
     }));
   }, timeoutMs);
@@ -211,8 +233,25 @@ export function _startRecoveryPolling(
         wasInterruptedRef.current = false;
         onRecovered(msgs);
       }
-    } catch {
-      // Agent still down — keep polling
+    } catch (caughtErr) {
+      if (caughtErr instanceof Error && (caughtErr as any).status && isNonRecoverableHttpStatus((caughtErr as any).status)) {
+        // Non-recoverable server error (e.g. model config, 4xx, 500) — stop polling, show error
+        if (deadlineRef.current) { clearTimeout(deadlineRef.current); deadlineRef.current = null; }
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        dispatch(updateStreamingState({
+          chatId: threadId,
+          state: {
+            isLoading: false,
+            isConnected: false,
+            isReconnecting: false,
+            reconnectAttempt: 0,
+            error: caughtErr.message || originalErrorMessage || 'Agent is unavailable. Please try again.',
+          },
+        }));
+        return;
+      }
+      // Transient error (502, 503, 504, network) — keep polling
     } finally {
       polling = false;
     }
@@ -601,7 +640,8 @@ export function useStreamingAPI(threadId: string) {
             },
             async onError(error) {
               lastStreamErrorRef.current = error;
-              if (!recoveryIntervalRef.current && threadId) {
+              const recoverable = isRecoverableStreamError(error);
+              if (recoverable && !recoveryIntervalRef.current && threadId) {
                 const pollStart = Date.now();
                 let polling = false;
                 recoveryIntervalRef.current = setInterval(async () => {
@@ -618,7 +658,7 @@ export function useStreamingAPI(threadId: string) {
                         isConnected: false,
                         isReconnecting: false,
                         reconnectAttempt: 0,
-                        error: 'Agent is unavailable. Please try again.',
+                        error: lastStreamErrorRef.current?.message || 'Agent is unavailable. Please try again.',
                       },
                     }));
                     return;
@@ -674,8 +714,22 @@ export function useStreamingAPI(threadId: string) {
                         setWasInterrupted(false);
                       }
                     }
-                  } catch {
-                    // Server may be unreachable during pod replacement
+                  } catch (caughtErr) {
+                    if (caughtErr instanceof Error && (caughtErr as any).status && isNonRecoverableHttpStatus((caughtErr as any).status)) {
+                      if (recoveryIntervalRef.current) clearInterval(recoveryIntervalRef.current);
+                      recoveryIntervalRef.current = null;
+                      lastStreamErrorRef.current = caughtErr;
+                      dispatch(updateStreamingState({
+                        chatId: threadId,
+                        state: {
+                          isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0,
+                          error: caughtErr.message || 'Agent is unavailable. Please try again.',
+                        },
+                      }));
+                      finish('failed');
+                      return;
+                    }
+                    // Transient error (502, 503, 504, network) — keep polling
                   } finally {
                     polling = false;
                   }
@@ -683,7 +737,7 @@ export function useStreamingAPI(threadId: string) {
               }
               const agentUp = await isAgentReachable();
               const canRetry =
-                agentUp && isRecoverableStreamError(error) && attempt < MAX_RETRIES && !userCancelledRef.current;
+                agentUp && recoverable && attempt < MAX_RETRIES && !userCancelledRef.current;
               if (canRetry) {
                 dispatch(
                   updateStreamingState({
@@ -695,7 +749,7 @@ export function useStreamingAPI(threadId: string) {
                     },
                   }),
                 );
-              } else if (!agentUp) {
+              } else if (!agentUp && recoverable) {
                 const tid = threadIdRef.current;
                 const dropped = isStreamingTokensRef.current;
                 clearReconnectTimers();
@@ -799,7 +853,7 @@ export function useStreamingAPI(threadId: string) {
                         isConnected: false,
                         isReconnecting: false,
                         reconnectAttempt: 0,
-                        error: 'Agent is unavailable. Please try again.',
+                       error: lastStreamErrorRef.current?.message || 'Agent is unavailable. Please try again.',
                       },
                     }));
                     return;
@@ -840,7 +894,22 @@ export function useStreamingAPI(threadId: string) {
                       }));
                       setWasInterrupted(false);
                     }
-                  } catch { /* keep polling */ }
+                  } catch (caughtErr) {
+                    if (caughtErr instanceof Error && (caughtErr as any).status && isNonRecoverableHttpStatus((caughtErr as any).status)) {
+                      if (recoveryIntervalRef.current) clearInterval(recoveryIntervalRef.current);
+                      recoveryIntervalRef.current = null;
+                      lastStreamErrorRef.current = caughtErr;
+                      dispatch(updateStreamingState({
+                        chatId: threadId,
+                        state: {
+                          isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0,
+                          error: caughtErr.message || 'Agent is unavailable. Please try again.',
+                        },
+                      }));
+                      return;
+                    }
+                    // Transient error (502, 503, 504, network) — keep polling
+                  }
                   finally { polling = false; }
                 }, RECOVERY_POLL_INTERVAL_MS);
               }
@@ -891,6 +960,9 @@ export function useStreamingAPI(threadId: string) {
               }
               finish('success');
             }
+          }).catch((err: Error) => {
+            lastStreamErrorRef.current = err;
+            finish('failed');
           });
         });
 
@@ -906,10 +978,10 @@ export function useStreamingAPI(threadId: string) {
           attempt >= MAX_RETRIES ||
           userCancelledRef.current
         ) {
-          // Stream failed after all retries — start recovery polling
-          // The agent may recover (LeaseReaper) and complete the run;
-          // poll thread state until the response appears or timeout
-          if (err && !userCancelledRef.current) {
+          // Stream failed — for recoverable errors (network, 5xx), start recovery polling
+          // in case the agent recovers (LeaseReaper). For non-recoverable errors
+          // (config issues, 4xx), show the error immediately.
+          if (err && !userCancelledRef.current && isRecoverableStreamError(err)) {
             _startRecoveryPolling(threadIdRef.current, dispatch, (msgs) => {
               if (msgs.length > 0) {
                 dispatch(updateChat({
@@ -922,7 +994,19 @@ export function useStreamingAPI(threadId: string) {
                   state: { isLoading: false, error: null },
                 }));
               }
-            }, recoveryIntervalRef, recoveryDeadlineRef, wasInterruptedRef, RECOVERY_POLL_INTERVAL_MS, RECOVERY_POLL_TIMEOUT_MS);
+            }, recoveryIntervalRef, recoveryDeadlineRef, wasInterruptedRef, RECOVERY_POLL_INTERVAL_MS, RECOVERY_POLL_TIMEOUT_MS, lastStreamErrorRef.current?.message);
+          } else if (err && !userCancelledRef.current) {
+            // Non-recoverable error — show immediately, no polling
+            dispatch(updateStreamingState({
+              chatId: threadIdRef.current,
+              state: {
+                isLoading: false,
+                isConnected: false,
+                isReconnecting: false,
+                reconnectAttempt: 0,
+                error: err.message || 'Agent encountered an error.',
+              },
+            }));
           }
           break;
         }
@@ -962,7 +1046,7 @@ export function useStreamingAPI(threadId: string) {
                 isConnected: false,
                 isReconnecting: false,
                 reconnectAttempt: 0,
-                error: 'Agent is unavailable. Please try again.',
+                error: lastStreamErrorRef.current?.message || 'Agent is unavailable. Please try again.',
               },
             }));
             return;
@@ -981,7 +1065,22 @@ export function useStreamingAPI(threadId: string) {
               dispatch(updateStreamingState({ chatId: threadId, state: { error: null, isLoading: false, isConnected: false } }));
               setWasInterrupted(false);
             }
-          } catch { /* keep polling */ }
+          } catch (caughtErr) {
+            if (caughtErr instanceof Error && (caughtErr as any).status && isNonRecoverableHttpStatus((caughtErr as any).status)) {
+              if (recoveryIntervalRef.current) clearInterval(recoveryIntervalRef.current);
+              recoveryIntervalRef.current = null;
+              lastStreamErrorRef.current = caughtErr;
+              dispatch(updateStreamingState({
+                chatId: threadId,
+                state: {
+                  isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0,
+                  error: caughtErr.message || 'Agent is unavailable. Please try again.',
+                },
+              }));
+              return;
+            }
+            // Transient error (502, 503, 504, network) — keep polling
+          }
           finally { polling = false; }
         }, RECOVERY_POLL_INTERVAL_MS);
       }
