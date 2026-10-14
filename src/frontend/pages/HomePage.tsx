@@ -18,7 +18,8 @@ function builtinQuickPrompts(): string[] {
 function quickPrompts(): string[] {
   const configured = (window.APP_DATA?.quickPrompts ?? [])
     .map((prompt) => prompt.trim())
-    .filter((prompt) => prompt.length > 0);
+    .filter((prompt) => prompt.length > 0)
+    .filter((prompt, index, all) => all.indexOf(prompt) === index);
   return configured.length > 0 ? configured : builtinQuickPrompts();
 }
 
