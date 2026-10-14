@@ -367,11 +367,25 @@ quick_prompts:
     ]);
   });
 
-  it("rejects quick_prompts that are not a list of strings", () => {
+  it("accepts an unquoted prompt that parses as a number or boolean", () => {
+    const yaml = `
+quick_prompts:
+  - Valid question
+  - 1234
+  - true
+`;
+
+    writeFileSync(testConfigPath, yaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    expect(getSettings().quick_prompts).toEqual(["Valid question", "1234", "true"]);
+  });
+
+  it("rejects a quick_prompts entry that is empty", () => {
     const yaml = `
 quick_prompts:
   - "Valid question"
-  - 12
+  - ""
 `;
 
     writeFileSync(testConfigPath, yaml);

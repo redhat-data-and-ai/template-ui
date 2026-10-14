@@ -371,11 +371,16 @@ function validateConfig(config: UISettings): void {
   if (!Array.isArray(config.quick_prompts)) {
     throw new Error("Config validation error: quick_prompts must be a list of strings");
   }
-  for (const prompt of config.quick_prompts) {
-    if (typeof prompt !== "string" || prompt.trim() === "") {
+  // An unquoted prompt like 1234 or true parses as a number/boolean in
+  // YAML, not a string. Builders typing prompts through the UI won't
+  // quote anything, so read any scalar as text instead of rejecting it.
+  config.quick_prompts = config.quick_prompts.map((prompt) => {
+    const text = typeof prompt === "string" ? prompt : String(prompt);
+    if (text.trim() === "") {
       throw new Error("Config validation error: quick_prompts entries must be non-empty strings");
     }
-  }
+    return text;
+  });
 }
 
 function applyEnvOverrides(config: UISettings): void {
