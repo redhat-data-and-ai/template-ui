@@ -58,7 +58,7 @@ function AgentTreeNode({
   );
   const hasBadges = Boolean(node.tools?.length || node.skills?.length || node.mcps?.length);
 
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   return (
     <div>
@@ -174,15 +174,14 @@ function AgentDetails({ agent, isMainAgent = false }: { agent: AgentNode; isMain
   );
 
   return (
-    <li>
+    <div>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between rounded px-1 py-1.5 text-left text-sm hover:bg-secondary/50"
+        className="flex w-full items-center justify-between rounded py-1.5 text-left text-sm hover:bg-secondary/50"
         aria-expanded={open}
       >
         <span className="flex items-center gap-2">
-          <Bot className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <span className="font-medium text-foreground">{agent.name}</span>
           {isMainAgent ? (
             <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
@@ -236,22 +235,23 @@ function AgentDetails({ agent, isMainAgent = false }: { agent: AgentNode; isMain
           ) : null}
         </div>
       ) : null}
-    </li>
+    </div>
   );
 }
 
 function AgentDetailsList({ structure }: { structure: AgentStructure }) {
   return (
-    <div className="mt-4 space-y-3 border-t border-border pt-4">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+    <div className="space-y-3 border-t border-border mt-2 pt-5">
+      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <Bot className="h-4 w-4 text-primary" aria-hidden="true" />
         Agents
-      </h3>
-      <ul className="space-y-2">
+      </div>
+      <div className="space-y-2 pl-6">
         <AgentDetails agent={structure.orchestrator} isMainAgent />
         {Object.values(structure.subagents).map((agent) => (
           <AgentDetails key={agent.name} agent={agent} />
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
