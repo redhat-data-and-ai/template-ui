@@ -1,5 +1,8 @@
 export interface AgentNode {
   name: string;
+  description?: string;
+  model?: string;
+  tools?: string[];
   skills?: string[];
   mcps?: string[];
   subagents?: string[];
