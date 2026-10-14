@@ -94,6 +94,7 @@ interface BrandingThemeColors {
 interface BrandingConfig {
   logo_url?: string;
   title: string;
+  version: string;
   favicon_url?: string;
   colors: {
     light: BrandingThemeColors;
@@ -141,6 +142,7 @@ const DEFAULTS: UISettings = {
   branding: {
     logo_url: "",
     title: "Deep Agent",
+    version: "v1.0.0",
     favicon_url: "",
     colors: {
       light: {
