@@ -114,6 +114,20 @@ agent.endpoint  →  AGENT_HOST env var  →  http://localhost:5002
 
 ---
 
+### `quick_prompts`
+
+Starting questions shown on the agent chat home page. A non-empty list replaces the built-in prompts. Omit the key, or leave it as an empty list, and the UI keeps the four built-in prompts.
+
+```yaml
+quick_prompts:
+  - "What is our refund policy?"
+  - "Summarize the latest incident"
+```
+
+Each entry must be a non-empty string. The server validates the list at startup. A refresh after the file changes is enough; the next page load reads the updated list.
+
+---
+
 ### `security`
 
 Security hardening. Changes to `rate_limit`, `session`, and `helmet` require a **server restart** to take effect.
