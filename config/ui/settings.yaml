@@ -25,8 +25,11 @@ agent:
   timeout_ms: 30000
   streaming: true
 
-# Home-page quick prompts. Leave empty to keep the built-in prompts.
-quick_prompts: []
+quick_prompts:
+  - What can Agent do for me?
+  - Help me analyze a dataset
+  - Write a query to find anomalies
+  - Summarize the key findings from this data
 
 platform:
   opa:
