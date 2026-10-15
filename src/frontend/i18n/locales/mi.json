@@ -229,6 +229,10 @@
       "models_visible_to_all": {
         "title": "Ka kitea ngā tauira e te katoa",
         "detail": "Ka weto, ka huna te ripa Tauira mai i te katoa engari i ngā kaiwhakawhanake."
+      },
+      "safeguards_visible_to_all": {
+        "title": "Ka kitea ngā ārai e te katoa",
+        "detail": "Ka weto, ka huna te ripa Ārai mai i te katoa engari i ngā kaiwhakawhanake."
       }
     }
   },
@@ -355,6 +359,28 @@
     "perSubagent": "Ia pokapū-iti",
     "inherited": "tuku iho",
     "routing": "Te whakatere",
-    "routingHint": "Ka tukuna ia hurihanga ki tētahi taumata i runga i tāna e tono ai."
+    "routingHint": "Ka tukuna ia hurihanga ki tētahi taumata i runga i tāna e tono ai.",
+    "excluded": "kāore e wātea ki tēnei tauira:"
+  },
+  "provenance": {
+    "truncated": "kua tapahia — kua pau te wāhi o te tauira",
+    "empty": "kāore te tauira i whakahoki mai i tētahi mea",
+    "fallback": "i whakautua e te tauira taupua i muri i te rahunga o {{from}}",
+    "routed": "kua tukuna ki {{tier}}",
+    "routedBy": "kua tukuna ki {{tier}} e {{how}}",
+    "cached": "mai i te keteroki"
+  },
+  "safeguards": {
+    "title": "Ngā ārai",
+    "description": "Ngā mea ka tāpiritia ki tētahi karere i tua atu i te tauira.",
+    "on": "kua hohe",
+    "off": "kua weto",
+    "pii": "Hurahanga mōhiohio whaiaro",
+    "piiDetail": "Ka whakakapia ngā uara ka kitea i tāu karere i mua i te kitenga a te tauira.",
+    "traceStrategy": "I ngā whaiaro, ka mahia ngā uara ka kitea mā te {{strategy}}.",
+    "guardrail": "Ārai",
+    "guardrailDetail": "Ka tirotirohia ngā whakautu i mua i te taenga mai ki a koe.",
+    "tokenBudget": "Tahua tohu",
+    "tokenBudgetDetail": "Ka whakamutua te rere ina pau tana tahua."
   }
 }

@@ -140,6 +140,7 @@ interface FeaturesConfig {
   subagents_visible_to_all: boolean;
   prompt_visible_to_all: boolean;
   models_visible_to_all: boolean;
+  safeguards_visible_to_all: boolean;
 }
 
 interface AgentConfig {
@@ -254,6 +255,7 @@ const DEFAULTS: UISettings = {
     subagents_visible_to_all: true,
     prompt_visible_to_all: true,
     models_visible_to_all: true,
+    safeguards_visible_to_all: true,
     memory_enabled: true,
   },
   agent: {

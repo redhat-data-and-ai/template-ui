@@ -9,6 +9,8 @@ interface ModelEntry {
   provider: string;
   used_by: string;
   inherited?: boolean;
+  excluded_tools?: string[];
+  excluded_middleware?: string[];
 }
 
 interface RoutingTier {
@@ -112,6 +114,22 @@ export function ModelList() {
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
         {model.used_by}
       </p>
+      {/* A harness profile can strip tools for a model. Skills still
+          advertises the capability, so without this the absence is
+          invisible — the agent simply cannot do something the list
+          says it can. */}
+      {(model.excluded_tools?.length || model.excluded_middleware?.length) && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-amber-600 dark:text-amber-500">
+          <span>{t('models.excluded')}</span>
+          {[...(model.excluded_tools ?? []), ...(model.excluded_middleware ?? [])].map(
+            (name) => (
+              <code key={name} className="rounded bg-secondary/60 px-1.5 py-0.5 text-[10px]">
+                {name}
+              </code>
+            ),
+          )}
+        </p>
+      )}
     </li>
   );
 

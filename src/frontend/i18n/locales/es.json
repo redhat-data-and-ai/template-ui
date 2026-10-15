@@ -229,6 +229,10 @@
       "models_visible_to_all": {
         "title": "Modelos visibles para todos",
         "detail": "Desactivado, oculta la pestaña Modelos a todos salvo a los desarrolladores."
+      },
+      "safeguards_visible_to_all": {
+        "title": "Salvaguardas visibles para todos",
+        "detail": "Desactivado, oculta la pestaña Salvaguardas a todos salvo a los desarrolladores."
       }
     }
   },
@@ -355,6 +359,28 @@
     "perSubagent": "Por subagente",
     "inherited": "heredado",
     "routing": "Enrutamiento",
-    "routingHint": "Cada turno se envía a un nivel según lo que pide."
+    "routingHint": "Cada turno se envía a un nivel según lo que pide.",
+    "excluded": "no disponible con este modelo:"
+  },
+  "provenance": {
+    "truncated": "truncado: el modelo se quedó sin espacio",
+    "empty": "el modelo no devolvió nada",
+    "fallback": "respondió un modelo de reserva tras fallar {{from}}",
+    "routed": "enrutado a {{tier}}",
+    "routedBy": "enrutado a {{tier}} por {{how}}",
+    "cached": "desde la caché"
+  },
+  "safeguards": {
+    "title": "Salvaguardas",
+    "description": "Qué se aplica a un mensaje además del modelo.",
+    "on": "activo",
+    "off": "inactivo",
+    "pii": "Depuración de datos personales",
+    "piiDetail": "Sustituye los valores detectados en tu mensaje antes de que el modelo lo vea.",
+    "traceStrategy": "En las trazas, los valores detectados se tratan con «{{strategy}}».",
+    "guardrail": "Barrera de seguridad",
+    "guardrailDetail": "Revisa las respuestas antes de que te lleguen.",
+    "tokenBudget": "Presupuesto de tokens",
+    "tokenBudgetDetail": "Detiene una ejecución cuando agota su asignación."
   }
 }

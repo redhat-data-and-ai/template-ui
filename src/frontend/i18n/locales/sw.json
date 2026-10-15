@@ -229,6 +229,10 @@
       "models_visible_to_all": {
         "title": "Miundo inaonekana kwa kila mtu",
         "detail": "Ukizima, kinaficha kichupo cha Miundo kwa wote isipokuwa wasanidi."
+      },
+      "safeguards_visible_to_all": {
+        "title": "Kinga zinaonekana kwa kila mtu",
+        "detail": "Ukizima, kinaficha kichupo cha Kinga kwa wote isipokuwa wasanidi."
       }
     }
   },
@@ -355,6 +359,28 @@
     "perSubagent": "Kwa kila wakala mdogo",
     "inherited": "imerithiwa",
     "routing": "Uelekezaji",
-    "routingHint": "Kila zamu hupelekwa kwenye daraja kulingana na kinachoombwa."
+    "routingHint": "Kila zamu hupelekwa kwenye daraja kulingana na kinachoombwa.",
+    "excluded": "haipatikani kwa muundo huu:"
+  },
+  "provenance": {
+    "truncated": "imekatwa — muundo umeishiwa na nafasi",
+    "empty": "muundo haukurudisha chochote",
+    "fallback": "imejibiwa na muundo mbadala baada ya {{from}} kushindwa",
+    "routed": "imeelekezwa kwa {{tier}}",
+    "routedBy": "imeelekezwa kwa {{tier}} na {{how}}",
+    "cached": "kutoka akiba"
+  },
+  "safeguards": {
+    "title": "Kinga",
+    "description": "Kinachotumika kwa ujumbe zaidi ya muundo.",
+    "on": "imewashwa",
+    "off": "imezimwa",
+    "pii": "Uondoaji wa taarifa binafsi",
+    "piiDetail": "Hubadilisha thamani zinazopatikana katika ujumbe wako kabla muundo haujauona.",
+    "traceStrategy": "Katika nyayo, thamani zinazopatikana hushughulikiwa kwa {{strategy}}.",
+    "guardrail": "Kizuizi",
+    "guardrailDetail": "Huchunguza majibu kabla hayajakufikia.",
+    "tokenBudget": "Bajeti ya tokeni",
+    "tokenBudgetDetail": "Husimamisha utekelezaji baada ya kutumia mgao wake."
   }
 }

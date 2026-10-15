@@ -9,6 +9,7 @@ import { SkillList } from './SkillList';
 import { SubagentList } from './SubagentList';
 import { PromptView } from './PromptView';
 import { ModelList } from './ModelList';
+import { SafeguardList } from './SafeguardList';
 import { DocumentList } from './DocumentList';
 import { isPrivilegedUser } from '../../lib/role-utils';
 import { selectDeveloperMode } from '../../redux/slices/userSettings';
@@ -30,7 +31,7 @@ interface Section {
   key: string;
   label: string;
   /** Hidden by a deployment-wide flag. */
-  flag?: 'skills' | 'subagents' | 'prompt' | 'models';
+  flag?: 'skills' | 'subagents' | 'prompt' | 'models' | 'safeguards';
   /** Never hidden. */
   alwaysVisible?: boolean;
   /** Hidden unless the reader is an operator. Not a flag: Documents
@@ -88,6 +89,19 @@ export function useVisibleComponentSections(): Section[] {
               {t('models.description')}
             </p>
             <ModelList />
+          </div>
+        ),
+      },
+      {
+        key: 'safeguards',
+        label: t('safeguards.title'),
+        flag: 'safeguards',
+        render: () => (
+          <div>
+            <p className="mb-3 text-sm text-muted-foreground">
+              {t('safeguards.description')}
+            </p>
+            <SafeguardList />
           </div>
         ),
       },

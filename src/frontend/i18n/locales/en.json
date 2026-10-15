@@ -229,6 +229,10 @@
       "models_visible_to_all": {
         "title": "Models visible to everyone",
         "detail": "Off hides the Models tab from everyone except developers."
+      },
+      "safeguards_visible_to_all": {
+        "title": "Safeguards visible to everyone",
+        "detail": "Off hides the Safeguards tab from everyone except developers."
       }
     }
   },
@@ -355,6 +359,28 @@
     "perSubagent": "Per subagent",
     "inherited": "inherited",
     "routing": "Routing",
-    "routingHint": "Turns are sent to a tier based on what they ask for."
+    "routingHint": "Turns are sent to a tier based on what they ask for.",
+    "excluded": "not available with this model:"
+  },
+  "provenance": {
+    "truncated": "cut off — the model ran out of room",
+    "empty": "the model returned nothing",
+    "fallback": "answered by a fallback after {{from}} failed",
+    "routed": "routed to {{tier}}",
+    "routedBy": "routed to {{tier}} by {{how}}",
+    "cached": "from cache"
+  },
+  "safeguards": {
+    "title": "Safeguards",
+    "description": "What is applied to a message besides the model.",
+    "on": "on",
+    "off": "off",
+    "pii": "PII scrubbing",
+    "piiDetail": "Replaces matched values in your message before the model sees it.",
+    "traceStrategy": "In traces, matched values are {{strategy}}ed.",
+    "guardrail": "Guardrail",
+    "guardrailDetail": "Screens replies before they reach you.",
+    "tokenBudget": "Token budget",
+    "tokenBudgetDetail": "Stops a run once it has spent its allowance."
   }
 }

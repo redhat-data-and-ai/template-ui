@@ -229,6 +229,10 @@
       "models_visible_to_all": {
         "title": "Modèles visibles par tous",
         "detail": "Désactivé, masque l'onglet Modèles à tous sauf aux développeurs."
+      },
+      "safeguards_visible_to_all": {
+        "title": "Garde-fous visibles par tous",
+        "detail": "Désactivé, masque l'onglet Garde-fous à tous sauf aux développeurs."
       }
     }
   },
@@ -355,6 +359,28 @@
     "perSubagent": "Par sous-agent",
     "inherited": "hérité",
     "routing": "Routage",
-    "routingHint": "Chaque tour est envoyé à un niveau selon ce qu'il demande."
+    "routingHint": "Chaque tour est envoyé à un niveau selon ce qu'il demande.",
+    "excluded": "indisponible avec ce modèle :"
+  },
+  "provenance": {
+    "truncated": "tronqué : le modèle a manqué de place",
+    "empty": "le modèle n'a rien renvoyé",
+    "fallback": "répondu par un modèle de secours après l'échec de {{from}}",
+    "routed": "routé vers {{tier}}",
+    "routedBy": "routé vers {{tier}} par {{how}}",
+    "cached": "depuis le cache"
+  },
+  "safeguards": {
+    "title": "Garde-fous",
+    "description": "Ce qui s'applique à un message en plus du modèle.",
+    "on": "activé",
+    "off": "désactivé",
+    "pii": "Masquage des données personnelles",
+    "piiDetail": "Remplace les valeurs détectées dans votre message avant que le modèle le voie.",
+    "traceStrategy": "Dans les traces, les valeurs détectées sont traitées en « {{strategy}} ».",
+    "guardrail": "Garde-fou",
+    "guardrailDetail": "Filtre les réponses avant qu'elles vous parviennent.",
+    "tokenBudget": "Budget de jetons",
+    "tokenBudgetDetail": "Arrête une exécution une fois son allocation épuisée."
   }
 }

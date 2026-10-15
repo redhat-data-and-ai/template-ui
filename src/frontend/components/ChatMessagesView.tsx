@@ -33,6 +33,7 @@ import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButt
 import { ForkButton } from "./ForkButton";
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
+import { MessageProvenance, type Provenance } from './MessageProvenance';
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -1132,6 +1133,16 @@ export function ChatMessagesView({
                     // +1 because forking "at" a message keeps it.
                     forkIndex={messageIndex + 1}
                   />
+                  {/* Below the actions, not above: it explains the
+                      answer rather than offering anything to do. */}
+                  <div className="pl-11">
+                    <MessageProvenance
+                      provenance={
+                        (message as Record<string, unknown>)
+                          .provenance as Provenance | undefined
+                      }
+                    />
+                  </div>
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
                       <div className="text-[11px] text-muted-foreground">

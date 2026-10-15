@@ -229,6 +229,10 @@
       "models_visible_to_all": {
         "title": "モデルを全員に表示",
         "detail": "オフにすると、開発者以外からモデルタブを隠します。"
+      },
+      "safeguards_visible_to_all": {
+        "title": "セーフガードを全員に表示",
+        "detail": "オフにすると、開発者以外からセーフガードタブを隠します。"
       }
     }
   },
@@ -355,6 +359,28 @@
     "perSubagent": "サブエージェント別",
     "inherited": "継承",
     "routing": "ルーティング",
-    "routingHint": "各ターンは内容に応じたティアに振り分けられます。"
+    "routingHint": "各ターンは内容に応じたティアに振り分けられます。",
+    "excluded": "このモデルでは利用不可:"
+  },
+  "provenance": {
+    "truncated": "途中で終了 — モデルの出力上限に達しました",
+    "empty": "モデルは何も返しませんでした",
+    "fallback": "{{from}} の失敗後、フォールバックが応答",
+    "routed": "{{tier}} にルーティング",
+    "routedBy": "{{how}} により {{tier}} にルーティング",
+    "cached": "キャッシュから"
+  },
+  "safeguards": {
+    "title": "セーフガード",
+    "description": "モデル以外にメッセージへ適用される処理。",
+    "on": "有効",
+    "off": "無効",
+    "pii": "個人情報のマスキング",
+    "piiDetail": "モデルが見る前に、メッセージ内の該当する値を置き換えます。",
+    "traceStrategy": "トレースでは、該当する値は {{strategy}} 方式で扱われます。",
+    "guardrail": "ガードレール",
+    "guardrailDetail": "応答が届く前に検査します。",
+    "tokenBudget": "トークン予算",
+    "tokenBudgetDetail": "割り当てを使い切った時点で実行を停止します。"
   }
 }
