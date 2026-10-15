@@ -318,7 +318,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           </div>
         </div>
       </div>
-      <p className="text-[11px] text-muted-foreground/70 text-center mt-1.5">
+      <p className="text-xs text-muted-foreground text-center mt-1.5">
         You are interacting with an AI tool. Always review AI-generated content prior to use.
       </p>
     </form>
