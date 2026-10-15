@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant } from '@patternfly/react-core';
 import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
@@ -13,6 +14,7 @@ import { releaseStreamingManager } from '../../lib/streaming/streamingManagerReg
 import { isPrivilegedUser } from '../../lib/role-utils';
 
 export function ProfileSection() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const chats = useAppSelector(selectAllChats);
@@ -42,9 +44,9 @@ export function ProfileSection() {
     if (failures > 0 && failures < ids.length) {
       dispatch(addToast({ title: `${ids.length - failures} chats deleted, ${failures} failed on server`, variant: 'warning' }));
     } else if (failures === ids.length) {
-      dispatch(addToast({ title: 'Chats cleared locally but server deletion failed', variant: 'warning' }));
+      dispatch(addToast({ title: t('toast.allChatsDeletedLocally'), variant: 'warning' }));
     } else {
-      dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
+      dispatch(addToast({ title: t('toast.allChatsDeleted'), variant: 'success' }));
     }
     navigate('/');
   };
@@ -76,7 +78,7 @@ export function ProfileSection() {
         </div>
         <div className="flex items-center gap-3 text-sm">
           <Shield className="w-4 h-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Authenticated via SSO</span>
+          <span className="text-muted-foreground">{t('profile.ssoAuthenticated')}</span>
         </div>
       </div>
 
@@ -84,16 +86,16 @@ export function ProfileSection() {
         <div className="pt-4 border-t border-border">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-medium text-foreground">Developer Mode</h3>
+              <h3 className="text-sm font-medium text-foreground">{t('profile.developerMode')}</h3>
               <p className="text-xs text-muted-foreground">
-                Show the Developer tab with advanced tools and agent evaluation.
+                {t('profile.developerModeHint')}
               </p>
             </div>
             <button
               type="button"
               role="switch"
               aria-checked={developerMode}
-              aria-label="Enable Developer Mode"
+              aria-label={t('profile.enableDeveloperMode')}
               onClick={() => dispatch(setDeveloperMode(!developerMode))}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
                 developerMode ? 'bg-primary' : 'bg-muted'
@@ -111,16 +113,16 @@ export function ProfileSection() {
 
       {chats.length > 0 && (
         <div className="pt-4 border-t border-border">
-          <h3 className="text-sm font-medium text-destructive mb-2">Danger Zone</h3>
+          <h3 className="text-sm font-medium text-destructive mb-2">{t('profile.dangerZone')}</h3>
           <div className="flex items-center justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/5">
             <div>
-              <p className="text-sm font-medium text-foreground">Delete all conversations</p>
+              <p className="text-sm font-medium text-foreground">{t('profile.deleteAllConversations')}</p>
               <p className="text-xs text-muted-foreground">
                 Permanently remove all {chats.length} chat{chats.length !== 1 ? 's' : ''}
               </p>
             </div>
             <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)} icon={<Trash2 className="w-3.5 h-3.5" />}>
-              Delete all
+              {t('profile.deleteAll')}
             </Button>
           </div>
         </div>
@@ -130,18 +132,18 @@ export function ProfileSection() {
         variant={ModalVariant.small}
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        aria-label="Delete all chats confirmation"
+        aria-label={t('profile.deleteAllChatsConfirm')}
       >
-        <ModalHeader title="Delete all chats" />
+        <ModalHeader title={t('profile.deleteAllChats')} />
         <ModalBody>
-          This will permanently delete all {chats.length} conversations. This action cannot be undone.
+          {t('profile.deleteAllBody', { count: chats.length })}
         </ModalBody>
         <ModalFooter>
           <Button variant="danger" onClick={handleDeleteAll}>
-            Delete all
+            {t('profile.deleteAll')}
           </Button>
           <Button variant="link" onClick={() => setConfirmDelete(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </ModalFooter>
       </Modal>

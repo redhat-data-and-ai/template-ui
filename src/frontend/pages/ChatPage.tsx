@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { Message } from '@langchain/langgraph-sdk';
 import { Button, Spinner } from '@patternfly/react-core';
 
@@ -43,6 +44,7 @@ import {
 import { formatMcpModelContext } from '../types/mcp-apps';
 
 export function ChatPage({ threadId }: { threadId: string }) {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -297,10 +299,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to submit message:', err);
-        dispatch(addToast({ title: 'Failed to send message', message: 'Please try again.', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.sendFailed'), message: t('errors.tryAgain'), variant: 'danger' }));
       }
     },
-    [threadId, currentChat, dispatch]
+    [threadId, currentChat, dispatch, t]
   );
 
   const chatActions = useMemo(
@@ -336,10 +338,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to edit message:', err);
-        dispatch(addToast({ title: 'Failed to send edited message', message: 'Please try again.', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.editFailed'), message: t('errors.tryAgain'), variant: 'danger' }));
       }
     },
-    [thread, threadId, currentChat, dispatch],
+    [thread, threadId, currentChat, dispatch, t],
   );
 
   const handleRetry = useCallback(() => {
@@ -362,9 +364,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
       }, 100);
     } catch (err) {
       console.error('Failed to retry:', err);
-      dispatch(addToast({ title: 'Failed to retry', message: 'Please try again.', variant: 'danger' }));
+      dispatch(addToast({ title: t('toast.retryFailed'), message: t('errors.tryAgain'), variant: 'danger' }));
     }
-  }, [threadId, currentChat, dispatch]);
+  }, [threadId, currentChat, dispatch, t]);
 
   const handleInterruptResume = useCallback(
     async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
@@ -376,10 +378,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
-        dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.resumeFailed'), variant: 'danger' }));
       }
     },
-    [thread, threadId, currentChat, dispatch],
+    [thread, threadId, currentChat, dispatch, t],
   );
 
   const handleMCPOAuthResume = useCallback(
@@ -392,10 +394,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
-        dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.resumeFailed'), variant: 'danger' }));
       }
     },
-    [thread, threadId, currentChat, dispatch],
+    [thread, threadId, currentChat, dispatch, t],
   );
 
   const handleInterruptDismiss = useCallback(() => {
@@ -538,8 +540,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
   if (chatsLoading || hydrating) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <Spinner size="lg" aria-label="Loading chat" />
-        <p className="text-muted-foreground">{hydrating ? 'Loading messages...' : 'Loading chat...'}</p>
+        <Spinner size="lg" aria-label={t('chat.loading')} />
+        <p className="text-muted-foreground">{hydrating ? t('chat.loadingMessages') : t('chat.loadingChat')}</p>
       </div>
     );
   }
@@ -547,9 +549,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
   if (threadId && !currentChat) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
-        <p className="text-muted-foreground">The requested chat could not be found.</p>
-        <Button variant="primary" onClick={() => navigate('/')}>Go Home</Button>
+        <h1 className="text-2xl text-muted-foreground font-bold">{t('chat.notFound')}</h1>
+        <p className="text-muted-foreground">{t('chat.notFoundBody')}</p>
+        <Button variant="primary" onClick={() => navigate('/')}>{t('chat.goHome')}</Button>
       </div>
     );
   }

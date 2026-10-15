@@ -87,7 +87,12 @@ describe("Missing YAML → throws when UI_CONFIG_PATH is explicit", () => {
     delete process.env.UI_CONFIG_PATH;
     const settings = getSettings();
 
-    expect(settings.branding.title).toBe("Deep Agent");
+    // With no UI_CONFIG_PATH the loader still finds the shipped
+    // config/ui/settings.yaml, so this reads the real branding
+    // rather than the defaults table. Asserting a literal name here
+    // was asserting the product name, which is why renaming the
+    // agent broke a test about missing-file handling.
+    expect(typeof settings.branding.title).toBe("string");
     expect(settings.features.auth_enabled).toBe(true);
     expect(settings.agent.timeout_ms).toBe(30000);
     expect(settings.server.port).toBe(8080);
@@ -103,7 +108,9 @@ describe("Empty or comment-only YAML → graceful fallback", () => {
     process.env.UI_CONFIG_PATH = testConfigPath;
 
     const settings = getSettings();
-    expect(settings.branding.title).toBe("Deep Agent");
+    // A generic fallback, not the product name — asserting the brand
+    // here made renaming the agent fail a test about empty files.
+    expect(settings.branding.title).toBe("Agent");
     expect(settings.features.auth_enabled).toBe(true);
   });
 
@@ -112,7 +119,7 @@ describe("Empty or comment-only YAML → graceful fallback", () => {
     process.env.UI_CONFIG_PATH = testConfigPath;
 
     const settings = getSettings();
-    expect(settings.branding.title).toBe("Deep Agent");
+    expect(settings.branding.title).toBe("Agent");
     expect(settings.agent.timeout_ms).toBe(30000);
   });
 });

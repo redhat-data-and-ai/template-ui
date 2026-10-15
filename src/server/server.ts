@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyServerOptions } from "fastify";
 import { clientRoutes } from "./router/client.router.js";
 import { apiRoutes } from "./router/api.router.js";
 import { proxyRoutes } from "./router/proxy.router.js";
@@ -48,10 +48,29 @@ export async function setupServer(): Promise<FastifyInstance> {
   const environment =
     (process.env.ENVIRONMENT as keyof LoggerConfig) || "production";
 
-  const fastify = Fastify({
+  // Expressed as a trust function rather than a hop count: Fastify
+  // forwards a number to proxy-addr happily at runtime but does not
+  // type it, and `hop < n` is the same rule written out.
+  const configuredHops = cfg.security.rate_limit.trust_proxy;
+  const trustProxy =
+    configuredHops === false
+      ? false
+      : (_address: string, hop: number) => hop < Number(configuredHops);
+
+  const serverOptions: FastifyServerOptions = {
     logger: envToLogger[environment] ?? true,
     bodyLimit: cfg.server.body_limit,
-  });
+    // Behind an OpenShift Route or an ingress, the socket address is
+    // the proxy's. Without this every request looks like it came from
+    // one client, so the rate limiter shares a single bucket across
+    // the whole deployment and the per-user limit is a per-cluster
+    // limit. A hop count rather than `true`: trusting the full
+    // X-Forwarded-For lets a caller prepend an address and mint a
+    // fresh bucket per request.
+    trustProxy,
+  };
+
+  const fastify = Fastify(serverOptions);
 
   // Explicitly remove information disclosure headers
   fastify.addHook('onSend', async (request, reply) => {
@@ -91,6 +110,26 @@ export async function setupServer(): Promise<FastifyInstance> {
       }
     }
 
+    // Same treatment for branding images. A logo hosted off-origin is
+    // a perfectly ordinary thing to configure and the default
+    // img-src ('self' data: blob:) blocks it silently — the browser
+    // reports a CSP violation in the console and the page just shows
+    // no logo, which reads as a bad URL rather than a policy.
+    //
+    // Derived rather than listed so the CDN host is not a second
+    // place to edit: change branding.logo_url and the policy follows.
+    const imgSrc = [...csp.img_src];
+    for (const url of [cfg.branding.logo_url, cfg.branding.favicon_url]) {
+      if (!url || url.startsWith('/') || url.startsWith('data:')) continue;
+      try {
+        const parsed = new URL(url);
+        const origin = `${parsed.protocol}//${parsed.host}`;
+        if (!imgSrc.includes(origin)) imgSrc.push(origin);
+      } catch {
+        fastify.log.warn(`Invalid branding image URL, not added to CSP img-src: ${url}`);
+      }
+    }
+
     await fastify.register(import("@fastify/helmet"), {
       crossOriginEmbedderPolicy: cfg.security.helmet.cross_origin_embedder_policy,
       // MCP Apps sandbox (ext-apps / sandbox_proxy.js) learns the host from
@@ -103,7 +142,7 @@ export async function setupServer(): Promise<FastifyInstance> {
           defaultSrc: csp.default_src,
           scriptSrc: csp.script_src,
           styleSrc: csp.style_src,
-          imgSrc: csp.img_src,
+          imgSrc: imgSrc,
           connectSrc: connectSrc,
           fontSrc: csp.font_src,
           objectSrc: csp.object_src,
@@ -120,6 +159,17 @@ export async function setupServer(): Promise<FastifyInstance> {
     await fastify.register(import("@fastify/rate-limit"), {
       max: rl.max,
       timeWindow: rl.window,
+      // Key on the signed-in user, falling back to IP.
+      //
+      // IP alone is wrong in both directions here: everyone behind one
+      // corporate NAT shares a bucket and throttles each other, while
+      // one person on three devices gets three. The session id is the
+      // closest thing to "a person" this server has, and it cannot be
+      // forged — it is signed with COOKIE_SIGN.
+      keyGenerator: (request) => {
+        const session = (request as { session?: { user?: { sub?: string } } }).session;
+        return session?.user?.sub ?? request.ip;
+      },
       allowList: (request) => {
         const path = request.url.split("?")[0];
         return excludeSet.has(path);
@@ -138,6 +188,21 @@ export async function setupServer(): Promise<FastifyInstance> {
   await fastify.register(import("@fastify/cookie"));
   await fastify.register(import("@fastify/session"), {
     secret: cookieSign,
+    // Do not persist a session that holds nothing.
+    //
+    // @fastify/session defaults this to true, so every request
+    // arriving without a cookie (health probes, unauthenticated API
+    // calls, crawlers, a curl in a loop) wrote a session record
+    // holding only a cookie object, with the full 30-day TTL.
+    // Twenty anonymous requests created twenty-two keys; a dev
+    // cluster reached 19,000.
+    //
+    // They accumulate in the same Redis the agent uses for its
+    // worker queue and lease recovery, so this is a slow squeeze on
+    // something that matters, not merely wasted space. A session is
+    // now written when something is actually put in it, which in
+    // practice means at login.
+    saveUninitialized: false,
     cookie: {
       secure: cfg.security.session.secure_cookie,
       httpOnly: cfg.security.session.http_only ?? true,

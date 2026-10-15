@@ -1,0 +1,360 @@
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Activity, AlertTriangle, Loader2 } from 'lucide-react';
+import {
+  fetchErrors,
+  fetchModels,
+  fetchSummary,
+  fetchTimeseries,
+  type AnalyticsSummary,
+  type ErrorClass,
+  type ModelRow,
+  type TimeseriesPoint,
+} from '../services/analytics-api';
+
+const WINDOWS = [1, 7, 30, 90];
+
+/** `null` means "not enough data", which is not the same as zero. */
+function pct(value: number | null): string {
+  return value === null ? '—' : `${value}%`;
+}
+
+function compact(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return String(value);
+}
+
+function seconds(value: number): string {
+  return value >= 60 ? `${(value / 60).toFixed(1)}m` : `${value.toFixed(1)}s`;
+}
+
+/**
+ * Operator view: is it used, does it work, how slow, what does it cost.
+ *
+ * Everything here is aggregate. There is deliberately no way to read
+ * anyone's messages from this page — the API does not expose them, and
+ * a dashboard is the wrong place to discover that it could.
+ */
+/**
+ * `embedded` drops the page chrome — outer gutter, width cap and the
+ * <h1> — because inside a Settings panel the tab label is already the
+ * heading and the panel already has its own container. Without it the
+ * page renders a title under a title inside a box inside a box.
+ */
+export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useTranslation();
+  const [days, setDays] = useState(7);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [points, setPoints] = useState<TimeseriesPoint[]>([]);
+  const [models, setModels] = useState<ModelRow[]>([]);
+  const [errorClasses, setErrorClasses] = useState<ErrorClass[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [s, t, m, e] = await Promise.all([
+        fetchSummary(days),
+        fetchTimeseries(days, days <= 2 ? 'hour' : 'day'),
+        fetchModels(days),
+        fetchErrors(days),
+      ]);
+      setSummary(s);
+      // Array.isArray rather than a truthiness check: `{}` is
+      // truthy and still has no `.map`.
+      setPoints(Array.isArray(t) ? t : []);
+      setModels(Array.isArray(m) ? m : []);
+      setErrorClasses(Array.isArray(e) ? e : []);
+    } catch (err) {
+      // Showing zeroes here would be worse than showing nothing: a
+      // flat chart reads as "nobody used it", and somebody will act
+      // on that.
+      setError(err instanceof Error ? err.message : t('analytics.loadFailed'));
+      setSummary(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [days, t]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const peak = Math.max(1, ...points.map((p) => p.runs));
+
+  return (
+    <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-5xl px-8 py-10'}>
+      <header className="mb-10 flex items-start justify-between gap-4">
+        {!embedded && (
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-semibold">
+              <Activity className="h-5 w-5" aria-hidden="true" />
+              {t('analytics.title')}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t('analytics.subtitle')}
+            </p>
+          </div>
+        )}
+        {embedded && (
+          <p className="text-sm text-muted-foreground">{t('analytics.subtitle')}</p>
+        )}
+        <div className="flex gap-1" role="group" aria-label={t('analytics.window')}>
+          {WINDOWS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setDays(option)}
+              aria-pressed={days === option}
+              className={`rounded-lg px-2.5 py-1 text-xs transition-colors ${
+                days === option
+                  ? 'bg-secondary text-foreground'
+                  : 'text-muted-foreground hover:bg-secondary/60'
+              }`}
+            >
+              {option}d
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {error && (
+        <div
+          role="alert"
+          className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {error}
+        </div>
+      )}
+
+      {loading && !summary && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Loading…
+        </div>
+      )}
+
+      {summary && (
+        <>
+          <dl className="mb-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <Stat label={t('analytics.runs')} value={compact(summary.runs)} />
+            {/* Every figure on this page is client-only: the agent
+                also serves benchmark harnesses, planner steps and
+                subagent calls, which were 542 of 553 runs here and
+                would otherwise be reported as product usage. */}
+            <Stat
+              label={t('analytics.conversations')}
+              value={compact(summary.conversations)}
+            />
+
+            <Stat label={t('analytics.people')} value={compact(summary.users)} />
+            <Stat
+              label={t('analytics.succeeded')}
+              value={pct(summary.success_rate)}
+              tone={
+                summary.success_rate !== null && summary.success_rate < 95
+                  ? 'warn'
+                  : undefined
+              }
+            />
+            <Stat label="p50" value={seconds(summary.p50_seconds)} />
+            <Stat
+              label="p95"
+              value={seconds(summary.p95_seconds)}
+              tone={summary.p95_seconds > 60 ? 'warn' : undefined}
+            />
+            <Stat label={t('analytics.tokensIn')} value={compact(summary.input_tokens)} />
+            <Stat label={t('analytics.tokensOut')} value={compact(summary.output_tokens)} />
+            <Stat label={t('analytics.thumbsUp')} value={compact(summary.feedback_up)} />
+            <Stat label={t('analytics.thumbsDown')} value={compact(summary.feedback_down)} />
+            <Stat label={t('analytics.ratedGood')} value={pct(summary.satisfaction)} />
+            <Stat label={t('analytics.inFlight')} value={compact(summary.in_flight)} />
+            {/* Separate from in-flight: a run stranded by a restart
+                needs the reaper looked at, a running one needs
+                nothing. Warn on any, because the steady state is
+                zero. */}
+            <Stat
+              label={t('analytics.interrupted')}
+              value={compact(summary.interrupted)}
+              tone={summary.interrupted > 0 ? 'warn' : undefined}
+            />
+            {/* Only when there are any. A permanent "Stale 0" is a
+                stat nobody reads, which is how a stat stops being
+                noticed when it finally changes. */}
+            {summary.stale > 0 && (
+              <Stat
+                label={t('analytics.stale')}
+                value={compact(summary.stale)}
+                tone="warn"
+              />
+            )}
+          </dl>
+
+          <section className="mb-12">
+            <h2 className="mb-5 text-base font-semibold">{t('analytics.runsOverTime')}</h2>
+            {/* Bars, not a chart library. A quiet day must look like a
+                quiet day and not like missing data, so every bucket
+                keeps a visible baseline — a zero-height bar is
+                indistinguishable from a bucket that was never
+                rendered, which is the thing this is trying not to
+                say. */}
+            <ul className="flex h-40 items-end gap-1 list-none p-0 border-b border-border">
+              {points.map((point) => (
+                <li
+                  key={point.bucket}
+                  className="relative flex h-full flex-1 items-end"
+                  title={`${point.bucket}: ${point.runs} runs, ${point.errors} errors, p95 ${seconds(point.p95_seconds)}`}
+                >
+                  <span
+                    className={`relative block w-full ${
+                      point.runs > 0 ? 'bg-secondary/80' : 'bg-border/60'
+                    }`}
+                    style={{
+                      height:
+                        point.runs > 0
+                          ? `max(3px, ${Math.round((point.runs / peak) * 100)}%)`
+                          : '2px',
+                    }}
+                  >
+                    {point.errors > 0 && (
+                      <span
+                        className="absolute inset-x-0 bottom-0 bg-destructive/70"
+                        style={{
+                          height: `${Math.round((point.errors / Math.max(1, point.runs)) * 100)}%`,
+                        }}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+              <span>{points[0] ? new Date(points[0].bucket).toLocaleDateString() : ''}</span>
+              <span>
+                {points.length
+                  ? new Date(points[points.length - 1].bucket).toLocaleDateString()
+                  : ''}
+              </span>
+            </p>
+          </section>
+
+          <section className="mb-12">
+            <h2 className="mb-5 text-base font-semibold">{t('analytics.byModel')}</h2>
+            <Table
+              head={[t('analytics.model'), t('analytics.runs'), t('analytics.calls'), t('analytics.errors'), 'p95', t('analytics.tokensIn'), t('analytics.tokensOut')]}
+              rows={models.map((m) => [
+                m.model,
+                String(m.runs),
+                String(m.calls),
+                String(m.errors),
+                seconds(m.p95_seconds),
+                compact(m.input_tokens),
+                compact(m.output_tokens),
+              ])}
+              empty={t('analytics.noRuns')}
+            />
+          </section>
+
+          <section>
+            <h2 className="mb-2 text-base font-semibold">{t('analytics.failures')}</h2>
+            <p className="mb-5 text-xs leading-relaxed text-muted-foreground">
+{t('analytics.failuresNote')}
+            </p>
+            <Table
+              head={[t('analytics.kind'), t('analytics.count'), t('analytics.lastSeen')]}
+              rows={errorClasses.map((e) => [
+                t(`errorClass.${e.class}`, { defaultValue: e.class }),
+                String(e.count),
+                e.last_seen ? new Date(e.last_seen).toLocaleString() : '—',
+              ])}
+              empty={t('analytics.noFailures')}
+            />
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: 'warn';
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3.5">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd
+        className={`mt-1.5 text-2xl font-semibold tabular-nums ${
+          tone === 'warn' ? 'text-destructive' : ''
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function Table({
+  head,
+  rows,
+  empty,
+}: {
+  head: string[];
+  rows: string[][];
+  empty: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">{empty}</p>;
+  }
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+          {head.map((cell, index) => (
+            // Numbers right-aligned, labels left. A column of figures
+            // with ragged right edges cannot be compared by eye, which
+            // is the only thing anyone does with this table.
+            <th
+              key={cell}
+              scope="col"
+              className={`py-3 pr-4 last:pr-0 font-medium ${index > 0 ? 'text-right' : 'text-left'}`}
+            >
+              {cell}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr
+            key={row[0]}
+            className="border-b border-border/40 last:border-0 hover:bg-secondary/30"
+          >
+            {row.map((cell, index) => (
+              <td
+                key={`${row[0]}-${index}`}
+                className={`py-3 pr-4 last:pr-0 ${
+                  index > 0
+                    ? 'text-right tabular-nums text-muted-foreground'
+                    : 'font-medium text-foreground'
+                }`}
+              >
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}

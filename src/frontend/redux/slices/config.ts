@@ -1,9 +1,10 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import { fetchBranding, fetchFeatures, type BrandingConfig, type FeaturesConfig } from "../../services/config.service";
+import { fetchBranding, fetchFeatures, fetchContent, type BrandingConfig, type FeaturesConfig, type ContentConfig } from "../../services/config.service";
 
 interface ConfigState {
   branding: BrandingConfig | null;
   features: FeaturesConfig | null;
+  content: ContentConfig | null;
   loading: boolean;
   error: string | null;
 }
@@ -11,6 +12,7 @@ interface ConfigState {
 const initialState: ConfigState = {
   branding: null,
   features: null,
+  content: null,
   loading: false,
   error: null,
 };
@@ -19,11 +21,12 @@ const initialState: ConfigState = {
 export const loadConfig = createAsyncThunk(
   "config/load",
   async () => {
-    const [branding, features] = await Promise.all([
+    const [branding, features, content] = await Promise.all([
       fetchBranding(),
       fetchFeatures(),
+      fetchContent(),
     ]);
-    return { branding, features };
+    return { branding, features, content };
   }
 );
 
@@ -36,6 +39,9 @@ const configSlice = createSlice({
     },
     setFeatures(state, action: PayloadAction<FeaturesConfig>) {
       state.features = action.payload;
+    },
+    setContent(state, action: PayloadAction<ContentConfig>) {
+      state.content = action.payload;
     },
     setError(state, action: PayloadAction<string>) {
       state.error = action.payload;
@@ -51,6 +57,7 @@ const configSlice = createSlice({
       .addCase(loadConfig.fulfilled, (state, action) => {
         state.branding = action.payload.branding;
         state.features = action.payload.features;
+        state.content = action.payload.content;
         state.loading = false;
         state.error = null;
       })
@@ -61,5 +68,5 @@ const configSlice = createSlice({
   },
 });
 
-export const { setBranding, setFeatures, setError } = configSlice.actions;
+export const { setBranding, setFeatures, setContent, setError } = configSlice.actions;
 export default configSlice.reducer;

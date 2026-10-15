@@ -9,7 +9,7 @@ import { setLocalStorageSettings, getLocalStorageSettings } from '../helpers/loc
  *  1. Settings page loads with the expected heading.
  *  2. All tabs are navigable.
  *  3. Theme toggle persists to localStorage.
- *  4. "Tool Approvals" tab shows always-allowed tools list.
+ *  4. Tool approvals, now inside Components > MCP, shows the list.
  *  5. Adding a tool to always-allowed saves to localStorage.
  */
 
@@ -36,7 +36,7 @@ test.describe('Settings page', () => {
 
   // ── Tab navigation ─────────────────────────────────────────────────────────
 
-  test('Profile tab is visible and active by default', async ({ page }) => {
+  test('Profile is visible and active by default', async ({ page }) => {
     const settings = new SettingsPage(page);
     await settings.goto();
     await settings.expectTabContentVisible('Profile');
@@ -49,26 +49,29 @@ test.describe('Settings page', () => {
     await settings.expectTabContentVisible('Appearance');
   });
 
-  test('clicking Tool Approvals tab shows the tool list', async ({ page }) => {
+  test('Tool approvals, inside Components > MCP, shows the tool list', async ({ page }) => {
     const settings = new SettingsPage(page);
     await settings.goto();
-    await settings.clickTab('Tool Approvals');
-    await settings.expectTabContentVisible('Tool Approvals');
+    await settings.clickTab('Tool approvals');
+    await settings.expectTabContentVisible('Tool approvals');
   });
 
-  test('clicking Memories tab shows the Memories section', async ({ page }) => {
+  test('Your memories, inside Personalisation, shows the memories section', async ({ page }) => {
     const settings = new SettingsPage(page);
     await settings.goto();
-    await settings.clickTab('Your Memories');
-    await settings.expectTabContentVisible('Your Memories');
+    await settings.clickTab('Your memories');
+    await settings.expectTabContentVisible('Your memories');
   });
 
-  test('clicking MCP OAuth tab shows the OAuth connections section', async ({ page }) => {
+  // Was "MCP OAuth", a tab of its own. Connection state is part of
+  // the server list now — you see a server and whether you are
+  // connected to it in one place, rather than in two tabs that had
+  // to be read together.
+  test('Components > MCP lists servers', async ({ page }) => {
     const settings = new SettingsPage(page);
     await settings.goto();
-    await settings.clickTab('MCP OAuth');
-    await settings.expectTabContentVisible('MCP OAuth');
-    await expect(page.getByText(/no oauth-connected services are configured/i)).toBeVisible();
+    await settings.clickTab('MCP');
+    await settings.expectTabContentVisible('MCP');
   });
 
   // ── Theme toggle + localStorage persistence ────────────────────────────────
@@ -103,7 +106,7 @@ test.describe('Settings page', () => {
 
     const settings = new SettingsPage(page);
     await settings.goto();
-    await settings.clickTab('Tool Approvals');
+    await settings.clickTab('Tool approvals');
 
     await expect(page.getByText('web_search')).toBeVisible();
     await expect(page.getByText('github_search')).toBeVisible();

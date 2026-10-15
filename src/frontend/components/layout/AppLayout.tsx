@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Page,
@@ -98,6 +99,7 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const chats = useAppSelector(selectAllChats);
   const branding = useAppSelector((state: RootState) => state.config.branding);
@@ -184,6 +186,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           const backendTitle = backendTitleMap.get(c.id);
           const ts = backendTimestampMap.get(c.id);
           const updated = { ...c };
+          // Not translated, here or at creation: the title is
+          // persisted and compared, so a localised one would both
+          // break this check and leave a user's history in whatever
+          // language they happened to be using that day.
           if (backendTitle && (c.title === 'Chat' || c.title === 'New Chat')) {
             updated.title = backendTitle;
             updated.preview = backendTitle;
@@ -247,14 +253,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         dispatch(setThreadsListHydrated(true));
       } catch (error) {
         console.error('Failed to load user history:', error);
-        dispatch(addToast({ title: 'Failed to load chat history', variant: 'warning' }));
+        dispatch(addToast({ title: t('toast.loadHistoryFailed'), variant: 'warning' }));
       } finally {
         dispatch(setLoadingThreads(false));
       }
     }
 
     loadUserHistory();
-  }, [dispatch]);
+  }, [dispatch, t]);
 
   useEffect(() => {
     if (chats.length > 0) {
@@ -329,18 +335,18 @@ export function AppLayout({ children }: AppLayoutProps) {
       const remaining = chats.filter((c) => c.id !== chatId);
       const ok = await deleteThread(chatId).catch(() => false);
       if (ok) {
-        dispatch(addToast({ title: 'Chat deleted', variant: 'success' }));
+        dispatch(addToast({ title: t('toast.chatDeleted'), variant: 'success' }));
       } else {
         if (chat?.project_id) {
           dispatch(updateProjectThreadCount({ projectId: chat.project_id, delta: 1 }));
         }
-        dispatch(addToast({ title: 'Chat cleared locally but server delete failed', variant: 'warning' }));
+        dispatch(addToast({ title: t('toast.chatDeletedLocally'), variant: 'warning' }));
       }
       if (location.pathname === `/chat/${chatId}`) {
         navigate(remaining.length > 0 ? `/chat/${remaining[0].id}` : '/');
       }
     },
-    [dispatch, chats, navigate, location.pathname]
+    [dispatch, chats, navigate, location.pathname, t]
   );
 
   const handleRenameChat = useCallback(
@@ -355,13 +361,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       const keepThreads = options?.keepThreads === true;
       const { ok, deletedThreadIds, missing } = await deleteProject(projectId, { keepThreads });
       if (!ok) {
-        dispatch(addToast({ title: 'Failed to delete project', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.deleteProjectFailed'), variant: 'danger' }));
         return false;
       }
 
       if (keepThreads) {
         dispatch(addToast({
-          title: 'Project deleted. Conversations moved to Chats.',
+          title: t('toast.projectDeletedWithChats'),
           variant: 'success',
         }));
         if (location.pathname.startsWith(`/project/${projectId}`)) {
@@ -370,7 +376,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         return true;
       }
 
-      dispatch(addToast({ title: 'Project deleted', variant: 'success' }));
+      dispatch(addToast({ title: t('toast.projectDeleted'), variant: 'success' }));
       if (missing) {
         for (const chat of chats) {
           if (chat.project_id === projectId) {
@@ -404,20 +410,20 @@ export function AppLayout({ children }: AppLayoutProps) {
       }
       return true;
     },
-    [deleteProject, dispatch, chats, navigate, location.pathname, currentChatId],
+    [deleteProject, dispatch, chats, navigate, location.pathname, currentChatId, t],
   );
 
   const handleUnassignAll = useCallback(
     async (projectId: string) => {
       const ok = await unassignAllThreads(projectId);
       if (ok) {
-        dispatch(addToast({ title: 'Conversations moved to Chats', variant: 'success' }));
+        dispatch(addToast({ title: t('toast.conversationsMoved'), variant: 'success' }));
       } else {
-        dispatch(addToast({ title: 'Failed to unassign conversations', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.unassignFailed'), variant: 'danger' }));
       }
       return ok;
     },
-    [unassignAllThreads, dispatch],
+    [unassignAllThreads, dispatch, t],
   );
 
   useKeyboardShortcuts({
@@ -431,7 +437,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <MastheadToggle>
         <PageToggleButton
           variant="plain"
-          aria-label="Toggle sidebar"
+          aria-label={t('layout.toggleSidebar')}
           isSidebarOpen={!sidebarCollapsed}
           onSidebarToggle={() => setSidebarCollapsed((prev) => !prev)}
           id="nav-toggle"
@@ -475,7 +481,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 
   const sidebar = (
-    <PageSidebar isSidebarOpen={!sidebarCollapsed} aria-label="Sidebar navigation" role="navigation">
+    <PageSidebar isSidebarOpen={!sidebarCollapsed} aria-label={t('layout.sidebarNavigation')} role="navigation">
       <PageSidebarBody isFilled className="min-h-0">
         <ErrorBoundary
           onError={(error, errorInfo) => {
@@ -507,7 +513,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <Page masthead={masthead} sidebar={sidebar} className="h-screen bg-background text-foreground">
       <a href="#main-content" className="skip-to-main sr-only">
-        Skip to main content
+        {t('layout.skipToContent')}
       </a>
       <KeyboardShortcutsDialog isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       {/* PatternFly Modal traps focus and restores focus on close. */}

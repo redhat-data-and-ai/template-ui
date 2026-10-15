@@ -8,7 +8,7 @@
  * - Semantic HTML and form labelling
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, beforeEach, afterEach } from 'vitest';
 import { axe } from '../../test-utils/setup';
@@ -222,24 +222,38 @@ describe('AppearanceSettings — accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  // Scoped to the group under test. Counting radios page-wide broke
+  // the moment a second radiogroup (density) appeared, and would
+  // break again on the third.
+  const themeGroup = () => screen.getByRole('radiogroup', { name: /theme/i });
+  const densityGroup = () =>
+    screen.getByRole('radiogroup', { name: /density/i });
+
   it('has a radiogroup wrapping theme options', () => {
     renderWithProviders(<AppearanceSettings />);
-    const group = screen.getByRole('radiogroup');
-    expect(group).toBeInTheDocument();
+    expect(themeGroup()).toBeInTheDocument();
   });
 
   it('theme options have role="radio"', () => {
     renderWithProviders(<AppearanceSettings />);
-    const radios = screen.getAllByRole('radio');
-    expect(radios.length).toBe(2);
+    expect(within(themeGroup()).getAllByRole('radio').length).toBe(2);
   });
 
-  it('exactly one radio is checked by default', () => {
+  it('exactly one theme radio is checked by default', () => {
     renderWithProviders(<AppearanceSettings />);
-    const checked = screen
+    const checked = within(themeGroup())
       .getAllByRole('radio')
       .filter((r) => r.getAttribute('aria-checked') === 'true');
     expect(checked.length).toBe(1);
+  });
+
+  it('offers a density choice with exactly one selected', () => {
+    renderWithProviders(<AppearanceSettings />);
+    const radios = within(densityGroup()).getAllByRole('radio');
+    expect(radios.length).toBe(2);
+    expect(
+      radios.filter((r) => r.getAttribute('aria-checked') === 'true').length,
+    ).toBe(1);
   });
 
   it('clicking a theme option marks it as checked', async () => {
@@ -516,5 +530,29 @@ describe('Sidebar — accessibility', () => {
   it('settings button has accessible label', () => {
     renderWithProviders(<Sidebar {...defaultProps} />);
     expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar footer', () => {
+  it('shows only Settings and sign out beside the user name', () => {
+    // Every operator surface is a tab inside Settings, so a shortcut
+    // to each one beside the name grew a row of icons that said
+    // nothing about the person they sat next to.
+    renderWithProviders(
+      <Sidebar
+        chatHistory={[]}
+        onNewChat={() => {}}
+        onSelectChat={() => {}}
+        onDeleteChat={() => {}}
+        onRenameChat={() => {}}
+      />,
+    );
+    const footerLabels = [/open settings/i, /log out/i];
+    for (const label of footerLabels) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    for (const gone of [/open analytics/i, /deployment flags/i, /open documents/i]) {
+      expect(screen.queryByRole('button', { name: gone })).not.toBeInTheDocument();
+    }
   });
 });

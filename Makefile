@@ -1,4 +1,5 @@
-.PHONY: dev clean local local-down container container-down deploy undeploy e2e opa-build
+.PHONY: dev clean local local-down container container-down deploy undeploy e2e opa-build \
+	render-deployment render-deployment-check test
 
 # Detect npm/node path (supports nvm, system install, etc)
 NPM := $(shell command -v npm 2>/dev/null || echo /Users/sodutta/.nvm/versions/node/v24.18.0/bin/npm)
@@ -30,6 +31,18 @@ opa-check:
 	@which opa > /dev/null || (echo "Error: opa CLI not found. Install from https://www.openpolicyagent.org/docs/latest/#running-opa" && exit 1)
 	opa check config/compliance/
 	@echo "OPA policy syntax OK"
+
+## Regenerate deployment overlays from config/ui/deployment/values.yaml
+render-deployment:
+	$(NPM) run render:deployment
+
+## Fail if the overlays have drifted from values.yaml (CI)
+render-deployment-check:
+	$(NPM) run render:deployment:check
+
+## Run unit tests once
+test:
+	$(NPM) run test:run
 
 clean:
 	@echo "Stopping containers and removing volumes..."
