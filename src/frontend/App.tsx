@@ -1,6 +1,4 @@
 import { useEffect } from 'react';
-import { useAppSelector } from './redux/hooks';
-import { selectDensity } from './redux/slices/userSettings';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
@@ -28,13 +26,6 @@ export default function App() {
   useThemeSync();
 
   // Load config at app init
-  // Density is a data attribute rather than a prop threaded through
-  // the tree: the spacing values then live in CSS next to the rest
-  // of the theme, and no component needs to know the setting exists.
-  const density = useAppSelector(selectDensity);
-  useEffect(() => {
-    document.documentElement.dataset.density = density;
-  }, [density]);
   useEffect(() => {
     // Seed branding/features from server-injected HTML data
     const serverBranding = window.APP_DATA?.branding;

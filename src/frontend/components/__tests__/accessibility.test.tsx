@@ -222,12 +222,11 @@ describe('AppearanceSettings — accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  // Scoped to the group under test. Counting radios page-wide broke
-  // the moment a second radiogroup (density) appeared, and would
-  // break again on the third.
+  // Scoped to the group under test rather than counting radios
+  // page-wide. Theme is the only group now that density is gone, but
+  // the page-wide count broke the moment the second one appeared and
+  // would break again on the next.
   const themeGroup = () => screen.getByRole('radiogroup', { name: /theme/i });
-  const densityGroup = () =>
-    screen.getByRole('radiogroup', { name: /density/i });
 
   it('has a radiogroup wrapping theme options', () => {
     renderWithProviders(<AppearanceSettings />);
@@ -245,15 +244,6 @@ describe('AppearanceSettings — accessibility', () => {
       .getAllByRole('radio')
       .filter((r) => r.getAttribute('aria-checked') === 'true');
     expect(checked.length).toBe(1);
-  });
-
-  it('offers a density choice with exactly one selected', () => {
-    renderWithProviders(<AppearanceSettings />);
-    const radios = within(densityGroup()).getAllByRole('radio');
-    expect(radios.length).toBe(2);
-    expect(
-      radios.filter((r) => r.getAttribute('aria-checked') === 'true').length,
-    ).toBe(1);
   });
 
   it('clicking a theme option marks it as checked', async () => {

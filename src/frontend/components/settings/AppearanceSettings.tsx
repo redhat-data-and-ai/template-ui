@@ -1,10 +1,7 @@
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import {
-  selectDensity,
   selectTheme,
-  setDensity,
   setTheme,
-  type Density,
 } from '../../redux/slices/userSettings';
 import { Sun, Moon } from 'lucide-react';
 import { LanguageSelect } from '../LanguageSelect';
@@ -19,7 +16,6 @@ const THEME_OPTIONS: { value: ThemeOption; label: string; icon: typeof Sun; desc
 export function AppearanceSettings() {
   const dispatch = useAppDispatch();
   const currentTheme = useAppSelector(selectTheme);
-  const density = useAppSelector(selectDensity);
 
   return (
     <div className="space-y-6">
@@ -60,49 +56,6 @@ export function AppearanceSettings() {
         </div>
       </div>
 
-      <div>
-        <h3 id="density-group-label" className="text-sm font-medium text-foreground mb-1">
-          Interface Density
-        </h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          How much space the conversation uses. Compact fits more of a
-          long transcript on screen.
-        </p>
-        <div role="radiogroup" aria-labelledby="density-group-label" className="flex gap-2">
-          {(
-            [
-              { value: 'comfortable', label: 'Comfortable', hint: 'More space between turns' },
-              { value: 'compact', label: 'Compact', hint: 'More of the conversation at once' },
-            ] as { value: Density; label: string; hint: string }[]
-          ).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={density === option.value}
-              onClick={() => dispatch(setDensity(option.value))}
-              className={`flex-1 rounded-lg border p-3 text-left transition-colors ${
-                density === option.value
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border hover:bg-secondary/40'
-              }`}
-            >
-              <span className="block text-sm font-medium text-foreground">{option.label}</span>
-              {/* Selected tints the card with bg-primary/10, which
-                  lifts the background enough that muted-foreground
-                  lands at 4.45:1 — just under the 4.5:1 AA floor.
-                  The selected card gets the stronger colour. */}
-              <span
-                className={`mt-0.5 block text-xs ${
-                  density === option.value ? 'text-foreground/80' : 'text-muted-foreground'
-                }`}
-              >
-                {option.hint}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
       <LanguageSelect />
     </div>
   );

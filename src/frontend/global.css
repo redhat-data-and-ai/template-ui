@@ -551,19 +551,14 @@
 }
 
 
-/* Interface density.
+/* Spacing between turns in a transcript.
  *
- * One variable, set on the document and read by the transcript. The
- * alternative was a prop threaded down to every component that has
- * a margin, which is how a setting like this ends up applied in
- * three places and missed in a fourth.
+ * A variable rather than a literal, because it was a user-facing
+ * choice until the density control was removed and the spacing
+ * itself is still worth naming in one place.
  */
 :root {
   --turn-gap: 2rem;
-}
-
-:root[data-density='compact'] {
-  --turn-gap: 0.875rem;
 }
 
 .chat-turns > * + * {

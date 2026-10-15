@@ -10,11 +10,9 @@ type Theme = 'light' | 'dark';
  * transcripts on small screens, where the spacing that makes a short
  * exchange readable turns a long one into scrolling.
  */
-export type Density = 'comfortable' | 'compact';
 
 interface UserSettingsState {
   theme: Theme;
-  density: Density;
   debugMode: boolean;
   developerMode: boolean;
   alwaysAllowedTools: string[];
@@ -31,7 +29,6 @@ function loadSettings(): UserSettingsState {
       const parsed = JSON.parse(stored);
       return {
         theme: parsed.theme ?? 'dark',
-        density: parsed.density === 'compact' ? 'compact' : 'comfortable',
         debugMode: parsed.debugMode ?? false,
         developerMode: parsed.developerMode ?? false,
         alwaysAllowedTools: Array.isArray(parsed.alwaysAllowedTools) ? parsed.alwaysAllowedTools : [],
@@ -44,7 +41,6 @@ function loadSettings(): UserSettingsState {
   }
   return {
     theme: 'dark',
-    density: 'comfortable',
     debugMode: false,
     developerMode: false,
     alwaysAllowedTools: [],
@@ -67,13 +63,6 @@ const userSettingsSlice = createSlice({
   reducers: {
     setTheme(state, action: PayloadAction<Theme>) {
       state.theme = action.payload;
-      persistSettings(state);
-    },
-    setDensity(state, action: PayloadAction<Density>) {
-      state.density = action.payload;
-      // Every sibling reducer persists; omitting it here made the
-      // setting apply instantly and vanish on reload, which reads as
-      // the control not working at all.
       persistSettings(state);
     },
     toggleTheme(state) {
@@ -122,7 +111,6 @@ const userSettingsSlice = createSlice({
 
 export const {
   setTheme,
-  setDensity,
   toggleTheme,
   setDebugMode,
   setDeveloperMode,
@@ -134,8 +122,6 @@ export const {
   toggleAutoApproveAllTools,
 } = userSettingsSlice.actions;
 
-export const selectDensity = (state: { userSettings: UserSettingsState }) =>
-  state.userSettings.density;
 
 export const selectTheme = (state: { userSettings: UserSettingsState }) => state.userSettings.theme;
 export const selectDebugMode = (state: { userSettings: UserSettingsState }) => state.userSettings.debugMode;
