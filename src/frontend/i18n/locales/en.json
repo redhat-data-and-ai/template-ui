@@ -208,7 +208,7 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "Skills visible to everyone",
-        "detail": "Off gates the Skills tab behind a privileged role and developer mode."
+        "detail": "Off hides the Skills tab from all users."
       },
       "subagents_visible_to_all": {
         "title": "Subagents visible to everyone",

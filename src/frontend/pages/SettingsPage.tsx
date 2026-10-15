@@ -56,6 +56,7 @@ const LEGACY_TAB_IDS: Record<string, TabId> = {
   skills: 'components',
   subagents: 'components',
   prompt: 'components',
+  models: 'components',
   datasets: 'components',
   documents: 'components',
   analytics: 'developers',

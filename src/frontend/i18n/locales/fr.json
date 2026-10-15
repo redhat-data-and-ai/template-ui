@@ -208,7 +208,7 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "Compétences visibles par tous",
-        "detail": "Désactivé, l'onglet Compétences est réservé à un rôle privilégié en mode développeur."
+        "detail": "Désactivé, masque l'onglet Compétences à tous les utilisateurs."
       },
       "subagents_visible_to_all": {
         "title": "Sous-agents visibles par tous",

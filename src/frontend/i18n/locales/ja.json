@@ -208,7 +208,7 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "スキルを全員に表示",
-        "detail": "オフにすると、スキルタブは特権ロールと開発者モードでのみ表示されます。"
+        "detail": "オフにすると、スキルタブをすべてのユーザーから隠します。"
       },
       "subagents_visible_to_all": {
         "title": "サブエージェントを全員に表示",

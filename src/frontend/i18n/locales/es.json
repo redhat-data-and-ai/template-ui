@@ -208,7 +208,7 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "Habilidades visibles para todos",
-        "detail": "Desactivado, la pestaña Habilidades queda restringida a un rol privilegiado y al modo desarrollador."
+        "detail": "Desactivado, oculta la pestaña Habilidades a todos los usuarios."
       },
       "subagents_visible_to_all": {
         "title": "Subagentes visibles para todos",

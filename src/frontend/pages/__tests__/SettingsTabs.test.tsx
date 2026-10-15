@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
@@ -145,6 +145,7 @@ describe('Settings tabs — Datasets', () => {
         skills_visible_to_all: false,
         subagents_visible_to_all: false,
         prompt_visible_to_all: false,
+        models_visible_to_all: false,
       },
     });
     expect(await tabNames()).toContain('Components');
@@ -179,6 +180,7 @@ describe('Settings tabs — Components visibility', () => {
         skills_visible_to_all: false,
         subagents_visible_to_all: false,
         prompt_visible_to_all: false,
+        models_visible_to_all: false,
       },
     });
     expect(await tabNames()).toContain('Components');
@@ -201,5 +203,31 @@ describe('Components sections', () => {
     const labels = inner.map((t) => t.textContent?.trim() ?? '');
     expect(labels).toContain('Documents');
     expect(labels).not.toContain('Datasets');
+  });
+  it('gates Models exactly as it gates Skills', async () => {
+    // Same mechanism, so the assertion is that they move together:
+    // one flag each, hidden from everyone when off, shown to
+    // everyone when absent. A section that drifts to a different
+    // rule is one an operator cannot reason about from the switch.
+    const userEvent = (await import('@testing-library/user-event')).default;
+
+    const labelsWith = async (features: Record<string, boolean>) => {
+      cleanup();
+      renderTabs({ role: 'users', developerMode: false, features });
+      await userEvent.click(await screen.findByRole('tab', { name: 'Components' }));
+      return (await screen.findAllByRole('tab')).map((t) => t.textContent?.trim() ?? '');
+    };
+
+    const shown = await labelsWith({});
+    expect(shown).toContain('Skills');
+    expect(shown).toContain('Models');
+
+    const skillsOff = await labelsWith({ skills_visible_to_all: false });
+    expect(skillsOff).not.toContain('Skills');
+    expect(skillsOff).toContain('Models');
+
+    const modelsOff = await labelsWith({ models_visible_to_all: false });
+    expect(modelsOff).toContain('Skills');
+    expect(modelsOff).not.toContain('Models');
   });
 });
