@@ -1,3 +1,23 @@
+/* Layer order is declared before anything else, because a layer's
+ * priority is fixed by where it is first named. Everything after
+ * `patternfly` outranks it.
+ *
+ * This exists because of a cascade rule that is easy to miss:
+ * **unlayered CSS beats all layered CSS, whatever the specificity.**
+ * Tailwind v4 emits its utilities inside `@layer utilities`;
+ * PatternFly ships unlayered. So every PatternFly declaration
+ * silently won against every Tailwind utility touching the same
+ * property — `py-3` on a table cell computed to `0px` with the class
+ * right there in the DOM, which looks like the build is broken
+ * rather than like the cascade working as specified.
+ *
+ * Putting PatternFly in the lowest layer restores the normal rules:
+ * its components still style themselves, and a utility class on top
+ * of one does what it says. */
+@layer patternfly, theme, base, components, utilities;
+
+@import "@patternfly/patternfly/patternfly.css" layer(patternfly);
+@import "@patternfly/patternfly/patternfly-addons.css" layer(patternfly);
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -146,37 +166,50 @@
   }
 }
 
-/* Tailwind v4 reset strips native form element styles.
-   Restore sane defaults so utility classes layer on top. */
-textarea,
-input[type="text"],
-input[type="search"],
-input[type="email"],
-input[type="password"],
-input[type="url"] {
-  background-color: var(--card);
-  color: var(--foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md, 0.5rem);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-textarea::placeholder,
-input::placeholder {
-  color: var(--muted-foreground);
-  opacity: 0.7;
-}
-textarea:focus,
-input[type="text"]:focus,
-input[type="search"]:focus,
-input[type="email"]:focus,
-input[type="password"]:focus,
-input[type="url"]:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
-  outline: none;
+/* In `base`, not unlayered.
+ *
+ * These are element defaults restoring what the Tailwind v4 reset
+ * strips. Unlayered, they beat every layered utility — `border-0` on
+ * a textarea did nothing, so the composer drew its own bordered box
+ * inside the rounded container around it and read as two stacked
+ * chat boxes. Same cascade rule that put PatternFly in its own layer
+ * further up: unlayered CSS wins over all layered CSS regardless of
+ * specificity, so anything meant to be overridable has to be in a
+ * layer.
+ */
+@layer base {
+  /* Tailwind v4 reset strips native form element styles.
+     Restore sane defaults so utility classes layer on top. */
+  textarea,
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="password"],
+  input[type="url"] {
+    background-color: var(--card);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 0.5rem);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  textarea::placeholder,
+  input::placeholder {
+    color: var(--muted-foreground);
+    opacity: 0.7;
+  }
+  textarea:focus,
+  input[type="text"]:focus,
+  input[type="search"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus,
+  input[type="url"]:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+    outline: none;
+  }
 }
 
 /* ── Animation Delays ──────────────────────────────────── */
@@ -359,3 +392,250 @@ input[type="url"]:focus {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── PatternFly token bridge ─────────────────────────────
+ *
+ * The UI renders two design systems: PatternFly components in ~30
+ * files, hand-rolled utility classes in ~41 more. Both were "right"
+ * and they disagreed — a pill PatternFly button next to a flat
+ * rectangular div, five corner radii, two greys for the same surface.
+ *
+ * Rather than restyle PatternFly away, its global tokens are pointed
+ * at this app's theme variables. One assignment per token, and every
+ * PatternFly component in the tree inherits the app's colours and
+ * radii — including components nobody has touched yet, and components
+ * a fork adds later.
+ *
+ * This is the whole reason to standardise on PatternFly rather than
+ * replace it: the token layer is a supported seam. Overriding
+ * `.pf-v6-c-button` selectors instead would break on their next minor.
+ *
+ * Both themes inherit this; the variables on the right are already
+ * theme-switched by `:root` / `.dark` above, so there is nothing to
+ * duplicate.
+ */
+:root,
+.dark {
+  /* Surfaces.
+   *
+   * PatternFly's "primary" background is the *component surface* — it
+   * is what Card, Panel and Menu paint themselves with, and in their
+   * light theme it is white against a grey page. "secondary" is the
+   * page behind them. Mapping primary to our page colour, which is
+   * the intuitive reading of the name, made every Card exactly the
+   * colour of the page it sat on: the prompt cards on the home screen
+   * rendered as four lines of floating text with no edges at all. */
+  --pf-t--global--background--color--primary--default: var(--card);
+  --pf-t--global--background--color--secondary--default: var(--background);
+  --pf-t--global--background--color--floating--default: var(--popover);
+
+  /* Text */
+  --pf-t--global--text--color--regular: var(--foreground);
+  --pf-t--global--text--color--subtle: var(--muted-foreground);
+
+  /* Borders.
+   *
+   * All of the neutral variants, not just `default`. Card draws its
+   * edge from `subtle`, which this originally missed — so the cards
+   * kept PatternFly's light-theme hairline, a near-white grey that is
+   * invisible on a dark surface. The card had a border the whole
+   * time; it was just the wrong colour, which looks exactly like not
+   * having one. */
+  --pf-t--global--border--color--default: var(--border);
+  --pf-t--global--border--color--subtle: var(--border);
+  --pf-t--global--border--color--alt: var(--border);
+  --pf-t--global--border--color--50: var(--border);
+  --pf-t--global--border--color--100: var(--border);
+  --pf-t--global--border--color--200: var(--border);
+  --pf-t--global--border--color--300: var(--border);
+  --pf-t--global--border--color--400: var(--border);
+  --pf-t--global--border--color--hover: var(--primary);
+  --pf-t--global--border--color--clicked: var(--primary);
+  --pf-t--global--border--color--control--default: var(--input);
+
+  /* Brand. PatternFly's default blue and ours are not the same blue,
+   * which is why a primary button never matched a primary link. */
+  --pf-t--global--color--brand--default: var(--primary);
+  --pf-t--global--border--color--brand--default: var(--primary);
+  --pf-t--global--text--color--brand--default: var(--primary);
+
+  --pf-t--global--color--status--danger--default: var(--destructive);
+
+  /* Radii. Five values collapse to three, derived from one --radius.
+   * `action` is what Buttons use and `control` is what inputs use —
+   * setting both is what stops a button and the field beside it
+   * having different corners. */
+  --pf-t--global--border--radius--tiny: var(--radius-sm);
+  --pf-t--global--border--radius--small: var(--radius-sm);
+  --pf-t--global--border--radius--medium: var(--radius-md);
+  --pf-t--global--border--radius--large: var(--radius-lg);
+  --pf-t--global--border--radius--action--default: var(--radius-md);
+  --pf-t--global--border--radius--control--default: var(--radius-md);
+  --pf-t--global--border--radius--control--form-element: var(--radius-md);
+}
+
+/* Prompt tiles.
+ *
+ * PatternFly paints a Card's edge on a `::before` with the shorthand
+ *   border: <color> <style> <width>
+ * where `.pf-m-clickable` re-points the width at a variable defined
+ * only in the `current` state. Everywhere else it is empty, the
+ * shorthand is invalid, and the computed border comes back
+ * `0px none` — a clickable card has no edge while a plain one does.
+ *
+ * Rather than fight that from the outside with escalating specificity,
+ * the tiles get their contrast directly. The component is still
+ * PatternFly's; only the surface treatment is ours, which is what
+ * `className` passthrough is for.
+ */
+.prompt-tile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--secondary);
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.prompt-tile:hover {
+  border-color: var(--primary);
+  background-color: var(--muted);
+}
+
+
+/* The composer is one control, so it shows one focus indicator.
+ *
+ * The global `:focus-visible` outline is right for buttons and links
+ * and wrong here: the textarea is painted inside a rounded container
+ * that already carries the border, so an outline on the inner
+ * element draws a second rounded box and the composer reads as two
+ * stacked chat boxes.
+ *
+ * The indicator moves to the container rather than disappearing —
+ * removing it would be an accessibility regression, not a fix.
+ */
+.composer:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+.composer textarea:focus,
+.composer textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Pin the sidebar footers.
+ *
+ * The chat list is supposed to be the only scrolling region, with
+ * the agent status and the user row fixed at the bottom. Two
+ * PatternFly ancestors broke that: `__sidebar-main` keeps the flex
+ * default `min-height: auto`, so it refuses to shrink below its
+ * content, and `__sidebar-body` is `display: block`, so a `h-full`
+ * flex child inside it cannot size to the parent at all.
+ *
+ * The result was a sidebar 972px tall in a 900px viewport: the
+ * footers rendered 135px below the fold and you had to scroll the
+ * page to reach them, which is exactly what a pinned footer is for.
+ *
+ * Safe to override now that PatternFly sits in its own lower layer.
+ */
+.pf-v6-c-page__sidebar-main {
+  min-height: 0;
+}
+
+.pf-v6-c-page__sidebar-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+
+/* Interface density.
+ *
+ * One variable, set on the document and read by the transcript. The
+ * alternative was a prop threaded down to every component that has
+ * a margin, which is how a setting like this ends up applied in
+ * three places and missed in a fourth.
+ */
+:root {
+  --turn-gap: 2rem;
+}
+
+:root[data-density='compact'] {
+  --turn-gap: 0.875rem;
+}
+
+.chat-turns > * + * {
+  margin-top: var(--turn-gap);
+}
+
+/* Rendered markdown, everywhere it appears.
+ *
+ * Hand-written rather than `@tailwindcss/typography`, which is not a
+ * dependency of this project. Four components were marked up with
+ * `prose prose-sm dark:prose-invert` — including the chat transcript
+ * — and every one of those classes was **inert**: the built
+ * stylesheet contained no `.prose` rule at all, so assistant replies
+ * rendered with no heading hierarchy, no list bullets and no
+ * blockquote rule. It looked like a styling opinion; it was a
+ * missing plugin.
+ *
+ * Unlayered on purpose. PatternFly's resets live in a cascade layer,
+ * and unlayered rules beat every layered one regardless of
+ * specificity — the same mechanism that made `py-3` compute to 0px
+ * earlier in this project, used deliberately here instead of being
+ * tripped over.
+ */
+.md-prose > :first-child { margin-top: 0; }
+.md-prose > :last-child { margin-bottom: 0; }
+.md-prose h1,
+.md-prose h2,
+.md-prose h3 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.25em 0 0.5em;
+  color: var(--foreground);
+}
+.md-prose h1 { font-size: 1.25rem; }
+.md-prose h2 { font-size: 1.05rem; }
+.md-prose h3 { font-size: 0.95rem; }
+.md-prose p { margin: 0.6em 0; line-height: 1.6; }
+.md-prose ul,
+.md-prose ol { margin: 0.6em 0; padding-left: 1.4em; }
+.md-prose ul { list-style: disc; }
+.md-prose ol { list-style: decimal; }
+.md-prose li { margin: 0.25em 0; }
+.md-prose code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.85em;
+  background: color-mix(in srgb, var(--secondary) 60%, transparent);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+}
+.md-prose pre {
+  background: color-mix(in srgb, var(--secondary) 45%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+.md-prose pre code { background: none; padding: 0; font-size: 0.8rem; }
+.md-prose blockquote {
+  border-left: 3px solid var(--border);
+  margin: 0.75em 0;
+  padding-left: 0.85em;
+  color: var(--muted-foreground);
+}
+.md-prose table { border-collapse: collapse; margin: 0.75em 0; width: 100%; }
+.md-prose th,
+.md-prose td {
+  border: 1px solid var(--border);
+  padding: 0.35em 0.6em;
+  text-align: left;
+  font-size: 0.85em;
+}
+.md-prose th { font-weight: 600; background: color-mix(in srgb, var(--secondary) 35%, transparent); }
+.md-prose hr { border: 0; border-top: 1px solid var(--border); margin: 1.1em 0; }
+.md-prose a { color: var(--primary); text-decoration: underline; }
+.md-prose strong { font-weight: 600; color: var(--foreground); }

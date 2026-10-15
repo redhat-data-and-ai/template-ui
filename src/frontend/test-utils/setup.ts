@@ -97,3 +97,15 @@ Object.defineProperty(window, 'USER_DATA', {
   writable: true,
   configurable: true,
 });
+
+// Initialise i18next for every test.
+//
+// Without this, components render translation *keys* — `t('x.y')`
+// returns `x.y` when no resources are loaded — so any test matching on
+// user-visible text fails the moment its component is translated. That
+// is a real failure in the test harness, not in the component, and
+// without this line the i18n rollout would look like it breaks the UI.
+//
+// Imported after the localStorage shim above: the language detector
+// reads localStorage at init.
+import '../i18n';

@@ -9,6 +9,13 @@
 branding:
   title: "Local Dev Agent"
 
+content:
+  # Strip the landing page back to a bare composer: no starter buttons,
+  # no heading above them.
+  subtitle: "Local build. Nothing here is production data."
+  quick_prompts: []
+  quick_prompts_heading: ""
+
 features:
   auth_enabled: false       # Bypasses SSO; uses dummy user developer@redhat.com
   debug_mode_default: true  # Opens the debug panel by default (useful during development)

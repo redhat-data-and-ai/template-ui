@@ -8,6 +8,7 @@ import {
 } from '@patternfly/react-core';
 import { Bot, Check, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import type { ToolCallWithContent, InterruptInfo } from '../types/deep-agent';
+import { useTranslation } from 'react-i18next';
 import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
 
 interface SubAgentIndicatorProps {
@@ -36,17 +37,21 @@ function deriveStatus(toolCall: ToolCallWithContent): VisualStatus {
 }
 
 const STATUS_CONFIG: Record<VisualStatus, {
-  label: string;
+  labelKey: string;
   color: 'blue' | 'green' | 'red';
   icon: typeof Loader2;
   animate: boolean;
 }> = {
-  delegating: { label: 'Working', color: 'blue', icon: Loader2, animate: true },
-  complete:   { label: 'Complete', color: 'green', icon: CheckCircle, animate: false },
-  error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
+  // `labelKey`, not `label`: this map is module-level, so a literal
+  // here would be resolved once at import time, before i18n has a
+  // language.
+  delegating: { labelKey: 'subagents.working', color: 'blue', icon: Loader2, animate: true },
+  complete:   { labelKey: 'subagents.complete', color: 'green', icon: CheckCircle, animate: false },
+  error:      { labelKey: 'common.error', color: 'red', icon: AlertCircle, animate: false },
 };
 
 export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow }: SubAgentIndicatorProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const name = extractSubAgentName(toolCall);
@@ -108,7 +113,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     />
                   }
                 >
-                  {needsApproval ? 'Approval required' : config.label}
+                  {needsApproval ? t('subagents.approvalRequired') : t(config.labelKey)}
                 </Label>
               </div>
               <span aria-hidden="true">
@@ -129,7 +134,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
               {delegationText && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Delegation
+                    {t('subagents.delegation')}
                   </p>
                   <p className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg whitespace-pre-wrap">
                     {delegationText}
@@ -139,7 +144,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
               {hasContent(toolCall) && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Result
+                    {t('common.result')}
                   </p>
                   <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono max-h-60">
                     {typeof toolCall.content === 'string'
@@ -188,12 +193,12 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                         onInterruptResume?.([{ type: 'approve' }]);
                       }
                     }}
-                    aria-label={isInnerToolApproval ? `Approve tool: ${innerToolLabel}` : `Approve sub-agent action: ${name}`}
+                    aria-label={isInnerToolApproval ? t('subagents.approveTool', { name: innerToolLabel }) : t('subagents.approveAction', { name })}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                     style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
                   >
                     <Check className="w-3 h-3" aria-hidden="true" />
-                    Approve
+                    {t('chat.approve')}
                   </button>
                   <button
                     type="button"
@@ -207,11 +212,11 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                         onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
                       }
                     }}
-                    aria-label={isInnerToolApproval ? `Reject tool: ${innerToolLabel}` : `Reject sub-agent action: ${name}`}
+                    aria-label={isInnerToolApproval ? t('subagents.rejectTool', { name: innerToolLabel }) : t('subagents.rejectAction', { name })}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
                     style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
                   >
-                    Reject
+                    {t('chat.reject')}
                   </button>
                   <button
                     type="button"
@@ -226,11 +231,11 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                         onInterruptResume?.([{ type: 'approve' }]);
                       }
                     }}
-                    aria-label={isInnerToolApproval ? `Always allow tool: ${innerToolLabel}` : `Always allow sub-agent: ${name}`}
+                    aria-label={isInnerToolApproval ? t('subagents.alwaysAllowTool', { name: innerToolLabel }) : t('subagents.alwaysAllowAgent', { name })}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
                   >
                     <ShieldCheck className="w-3 h-3" aria-hidden="true" />
-                    Always allow
+                    {t('chat.alwaysAllow')}
                   </button>
                 </div>
               )}

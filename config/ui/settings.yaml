@@ -1,8 +1,8 @@
 branding:
-  title: "Deep Agent"
+  title: "Workpilot"
   version: "v1.0.0"
-  logo_url: "/dist/frontend/redhat-logo.svg"
-  favicon_url: "/dist/frontend/redhat-logo.svg"
+  logo_url: "https://cdn.prod.website-files.com/6447ad3a38d5f03bc4e0a3b2/69e9fcfe18543c02af4fde56_WorkPilot.jpg"
+  favicon_url: "https://cdn.prod.website-files.com/6447ad3a38d5f03bc4e0a3b2/69e9fcfe18543c02af4fde56_WorkPilot.jpg"
   colors:
     light:
       primary: "#0066cc"
@@ -14,6 +14,23 @@ branding:
       accent: "#f56e6e"
       background: "#0a1628"
       foreground: "#f0f4f8"
+
+# Landing copy. `{agent}` and `{user}` are substituted at render time;
+# `{user}` is empty when nobody is signed in, so greeting_anonymous is used.
+content:
+  greeting: "Hey {user}! 👋"
+  greeting_anonymous: "Hey there! 👋"
+  subtitle: "{agent} is ready to help. What would you like to explore today?"
+  quick_prompts_heading: "Let's try some quick prompts 🚀"
+  # Set to [] to drop the starter buttons entirely.
+  quick_prompts:
+    - "What can {agent} do for me?"
+    - "Help me analyze a dataset"
+    - "Write a query to find anomalies"
+    - "Summarize the key findings from this data"
+  input_placeholder: "Ask {agent} anything..."
+  welcome_heading: "Welcome to {agent}!"
+  welcome_subtitle: "How can I help you today?"
 
 features:
   debug_mode_default: false
@@ -47,8 +64,21 @@ platform:
 security:
   rate_limit:
     enabled: true
-    max: 100
+    # A chat UI is chattier than a REST client: one load of the
+    # analytics page is four calls, and streaming, thread-state
+    # polling and uploads stack on top. 100/min tripped during
+    # ordinary use, and a limit that fires on normal work trains
+    # people to ignore the error.
+    max: 600
     window: "1 minute"
+    # Reverse-proxy hops to trust when reading the client address.
+    # 0 trusts none. Without this, every request behind an OpenShift
+    # Route carries the ingress pod's address and the whole
+    # deployment shares one bucket — a per-user limit that is really
+    # a per-cluster one. Not `true`: trusting the entire
+    # X-Forwarded-For lets a caller prepend an address and mint a
+    # fresh bucket per request.
+    trust_proxy: 1
     exclude_paths:
       - "/api/health"
       - "/_health"

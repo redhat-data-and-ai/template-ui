@@ -16,3 +16,6 @@ images:
   - name: template-ui
     newName: localhost/template-ui
     newTag: local
+
+patches:
+  - path: generated.yaml

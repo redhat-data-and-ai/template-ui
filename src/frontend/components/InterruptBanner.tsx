@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   AlertActionCloseButton,
@@ -19,7 +20,35 @@ interface InterruptBannerProps {
   readonly onDismiss: () => void;
 }
 
+/** Severity the agent attached to this approval, if any. */
+type ApprovalRisk = 'high' | 'low' | 'normal';
+
+/**
+ * Read the risk marker the agent prefixes onto an interrupt description.
+ *
+ * Without it every approval renders identically, so deleting a user
+ * looks the same as reading a file and people learn to approve without
+ * reading. Falls back to `normal` for interrupts that carry no marker.
+ */
+function approvalRisk(value: string): ApprovalRisk {
+  if (value.includes('[HIGH RISK]')) return 'high';
+  if (value.includes('[low risk]')) return 'low';
+  return 'normal';
+}
+
+/** The marker is for the UI, not the reader. */
+function stripRiskMarker(value: string): string {
+  return value.replace('[HIGH RISK]', '').replace('[low risk]', '').trimStart();
+}
+
 function isToolApproval(value: string): boolean {
+  // A risk marker is only ever emitted for a tool-approval interrupt, so
+  // it is a definitive signal. The keyword match below is the fallback
+  // for interrupts that carry no marker — without the marker check, an
+  // approval whose wording happens to avoid these words renders as a
+  // generic prompt with no Approve/Reject buttons.
+  if (approvalRisk(value) !== 'normal') return true;
+
   const lower = value.toLowerCase();
   return lower.includes('approve') || lower.includes('confirm') || lower.includes('permission')
     || lower.includes('allow') || lower.includes('proceed');
@@ -55,6 +84,7 @@ function parseMcpAuthPayload(interrupt: InterruptInfo): InterruptInfo['payload']
 }
 
 export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBannerProps) {
+  const { t } = useTranslation();
   const [response, setResponse] = useState('');
   const [oauthReady, setOauthReady] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -107,11 +137,11 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
       const { origin } = openMcpOAuthPopup(authorize_url);
       setOauthOrigin(origin);
     } catch (err) {
-      setConnectError(err instanceof Error ? err.message : 'Connect failed');
+      setConnectError(err instanceof Error ? err.message : t('interrupt.connectFailed'));
     } finally {
       setConnecting(false);
     }
-  }, [mcpAuth]);
+  }, [mcpAuth, t]);
 
   if (mcpAuth) {
     return (
@@ -121,7 +151,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
             <Bot className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="prose prose-sm max-w-none text-foreground">
+            <div className="md-prose max-w-none text-foreground">
               <p>
                 To access external tools, you need to authenticate first.
                 Click the button below to securely connect your account.
@@ -139,7 +169,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
                   isLoading={connecting}
                   onClick={() => void handleConnect()}
                 >
-                  Authenticate
+                  {t('interrupt.authenticate')}
                 </Button>
               ) : (
                 <Button
@@ -148,7 +178,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
                   icon={<CheckCircle className="w-3.5 h-3.5" />}
                   onClick={() => onResume('continue')}
                 >
-                  Continue
+                  {t('common.continue')}
                 </Button>
               )}
             </div>
@@ -162,23 +192,28 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
   const approval = isToolApproval(valueStr);
 
   if (approval) {
+    const risk = approvalRisk(valueStr);
     return (
       <div className="mx-4 mb-3" role="alert">
         <Alert
-          variant="warning"
-          title="Action Required"
+          variant={risk === 'high' ? 'danger' : 'warning'}
+          title={risk === 'high' ? 'High-risk action — review carefully' : 'Action Required'}
           isInline
           actionClose={<AlertActionCloseButton onClose={onDismiss} />}
         >
-          <p className="text-sm mb-3 whitespace-pre-wrap">{valueStr}</p>
+          <p className="text-sm mb-3 whitespace-pre-wrap">
+            {stripRiskMarker(valueStr)}
+          </p>
           <div className="flex items-center gap-2">
+            {/* A destructive action should not have the affirmative
+                button styled as the obvious default. */}
             <Button
-              variant="primary"
+              variant={risk === 'high' ? 'secondary' : 'primary'}
               size="sm"
               icon={<CheckCircle className="w-3.5 h-3.5" />}
               onClick={() => onResume('approved')}
             >
-              Approve
+              {t('chat.approve')}
             </Button>
             <Button
               variant="danger"
@@ -186,7 +221,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
               icon={<XCircle className="w-3.5 h-3.5" />}
               onClick={() => onResume('rejected')}
             >
-              Reject
+              {t('chat.reject')}
             </Button>
           </div>
         </Alert>
@@ -197,7 +232,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
   return (
     <div className="mx-4 mb-3" role="alert">
       <Alert
-        title="Input Required"
+        title={t('interrupt.title')}
         isInline
         actionClose={<AlertActionCloseButton onClose={onDismiss} />}
       >
@@ -209,8 +244,8 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
             onKeyDown={(e) => {
               if (e.key === 'Enter' && response.trim()) onResume(response.trim());
             }}
-            placeholder="Type your response..."
-            aria-label="Interrupt response"
+            placeholder={t('interrupt.placeholder')}
+            aria-label={t('interrupt.response')}
             className="flex-1"
           />
           <Button

@@ -56,7 +56,7 @@ export function ArtifactViewer({ content, title }: ArtifactViewerProps) {
 
       <div className="max-h-80 overflow-auto p-3">
         {kind === 'markdown' ? (
-          <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+          <div className="md-prose max-w-none text-sm">
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]}>{content}</ReactMarkdown>
           </div>
         ) : kind === 'json' ? (

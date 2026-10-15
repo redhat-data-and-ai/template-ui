@@ -1,0 +1,343 @@
+{
+  "common": {
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "save": "Guardar",
+    "close": "Cerrar",
+    "loading": "Cargando…",
+    "none": "—",
+    "error": "Error",
+    "logIn": "Iniciar sesión",
+    "result": "Resultado",
+    "continue": "Continuar"
+  },
+  "sidebar": {
+    "newChat": "Nueva conversación",
+    "startNewChat": "Iniciar una conversación",
+    "chats": "Conversaciones",
+    "chatHistory": "Historial de conversaciones",
+    "noChatsYet": "Aún no hay conversaciones",
+    "noUnassignedChats": "No hay conversaciones sin asignar",
+    "projects": "Proyectos",
+    "noProjectsYet": "Aún no hay proyectos",
+    "createProject": "Crear proyecto",
+    "editProject": "Editar proyecto",
+    "newProject": "Nuevo proyecto",
+    "searchThreads": "Buscar conversaciones",
+    "searchChatThreads": "Buscar en las conversaciones",
+    "deleteChat": "Eliminar conversación",
+    "deleteProject": "Eliminar proyecto",
+    "unassignAll": "Desasignar todas las conversaciones",
+    "openSettings": "Abrir ajustes",
+    "logOut": "Cerrar sesión",
+    "agentHealthy": "Agente: operativo",
+    "agentOffline": "Agente: sin conexión",
+    "agentUnknown": "Agente: estado desconocido",
+    "noChats": "Sin chats",
+    "deleteChatConfirm": "Confirmación de eliminación del chat",
+    "deleteChatBody": "¿Seguro que quieres eliminar este chat? Esta acción no se puede deshacer.",
+    "deleteProjectConfirm": "Confirmación de eliminación del proyecto",
+    "keepConversationsHint": "Para conservar las conversaciones, usa Desasignar y eliminar: se moverán a Chats.",
+    "unassign": "Desasignar",
+    "unassignAndDelete": "Desasignar y eliminar",
+    "unassignAllConfirm": "Confirmación para desasignar todas las conversaciones",
+    "unassignAllBody": "¿Mover todas las conversaciones de este proyecto de vuelta a Chats?",
+    "unassignChat": "Desasignar chat: {{title}}",
+    "unassignAllFrom": "Desasignar todos los chats de {{name}}",
+    "deleteProjectBody": "¿Eliminar este proyecto y todas sus conversaciones? Esto no se puede deshacer.",
+    "unassignAllShort": "Desasignar todas"
+  },
+  "input": {
+    "typeMessage": "Escribe un mensaje",
+    "askAnything": "Pregúntame lo que quieras sobre los datos...",
+    "waiting": "Esperando respuesta...",
+    "sendMessage": "Enviar mensaje",
+    "cancelStreaming": "Cancelar la respuesta",
+    "attachFiles": "Adjuntar archivos",
+    "attachedFiles": "Archivos adjuntos",
+    "notReadable": "(no legible)",
+    "truncated": "(truncado)",
+    "basicParse": "(lectura básica)",
+    "uploadFailed": "Error al subir el archivo",
+    "dropToAttach": "Suelta archivos para adjuntarlos",
+    "attaching": "Adjuntando…"
+  },
+  "tags": {
+    "label": "Etiquetas",
+    "add": "Añadir una etiqueta",
+    "placeholder": "nombre de la etiqueta",
+    "none": "Aún no hay etiquetas",
+    "tooMany": "Una conversación puede tener como máximo {{max}} etiquetas",
+    "filteredBy": "Etiquetadas «{{tag}}»",
+    "clearFilter": "Quitar el filtro"
+  },
+  "share": {
+    "share": "Compartir",
+    "shareConversation": "Compartir la conversación",
+    "copyLink": "Copiar el enlace",
+    "copied": "Copiado",
+    "revoke": "Dejar de compartir",
+    "notShared": "Esta conversación no está compartida.",
+    "scope": "Quién puede abrirlo",
+    "scopeAuthenticated": "Cualquier persona con sesión iniciada que tenga el enlace",
+    "scopePublic": "Cualquier persona que tenga el enlace",
+    "expiry": "El enlace caduca tras",
+    "days": "{{count}} días",
+    "expiresOn": "Caduca el {{date}}",
+    "viewCount_one": "Abierto una vez",
+    "viewCount_other": "Abierto {{count}} veces",
+    "neverOpened": "Todavía sin abrir",
+    "snapshotNote": "Al compartir se guarda una copia del momento actual. Los mensajes posteriores no se incluyen, y los archivos adjuntos se nombran pero no se envían.",
+    "attachmentsNamed": "Archivos mencionados en esta conversación",
+    "linkRevoked": "Este enlace fue revocado",
+    "linkExpired": "Este enlace ha caducado",
+    "linkInvalid": "Este enlace no es válido",
+    "sharedOn": "Conversación compartida, copiada el {{date}}"
+  },
+  "analytics": {
+    "title": "Uso",
+    "subtitle": "Solo datos agregados. Aquí nunca se muestra el contenido de los mensajes.",
+    "window": "Periodo",
+    "runs": "Ejecuciones",
+    "calls": "Llamadas",
+    "conversations": "Conversaciones",
+    "people": "Personas",
+    "succeeded": "Correctas",
+    "tokensIn": "Tokens de entrada",
+    "tokensOut": "Tokens de salida",
+    "thumbsUp": "Me gusta",
+    "thumbsDown": "No me gusta",
+    "ratedGood": "Valoradas bien",
+    "inFlight": "En curso",
+    "interrupted": "Interrumpidas",
+    "runsOverTime": "Ejecuciones a lo largo del tiempo",
+    "byModel": "Por modelo",
+    "model": "Modelo",
+    "errors": "Errores",
+    "failures": "Fallos",
+    "failuresNote": "Agrupados por tipo. No se muestra el texto del error, porque suele contener los datos que lo provocaron.",
+    "kind": "Tipo",
+    "count": "Número",
+    "lastSeen": "Visto por última vez",
+    "noRuns": "No hay ejecuciones en este periodo.",
+    "noFailures": "No ha fallado nada en este periodo.",
+    "loadFailed": "No se pudieron cargar las estadísticas",
+    "stale": "Abandonadas",
+    "threads": "Hilos (todos)"
+  },
+  "errorClass": {
+    "model_timeout": "El modelo tardó demasiado",
+    "model_rate_limit": "El proveedor limitó las peticiones",
+    "model_refused": "El modelo se negó a responder",
+    "model_config": "Credenciales o nombre del modelo incorrectos",
+    "context_too_long": "La conversación superó la ventana de contexto",
+    "retries_exhausted": "Se agotaron los reintentos tras fallos repetidos",
+    "storage": "Base de datos o caché inaccesible",
+    "cancelled": "Cancelado por la persona usuaria",
+    "agent_defect": "Error en el agente",
+    "tool_failure": "Falló una herramienta",
+    "other": "Sin clasificar",
+    "unknown": "No se registró ningún mensaje de error"
+  },
+  "settings": {
+    "language": "Idioma",
+    "languageHint": "Se aplica solo a este navegador.",
+    "languageUnreviewed": "* Traducido por un modelo; todavía sin revisar por un hablante.",
+    "tabs": {
+      "account": "Cuenta",
+      "appearance": "Apariencia",
+      "personalisation": "Personalización",
+      "components": "Componentes",
+      "developers": "Desarrolladores"
+    }
+  },
+  "chat": {
+    "messages": "Mensajes de la conversación",
+    "aiGenerated": "Generado por IA",
+    "aiGeneratedContent": "Contenido generado por IA",
+    "thinking": "Pensando...",
+    "agentThinking": "El agente está pensando",
+    "waiting": "Esperando...",
+    "retry": "Reintentar",
+    "retryOperation": "Reintentar la operación",
+    "editMessage": "Editar el mensaje",
+    "saveEdit": "Guardar el mensaje editado",
+    "cancelEdit": "Cancelar la edición",
+    "export": "Exportar la conversación",
+    "exportMarkdown": "Exportar como Markdown",
+    "exportJson": "Exportar como JSON",
+    "arguments": "Argumentos",
+    "interactiveUi": "Interfaz interactiva",
+    "approve": "Aprobar",
+    "reject": "Rechazar",
+    "alwaysAllow": "Permitir siempre",
+    "notFound": "Chat no encontrado",
+    "notFoundBody": "No se encontró el chat solicitado.",
+    "goHome": "Ir al inicio",
+    "loading": "Cargando el chat",
+    "aiGeneratedMarker": "Generado por IA",
+    "loadingMessages": "Cargando los mensajes…",
+    "loadingChat": "Cargando el chat…",
+    "noResponse": "El agente no respondió. Puede ser un problema temporal.",
+    "agentError": "El agente encontró un error:"
+  },
+  "skills": {
+    "title": "Habilidades",
+    "empty": "Este agente no tiene habilidades configuradas.",
+    "notAttached": "no adjunta",
+    "usedBy": "Usada por",
+    "view": "Ver el código de {{name}}",
+    "files": "Archivos de la habilidad",
+    "readOnly": "solo lectura",
+    "truncated": "Archivo truncado para mostrarlo.",
+    "noFiles": "Esta habilidad no tiene archivos legibles.",
+    "source": "Código",
+    "rendered": "Vista"
+  },
+  "mcp": {
+    "readOnly": "solo lectura",
+    "destructive": "destructivo"
+  },
+  "admin": {
+    "title": "Opciones de despliegue",
+    "subtitle": "Interruptores que cambian lo que ve cada usuario. Se guardan para todo el despliegue, no solo este navegador.",
+    "forbidden": "Se requiere acceso de desarrollador.",
+    "flags": {
+      "skills_visible_to_all": {
+        "title": "Habilidades visibles para todos",
+        "detail": "Desactivado, la pestaña Habilidades queda restringida a un rol privilegiado y al modo desarrollador."
+      },
+      "subagents_visible_to_all": {
+        "title": "Subagentes visibles para todos",
+        "detail": "Desactivado, oculta la pestaña Subagentes a todos los usuarios."
+      },
+      "prompt_visible_to_all": {
+        "title": "Prompt visible para todos",
+        "detail": "Desactivado, oculta el prompt del orquestador a todos los usuarios."
+      },
+      "memory_enabled": {
+        "title": "Memoria",
+        "detail": "Permite que el agente recuerde datos de un usuario entre conversaciones."
+      },
+      "mcp_apps_enabled": {
+        "title": "Aplicaciones MCP",
+        "detail": "Permite que los servidores MCP muestren interfaces interactivas dentro de un chat."
+      }
+    }
+  },
+  "subagents": {
+    "title": "Subagentes",
+    "empty": "Este agente no tiene subagentes.",
+    "view": "Ver la definición de {{name}}",
+    "delegation": "Delegación",
+    "working": "Trabajando",
+    "complete": "Completado",
+    "userRejected": "El usuario rechazó esta acción.",
+    "approveTool": "Aprobar herramienta: {{name}}",
+    "approveAction": "Aprobar acción del subagente: {{name}}",
+    "rejectTool": "Rechazar herramienta: {{name}}",
+    "rejectAction": "Rechazar acción del subagente: {{name}}",
+    "alwaysAllowTool": "Permitir siempre la herramienta: {{name}}",
+    "alwaysAllowAgent": "Permitir siempre el subagente: {{name}}",
+    "approvalRequired": "Requiere aprobación"
+  },
+  "prompt": {
+    "description": "La identidad del orquestador, su tabla de enrutamiento y sus reglas: lo que hace antes de delegar.",
+    "view": "Ver el prompt",
+    "title": "Prompt"
+  },
+  "components": {
+    "title": "Componentes",
+    "mcpServers": "Servidores MCP",
+    "toolApprovals": "Aprobación de herramientas",
+    "skillsDescription": "Flujos de trabajo que sigue este agente, cada uno con sus propias reglas sobre lo que puede y no puede hacer.",
+    "subagentsDescription": "Especialistas a los que delega el orquestador, y lo que cada uno puede alcanzar.",
+    "documentsDescription": "Documentos que el agente puede leer al responder. No puede escribir en ellos: las cargas y ediciones se hacen aquí. Se montan en modo solo lectura en {{path}}, que es la ruta que ve el agente."
+  },
+  "developers": {
+    "title": "Desarrolladores",
+    "tabs": {
+      "usage": "Uso",
+      "flags": "Indicadores de función",
+      "evaluations": "Evaluaciones"
+    }
+  },
+  "documents": {
+    "title": "Documentos",
+    "upload": "Subir archivos",
+    "empty": "Aún no hay documentos.",
+    "of": "de",
+    "usage": "Uso del volumen",
+    "nearlyFull": "El almacenamiento está casi lleno. Elimina un documento antes de subir más.",
+    "view": "Ver {{name}}",
+    "remove": "Eliminar {{name}}",
+    "truncated": "Este archivo es demasiado grande para editarlo aquí; se muestra en solo lectura.",
+    "content": "Contenido de {{name}}"
+  },
+  "layout": {
+    "skipToContent": "Saltar al contenido principal",
+    "toggleSidebar": "Mostrar u ocultar la barra lateral",
+    "sidebarNavigation": "Navegación lateral"
+  },
+  "toast": {
+    "chatDeleted": "Chat eliminado",
+    "chatDeletedLocally": "El chat se borró localmente, pero falló la eliminación en el servidor",
+    "projectDeleted": "Proyecto eliminado",
+    "projectDeletedWithChats": "Proyecto eliminado. Las conversaciones se movieron a Chats.",
+    "conversationsMoved": "Conversaciones movidas a Chats",
+    "deleteProjectFailed": "No se pudo eliminar el proyecto",
+    "loadHistoryFailed": "No se pudo cargar el historial de chats",
+    "unassignFailed": "No se pudieron desasignar las conversaciones",
+    "sendFailed": "No se pudo enviar el mensaje",
+    "editFailed": "No se pudo enviar el mensaje editado",
+    "retryFailed": "No se pudo reintentar",
+    "resumeFailed": "No se pudo reanudar",
+    "allChatsDeleted": "Se eliminaron todos los chats",
+    "allChatsDeletedLocally": "Los chats se borraron localmente, pero falló la eliminación en el servidor"
+  },
+  "session": {
+    "title": "Sesión caducada",
+    "expired": "Sesión caducada",
+    "body": "Tu sesión ha caducado. Inicia sesión de nuevo para continuar.",
+    "workSaved": "Tu trabajo se ha guardado."
+  },
+  "errors": {
+    "title": "Algo salió mal",
+    "maxRetries": "Se alcanzó el número máximo de reintentos",
+    "startOver": "Empezar de nuevo",
+    "refreshPage": "Actualizar la página",
+    "technicalDetails": "Detalles técnicos",
+    "errorId": "ID del error",
+    "message": "Mensaje",
+    "retrying": "Reintentando",
+    "retryAttempt": "Reintentar (intento {{count}}/{{max}})",
+    "tryAgain": "Inténtalo de nuevo."
+  },
+  "interrupt": {
+    "title": "Se requiere una respuesta",
+    "response": "Respuesta a la interrupción",
+    "placeholder": "Escribe tu respuesta...",
+    "authenticate": "Autenticarse",
+    "connectFailed": "Error de conexión"
+  },
+  "projects": {
+    "loading": "Cargando el proyecto",
+    "loadingEllipsis": "Cargando el proyecto…",
+    "notFound": "Proyecto no encontrado",
+    "conversations": "Conversaciones del proyecto",
+    "noConversations": "Todavía no hay conversaciones. Empieza una arriba.",
+    "newChatInProject": "Nuevo chat en el proyecto"
+  },
+  "profile": {
+    "ssoAuthenticated": "Autenticado mediante SSO",
+    "developerMode": "Modo desarrollador",
+    "enableDeveloperMode": "Activar el modo desarrollador",
+    "developerModeHint": "Muestra la pestaña Desarrolladores con herramientas avanzadas y la evaluación del agente.",
+    "dangerZone": "Zona de riesgo",
+    "deleteAll": "Eliminar todo",
+    "deleteAllChats": "Eliminar todos los chats",
+    "deleteAllChatsConfirm": "Confirmación para eliminar todos los chats",
+    "deleteAllConversations": "Eliminar todas las conversaciones",
+    "deleteAllBody": "Esto eliminará permanentemente las {{count}} conversaciones. Esta acción no se puede deshacer."
+  }
+}

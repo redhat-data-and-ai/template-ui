@@ -2,6 +2,8 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { Provider } from 'react-redux';
+// ForkButton calls useNavigate, so the view needs a router in scope.
+import { MemoryRouter } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
 import { ChatMessagesView } from './ChatMessagesView';
@@ -68,11 +70,13 @@ describe('ChatMessagesView — errorMessage prop', () => {
   it('renders actual error text when errorMessage is provided', () => {
     const store = makeStore();
     render(
-      <Provider store={store}>
+      <MemoryRouter>
+        <Provider store={store}>
         <ChatMessagesView
           {...makeBaseProps({ errorMessage: 'Model configuration is invalid' })}
         />
-      </Provider>,
+        </Provider>
+      </MemoryRouter>,
     );
 
     // showNoResponse has a 1500ms delay before rendering
@@ -85,9 +89,11 @@ describe('ChatMessagesView — errorMessage prop', () => {
   it('shows generic fallback when errorMessage is not provided', () => {
     const store = makeStore();
     render(
-      <Provider store={store}>
+      <MemoryRouter>
+        <Provider store={store}>
         <ChatMessagesView {...makeBaseProps()} />
-      </Provider>,
+        </Provider>
+      </MemoryRouter>,
     );
 
     act(() => { vi.advanceTimersByTime(2000); });
@@ -100,9 +106,11 @@ describe('ChatMessagesView — errorMessage prop', () => {
   it('shows generic fallback when errorMessage is null', () => {
     const store = makeStore();
     render(
-      <Provider store={store}>
+      <MemoryRouter>
+        <Provider store={store}>
         <ChatMessagesView {...makeBaseProps({ errorMessage: null })} />
-      </Provider>,
+        </Provider>
+      </MemoryRouter>,
     );
 
     act(() => { vi.advanceTimersByTime(2000); });
@@ -122,14 +130,16 @@ describe('ChatMessagesView — errorMessage prop', () => {
     } as unknown as Message;
 
     render(
-      <Provider store={store}>
+      <MemoryRouter>
+        <Provider store={store}>
         <ChatMessagesView
           {...makeBaseProps({
             messages: [HUMAN_MESSAGE, AI_MESSAGE],
             errorMessage: 'Model configuration is invalid',
           })}
         />
-      </Provider>,
+        </Provider>
+      </MemoryRouter>,
     );
 
     // No delay needed — the standalone error block renders immediately
@@ -147,7 +157,8 @@ describe('ChatMessagesView — errorMessage prop', () => {
     } as unknown as Message;
 
     render(
-      <Provider store={store}>
+      <MemoryRouter>
+        <Provider store={store}>
         <ChatMessagesView
           {...makeBaseProps({
             messages: [HUMAN_MESSAGE, AI_MESSAGE],
@@ -155,7 +166,8 @@ describe('ChatMessagesView — errorMessage prop', () => {
             errorMessage: 'Some error',
           })}
         />
-      </Provider>,
+        </Provider>
+      </MemoryRouter>,
     );
 
     expect(screen.queryByText('The agent encountered an error:')).not.toBeInTheDocument();
@@ -164,11 +176,13 @@ describe('ChatMessagesView — errorMessage prop', () => {
   it('does not render error block while loading', () => {
     const store = makeStore();
     render(
-      <Provider store={store}>
+      <MemoryRouter>
+        <Provider store={store}>
         <ChatMessagesView
           {...makeBaseProps({ isLoading: true, errorMessage: 'Some error' })}
         />
-      </Provider>,
+        </Provider>
+      </MemoryRouter>,
     );
 
     act(() => { vi.advanceTimersByTime(2000); });
