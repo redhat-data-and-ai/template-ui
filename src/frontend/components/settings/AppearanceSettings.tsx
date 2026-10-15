@@ -88,7 +88,17 @@ export function AppearanceSettings() {
               }`}
             >
               <span className="block text-sm font-medium text-foreground">{option.label}</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">{option.hint}</span>
+              {/* Selected tints the card with bg-primary/10, which
+                  lifts the background enough that muted-foreground
+                  lands at 4.45:1 — just under the 4.5:1 AA floor.
+                  The selected card gets the stronger colour. */}
+              <span
+                className={`mt-0.5 block text-xs ${
+                  density === option.value ? 'text-foreground/80' : 'text-muted-foreground'
+                }`}
+              >
+                {option.hint}
+              </span>
             </button>
           ))}
         </div>
