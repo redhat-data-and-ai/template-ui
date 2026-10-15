@@ -30,9 +30,6 @@
     "unassignAll": "Ondoa mazungumzo yote kwenye mradi",
     "openSettings": "Fungua mipangilio",
     "logOut": "Ondoka",
-    "agentHealthy": "Wakala: anafanya kazi",
-    "agentOffline": "Wakala: hayupo mtandaoni",
-    "agentUnknown": "Wakala: hali haijulikani",
     "noChats": "Hakuna gumzo",
     "deleteChatConfirm": "Uthibitisho wa kufuta gumzo",
     "deleteChatBody": "Una uhakika unataka kufuta gumzo hili? Kitendo hiki hakiwezi kutenduliwa.",
@@ -45,7 +42,13 @@
     "unassignChat": "Ondoa gumzo: {{title}}",
     "unassignAllFrom": "Ondoa gumzo zote kutoka {{name}}",
     "deleteProjectBody": "Futa mradi huu na mazungumzo yake yote? Hili haliwezi kutenduliwa.",
-    "unassignAllShort": "Ondoa yote"
+    "unassignAllShort": "Ondoa yote",
+    "agent": {
+      "healthy": "Wakala: mzima",
+      "degraded": "Wakala: umepungua — unajibu, lakini tegemezi moja limesimama",
+      "unhealthy": "Wakala: nje ya mtandao",
+      "unknown": "Wakala: hali haijulikani"
+    }
   },
   "input": {
     "typeMessage": "Andika ujumbe",

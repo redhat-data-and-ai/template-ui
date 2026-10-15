@@ -30,9 +30,6 @@
     "unassignAll": "Tangohia ngā kōrerorero katoa i te kaupapa",
     "openSettings": "Huakina ngā tautuhinga",
     "logOut": "Takiputa",
-    "agentHealthy": "Pokapū: e pai ana",
-    "agentOffline": "Pokapū: kei waho o te ipurangi",
-    "agentUnknown": "Pokapū: tūnga kāore e mōhiotia",
     "noChats": "Kāore he kōrerorero",
     "deleteChatConfirm": "Whakaū i te muku kōrerorero",
     "deleteChatBody": "Kei te hiahia koe ki te muku i tēnei kōrerorero? Kāore e taea te whakahoki.",
@@ -45,7 +42,13 @@
     "unassignChat": "Tango kōrerorero: {{title}}",
     "unassignAllFrom": "Tangohia ngā kōrerorero katoa mai i {{name}}",
     "deleteProjectBody": "Mukua tēnei kaupapa me ōna kōrerorero katoa? Kāore e taea te whakahoki.",
-    "unassignAllShort": "Tangohia katoa"
+    "unassignAllShort": "Tangohia katoa",
+    "agent": {
+      "healthy": "Pokapū: ora",
+      "degraded": "Pokapū: kua heke — kei te whakautu, engari kua hinga tētahi whakawhirinakitanga",
+      "unhealthy": "Pokapū: kua weto",
+      "unknown": "Pokapū: kāore e mōhiotia ana"
+    }
   },
   "input": {
     "typeMessage": "Tuhia he karere",

@@ -30,9 +30,6 @@
     "unassignAll": "Desasignar todas las conversaciones",
     "openSettings": "Abrir ajustes",
     "logOut": "Cerrar sesión",
-    "agentHealthy": "Agente: operativo",
-    "agentOffline": "Agente: sin conexión",
-    "agentUnknown": "Agente: estado desconocido",
     "noChats": "Sin chats",
     "deleteChatConfirm": "Confirmación de eliminación del chat",
     "deleteChatBody": "¿Seguro que quieres eliminar este chat? Esta acción no se puede deshacer.",
@@ -45,7 +42,13 @@
     "unassignChat": "Desasignar chat: {{title}}",
     "unassignAllFrom": "Desasignar todos los chats de {{name}}",
     "deleteProjectBody": "¿Eliminar este proyecto y todas sus conversaciones? Esto no se puede deshacer.",
-    "unassignAllShort": "Desasignar todas"
+    "unassignAllShort": "Desasignar todas",
+    "agent": {
+      "healthy": "Agente: correcto",
+      "degraded": "Agente: degradado — responde, pero una dependencia está caída",
+      "unhealthy": "Agente: sin conexión",
+      "unknown": "Agente: estado desconocido"
+    }
   },
   "input": {
     "typeMessage": "Escribe un mensaje",

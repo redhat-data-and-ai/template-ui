@@ -505,30 +505,22 @@ function SidebarComponent({
 
       <div className="shrink-0 px-3 py-3 border-t border-sidebar-border">
         <Tooltip
-          content={
-            agentHealth.status === 'healthy'
-              ? t('sidebar.agentHealthy')
-              : agentHealth.status === 'unhealthy'
-                ? t('sidebar.agentOffline')
-                : t('sidebar.agentUnknown')
-          }
+          content={t(`sidebar.agent.${agentHealth.status}`)}
         >
           <div className="flex items-center gap-2 text-xs text-muted-foreground cursor-default">
             <span
               className={cn(
                 'h-2 w-2 rounded-full shrink-0',
                 agentHealth.status === 'healthy' && 'bg-green-500',
+                // Amber, not red: it is still answering.
+                agentHealth.status === 'degraded' && 'bg-amber-500',
                 agentHealth.status === 'unhealthy' && 'bg-red-500',
                 agentHealth.status === 'unknown' && 'bg-gray-400',
               )}
               aria-hidden
             />
             <span className="truncate">
-              {agentHealth.status === 'healthy'
-                ? t('sidebar.agentHealthy')
-                : agentHealth.status === 'unhealthy'
-                  ? t('sidebar.agentOffline')
-                  : t('sidebar.agentUnknown')}
+              {t(`sidebar.agent.${agentHealth.status}`)}
             </span>
           </div>
         </Tooltip>

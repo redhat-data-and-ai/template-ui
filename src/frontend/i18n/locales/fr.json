@@ -30,9 +30,6 @@
     "unassignAll": "Retirer toutes les conversations du projet",
     "openSettings": "Ouvrir les paramètres",
     "logOut": "Se déconnecter",
-    "agentHealthy": "Agent : opérationnel",
-    "agentOffline": "Agent : hors ligne",
-    "agentUnknown": "Agent : état inconnu",
     "noChats": "Aucune conversation",
     "deleteChatConfirm": "Confirmation de suppression de la conversation",
     "deleteChatBody": "Voulez-vous vraiment supprimer cette conversation ? Cette action est irréversible.",
@@ -45,7 +42,13 @@
     "unassignChat": "Retirer la conversation : {{title}}",
     "unassignAllFrom": "Retirer toutes les conversations de {{name}}",
     "deleteProjectBody": "Supprimer ce projet et toutes ses conversations ? Cette action est irréversible.",
-    "unassignAllShort": "Tout retirer"
+    "unassignAllShort": "Tout retirer",
+    "agent": {
+      "healthy": "Agent : opérationnel",
+      "degraded": "Agent : dégradé — répond, mais une dépendance est indisponible",
+      "unhealthy": "Agent : hors ligne",
+      "unknown": "Agent : état inconnu"
+    }
   },
   "input": {
     "typeMessage": "Écrivez un message",

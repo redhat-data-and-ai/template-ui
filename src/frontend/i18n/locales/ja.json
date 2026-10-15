@@ -30,9 +30,6 @@
     "unassignAll": "すべての会話の割り当てを解除",
     "openSettings": "設定を開く",
     "logOut": "ログアウト",
-    "agentHealthy": "エージェント: 正常",
-    "agentOffline": "エージェント: オフライン",
-    "agentUnknown": "エージェント: 状態不明",
     "noChats": "チャットがありません",
     "deleteChatConfirm": "チャット削除の確認",
     "deleteChatBody": "このチャットを削除しますか？この操作は取り消せません。",
@@ -45,7 +42,13 @@
     "unassignChat": "チャットの割り当てを解除: {{title}}",
     "unassignAllFrom": "{{name}} のすべてのチャットの割り当てを解除",
     "deleteProjectBody": "このプロジェクトとそのすべての会話を削除しますか？この操作は取り消せません。",
-    "unassignAllShort": "すべて解除"
+    "unassignAllShort": "すべて解除",
+    "agent": {
+      "healthy": "エージェント: 正常",
+      "degraded": "エージェント: 低下 — 応答していますが依存先が停止しています",
+      "unhealthy": "エージェント: オフライン",
+      "unknown": "エージェント: 状態不明"
+    }
   },
   "input": {
     "typeMessage": "メッセージを入力",
