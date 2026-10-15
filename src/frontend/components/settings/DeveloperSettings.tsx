@@ -44,18 +44,7 @@ function CollapsibleSection({
   );
 }
 
-function AgentTreeNode({
-  node,
-  subagents,
-  ancestors = [],
-}: {
-  node: AgentNode;
-  subagents: Record<string, AgentNode>;
-  ancestors?: string[];
-}) {
-  const childNames = (node.subagents ?? []).filter(
-    (name) => subagents[name] && !ancestors.includes(name),
-  );
+function AgentTreeNode({ node }: { node: AgentNode }) {
   const hasBadges = Boolean(node.tools?.length || node.skills?.length || node.mcps?.length);
 
   const [expanded, setExpanded] = useState(true);
@@ -121,14 +110,11 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
         Agent structure
       </div>
       <div className="space-y-3">
-        <AgentTreeNode
-          node={structure.orchestrator}
-          subagents={structure.subagents}
-        />
+        <AgentTreeNode node={structure.orchestrator} />
         {displayedSubagentNames.length > 0 ? (
           <div className="ml-10 space-y-3">
             {displayedSubagentNames.map((name) => (
-              <AgentTreeNode key={name} node={structure.subagents[name]} subagents={structure.subagents} />
+              <AgentTreeNode key={name} node={structure.subagents[name]} />
             ))}
           </div>
         ) : null}
