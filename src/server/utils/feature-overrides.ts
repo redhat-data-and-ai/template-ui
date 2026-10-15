@@ -25,6 +25,7 @@ export const OVERRIDABLE = [
   'skills_visible_to_all',
   'subagents_visible_to_all',
   'prompt_visible_to_all',
+  'models_visible_to_all',
   'memory_enabled',
   'mcp_apps_enabled',
 ] as const;

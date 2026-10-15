@@ -222,6 +222,10 @@
       "mcp_apps_enabled": {
         "title": "Ngā taupānga MCP",
         "detail": "Ka tukuna ngā tūmau MCP ki te whakaatu atanga tauwhitiwhiti i roto i tētahi kōrerorero."
+      },
+      "models_visible_to_all": {
+        "title": "Ka kitea ngā tauira e te katoa",
+        "detail": "Ka weto, ka huna te ripa Tauira mai i ngā kaiwhakamahi katoa."
       }
     }
   },
@@ -339,5 +343,15 @@
     "deleteAllChatsConfirm": "Whakaū i te muku i ngā kōrerorero katoa",
     "deleteAllConversations": "Mukua ngā kōrerorero katoa",
     "deleteAllBody": "Ka mukua mō ake tonu ngā kōrerorero {{count}} katoa. Kāore e taea te whakahoki."
+  },
+  "models": {
+    "title": "Ngā tauira",
+    "description": "Ko tēhea tauira ka whakautu, ā, ko tēhea ka whakamahia e ia pokapū-iti.",
+    "empty": "Kāore he tauira kua whakaritea.",
+    "answering": "Te whakautu",
+    "perSubagent": "Ia pokapū-iti",
+    "inherited": "tuku iho",
+    "routing": "Te whakatere",
+    "routingHint": "Ka tukuna ia hurihanga ki tētahi taumata i runga i tāna e tono ai."
   }
 }

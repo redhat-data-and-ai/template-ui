@@ -222,6 +222,10 @@
       "mcp_apps_enabled": {
         "title": "Applications MCP",
         "detail": "Autorise les serveurs MCP à afficher des interfaces interactives dans une conversation."
+      },
+      "models_visible_to_all": {
+        "title": "Modèles visibles par tous",
+        "detail": "Désactivé, masque l'onglet Modèles à tous les utilisateurs."
       }
     }
   },
@@ -339,5 +343,15 @@
     "deleteAllChatsConfirm": "Confirmation de suppression de toutes les conversations",
     "deleteAllConversations": "Supprimer toutes les conversations",
     "deleteAllBody": "Cela supprimera définitivement les {{count}} conversations. Cette action est irréversible."
+  },
+  "models": {
+    "title": "Modèles",
+    "description": "Quel modèle répond, et lequel utilise chaque sous-agent.",
+    "empty": "Aucun modèle configuré.",
+    "answering": "Répond",
+    "perSubagent": "Par sous-agent",
+    "inherited": "hérité",
+    "routing": "Routage",
+    "routingHint": "Chaque tour est envoyé à un niveau selon ce qu'il demande."
   }
 }

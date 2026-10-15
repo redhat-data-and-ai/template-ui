@@ -222,6 +222,10 @@
       "mcp_apps_enabled": {
         "title": "MCP Apps",
         "detail": "Allows MCP servers to render interactive UIs inside a chat."
+      },
+      "models_visible_to_all": {
+        "title": "Models visible to everyone",
+        "detail": "Off hides the Models tab from all users."
       }
     }
   },
@@ -339,5 +343,15 @@
     "deleteAllChatsConfirm": "Delete all chats confirmation",
     "deleteAllConversations": "Delete all conversations",
     "deleteAllBody": "This will permanently delete all {{count}} conversations. This action cannot be undone."
+  },
+  "models": {
+    "title": "Models",
+    "description": "Which model answers, and which model each subagent uses.",
+    "empty": "No models configured.",
+    "answering": "Answering",
+    "perSubagent": "Per subagent",
+    "inherited": "inherited",
+    "routing": "Routing",
+    "routingHint": "Turns are sent to a tier based on what they ask for."
   }
 }

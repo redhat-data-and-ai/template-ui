@@ -139,6 +139,7 @@ interface FeaturesConfig {
       read-only introspection surfaces. */
   subagents_visible_to_all: boolean;
   prompt_visible_to_all: boolean;
+  models_visible_to_all: boolean;
 }
 
 interface AgentConfig {
@@ -252,6 +253,7 @@ const DEFAULTS: UISettings = {
     skills_visible_to_all: true,
     subagents_visible_to_all: true,
     prompt_visible_to_all: true,
+    models_visible_to_all: true,
     memory_enabled: true,
   },
   agent: {

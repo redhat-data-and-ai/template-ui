@@ -222,6 +222,10 @@
       "mcp_apps_enabled": {
         "title": "Programu za MCP",
         "detail": "Huruhusu seva za MCP kuonyesha miingiliano shirikishi ndani ya gumzo."
+      },
+      "models_visible_to_all": {
+        "title": "Miundo inaonekana kwa kila mtu",
+        "detail": "Ukizima, kinaficha kichupo cha Miundo kwa watumiaji wote."
       }
     }
   },
@@ -339,5 +343,15 @@
     "deleteAllChatsConfirm": "Uthibitisho wa kufuta gumzo zote",
     "deleteAllConversations": "Futa mazungumzo yote",
     "deleteAllBody": "Hii itafuta kabisa mazungumzo yote {{count}}. Kitendo hiki hakiwezi kutenduliwa."
+  },
+  "models": {
+    "title": "Miundo",
+    "description": "Ni muundo upi unaojibu, na kila wakala mdogo anatumia upi.",
+    "empty": "Hakuna miundo iliyosanidiwa.",
+    "answering": "Inayojibu",
+    "perSubagent": "Kwa kila wakala mdogo",
+    "inherited": "imerithiwa",
+    "routing": "Uelekezaji",
+    "routingHint": "Kila zamu hupelekwa kwenye daraja kulingana na kinachoombwa."
   }
 }

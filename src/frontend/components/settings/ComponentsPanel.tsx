@@ -8,6 +8,7 @@ import { AlwaysAllowedTools } from './AlwaysAllowedTools';
 import { SkillList } from './SkillList';
 import { SubagentList } from './SubagentList';
 import { PromptView } from './PromptView';
+import { ModelList } from './ModelList';
 import { DocumentList } from './DocumentList';
 import { isPrivilegedUser } from '../../lib/role-utils';
 import { selectDeveloperMode } from '../../redux/slices/userSettings';
@@ -29,7 +30,7 @@ interface Section {
   key: string;
   label: string;
   /** Hidden by a deployment-wide flag. */
-  flag?: 'skills' | 'subagents' | 'prompt';
+  flag?: 'skills' | 'subagents' | 'prompt' | 'models';
   /** Never hidden. */
   alwaysVisible?: boolean;
   /** Hidden unless the reader is an operator. Not a flag: Documents
@@ -74,6 +75,19 @@ export function useVisibleComponentSections(): Section[] {
               </h3>
               <AlwaysAllowedTools />
             </section>
+          </div>
+        ),
+      },
+      {
+        key: 'models',
+        label: t('models.title'),
+        flag: 'models',
+        render: () => (
+          <div>
+            <p className="mb-3 text-sm text-muted-foreground">
+              {t('models.description')}
+            </p>
+            <ModelList />
           </div>
         ),
       },

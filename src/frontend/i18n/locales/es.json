@@ -222,6 +222,10 @@
       "mcp_apps_enabled": {
         "title": "Aplicaciones MCP",
         "detail": "Permite que los servidores MCP muestren interfaces interactivas dentro de un chat."
+      },
+      "models_visible_to_all": {
+        "title": "Modelos visibles para todos",
+        "detail": "Desactivado, oculta la pestaña Modelos a todos los usuarios."
       }
     }
   },
@@ -339,5 +343,15 @@
     "deleteAllChatsConfirm": "Confirmación para eliminar todos los chats",
     "deleteAllConversations": "Eliminar todas las conversaciones",
     "deleteAllBody": "Esto eliminará permanentemente las {{count}} conversaciones. Esta acción no se puede deshacer."
+  },
+  "models": {
+    "title": "Modelos",
+    "description": "Qué modelo responde y cuál usa cada subagente.",
+    "empty": "No hay modelos configurados.",
+    "answering": "Responde",
+    "perSubagent": "Por subagente",
+    "inherited": "heredado",
+    "routing": "Enrutamiento",
+    "routingHint": "Cada turno se envía a un nivel según lo que pide."
   }
 }

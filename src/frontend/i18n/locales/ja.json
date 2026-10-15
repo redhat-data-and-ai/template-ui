@@ -222,6 +222,10 @@
       "mcp_apps_enabled": {
         "title": "MCP アプリ",
         "detail": "MCP サーバーがチャット内に対話的な UI を表示できるようにします。"
+      },
+      "models_visible_to_all": {
+        "title": "モデルを全員に表示",
+        "detail": "オフにすると、モデルタブをすべてのユーザーから隠します。"
       }
     }
   },
@@ -339,5 +343,15 @@
     "deleteAllChatsConfirm": "すべてのチャット削除の確認",
     "deleteAllConversations": "すべての会話を削除",
     "deleteAllBody": "{{count}} 件の会話をすべて完全に削除します。この操作は取り消せません。"
+  },
+  "models": {
+    "title": "モデル",
+    "description": "どのモデルが応答し、各サブエージェントがどれを使うか。",
+    "empty": "モデルが設定されていません。",
+    "answering": "応答するモデル",
+    "perSubagent": "サブエージェント別",
+    "inherited": "継承",
+    "routing": "ルーティング",
+    "routingHint": "各ターンは内容に応じたティアに振り分けられます。"
   }
 }
