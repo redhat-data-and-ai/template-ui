@@ -1,14 +1,27 @@
+import {
+  OVERRIDABLE,
+  readOverrides,
+  writeOverrides,
+} from "../utils/feature-overrides.js";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
 import { getSettings } from "../utils/settings.js";
-import authCheckPlugin from "../plugins/auth-check.plugin.js";
 import { toClientUserData } from "../utils/session-identity.js";
 
-interface StreamRequest {
-  message: string;
-  thread_id: string;
-  session_id: string;
-  user_id: string;
+/**
+ * One error shape across both hosts.
+ *
+ * The agent is FastAPI, so every failure it reports is
+ * `{"detail": "..."}` — that is `HTTPException`, not a choice. This
+ * server grew up saying `{"error": "..."}` instead, in about twenty
+ * places. A client driving the operator endpoints hits both and has
+ * to guess which key holds the message.
+ *
+ * Both are sent, same string. `detail` is the one to read — it is the
+ * key that works against either host — and `error` stays so the
+ * existing callers here keep working until they move.
+ */
+function errorBody(message: string): { error: string; detail: string } {
+  return { error: message, detail: message };
 }
 
 async function apiRoutes(fastify: FastifyInstance) {
@@ -50,7 +63,54 @@ async function apiRoutes(fastify: FastifyInstance) {
   fastify.get("/config/features", async (_request, reply) => {
     const cfg = getSettings();
     reply.header("Cache-Control", "no-store");
-    return cfg.features;
+    // Config is the default; Redis holds what an operator changed.
+    // Merged on read so every consumer sees one answer rather than
+    // each deciding how to combine them.
+    return { ...cfg.features, ...(await readOverrides()) };
+  });
+
+  /**
+   * Runtime feature flags.
+   *
+   * Privileged role required, checked against the session the SSO
+   * login established. These decide what every user sees, so this is
+   * an operator capability — the same bar as the Usage and Documents
+   * surfaces.
+   */
+  fastify.get("/admin/features", async (request, reply) => {
+    if (!(await isPrivilegedCaller(request))) {
+      return reply.status(403).send(errorBody("Developer access required"));
+    }
+    const cfg = getSettings();
+    reply.header("Cache-Control", "no-store");
+    return {
+      features: { ...cfg.features, ...(await readOverrides()) },
+      overridable: OVERRIDABLE,
+    };
+  });
+
+  fastify.put("/admin/features", async (request, reply) => {
+    if (!(await isPrivilegedCaller(request))) {
+      return reply.status(403).send(errorBody("Developer access required"));
+    }
+    try {
+      const overrides = await writeOverrides(request.body);
+      const cfg = getSettings();
+      request.log.info({ overrides }, "feature overrides updated");
+      return { features: { ...cfg.features, ...overrides } };
+    } catch (error) {
+      return reply.status(503).send(
+        errorBody(
+          error instanceof Error ? error.message : "Could not save overrides",
+        ),
+      );
+    }
+  });
+
+  fastify.get("/config/content", async (_request, reply) => {
+    const cfg = getSettings();
+    reply.header("Cache-Control", "no-store");
+    return cfg.content;
   });
 
   fastify.get("/config/compliance", async (_request, reply) => {
@@ -112,21 +172,51 @@ async function apiRoutes(fastify: FastifyInstance) {
         userRole: null,
       };
     }
-    return reply.code(401).send({ error: "unauthenticated" });
+    return reply.code(401).send(errorBody("unauthenticated"));
   });
 
-  // Protected routes — auth required
-  await fastify.register(async (protectedRoutes) => {
-    await protectedRoutes.register(authCheckPlugin);
+}
 
-    protectedRoutes.post("/v1/stream", async (request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) => {
-      return handleStreamPost(protectedRoutes, request, reply);
+/**
+ * One definition of "privileged", not a second copy.
+ *
+ * `role-resolver` already owns the set. Re-declaring it here would
+ * drift the moment a role is added, and the two would disagree
+ * silently about who may change a deployment-wide flag.
+ */
+/**
+ * Is this caller an operator?
+ *
+ * Always asked of the agent, never decided here. The session role
+ * is not consulted: this server assigns `owners` to everyone when
+ * auth is off while the agent resolved the same user as `users`, so
+ * two authorities disagreed about one person. One authority, one
+ * answer, for the browser and for CI alike.
+ *
+ * The Authorization header is forwarded when present. With auth
+ * disabled there is none, and the agent says so itself rather than
+ * this server guessing on its behalf.
+ */
+async function isPrivilegedCaller(request: {
+  headers?: Record<string, unknown>;
+}): Promise<boolean> {
+  try {
+    const cfg = getSettings();
+    const host =
+      cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+    const auth = request.headers?.authorization;
+    const res = await fetch(`${host}/auth/whoami`, {
+      headers: typeof auth === "string" ? { Authorization: auth } : {},
+      signal: AbortSignal.timeout(10_000),
     });
-
-    protectedRoutes.get("/v1/history/:threadId", async (request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) => {
-      return handleHistoryGet(protectedRoutes, request, reply);
-    });
-  });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { is_developer?: boolean | null };
+    // `null` means the role lookup failed. Anything other than a
+    // clear yes is a no — an outage must not grant access.
+    return body.is_developer === true;
+  } catch {
+    return false;
+  }
 }
 
 export { apiRoutes };

@@ -283,3 +283,70 @@ describe('InterruptBanner — MCP auth branch', () => {
     expect(onResume).toHaveBeenCalledWith('continue');
   });
 });
+
+describe('InterruptBanner — approval risk', () => {
+  const baseProps = {
+    onResume: () => {},
+    onDismiss: () => {},
+  };
+
+  it('renders a high-risk approval as danger, not warning', () => {
+    render(
+      <InterruptBanner
+        {...baseProps}
+        interrupt={{
+          value: '[HIGH RISK] delete_user: Destructive and usually irreversible',
+          resumable: true,
+        }}
+      />
+    );
+
+    expect(screen.getByText(/High-risk action/i)).toBeInTheDocument();
+  });
+
+  it('hides the risk marker from the reader', () => {
+    render(
+      <InterruptBanner
+        {...baseProps}
+        interrupt={{
+          value: '[HIGH RISK] delete_user: Destructive and usually irreversible',
+          resumable: true,
+        }}
+      />
+    );
+
+    expect(screen.queryByText(/\[HIGH RISK\]/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Destructive and usually irreversible/)
+    ).toBeInTheDocument();
+  });
+
+  it('renders an ordinary approval as the standard prompt', () => {
+    render(
+      <InterruptBanner
+        {...baseProps}
+        interrupt={{
+          value: 'write_file: Modifies files in the workspace. Approve?',
+          resumable: true,
+        }}
+      />
+    );
+
+    expect(screen.getByText('Action Required')).toBeInTheDocument();
+  });
+
+  it('still shows both decisions for a high-risk action', () => {
+    render(
+      <InterruptBanner
+        {...baseProps}
+        interrupt={{
+          value: '[HIGH RISK] execute: Runs arbitrary commands. Approve?',
+          resumable: true,
+        }}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /approve/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reject/i })).toBeInTheDocument();
+  });
+});

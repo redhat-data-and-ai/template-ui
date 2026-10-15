@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { Readable, Transform } from 'node:stream';
 import { getSettings } from '../utils/settings.js';
 import authCheckPlugin from '../plugins/auth-check.plugin.js';
 import { resolveXUserIdFromSession } from '../utils/session-identity.js';
@@ -12,6 +13,41 @@ function getAgentHost(): string {
 /** Identity forwarded to the agent — same as prod: session username, else ``default``. */
 function resolveXUserId(request: { session?: { user?: { preferred_username?: string; sub?: string; email?: string }; token?: { access_token?: string; id_token?: string } } }): string {
   return resolveXUserIdFromSession(request.session);
+}
+
+/** Thrown when a streamed upload runs past the cap mid-flight. */
+class UploadTooLarge extends Error {
+  constructor(readonly limit: number) {
+    super(`Upload exceeds ${Math.floor(limit / 1024 / 1024)} MB`);
+    this.name = 'UploadTooLarge';
+  }
+}
+
+/**
+ * Re-impose a size cap on a stream Fastify is no longer bounding.
+ *
+ * A declared `content-length` is not a limit — a client can declare
+ * 1 KB and send a gigabyte — so the bytes are counted as they pass.
+ * The agent counts them again on its own side; this exists so a
+ * runaway upload dies at the proxy instead of travelling a second hop
+ * first.
+ */
+function countingStream(source: Readable, limit: number): Readable {
+  let seen = 0;
+  const counter = new Transform({
+    transform(chunk, _encoding, callback) {
+      seen += chunk.length;
+      if (seen > limit) {
+        callback(new UploadTooLarge(limit));
+        return;
+      }
+      callback(null, chunk);
+    },
+  });
+  // Without this, aborting the upload leaves the inbound socket
+  // paused and the connection hanging until it times out.
+  counter.on('error', () => source.destroy());
+  return source.pipe(counter);
 }
 
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
@@ -353,6 +389,11 @@ function buildForwardedQueryString(query: Record<string, unknown>): string {
 async function proxyRoutes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);
 
+  // Must exceed the agent's own per-file limit, or the proxy rejects
+  // a file the agent would have accepted — and does it with a less
+  // useful message. Agent default is 50 MB.
+  const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+
   fastify.removeContentTypeParser('application/json');
   fastify.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 1048576 }, (req, body, done) => {
     if (!body || (typeof body === 'string' && body.trim() === '')) {
@@ -360,6 +401,37 @@ async function proxyRoutes(fastify: FastifyInstance) {
     } else {
       try { done(null, JSON.parse(body as string)); } catch (err) { done(err as Error, undefined); }
     }
+  });
+
+  /**
+   * Forward multipart bodies as a **stream**, never as a buffer.
+   *
+   * Fastify refuses any content-type it has no parser for, so file
+   * uploads died at the proxy with 415 before reaching the agent —
+   * which looked exactly like the agent rejecting the file type.
+   *
+   * Not @fastify/multipart: parsing the parts here only to re-encode
+   * them would mean re-deriving the boundary and could silently alter
+   * bytes. The agent is the thing that validates uploads; the proxy's
+   * job is to carry them.
+   *
+   * And not `parseAs: 'buffer'`, which is what this did first. That
+   * holds the whole upload in memory for the life of the request, so
+   * concurrent uploads add up: a dozen simultaneous 50 MB files is
+   * 600 MB of heap and an OOMKill on a 1 Gi pod. The failure mode is
+   * the worst kind — fine in every test, fine in light use, and a
+   * restart loop exactly when the thing is busy.
+   *
+   * Streaming moves the bytes through with a bounded window, so proxy
+   * memory is a function of socket buffers rather than of file size.
+   */
+  fastify.addContentTypeParser('multipart/form-data', (_req, payload, done) => {
+    // `payload` is the raw request stream. Handing it straight to the
+    // route means Fastify's own bodyLimit no longer applies, so the
+    // cap is re-imposed below in `countingStream` — otherwise this
+    // would trade an OOM for an unbounded upload, which is not a
+    // trade.
+    done(null, payload);
   });
 
   /**
@@ -382,7 +454,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, resume: isResume, project_id } = request.body;
+      const {
+        message,
+        thread_id,
+        resume: isResume,
+        project_id,
+      } = request.body;
 
       if (project_id != null && typeof project_id !== 'string') {
         return reply.status(400).send({ error: 'project_id must be a string when provided' });
@@ -412,6 +489,13 @@ async function proxyRoutes(fastify: FastifyInstance) {
               threadId: thread_id,
               metadata: {
                 user_identity: xUserId,
+                // Without a graph association a thread rejects any
+                // state update — so attaching a file before the first
+                // message failed with "has no associated graph".
+                // A run sets this implicitly; creation has to as well,
+                // because attachments can precede the first run.
+                graph_id: 'agent',
+                assistant_id: 'agent',
                 ...(project_id ? { project_id } : {}),
               },
               ifExists: 'do_nothing',
@@ -453,8 +537,13 @@ async function proxyRoutes(fastify: FastifyInstance) {
         }
 
         runBody.config = {
-          metadata: { trace_id: traceId, user_id: xUserId },
-          configurable: { user_id: xUserId },
+          metadata: {
+            trace_id: traceId,
+            user_id: xUserId,
+          },
+          configurable: {
+            user_id: xUserId,
+          },
         };
 
         const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);
@@ -971,7 +1060,28 @@ async function proxyRoutes(fastify: FastifyInstance) {
         };
 
         if (request.method !== 'GET' && request.method !== 'HEAD' && request.body) {
-          fetchOptions.body = JSON.stringify(request.body);
+          if (request.body instanceof Readable) {
+            // Multipart, streamed. The original content-type carries
+            // the boundary the body is framed with, so it has to be
+            // forwarded verbatim — re-deriving it is how a proxy
+            // corrupts an upload it never looked at.
+            fetchOptions.body = countingStream(request.body, MAX_UPLOAD_BYTES) as any;
+            // Required by undici for a streaming request body.
+            (fetchOptions as any).duplex = 'half';
+            const original = request.headers['content-type'];
+            if (original) headers['Content-Type'] = String(original);
+            // Forwarded when the client declared one, so the agent can
+            // reject an oversized upload on the header instead of
+            // after reading it. Not trusted as a limit by either side.
+            const declared = request.headers['content-length'];
+            if (declared) headers['Content-Length'] = String(declared);
+          } else if (Buffer.isBuffer(request.body)) {
+            fetchOptions.body = request.body;
+            const original = request.headers['content-type'];
+            if (original) headers['Content-Type'] = String(original);
+          } else {
+            fetchOptions.body = JSON.stringify(request.body);
+          }
         }
 
         const agentResponse = await fetch(agentUrl, fetchOptions);
@@ -984,6 +1094,22 @@ async function proxyRoutes(fastify: FastifyInstance) {
           reply.header('Content-Type', contentType);
         }
 
+        // Binary responses must not go through `.text()`. Decoding
+        // an image as UTF-8 replaces every invalid byte with U+FFFD
+        // and re-encoding inflates it — a 1309-byte PNG arrived as
+        // 2262 bytes of mush, which the browser renders as nothing.
+        // Only text is safe to treat as text.
+        const isText =
+          !contentType ||
+          /^(text\/|application\/(json|xml|javascript|x-ndjson))/.test(contentType);
+
+        if (!isText) {
+          const bytes = Buffer.from(await agentResponse.arrayBuffer());
+          const cacheControl = agentResponse.headers.get('cache-control');
+          if (cacheControl) reply.header('Cache-Control', cacheControl);
+          return reply.send(bytes);
+        }
+
         const responseBody = await agentResponse.text();
 
         // Cache successful thread state responses
@@ -994,6 +1120,19 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         return reply.send(responseBody);
       } catch (error) {
+        // An upload killed mid-stream is the client's problem, not the
+        // agent's — 502 "failed to connect" would send someone to
+        // check a service that is perfectly healthy. undici wraps the
+        // stream error, so the cause has to be unwrapped.
+        const tooLarge =
+          error instanceof UploadTooLarge ||
+          (error as { cause?: unknown })?.cause instanceof UploadTooLarge;
+        if (tooLarge) {
+          fastify.log.warn({ traceId }, 'Upload exceeded the proxy limit');
+          return reply.status(413).send({
+            error: `Upload is larger than ${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)} MB`,
+          });
+        }
         fastify.log.error({ traceId, err: error }, 'Proxy error');
         return reply.status(502).send({ error: 'Failed to connect to agent service' });
       }

@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { useAppSelector } from './redux/hooks';
+import { selectDensity } from './redux/slices/userSettings';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AnnouncementBanner } from './components/AnnouncementBanner';
@@ -7,6 +9,7 @@ import { HomePage } from './pages/HomePage';
 import { ChatRoutePage } from './pages/ChatPage';
 import { ConsentPage } from './pages/ConsentPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AdminPage } from './pages/AdminPage';
 import { ProjectChatPage } from './pages/ProjectChatPage';
 import { EvalDatasetPage } from './pages/EvalDatasetPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -25,6 +28,13 @@ export default function App() {
   useThemeSync();
 
   // Load config at app init
+  // Density is a data attribute rather than a prop threaded through
+  // the tree: the spacing values then live in CSS next to the rest
+  // of the theme, and no component needs to know the setting exists.
+  const density = useAppSelector(selectDensity);
+  useEffect(() => {
+    document.documentElement.dataset.density = density;
+  }, [density]);
   useEffect(() => {
     // Seed branding/features from server-injected HTML data
     const serverBranding = window.APP_DATA?.branding;
@@ -111,6 +121,18 @@ export default function App() {
               <Route path="/chat/:threadId" element={<ChatRoutePage />} />
               <Route path="/project/:projectId" element={<ProjectChatPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              {/* Deployment-wide flags. Not under /settings because
+                  Settings is per-user preference and these change
+                  what everybody sees. */}
+              <Route path="/admin" element={<AdminPage />} />
+              {/* Usage lives as a Settings tab now. A redirect
+                  rather than a removal: this URL is in people's
+                  history and in the sidebar of any tab they left
+                  open. */}
+              <Route
+                path="/analytics"
+                element={<Navigate to="/settings?tab=usage" replace />}
+              />
               <Route
                 path="/eval/dataset"
                 element={isPrivilegedUser() ? <EvalDatasetPage /> : <Navigate to="/" replace />}

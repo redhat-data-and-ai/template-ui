@@ -62,7 +62,10 @@ jobs:
     timeout-minutes: 15
     needs: build
     container:
-      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      # Tracks @playwright/test in package.json exactly: the image
+      # ships the browser build that version expects, and a mismatch
+      # fails every test in 3ms with "Executable doesn't exist".
+      image: mcr.microsoft.com/playwright:v1.64.0-noble
     env:
       CI: "true"
     steps:

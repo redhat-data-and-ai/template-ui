@@ -28,6 +28,20 @@ interface RateLimitConfig {
   max: number;
   window: string;
   exclude_paths: string[];
+  /**
+   * Number of reverse proxies in front of this server, or false to
+   * trust none.
+   *
+   * Without it every request's source address is the ingress pod's,
+   * so the whole deployment shares one bucket and the limit stops
+   * being per-user. With it, `request.ip` is read from the last
+   * `trust_proxy` hops of X-Forwarded-For.
+   *
+   * A number, not `true`: trusting the whole header lets a client
+   * prepend any address it likes and get a fresh bucket per request.
+   * One hop is right for an OpenShift Route or a single ingress.
+   */
+  trust_proxy: number | false;
 }
 
 interface SessionConfig {
@@ -108,6 +122,23 @@ interface FeaturesConfig {
   auth_enabled: boolean;
   mcp_dcr_enabled: boolean;
   mcp_apps_enabled: boolean;
+  /**
+   * Whether the Skills tab is visible to everyone.
+   *
+   * Config rather than a Developer-panel toggle: a toggle there is
+   * per-browser localStorage, so it would change what one operator
+   * sees and nobody else — which is the opposite of deciding what
+   * *everyone* gets. A deployment-wide question needs a
+   * deployment-wide answer.
+   *
+   * When false, Skills is gated like Usage and Documents: privileged
+   * role plus developer mode.
+   */
+  skills_visible_to_all: boolean;
+  /** Same contract as `skills_visible_to_all`, for the other two
+      read-only introspection surfaces. */
+  subagents_visible_to_all: boolean;
+  prompt_visible_to_all: boolean;
 }
 
 interface AgentConfig {
@@ -124,8 +155,35 @@ interface AuthConfig {
   sso_callback_url: string;
 }
 
+/** Landing-page copy and starter prompts.
+ *
+ * Every string supports two tokens, substituted client-side:
+ * `{agent}` (the agent's display name) and `{user}` (the signed-in user's
+ * first name, empty when anonymous). Changing the product's voice should
+ * not mean editing React.
+ */
+interface ContentConfig {
+  /** Shown when a user has a name; `{user}` resolves to it. */
+  greeting: string;
+  /** Shown when no name is available. */
+  greeting_anonymous: string;
+  /** Sub-heading under the greeting. */
+  subtitle: string;
+  /** Heading above the starter buttons. Empty string hides it. */
+  quick_prompts_heading: string;
+  /** Starter buttons. Empty array hides the whole block. */
+  quick_prompts: string[];
+  /** Placeholder in the composer. */
+  input_placeholder: string;
+  /** Large heading on the empty-thread welcome screen. */
+  welcome_heading: string;
+  /** Line under that heading. */
+  welcome_subtitle: string;
+}
+
 export interface UISettings {
   branding: BrandingConfig;
+  content: ContentConfig;
   features: FeaturesConfig;
   agent: AgentConfig;
   auth: AuthConfig;
@@ -143,7 +201,14 @@ export interface UISettings {
 const DEFAULTS: UISettings = {
   branding: {
     logo_url: "",
-    title: "Deep Agent",
+    // Generic on purpose: the product name is config, not a
+    // constant. It comes from `branding.title` in
+    // config/ui/settings.yaml, and failing that from the agent's own
+    // `/info` name. A real name baked in here is one a fork has to
+    // hunt for in source. It cannot be empty — `validateConfig`
+    // rejects a blank title, so a missing config file would throw
+    // rather than fall back.
+    title: "Agent",
     version: "v1.0.0",
     favicon_url: "",
     colors: {
@@ -161,11 +226,32 @@ const DEFAULTS: UISettings = {
       },
     },
   },
+  content: {
+    greeting: "Hey {user}! 👋",
+    greeting_anonymous: "Hey there! 👋",
+    subtitle: "{agent} is ready to help. What would you like to explore today?",
+    quick_prompts_heading: "Let's try some quick prompts 🚀",
+    quick_prompts: [
+      "What can {agent} do for me?",
+      "Help me analyze a dataset",
+      "Write a query to find anomalies",
+      "Summarize the key findings from this data",
+    ],
+    input_placeholder: "Ask {agent} anything...",
+    welcome_heading: "Welcome to {agent}!",
+    welcome_subtitle: "How can I help you today?",
+  },
   features: {
     debug_mode_default: false,
     auth_enabled: true,
     mcp_dcr_enabled: true,
     mcp_apps_enabled: true,
+    // Visible by default: a capability list is the most useful thing
+    // a new user can read, and hiding it by default would make the
+    // agent's abilities discoverable only by asking it.
+    skills_visible_to_all: true,
+    subagents_visible_to_all: true,
+    prompt_visible_to_all: true,
     memory_enabled: true,
   },
   agent: {
@@ -201,9 +287,14 @@ const DEFAULTS: UISettings = {
     },
     rate_limit: {
       enabled: true,
-      max: 100,
+      // A chat UI is chattier than a REST client: a single page load
+      // of /analytics is four calls, and streaming, thread-state
+      // polling and uploads stack on top. 100/min tripped during
+      // ordinary use, which trains people to ignore the error.
+      max: 600,
       window: "1 minute",
       exclude_paths: ["/api/health", "/_health", "/api/proxy/agent/evals/status", "/api/proxy/agent/evals/results", "/api/proxy/agent/evals/history", "/api/proxy/agent/evals/trends"],
+      trust_proxy: 1,
     },
     session: {
       secure_cookie: false, // false for dev; set to true in production
@@ -506,6 +597,13 @@ function applyEnvOverrides(config: UISettings): void {
       config.security.rate_limit.max = max;
     }
   }
+  if (process.env.SECURITY_RATE_LIMIT_TRUST_PROXY) {
+    const hops = Number.parseInt(process.env.SECURITY_RATE_LIMIT_TRUST_PROXY, 10);
+    if (Number.isFinite(hops) && hops >= 0) {
+      config.security.rate_limit.trust_proxy = hops === 0 ? false : hops;
+    }
+  }
+
   if (process.env.SECURITY_RATE_LIMIT_WINDOW) {
     config.security.rate_limit.window = process.env.SECURITY_RATE_LIMIT_WINDOW;
   }
@@ -524,6 +622,45 @@ function applyEnvOverrides(config: UISettings): void {
   }
 }
 
+/**
+ * Refuse a `UI_CONFIG_PATH` that is not plausibly a config file.
+ *
+ * The only check used to be `existsSync`, which accepts *any* file
+ * that happens to be there. `config/ui/../../.env` resolves to the
+ * repo's real `.env`: it exists, so it was read as settings, failed to
+ * parse as the expected shape, and silently fell back to defaults. No
+ * secret leaked — nothing echoes the parsed file back — but "it
+ * exists" is not the property worth checking, and a config loader that
+ * reads whatever you point it at is one bug away from being the
+ * property that matters.
+ *
+ * Two rules, both portable:
+ *
+ * - **No upward traversal.** A deployment points at a mounted file by
+ *   its own path; it never needs to climb out of a directory to find
+ *   it. Checked on the raw string, because a `..` that resolves to
+ *   somewhere legitimate is still a sign the value was built by
+ *   joining untrusted pieces.
+ * - **Must be YAML.** Every real value in this repo — Containerfile,
+ *   compose.yml, env.template, the Kind overlay — ends in
+ *   `settings.yaml`. `/etc/shadow` and `.env` do not, and on a Linux
+ *   container `/etc/shadow` exists, so the existence check alone would
+ *   wave it through.
+ */
+function assertUsableConfigPath(raw: string): void {
+  const segments = raw.split(/[\\/]+/);
+  if (segments.includes("..")) {
+    throw new Error(
+      `Invalid UI_CONFIG_PATH: ${raw}. The path must not traverse upward.`,
+    );
+  }
+  if (!/\.ya?ml$/i.test(raw)) {
+    throw new Error(
+      `Invalid UI_CONFIG_PATH: ${raw}. Expected a .yaml or .yml file.`,
+    );
+  }
+}
+
 let _settings: UISettings | undefined;
 let _agentName: string | null = null;
 
@@ -535,10 +672,13 @@ export function getSettings(): UISettings {
     explicitPath ||
     resolve(__dirname, "../../../config/ui/settings.yaml");
 
-  if (explicitPath && !existsSync(configPath)) {
-    throw new Error(
-      `Config file not found: ${configPath}. Mount config/ui at /opt/app-root/src/config`,
-    );
+  if (explicitPath) {
+    assertUsableConfigPath(explicitPath);
+    if (!existsSync(configPath)) {
+      throw new Error(
+        `Config file not found: ${configPath}. Mount config/ui at /opt/app-root/src/config`,
+      );
+    }
   }
 
   const fromFile = loadYaml(configPath);

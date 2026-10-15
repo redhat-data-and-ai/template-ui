@@ -1,0 +1,343 @@
+{
+  "common": {
+    "cancel": "Ghairi",
+    "delete": "Futa",
+    "save": "Hifadhi",
+    "close": "Funga",
+    "loading": "Inapakia…",
+    "none": "—",
+    "error": "Hitilafu",
+    "logIn": "Ingia",
+    "result": "Matokeo",
+    "continue": "Endelea"
+  },
+  "sidebar": {
+    "newChat": "Mazungumzo mapya",
+    "startNewChat": "Anzisha mazungumzo mapya",
+    "chats": "Mazungumzo",
+    "chatHistory": "Historia ya mazungumzo",
+    "noChatsYet": "Bado hakuna mazungumzo",
+    "noUnassignedChats": "Hakuna mazungumzo yasiyo na mradi",
+    "projects": "Miradi",
+    "noProjectsYet": "Bado hakuna miradi",
+    "createProject": "Unda mradi",
+    "editProject": "Hariri mradi",
+    "newProject": "Mradi mpya",
+    "searchThreads": "Tafuta mazungumzo",
+    "searchChatThreads": "Tafuta ndani ya mazungumzo",
+    "deleteChat": "Futa mazungumzo",
+    "deleteProject": "Futa mradi",
+    "unassignAll": "Ondoa mazungumzo yote kwenye mradi",
+    "openSettings": "Fungua mipangilio",
+    "logOut": "Ondoka",
+    "agentHealthy": "Wakala: anafanya kazi",
+    "agentOffline": "Wakala: hayupo mtandaoni",
+    "agentUnknown": "Wakala: hali haijulikani",
+    "noChats": "Hakuna gumzo",
+    "deleteChatConfirm": "Uthibitisho wa kufuta gumzo",
+    "deleteChatBody": "Una uhakika unataka kufuta gumzo hili? Kitendo hiki hakiwezi kutenduliwa.",
+    "deleteProjectConfirm": "Uthibitisho wa kufuta mradi",
+    "keepConversationsHint": "Ili kuhifadhi mazungumzo, tumia Ondoa na ufute — yatahamishiwa kwenye Gumzo.",
+    "unassign": "Ondoa",
+    "unassignAndDelete": "Ondoa na ufute",
+    "unassignAllConfirm": "Uthibitisho wa kuondoa mazungumzo yote",
+    "unassignAllBody": "Hamisha mazungumzo yote ya mradi huu kurudi kwenye Gumzo?",
+    "unassignChat": "Ondoa gumzo: {{title}}",
+    "unassignAllFrom": "Ondoa gumzo zote kutoka {{name}}",
+    "deleteProjectBody": "Futa mradi huu na mazungumzo yake yote? Hili haliwezi kutenduliwa.",
+    "unassignAllShort": "Ondoa yote"
+  },
+  "input": {
+    "typeMessage": "Andika ujumbe",
+    "askAnything": "Niulize chochote kuhusu data...",
+    "waiting": "Inasubiri jibu...",
+    "sendMessage": "Tuma ujumbe",
+    "cancelStreaming": "Sitisha jibu",
+    "attachFiles": "Ambatisha faili",
+    "attachedFiles": "Faili zilizoambatishwa",
+    "notReadable": "(haisomeki)",
+    "truncated": "(imepunguzwa)",
+    "basicParse": "(usomaji wa kawaida)",
+    "uploadFailed": "Kupakia kumeshindikana",
+    "dropToAttach": "Dondosha faili ili kuziambatisha",
+    "attaching": "Inaambatisha…"
+  },
+  "tags": {
+    "label": "Lebo",
+    "add": "Ongeza lebo",
+    "placeholder": "jina la lebo",
+    "none": "Bado hakuna lebo",
+    "tooMany": "Mazungumzo yanaweza kuwa na lebo {{max}} pekee",
+    "filteredBy": "Zenye lebo “{{tag}}”",
+    "clearFilter": "Ondoa kichujio"
+  },
+  "share": {
+    "share": "Shiriki",
+    "shareConversation": "Shiriki mazungumzo",
+    "copyLink": "Nakili kiungo",
+    "copied": "Imenakiliwa",
+    "revoke": "Acha kushiriki",
+    "notShared": "Mazungumzo haya hayajashirikiwa.",
+    "scope": "Nani anaweza kuyafungua",
+    "scopeAuthenticated": "Mtu yeyote aliyeingia mwenye kiungo",
+    "scopePublic": "Mtu yeyote mwenye kiungo",
+    "expiry": "Kiungo kitaisha baada ya",
+    "days": "siku {{count}}",
+    "expiresOn": "Kinaisha {{date}}",
+    "viewCount_one": "Kimefunguliwa mara moja",
+    "viewCount_other": "Kimefunguliwa mara {{count}}",
+    "neverOpened": "Bado hakijafunguliwa",
+    "snapshotNote": "Kushiriki ni picha ya sasa hivi. Ujumbe wa baadaye haujumuishwi, na faili zilizoambatishwa zinatajwa tu bila kutumwa.",
+    "attachmentsNamed": "Faili zilizotajwa katika mazungumzo haya",
+    "linkRevoked": "Kiungo hiki kimebatilishwa",
+    "linkExpired": "Kiungo hiki kimeisha muda",
+    "linkInvalid": "Kiungo hiki si sahihi",
+    "sharedOn": "Mazungumzo yaliyoshirikiwa, yaliyonaswa {{date}}"
+  },
+  "analytics": {
+    "title": "Matumizi",
+    "subtitle": "Takwimu za jumla pekee. Maudhui ya ujumbe hayaonyeshwi hapa.",
+    "window": "Kipindi",
+    "runs": "Utekelezaji",
+    "calls": "Miito",
+    "conversations": "Mazungumzo",
+    "people": "Watu",
+    "succeeded": "Zilizofanikiwa",
+    "tokensIn": "Tokeni zilizoingia",
+    "tokensOut": "Tokeni zilizotoka",
+    "thumbsUp": "Maoni chanya",
+    "thumbsDown": "Maoni hasi",
+    "ratedGood": "Zilizopewa alama nzuri",
+    "inFlight": "Zinaendelea",
+    "interrupted": "Zilizokatizwa",
+    "runsOverTime": "Utekelezaji kwa muda",
+    "byModel": "Kwa modeli",
+    "model": "Modeli",
+    "errors": "Hitilafu",
+    "failures": "Kushindwa",
+    "failuresNote": "Zimepangwa kwa aina. Maandishi ya hitilafu hayaonyeshwi kwa sababu mara nyingi huwa na data iliyosababisha.",
+    "kind": "Aina",
+    "count": "Idadi",
+    "lastSeen": "Mara ya mwisho",
+    "noRuns": "Hakuna utekelezaji katika kipindi hiki.",
+    "noFailures": "Hakuna kilichoshindikana katika kipindi hiki.",
+    "loadFailed": "Imeshindwa kupakia takwimu",
+    "stale": "Zilizokwama",
+    "threads": "Nyuzi (zote)"
+  },
+  "errorClass": {
+    "model_timeout": "Modeli imechelewa kujibu",
+    "model_rate_limit": "Mtoa huduma amepunguza kasi",
+    "model_refused": "Modeli imekataa kujibu",
+    "model_config": "Vitambulisho au jina la modeli si sahihi",
+    "context_too_long": "Mazungumzo yamezidi ukubwa wa muktadha",
+    "retries_exhausted": "Imeacha baada ya kushindwa mara kwa mara",
+    "storage": "Hifadhidata au akiba haipatikani",
+    "cancelled": "Imesitishwa na mtumiaji",
+    "agent_defect": "Hitilafu ndani ya wakala",
+    "tool_failure": "Zana imeshindwa",
+    "other": "Haijaainishwa",
+    "unknown": "Hakuna ujumbe wa hitilafu uliorekodiwa"
+  },
+  "settings": {
+    "language": "Lugha",
+    "languageHint": "Inatumika kwenye kivinjari hiki pekee.",
+    "languageUnreviewed": "* Imetafsiriwa na modeli; bado haijakaguliwa na mzungumzaji.",
+    "tabs": {
+      "account": "Akaunti",
+      "appearance": "Muonekano",
+      "personalisation": "Ubinafsishaji",
+      "components": "Vipengele",
+      "developers": "Wasanidi"
+    }
+  },
+  "chat": {
+    "messages": "Ujumbe wa mazungumzo",
+    "aiGenerated": "Imetengenezwa na AI",
+    "aiGeneratedContent": "Maudhui yaliyotengenezwa na AI",
+    "thinking": "Inafikiri...",
+    "agentThinking": "Wakala anafikiri",
+    "waiting": "Inasubiri...",
+    "retry": "Jaribu tena",
+    "retryOperation": "Jaribu tena operesheni",
+    "editMessage": "Hariri ujumbe",
+    "saveEdit": "Hifadhi ujumbe uliohaririwa",
+    "cancelEdit": "Ghairi kuhariri",
+    "export": "Hamisha mazungumzo",
+    "exportMarkdown": "Hamisha kama Markdown",
+    "exportJson": "Hamisha kama JSON",
+    "arguments": "Hoja",
+    "interactiveUi": "Kiolesura shirikishi",
+    "approve": "Idhinisha",
+    "reject": "Kataa",
+    "alwaysAllow": "Ruhusu kila mara",
+    "notFound": "Gumzo halikupatikana",
+    "notFoundBody": "Gumzo ulilooomba halikupatikana.",
+    "goHome": "Nenda mwanzo",
+    "loading": "Inapakia gumzo",
+    "aiGeneratedMarker": "Imetengenezwa na AI",
+    "loadingMessages": "Inapakia ujumbe…",
+    "loadingChat": "Inapakia gumzo…",
+    "noResponse": "Wakala hakujibu. Hili linaweza kuwa tatizo la muda.",
+    "agentError": "Wakala amekumbana na hitilafu:"
+  },
+  "skills": {
+    "title": "Ujuzi",
+    "empty": "Wakala huyu hana ujuzi uliosanidiwa.",
+    "notAttached": "haijaambatishwa",
+    "usedBy": "Inatumiwa na",
+    "view": "Tazama chanzo cha {{name}}",
+    "files": "Faili za ujuzi",
+    "readOnly": "kusoma tu",
+    "truncated": "Faili imefupishwa kwa onyesho.",
+    "noFiles": "Ujuzi huu hauna faili zinazosomeka.",
+    "source": "Chanzo",
+    "rendered": "Imeonyeshwa"
+  },
+  "mcp": {
+    "readOnly": "kusoma tu",
+    "destructive": "haribifu"
+  },
+  "admin": {
+    "title": "Vigezo vya usambazaji",
+    "subtitle": "Swichi zinazobadilisha anachokiona kila mtumiaji. Huhifadhiwa kwa usambazaji wote, si kivinjari hiki pekee.",
+    "forbidden": "Ufikiaji wa msanidi unahitajika.",
+    "flags": {
+      "skills_visible_to_all": {
+        "title": "Ujuzi unaonekana kwa kila mtu",
+        "detail": "Ukizima, kichupo cha Ujuzi kinahitaji jukumu lenye ruhusa maalum na hali ya msanidi."
+      },
+      "subagents_visible_to_all": {
+        "title": "Mawakala wadogo wanaonekana kwa kila mtu",
+        "detail": "Ukizima, kinaficha kichupo cha Mawakala Wadogo kwa watumiaji wote."
+      },
+      "prompt_visible_to_all": {
+        "title": "Maagizo yanaonekana kwa kila mtu",
+        "detail": "Ukizima, kinaficha maagizo ya mratibu kwa watumiaji wote."
+      },
+      "memory_enabled": {
+        "title": "Kumbukumbu",
+        "detail": "Huruhusu wakala kukumbuka mambo kuhusu mtumiaji kati ya mazungumzo."
+      },
+      "mcp_apps_enabled": {
+        "title": "Programu za MCP",
+        "detail": "Huruhusu seva za MCP kuonyesha miingiliano shirikishi ndani ya gumzo."
+      }
+    }
+  },
+  "subagents": {
+    "title": "Mawakala wadogo",
+    "empty": "Wakala huyu hana mawakala wadogo.",
+    "view": "Tazama ufafanuzi wa {{name}}",
+    "delegation": "Ukabidhi",
+    "working": "Inafanya kazi",
+    "complete": "Imekamilika",
+    "userRejected": "Mtumiaji amekataa kitendo hiki.",
+    "approveTool": "Idhinisha zana: {{name}}",
+    "approveAction": "Idhinisha kitendo cha wakala mdogo: {{name}}",
+    "rejectTool": "Kataa zana: {{name}}",
+    "rejectAction": "Kataa kitendo cha wakala mdogo: {{name}}",
+    "alwaysAllowTool": "Ruhusu zana kila wakati: {{name}}",
+    "alwaysAllowAgent": "Ruhusu wakala mdogo kila wakati: {{name}}",
+    "approvalRequired": "Idhini inahitajika"
+  },
+  "prompt": {
+    "description": "Utambulisho wa mratibu, jedwali la uelekezaji na kanuni zake — anachofanya kabla ya kukabidhi.",
+    "view": "Tazama kidokezo",
+    "title": "Maagizo"
+  },
+  "components": {
+    "title": "Vipengele",
+    "mcpServers": "Seva za MCP",
+    "toolApprovals": "Uidhinishaji wa zana",
+    "skillsDescription": "Mtiririko wa kazi ambao wakala huyu hufuata, kila mmoja ukiwa na sheria zake kuhusu kinachoruhusiwa na kisichoruhusiwa.",
+    "subagentsDescription": "Wataalamu ambao mratibu huwakabidhi kazi, na kile ambacho kila mmoja anaweza kufikia.",
+    "documentsDescription": "Nyaraka ambazo wakala anaweza kuzisoma anapojibu. Hawezi kuziandikia: upakiaji na uhariri hufanyika hapa. Zimepachikwa kwa kusoma tu katika {{path}}, ndiyo njia ambayo wakala huiona."
+  },
+  "developers": {
+    "title": "Wasanidi",
+    "tabs": {
+      "usage": "Matumizi",
+      "flags": "Vipengele vinavyoweza kuwashwa",
+      "evaluations": "Tathmini"
+    }
+  },
+  "documents": {
+    "title": "Nyaraka",
+    "upload": "Pakia faili",
+    "empty": "Hakuna nyaraka bado.",
+    "of": "kati ya",
+    "usage": "Matumizi ya hifadhi",
+    "nearlyFull": "Hifadhi imekaribia kujaa. Futa nyaraka kabla ya kupakia zaidi.",
+    "view": "Tazama {{name}}",
+    "remove": "Futa {{name}}",
+    "truncated": "Faili hili ni kubwa mno kuhaririwa hapa; linaonyeshwa kwa kusoma tu.",
+    "content": "Yaliyomo ya {{name}}"
+  },
+  "layout": {
+    "skipToContent": "Rukia hadi maudhui makuu",
+    "toggleSidebar": "Onyesha au ficha utepe wa kando",
+    "sidebarNavigation": "Urambazaji wa utepe wa kando"
+  },
+  "toast": {
+    "chatDeleted": "Gumzo limefutwa",
+    "chatDeletedLocally": "Gumzo limefutwa kwenye kifaa lakini kufuta kwenye seva kumeshindikana",
+    "projectDeleted": "Mradi umefutwa",
+    "projectDeletedWithChats": "Mradi umefutwa. Mazungumzo yamehamishiwa kwenye Gumzo.",
+    "conversationsMoved": "Mazungumzo yamehamishiwa kwenye Gumzo",
+    "deleteProjectFailed": "Imeshindwa kufuta mradi",
+    "loadHistoryFailed": "Imeshindwa kupakia historia ya gumzo",
+    "unassignFailed": "Imeshindwa kuondoa mazungumzo",
+    "sendFailed": "Imeshindwa kutuma ujumbe",
+    "editFailed": "Imeshindwa kutuma ujumbe uliohaririwa",
+    "retryFailed": "Imeshindwa kujaribu tena",
+    "resumeFailed": "Imeshindwa kuendelea",
+    "allChatsDeleted": "Gumzo zote zimefutwa",
+    "allChatsDeletedLocally": "Gumzo zimefutwa kwenye kifaa lakini kufuta kwenye seva kumeshindikana"
+  },
+  "session": {
+    "title": "Kipindi kimeisha",
+    "expired": "Kipindi kimeisha",
+    "body": "Kipindi chako kimeisha. Tafadhali ingia tena ili kuendelea.",
+    "workSaved": "Kazi yako imehifadhiwa."
+  },
+  "errors": {
+    "title": "Hitilafu imetokea",
+    "maxRetries": "Idadi ya juu ya majaribio imefikiwa",
+    "startOver": "Anza upya",
+    "refreshPage": "Onyesha upya ukurasa",
+    "technicalDetails": "Maelezo ya kiufundi",
+    "errorId": "Kitambulisho cha hitilafu",
+    "message": "Ujumbe",
+    "retrying": "Inajaribu tena",
+    "retryAttempt": "Jaribu tena (jaribio {{count}}/{{max}})",
+    "tryAgain": "Tafadhali jaribu tena."
+  },
+  "interrupt": {
+    "title": "Majibu yanahitajika",
+    "response": "Jibu la kukatiza",
+    "placeholder": "Andika jibu lako...",
+    "authenticate": "Thibitisha utambulisho",
+    "connectFailed": "Muunganisho umeshindikana"
+  },
+  "projects": {
+    "loading": "Inapakia mradi",
+    "loadingEllipsis": "Inapakia mradi…",
+    "notFound": "Mradi haukupatikana",
+    "conversations": "Mazungumzo ya mradi",
+    "noConversations": "Bado hakuna mazungumzo. Anzisha moja hapo juu.",
+    "newChatInProject": "Gumzo jipya katika mradi"
+  },
+  "profile": {
+    "ssoAuthenticated": "Umethibitishwa kupitia SSO",
+    "developerMode": "Hali ya msanidi",
+    "enableDeveloperMode": "Washa hali ya msanidi",
+    "developerModeHint": "Onyesha kichupo cha Wasanidi chenye zana za kina na tathmini ya wakala.",
+    "dangerZone": "Eneo la hatari",
+    "deleteAll": "Futa yote",
+    "deleteAllChats": "Futa gumzo zote",
+    "deleteAllChatsConfirm": "Uthibitisho wa kufuta gumzo zote",
+    "deleteAllConversations": "Futa mazungumzo yote",
+    "deleteAllBody": "Hii itafuta kabisa mazungumzo yote {{count}}. Kitendo hiki hakiwezi kutenduliwa."
+  }
+}
