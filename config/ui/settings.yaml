@@ -26,6 +26,12 @@ agent:
   timeout_ms: 30000
   streaming: true
 
+quick_prompts:
+  - What can Agent do for me?
+  - Help me analyze a dataset
+  - Write a query to find anomalies
+  - Summarize the key findings from this data
+
 platform:
   opa:
     enabled: false
