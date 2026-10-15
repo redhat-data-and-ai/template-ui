@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Bot, ChevronDown, FileText, FolderTree, LoaderCircle, Plug, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EvalDashboard } from './eval';
@@ -248,7 +248,7 @@ export function DeveloperSettings() {
   const [loadingStructure, setLoadingStructure] = useState(false);
   const [structureError, setStructureError] = useState<string | null>(null);
 
-  const loadAgentStructure = async () => {
+  const loadAgentStructure = useCallback(async () => {
     if (structure || loadingStructure) return;
 
     setLoadingStructure(true);
@@ -260,11 +260,9 @@ export function DeveloperSettings() {
     } finally {
       setLoadingStructure(false);
     }
-  };
+  }, [structure, loadingStructure]);
 
-  useEffect(() => {
-    loadAgentStructure();
-  }, []);
+  useEffect(() => { loadAgentStructure(); }, [loadAgentStructure]);
 
   return (
     <div className="space-y-4">
