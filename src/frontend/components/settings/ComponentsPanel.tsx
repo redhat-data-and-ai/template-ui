@@ -149,10 +149,25 @@ export function useVisibleComponentSections(): Section[] {
     return all.filter((section) => {
       if (section.alwaysVisible) return true;
       if (section.developerOnly) return isPrivilegedUser() && developerMode;
+
       // Absent means visible, so an older config does not silently
       // lose a section.
       const key = `${section.flag}_visible_to_all` as const;
-      return (features as Record<string, unknown> | null)?.[key] !== false;
+      if ((features as Record<string, unknown> | null)?.[key] !== false) {
+        return true;
+      }
+
+      // Off hides it from *users*, not from operators. The flag
+      // answers "should everyone see this", and a developer turning
+      // it off is deciding what the product shows — not giving up
+      // their own view of how the agent is configured.
+      //
+      // This fallback was removed once, on the reading that a switch
+      // with no visible effect for the person flipping it must be
+      // broken. The switch was fine; what was broken was that the
+      // page did not reload the config after a write, so nothing
+      // changed for anyone until a refresh.
+      return isPrivilegedUser() && developerMode;
     });
   }, [features, developerMode, t]);
 }

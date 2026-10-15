@@ -230,4 +230,57 @@ describe('Components sections', () => {
     expect(modelsOff).toContain('Skills');
     expect(modelsOff).not.toContain('Models');
   });
+  it('keeps the flagged sections visible to a developer when the flags are off', async () => {
+    // The flag answers "should everyone see this". A developer
+    // turning it off is deciding what the product shows, not giving
+    // up their own view of how the agent is configured — so they
+    // keep it and ordinary users lose it.
+    const userEvent = (await import('@testing-library/user-event')).default;
+    const off = {
+      skills_visible_to_all: false,
+      subagents_visible_to_all: false,
+      prompt_visible_to_all: false,
+      models_visible_to_all: false,
+    };
+
+    cleanup();
+    renderTabs({ role: 'owners', developerMode: true, features: off });
+    await userEvent.click(await screen.findByRole('tab', { name: 'Components' }));
+    const asDeveloper = (await screen.findAllByRole('tab')).map(
+      (t) => t.textContent?.trim() ?? '',
+    );
+    for (const label of ['Skills', 'Subagents', 'Prompt', 'Models']) {
+      expect(asDeveloper).toContain(label);
+    }
+
+    cleanup();
+    renderTabs({ role: 'users', developerMode: false, features: off });
+    await userEvent.click(await screen.findByRole('tab', { name: 'Components' }));
+    const asUser = (await screen.findAllByRole('tab')).map(
+      (t) => t.textContent?.trim() ?? '',
+    );
+    for (const label of ['Skills', 'Subagents', 'Prompt', 'Models']) {
+      expect(asUser).not.toContain(label);
+    }
+    // MCP has no flag, so the group never empties.
+    expect(asUser).toContain('MCP');
+  });
+
+  it('needs developer mode on, not just the role', async () => {
+    // Matches how Usage and Documents gate: the role alone is not
+    // the switch, because an operator browsing normally should see
+    // what everyone else sees.
+    const userEvent = (await import('@testing-library/user-event')).default;
+    cleanup();
+    renderTabs({
+      role: 'owners',
+      developerMode: false,
+      features: { skills_visible_to_all: false },
+    });
+    await userEvent.click(await screen.findByRole('tab', { name: 'Components' }));
+    const labels = (await screen.findAllByRole('tab')).map(
+      (t) => t.textContent?.trim() ?? '',
+    );
+    expect(labels).not.toContain('Skills');
+  });
 });

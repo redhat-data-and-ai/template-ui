@@ -208,15 +208,15 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "Compétences visibles par tous",
-        "detail": "Désactivé, masque l'onglet Compétences à tous les utilisateurs."
+        "detail": "Désactivé, masque l'onglet Compétences à tous sauf aux développeurs."
       },
       "subagents_visible_to_all": {
         "title": "Sous-agents visibles par tous",
-        "detail": "Désactivé, masque l'onglet Sous-agents à tous les utilisateurs."
+        "detail": "Désactivé, masque l'onglet Sous-agents à tous sauf aux développeurs."
       },
       "prompt_visible_to_all": {
         "title": "Prompt visible par tous",
-        "detail": "Désactivé, masque le prompt de l'orchestrateur à tous les utilisateurs."
+        "detail": "Désactivé, masque le prompt de l'orchestrateur à tous sauf aux développeurs."
       },
       "memory_enabled": {
         "title": "Mémoire",
@@ -228,7 +228,7 @@
       },
       "models_visible_to_all": {
         "title": "Modèles visibles par tous",
-        "detail": "Désactivé, masque l'onglet Modèles à tous les utilisateurs."
+        "detail": "Désactivé, masque l'onglet Modèles à tous sauf aux développeurs."
       }
     }
   },

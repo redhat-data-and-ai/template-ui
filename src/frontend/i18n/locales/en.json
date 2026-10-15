@@ -208,15 +208,15 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "Skills visible to everyone",
-        "detail": "Off hides the Skills tab from all users."
+        "detail": "Off hides the Skills tab from everyone except developers."
       },
       "subagents_visible_to_all": {
         "title": "Subagents visible to everyone",
-        "detail": "Off hides the Subagents tab from all users."
+        "detail": "Off hides the Subagents tab from everyone except developers."
       },
       "prompt_visible_to_all": {
         "title": "Prompt visible to everyone",
-        "detail": "Off hides the orchestrator's prompt from all users."
+        "detail": "Off hides the orchestrator's prompt from everyone except developers."
       },
       "memory_enabled": {
         "title": "Memory",
@@ -228,7 +228,7 @@
       },
       "models_visible_to_all": {
         "title": "Models visible to everyone",
-        "detail": "Off hides the Models tab from all users."
+        "detail": "Off hides the Models tab from everyone except developers."
       }
     }
   },

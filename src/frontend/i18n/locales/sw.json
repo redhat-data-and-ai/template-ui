@@ -208,15 +208,15 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "Ujuzi unaonekana kwa kila mtu",
-        "detail": "Ukizima, kinaficha kichupo cha Ujuzi kwa watumiaji wote."
+        "detail": "Ukizima, kinaficha kichupo cha Ujuzi kwa wote isipokuwa wasanidi."
       },
       "subagents_visible_to_all": {
         "title": "Mawakala wadogo wanaonekana kwa kila mtu",
-        "detail": "Ukizima, kinaficha kichupo cha Mawakala Wadogo kwa watumiaji wote."
+        "detail": "Ukizima, kinaficha kichupo cha Mawakala Wadogo kwa wote isipokuwa wasanidi."
       },
       "prompt_visible_to_all": {
         "title": "Maagizo yanaonekana kwa kila mtu",
-        "detail": "Ukizima, kinaficha maagizo ya mratibu kwa watumiaji wote."
+        "detail": "Ukizima, kinaficha maagizo ya mratibu kwa wote isipokuwa wasanidi."
       },
       "memory_enabled": {
         "title": "Kumbukumbu",
@@ -228,7 +228,7 @@
       },
       "models_visible_to_all": {
         "title": "Miundo inaonekana kwa kila mtu",
-        "detail": "Ukizima, kinaficha kichupo cha Miundo kwa watumiaji wote."
+        "detail": "Ukizima, kinaficha kichupo cha Miundo kwa wote isipokuwa wasanidi."
       }
     }
   },

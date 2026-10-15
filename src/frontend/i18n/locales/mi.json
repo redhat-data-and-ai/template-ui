@@ -208,15 +208,15 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "Ka kitea ngā pūkenga e te katoa",
-        "detail": "Ka weto, ka huna te ripa Pūkenga mai i ngā kaiwhakamahi katoa."
+        "detail": "Ka weto, ka huna te ripa Pūkenga mai i te katoa engari i ngā kaiwhakawhanake."
       },
       "subagents_visible_to_all": {
         "title": "Ka kitea ngā pokapū-iti e te katoa",
-        "detail": "Ka weto, ka huna te ripa Pokapū-iti mai i ngā kaiwhakamahi katoa."
+        "detail": "Ka weto, ka huna te ripa Pokapū-iti mai i te katoa engari i ngā kaiwhakawhanake."
       },
       "prompt_visible_to_all": {
         "title": "Ka kitea te tohutohu e te katoa",
-        "detail": "Ka weto, ka huna te tohutohu a te kaiwhakarite mai i ngā kaiwhakamahi katoa."
+        "detail": "Ka weto, ka huna te tohutohu a te kaiwhakarite mai i te katoa engari i ngā kaiwhakawhanake."
       },
       "memory_enabled": {
         "title": "Pūmahara",
@@ -228,7 +228,7 @@
       },
       "models_visible_to_all": {
         "title": "Ka kitea ngā tauira e te katoa",
-        "detail": "Ka weto, ka huna te ripa Tauira mai i ngā kaiwhakamahi katoa."
+        "detail": "Ka weto, ka huna te ripa Tauira mai i te katoa engari i ngā kaiwhakawhanake."
       }
     }
   },

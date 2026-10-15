@@ -208,15 +208,15 @@
     "flags": {
       "skills_visible_to_all": {
         "title": "Habilidades visibles para todos",
-        "detail": "Desactivado, oculta la pestaña Habilidades a todos los usuarios."
+        "detail": "Desactivado, oculta la pestaña Habilidades a todos salvo a los desarrolladores."
       },
       "subagents_visible_to_all": {
         "title": "Subagentes visibles para todos",
-        "detail": "Desactivado, oculta la pestaña Subagentes a todos los usuarios."
+        "detail": "Desactivado, oculta la pestaña Subagentes a todos salvo a los desarrolladores."
       },
       "prompt_visible_to_all": {
         "title": "Prompt visible para todos",
-        "detail": "Desactivado, oculta el prompt del orquestador a todos los usuarios."
+        "detail": "Desactivado, oculta el prompt del orquestador a todos salvo a los desarrolladores."
       },
       "memory_enabled": {
         "title": "Memoria",
@@ -228,7 +228,7 @@
       },
       "models_visible_to_all": {
         "title": "Modelos visibles para todos",
-        "detail": "Desactivado, oculta la pestaña Modelos a todos los usuarios."
+        "detail": "Desactivado, oculta la pestaña Modelos a todos salvo a los desarrolladores."
       }
     }
   },
