@@ -203,7 +203,7 @@ export function SettingsPage() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div className="shrink-0 border-b border-border bg-card/60 backdrop-blur-sm px-6 py-3">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <Button
             variant="plain"
             size="sm"
@@ -218,7 +218,14 @@ export function SettingsPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-6">
+        {/* Full width. The cap here was 56rem, which left most of a
+            laptop screen empty beside tables and card lists that use
+            the room — the Models, Safeguards and Documents panels,
+            the usage charts and the eval tables. Reading width is
+            handled where it matters, on the prose inside a panel,
+            rather than by narrowing every panel to suit the widest
+            paragraph. */}
+        <div className="px-6 py-6">
           <div className="flex flex-col sm:flex-row gap-6">
             {/* Tab navigation */}
             <nav className="sm:w-52 shrink-0" aria-label="Settings sections">
