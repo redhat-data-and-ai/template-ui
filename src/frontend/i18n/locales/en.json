@@ -349,7 +349,8 @@
     "deleteAllChats": "Delete all chats",
     "deleteAllChatsConfirm": "Delete all chats confirmation",
     "deleteAllConversations": "Delete all conversations",
-    "deleteAllBody": "This will permanently delete all {{count}} conversations. This action cannot be undone."
+    "deleteAllBody": "This will permanently delete all {{count}} conversations. This action cannot be undone.",
+    "authDisabled": "Authentication is off — this identity is a local stand-in"
   },
   "models": {
     "title": "Models",

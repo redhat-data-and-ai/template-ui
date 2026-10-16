@@ -349,7 +349,8 @@
     "deleteAllChats": "Supprimer toutes les conversations",
     "deleteAllChatsConfirm": "Confirmation de suppression de toutes les conversations",
     "deleteAllConversations": "Supprimer toutes les conversations",
-    "deleteAllBody": "Cela supprimera définitivement les {{count}} conversations. Cette action est irréversible."
+    "deleteAllBody": "Cela supprimera définitivement les {{count}} conversations. Cette action est irréversible.",
+    "authDisabled": "Authentification désactivée — cette identité est un substitut local"
   },
   "models": {
     "title": "Modèles",

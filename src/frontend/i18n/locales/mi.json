@@ -349,7 +349,8 @@
     "deleteAllChats": "Mukua ngā kōrerorero katoa",
     "deleteAllChatsConfirm": "Whakaū i te muku i ngā kōrerorero katoa",
     "deleteAllConversations": "Mukua ngā kōrerorero katoa",
-    "deleteAllBody": "Ka mukua mō ake tonu ngā kōrerorero {{count}} katoa. Kāore e taea te whakahoki."
+    "deleteAllBody": "Ka mukua mō ake tonu ngā kōrerorero {{count}} katoa. Kāore e taea te whakahoki.",
+    "authDisabled": "Kua weto te whakamotuhēhē — he tuara ā-rohe tēnei tuakiri"
   },
   "models": {
     "title": "Ngā tauira",

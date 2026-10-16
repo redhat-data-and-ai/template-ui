@@ -349,7 +349,8 @@
     "deleteAllChats": "Futa gumzo zote",
     "deleteAllChatsConfirm": "Uthibitisho wa kufuta gumzo zote",
     "deleteAllConversations": "Futa mazungumzo yote",
-    "deleteAllBody": "Hii itafuta kabisa mazungumzo yote {{count}}. Kitendo hiki hakiwezi kutenduliwa."
+    "deleteAllBody": "Hii itafuta kabisa mazungumzo yote {{count}}. Kitendo hiki hakiwezi kutenduliwa.",
+    "authDisabled": "Uthibitishaji umezimwa — utambulisho huu ni wa majaribio ya ndani"
   },
   "models": {
     "title": "Miundo",

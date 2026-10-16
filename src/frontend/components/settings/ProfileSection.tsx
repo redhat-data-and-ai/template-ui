@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant } from '@patternfly/react-core';
 import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
+import type { RootState } from '../../redux/store';
 import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
 import { selectDeveloperMode, setDeveloperMode } from '../../redux/slices/userSettings';
 import { loadProjectsThunk } from '../../redux/slices/projects';
@@ -15,6 +16,8 @@ import { isPrivilegedUser } from '../../lib/role-utils';
 
 export function ProfileSection() {
   const { t } = useTranslation();
+  const authEnabled =
+    useAppSelector((state: RootState) => state.config.features?.auth_enabled) ?? true;
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const chats = useAppSelector(selectAllChats);
@@ -76,9 +79,25 @@ export function ProfileSection() {
           <User className="w-4 h-4 text-muted-foreground" />
           <span className="text-foreground">{username || displayName}</span>
         </div>
+        {/* Stated, not assumed. This line sat under a shield icon
+            claiming SSO whatever was actually true — including on a
+            local cluster with ENABLE_AUTH=false, where the identity
+            above it is a development stand-in and nothing has been
+            authenticated at all. A security claim that is sometimes
+            wrong is worse than no claim. */}
         <div className="flex items-center gap-3 text-sm">
-          <Shield className="w-4 h-4 text-muted-foreground" />
-          <span className="text-muted-foreground">{t('profile.ssoAuthenticated')}</span>
+          <Shield
+            className={`w-4 h-4 ${authEnabled ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-500'}`}
+          />
+          <span
+            className={
+              authEnabled
+                ? 'text-muted-foreground'
+                : 'text-amber-600 dark:text-amber-500'
+            }
+          >
+            {authEnabled ? t('profile.ssoAuthenticated') : t('profile.authDisabled')}
+          </span>
         </div>
       </div>
 

@@ -349,7 +349,8 @@
     "deleteAllChats": "すべてのチャットを削除",
     "deleteAllChatsConfirm": "すべてのチャット削除の確認",
     "deleteAllConversations": "すべての会話を削除",
-    "deleteAllBody": "{{count}} 件の会話をすべて完全に削除します。この操作は取り消せません。"
+    "deleteAllBody": "{{count}} 件の会話をすべて完全に削除します。この操作は取り消せません。",
+    "authDisabled": "認証は無効です — この ID はローカル用の代替です"
   },
   "models": {
     "title": "モデル",

@@ -349,7 +349,8 @@
     "deleteAllChats": "Eliminar todos los chats",
     "deleteAllChatsConfirm": "Confirmación para eliminar todos los chats",
     "deleteAllConversations": "Eliminar todas las conversaciones",
-    "deleteAllBody": "Esto eliminará permanentemente las {{count}} conversaciones. Esta acción no se puede deshacer."
+    "deleteAllBody": "Esto eliminará permanentemente las {{count}} conversaciones. Esta acción no se puede deshacer.",
+    "authDisabled": "La autenticación está desactivada: esta identidad es sustituta local"
   },
   "models": {
     "title": "Modelos",
