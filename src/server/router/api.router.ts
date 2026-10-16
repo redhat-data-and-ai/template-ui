@@ -67,6 +67,28 @@ async function apiRoutes(fastify: FastifyInstance) {
     };
   });
 
+  fastify.get("/config/agent-structure", async (_request, reply) => {
+    const cfg = getSettings();
+    const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+
+    try {
+      const response = await fetch(`${agentHost}/config/agent-structure`, {
+        signal: AbortSignal.timeout(5_000),
+      });
+
+      if (!response.ok) {
+        return reply.code(response.status).send({
+          error: "Unable to load agent structure",
+        });
+      }
+
+      reply.header("Cache-Control", "no-store");
+      return response.json();
+    } catch {
+      return reply.code(502).send({ error: "Unable to reach agent" });
+    }
+  });
+
   // Vite local serves HTML without session injection. Keep this off auth-check
   // so a missing cookie returns 401 JSON instead of a /login redirect (429s SSO).
   fastify.get("/me", async (request: FastifyRequest, reply: FastifyReply) => {
