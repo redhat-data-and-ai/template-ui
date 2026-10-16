@@ -140,19 +140,30 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
 
       {summary && (
         <>
-          <dl className="mb-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            <Stat label={t('analytics.runs')} value={compact(summary.runs)} />
-            {/* Every figure on this page is client-only: the agent
-                also serves benchmark harnesses, planner steps and
-                subagent calls, which were 542 of 553 runs here and
-                would otherwise be reported as product usage. */}
-            <Stat
+          {/* Grouped by the question each answers, not laid out as
+              one flat grid of equal boxes. Thirteen identical cards
+              gave volume, latency, cost and health the same weight,
+              so nothing read as more important than anything else
+              and the eye had nowhere to land. Figures that are one
+              fact — p50 with p95, tokens in with out, thumbs up with
+              down — now share a card instead of being split across
+              three. */}
+          {/* Conversations leads, with runs beneath it: every figure
+              here is client-only, because the agent also serves
+              benchmark harnesses, planner steps and subagent calls —
+              542 of 553 runs in one window — which would otherwise be
+              reported as product usage. */}
+          <div className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Headline
               label={t('analytics.conversations')}
               value={compact(summary.conversations)}
+              sub={`${compact(summary.runs)} ${t('analytics.runs').toLowerCase()}`}
             />
-
-            <Stat label={t('analytics.people')} value={compact(summary.users)} />
-            <Stat
+            <Headline
+              label={t('analytics.people')}
+              value={compact(summary.users)}
+            />
+            <Headline
               label={t('analytics.succeeded')}
               value={pct(summary.success_rate)}
               tone={
@@ -160,24 +171,43 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
                   ? 'warn'
                   : undefined
               }
+              sub={
+                summary.errors > 0
+                  ? `${compact(summary.errors)} ${t('analytics.failures').toLowerCase()}`
+                  : undefined
+              }
             />
-            <Stat label="p50" value={seconds(summary.p50_seconds)} />
-            <Stat
-              label="p95"
-              value={seconds(summary.p95_seconds)}
-              tone={summary.p95_seconds > 60 ? 'warn' : undefined}
-            />
-            <Stat label={t('analytics.tokensIn')} value={compact(summary.input_tokens)} />
-            <Stat label={t('analytics.tokensOut')} value={compact(summary.output_tokens)} />
-            <Stat label={t('analytics.thumbsUp')} value={compact(summary.feedback_up)} />
-            <Stat label={t('analytics.thumbsDown')} value={compact(summary.feedback_down)} />
-            <Stat label={t('analytics.ratedGood')} value={pct(summary.satisfaction)} />
-            <Stat label={t('analytics.inFlight')} value={compact(summary.in_flight)} />
-            {/* Separate from in-flight: a run stranded by a restart
-                needs the reaper looked at, a running one needs
-                nothing. Warn on any, because the steady state is
-                zero. */}
-            <Stat
+
+            <Panel label={t('analytics.speed')}>
+              <Figure label="p50" value={seconds(summary.p50_seconds)} />
+              <Figure
+                label="p95"
+                value={seconds(summary.p95_seconds)}
+                tone={summary.p95_seconds > 60 ? 'warn' : undefined}
+              />
+            </Panel>
+
+            <Panel label={t('analytics.tokens')}>
+              <Figure label={t('analytics.tokensIn')} value={compact(summary.input_tokens)} />
+              <Figure label={t('analytics.tokensOut')} value={compact(summary.output_tokens)} />
+            </Panel>
+
+            <Panel label={t('analytics.feedback')}>
+              <Figure label="👍" value={compact(summary.feedback_up)} />
+              <Figure label="👎" value={compact(summary.feedback_down)} />
+              <Figure label={t('analytics.ratedGood')} value={pct(summary.satisfaction)} />
+            </Panel>
+          </div>
+
+          {/* Separate band, because these describe the agent right
+              now rather than the window above — and two of them are
+              states somebody has to act on. */}
+          <Panel label={t('analytics.rightNow')} className="mb-12">
+            <Figure label={t('analytics.inFlight')} value={compact(summary.in_flight)} />
+            {/* A run stranded by a restart needs the reaper looked
+                at; a running one needs nothing. Warn on any, because
+                the steady state is zero. */}
+            <Figure
               label={t('analytics.interrupted')}
               value={compact(summary.interrupted)}
               tone={summary.interrupted > 0 ? 'warn' : undefined}
@@ -186,16 +216,21 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
                 stat nobody reads, which is how a stat stops being
                 noticed when it finally changes. */}
             {summary.stale > 0 && (
-              <Stat
-                label={t('analytics.stale')}
-                value={compact(summary.stale)}
-                tone="warn"
-              />
+              <Figure label={t('analytics.stale')} value={compact(summary.stale)} tone="warn" />
             )}
-          </dl>
+          </Panel>
 
           <section className="mb-12">
-            <h2 className="mb-5 text-base font-semibold">{t('analytics.runsOverTime')}</h2>
+            {/* The peak beside the title: without a scale a bar's
+                height is only a comparison with its neighbours, and
+                "the tallest bar" could be nine runs or nine
+                thousand. */}
+            <div className="mb-5 flex items-baseline justify-between gap-4">
+              <h2 className="text-base font-semibold">{t('analytics.runsOverTime')}</h2>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {t('analytics.peak', { count: peak })}
+              </span>
+            </div>
             {/* Bars, not a chart library. A quiet day must look like a
                 quiet day and not like missing data, so every bucket
                 keeps a visible baseline — a zero-height bar is
@@ -210,8 +245,10 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
                   title={`${point.bucket}: ${point.runs} runs, ${point.errors} errors, p95 ${seconds(point.p95_seconds)}`}
                 >
                   <span
-                    className={`relative block w-full ${
-                      point.runs > 0 ? 'bg-secondary/80' : 'bg-border/60'
+                    className={`relative block w-full rounded-sm transition-colors ${
+                      point.runs > 0
+                        ? 'bg-primary/30 hover:bg-primary/50'
+                        : 'bg-border/60'
                     }`}
                     style={{
                       height:
@@ -222,7 +259,7 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
                   >
                     {point.errors > 0 && (
                       <span
-                        className="absolute inset-x-0 bottom-0 bg-destructive/70"
+                        className="absolute inset-x-0 bottom-0 rounded-sm bg-destructive/80"
                         style={{
                           height: `${Math.round((point.errors / Math.max(1, point.runs)) * 100)}%`,
                         }}
@@ -281,7 +318,62 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function Stat({
+/**
+ * A figure that leads: the three a reader looks at first, in a size
+ * that says so. `sub` carries the number that qualifies it — runs
+ * beneath conversations, failures beneath the success rate — so the
+ * qualifier travels with the claim rather than sitting in a box of
+ * its own four cards away.
+ */
+function Headline({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: 'warn';
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card px-5 py-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={`mt-1 text-3xl font-semibold tabular-nums ${
+          tone === 'warn' ? 'text-destructive' : 'text-foreground'
+        }`}
+      >
+        {value}
+      </p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+/** A card holding figures that are one fact — p50 with p95, in with out. */
+function Panel({
+  label,
+  className = '',
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className={`rounded-xl border border-border bg-card px-5 py-4 ${className}`}
+      aria-label={label}
+    >
+      <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>
+      <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-3">{children}</dl>
+    </section>
+  );
+}
+
+/** One labelled number inside a Panel. */
+function Figure({
   label,
   value,
   tone,
@@ -291,11 +383,11 @@ function Stat({
   tone?: 'warn';
 }) {
   return (
-    <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
+    <div>
+      <dt className="text-[11px] text-muted-foreground">{label}</dt>
       <dd
-        className={`mt-1.5 text-2xl font-semibold tabular-nums ${
-          tone === 'warn' ? 'text-destructive' : ''
+        className={`mt-0.5 text-xl font-semibold tabular-nums ${
+          tone === 'warn' ? 'text-destructive' : 'text-foreground'
         }`}
       >
         {value}

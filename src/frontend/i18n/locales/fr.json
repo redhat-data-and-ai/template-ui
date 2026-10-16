@@ -126,7 +126,12 @@
     "noFailures": "Aucun échec sur cette période.",
     "loadFailed": "Impossible de charger les statistiques",
     "stale": "Abandonnés",
-    "threads": "Fils (tous)"
+    "threads": "Fils (tous)",
+    "speed": "Vitesse",
+    "tokens": "Jetons",
+    "feedback": "Retours",
+    "rightNow": "En ce moment",
+    "peak": "pic {{count}}/jour"
   },
   "errorClass": {
     "model_timeout": "Le modèle a dépassé le délai",

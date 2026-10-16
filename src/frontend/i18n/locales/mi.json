@@ -126,7 +126,12 @@
     "noFailures": "Kāore he mea i rahua i tēnei wā.",
     "loadFailed": "Kāore i taea te uta i ngā tatauranga",
     "stale": "Mahue",
-    "threads": "Ngā aho (katoa)"
+    "threads": "Ngā aho (katoa)",
+    "speed": "Tere",
+    "tokens": "Ngā tohu",
+    "feedback": "Urupare",
+    "rightNow": "I tēnei wā",
+    "peak": "tihi {{count}}/rā"
   },
   "errorClass": {
     "model_timeout": "I roa rawa te tauira",

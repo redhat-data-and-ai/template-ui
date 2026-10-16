@@ -126,7 +126,12 @@
     "noFailures": "Nothing failed in this window.",
     "loadFailed": "Could not load analytics",
     "stale": "Stranded",
-    "threads": "Threads (all)"
+    "threads": "Threads (all)",
+    "speed": "Speed",
+    "tokens": "Tokens",
+    "feedback": "Feedback",
+    "rightNow": "Right now",
+    "peak": "peak {{count}}/day"
   },
   "errorClass": {
     "model_timeout": "Model timed out",

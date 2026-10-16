@@ -126,7 +126,12 @@
     "noFailures": "この期間に失敗はありません。",
     "loadFailed": "利用状況を読み込めませんでした",
     "stale": "取り残し",
-    "threads": "スレッド（全体）"
+    "threads": "スレッド（全体）",
+    "speed": "速度",
+    "tokens": "トークン",
+    "feedback": "フィードバック",
+    "rightNow": "現在",
+    "peak": "ピーク {{count}}/日"
   },
   "errorClass": {
     "model_timeout": "モデルがタイムアウトしました",

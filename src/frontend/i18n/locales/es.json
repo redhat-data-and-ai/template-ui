@@ -126,7 +126,12 @@
     "noFailures": "No ha fallado nada en este periodo.",
     "loadFailed": "No se pudieron cargar las estadísticas",
     "stale": "Abandonadas",
-    "threads": "Hilos (todos)"
+    "threads": "Hilos (todos)",
+    "speed": "Velocidad",
+    "tokens": "Tokens",
+    "feedback": "Valoraciones",
+    "rightNow": "Ahora mismo",
+    "peak": "máximo {{count}}/día"
   },
   "errorClass": {
     "model_timeout": "El modelo tardó demasiado",

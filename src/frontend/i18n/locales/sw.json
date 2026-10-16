@@ -126,7 +126,12 @@
     "noFailures": "Hakuna kilichoshindikana katika kipindi hiki.",
     "loadFailed": "Imeshindwa kupakia takwimu",
     "stale": "Zilizokwama",
-    "threads": "Nyuzi (zote)"
+    "threads": "Nyuzi (zote)",
+    "speed": "Kasi",
+    "tokens": "Tokeni",
+    "feedback": "Maoni",
+    "rightNow": "Sasa hivi",
+    "peak": "kilele {{count}}/siku"
   },
   "errorClass": {
     "model_timeout": "Modeli imechelewa kujibu",
