@@ -4,7 +4,7 @@ import {
   writeOverrides,
 } from "../utils/feature-overrides.js";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { getSettings } from "../utils/settings.js";
+import { getSettings, resolveAgentHost } from "../utils/settings.js";
 import { toClientUserData } from "../utils/session-identity.js";
 
 /**
@@ -201,9 +201,7 @@ async function isPrivilegedCaller(request: {
   headers?: Record<string, unknown>;
 }): Promise<boolean> {
   try {
-    const cfg = getSettings();
-    const host =
-      cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+    const host = resolveAgentHost();
     const auth = request.headers?.authorization;
     const res = await fetch(`${host}/auth/whoami`, {
       headers: typeof auth === "string" ? { Authorization: auth } : {},

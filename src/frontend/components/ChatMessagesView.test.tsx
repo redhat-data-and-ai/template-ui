@@ -191,3 +191,94 @@ describe('ChatMessagesView — errorMessage prop', () => {
     expect(screen.queryByText('Some error')).not.toBeInTheDocument();
   });
 });
+
+describe('actions row on delegation messages', () => {
+  /**
+   * A turn that delegates produces two assistant messages: one whose
+   * only payload is `task` tool calls, and one with the answer. Both
+   * used to get a full actions row, so a single turn showed two
+   * "AI-generated" tags and offered a thumbs-up on a message that
+   * said nothing but "I called two subagents".
+   */
+  const delegation = {
+    id: 'ai-delegation',
+    type: 'ai',
+    content: '',
+    tool_calls: [
+      { name: 'task', id: 'c1', args: { subagent_type: 'investigator', description: 'Find MRs' } },
+    ],
+  } as unknown as Message;
+
+  const answer = {
+    id: 'ai-answer',
+    type: 'ai',
+    content: 'Here are your 20 open merge requests.',
+  } as unknown as Message;
+
+  const renderWith = (messages: Message[]) =>
+    render(
+      <MemoryRouter>
+        <Provider store={makeStore()}>
+          <ChatMessagesView {...makeBaseProps({ messages })} />
+        </Provider>
+      </MemoryRouter>,
+    );
+
+  it('marks the answer as AI-generated exactly once in a delegated turn', () => {
+    renderWith([HUMAN_MESSAGE, delegation, answer]);
+    // Exact text: the badge's own aria-label is "AI-generated
+    // content", which a loose matcher also catches.
+    expect(screen.getAllByText('AI-generated')).toHaveLength(1);
+  });
+
+  it('still marks a plain answer', () => {
+    renderWith([HUMAN_MESSAGE, answer]);
+    expect(screen.getAllByText('AI-generated')).toHaveLength(1);
+  });
+});
+
+describe('ChatMessagesView — delegation intent', () => {
+  it('renders the text the agent wrote above its subagent boxes', () => {
+    const store = makeStore();
+    const delegating = {
+      type: 'ai',
+      id: 'msg-ai-1',
+      content: 'Checking GitLab with investigator for your open merge requests.',
+      tool_calls: [
+        { id: 'tc-1', name: 'task', args: { subagent_type: 'investigator', description: 'find MRs' } },
+        { id: 'tc-2', name: 'task', args: { subagent_type: 'workspace', description: 'find issues' } },
+      ],
+    } as unknown as Message;
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ChatMessagesView {...makeBaseProps({ messages: [HUMAN_MESSAGE, delegating] })} />
+        </Provider>
+      </MemoryRouter>,
+    );
+
+    const intent = screen.getByTestId('delegation-intent');
+    expect(intent).toHaveTextContent('Checking GitLab with investigator');
+  });
+
+  it('renders no intent block when the agent delegated without saying anything', () => {
+    const store = makeStore();
+    const silent = {
+      type: 'ai',
+      id: 'msg-ai-2',
+      content: '',
+      tool_calls: [{ id: 'tc-3', name: 'task', args: { subagent_type: 'investigator' } }],
+    } as unknown as Message;
+
+    render(
+      <MemoryRouter>
+        <Provider store={store}>
+          <ChatMessagesView {...makeBaseProps({ messages: [HUMAN_MESSAGE, silent] })} />
+        </Provider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId('delegation-intent')).not.toBeInTheDocument();
+  });
+});

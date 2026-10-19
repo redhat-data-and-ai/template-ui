@@ -32,6 +32,7 @@ import {
   deleteChat,
   updateChat,
   setChats,
+  markThreadsDeleted,
   setLoadingThreads,
   setThreadsListHydrated,
   ChatItem,
@@ -40,7 +41,14 @@ import { addToast } from '../../redux/slices/toasts';
 import { updateProjectThreadCount } from '../../redux/slices/projects';
 import { SidebarChatItem } from '../../types/chat';
 import { chatStorage } from '../../services/chatStorage';
-import { getAllThreadsByUserId, getThreadState, deleteThread, type Thread } from '../../services/agent-rest';
+import {
+  getAllThreadsByUserId,
+  getThreadState,
+  deleteThread,
+  deleteThreads,
+  listAllThreadIds,
+  type Thread,
+} from '../../services/agent-rest';
 import { getProjects, getThreadsByProject } from '../../services/projects-api';
 import { setAuthExpiredCallback } from '../../services/authenticated-fetch';
 import { markChatAsClientCreated, isClientCreatedChat } from '../../services/newChatTracker';
@@ -138,6 +146,39 @@ export function AppLayout({ children }: AppLayoutProps) {
     currentChatId ? selectStreamingState(state, currentChatId) : null,
   );
   const activeSubAgent = streamingState?.activeSubAgent ?? null;
+
+  // Finish a delete that outlived its page.
+  //
+  // "Delete all conversations" is hundreds of requests against the
+  // agent; a refresh partway through abandoned the rest, and the
+  // survivors came back looking like the delete had failed. The
+  // tombstones are on disk, so on load they are re-applied to the
+  // sidebar and any thread still on the server is swept again.
+  useEffect(() => {
+    const pending = chatStorage.loadDeletedThreadIds();
+    if (pending.length === 0) return;
+
+    dispatch(markThreadsDeleted({ ids: pending }));
+    let cancelled = false;
+
+    void (async () => {
+      const remaining = new Set(await listAllThreadIds());
+      const unfinished = pending.filter((id) => remaining.has(id));
+      if (cancelled) return;
+      if (unfinished.length === 0) {
+        chatStorage.clearDeletedThreadIds();
+        return;
+      }
+      const { failed } = await deleteThreads(unfinished);
+      if (!cancelled && failed === 0) {
+        chatStorage.clearDeletedThreadIds();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch]);
 
   useEffect(() => {
     const loadedChats = chatStorage.loadChats();

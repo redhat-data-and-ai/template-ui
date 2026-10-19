@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useStickToBottom } from '../hooks/useStickToBottom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Message } from '@langchain/langgraph-sdk';
@@ -209,12 +210,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, hasMessages]);
 
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      const el = scrollAreaRef.current;
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [thread.messages]);
+  // Follow the stream, but stop the moment the reader scrolls up.
+  // This used to scroll unconditionally on every message change —
+  // several times a second during a long answer — so re-reading
+  // anything meant being thrown back to the bottom repeatedly.
+  const { isPinned, jumpToBottom } = useStickToBottom(scrollAreaRef, thread.messages);
 
   const previousMessagesLength = useRef(0);
   useEffect(() => {
@@ -271,17 +271,24 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, []);
 
   const handleSubmit = useCallback(
-    async (inputValue: string) => {
+    async (inputValue: string, options?: { silent?: boolean }) => {
       if (!threadId || !currentChat) return;
 
       const trimmed = inputValue.trim();
       if (!trimmed) return;
 
+      // A silent submit is a retry the interface decided on, not a
+      // thing the reader typed. The agent still needs the question —
+      // it is how the turn continues — but showing it again makes
+      // the conversation look as though they asked twice.
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
         type: 'human',
         content: trimmed,
-      };
+        ...(options?.silent
+          ? { additional_kwargs: { silent_retry: true } }
+          : {}),
+      } as Message;
 
       const currentThread = threadRef.current;
       const messages = [...currentThread.messages, userMessage];
@@ -615,6 +622,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
               onRetry={handleStreamRetry}
               errorMessage={streamingState.error}
               scrollAreaRef={scrollAreaRef}
+              jumpToLatest={isPinned ? undefined : jumpToBottom}
               onSubmit={handleSubmit}
               onEditMessage={handleEditMessage}
               onCancel={handleCancel}
@@ -623,6 +631,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
               isRateLimited={rateLimit.isRateLimited}
               rateLimitRemainingSeconds={rateLimit.retryAfterSeconds}
               mcpEvents={thread.mcpEvents}
+              subagentProgress={thread.subagentProgress}
               chatId={threadId}
               traceId={thread.traceId}
               userId={feedbackUserId}

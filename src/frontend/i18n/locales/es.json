@@ -48,7 +48,12 @@
       "degraded": "Agente: degradado — responde, pero una dependencia está caída",
       "unhealthy": "Agente: sin conexión",
       "unknown": "Agente: estado desconocido"
-    }
+    },
+    "sectionNeedsInput": "Requiere tu atención",
+    "sectionInProgress": "En curso",
+    "sectionCompleted": "Completado",
+    "statusRunning": "En ejecución",
+    "statusNeedsInput": "Esperándote"
   },
   "input": {
     "typeMessage": "Escribe un mensaje",
@@ -108,6 +113,7 @@
     "succeeded": "Correctas",
     "tokensIn": "Tokens de entrada",
     "tokensOut": "Tokens de salida",
+    "cached": "En caché",
     "thumbsUp": "Me gusta",
     "thumbsDown": "No me gusta",
     "ratedGood": "Valoradas bien",
@@ -187,7 +193,8 @@
     "loadingMessages": "Cargando los mensajes…",
     "loadingChat": "Cargando el chat…",
     "noResponse": "El agente no respondió. Puede ser un problema temporal.",
-    "agentError": "El agente encontró un error:"
+    "agentError": "El agente encontró un error:",
+    "jumpToLatest": "Ir a lo más reciente"
   },
   "skills": {
     "title": "Habilidades",
@@ -255,7 +262,13 @@
     "rejectAction": "Rechazar acción del subagente: {{name}}",
     "alwaysAllowTool": "Permitir siempre la herramienta: {{name}}",
     "alwaysAllowAgent": "Permitir siempre el subagente: {{name}}",
-    "approvalRequired": "Requiere aprobación"
+    "approvalRequired": "Requiere aprobación",
+    "processing": "El subagente está procesando…",
+    "inNode": "Ejecutando {{node}}…",
+    "calling": "Llamando a {{tool}}…",
+    "writing": "redactando…",
+    "steps": "Pasos",
+    "stopped": "Detenido"
   },
   "prompt": {
     "description": "La identidad del orquestador, su tabla de enrutamiento y sus reglas: lo que hace antes de delegar.",
@@ -334,7 +347,8 @@
     "response": "Respuesta a la interrupción",
     "placeholder": "Escribe tu respuesta...",
     "authenticate": "Autenticarse",
-    "connectFailed": "Error de conexión"
+    "connectFailed": "Error de conexión",
+    "resumeNow": "Reanudar"
   },
   "projects": {
     "loading": "Cargando el proyecto",
@@ -388,5 +402,17 @@
     "guardrailDetail": "Revisa las respuestas antes de que te lleguen.",
     "tokenBudget": "Presupuesto de tokens",
     "tokenBudgetDetail": "Detiene una ejecución cuando agota su asignación."
+  },
+  "mcpAuth": {
+    "connect": "Conectar",
+    "connecting": "Conectando…",
+    "done": "Conectado",
+    "failed": "Error al conectar",
+    "connected": "{{name}} conectado",
+    "notConnected": "{{name}} no está conectado.",
+    "expired": "Tu sesión de {{name}} ha caducado."
+  },
+  "subagent": {
+    "working": "Trabajando…"
   }
 }

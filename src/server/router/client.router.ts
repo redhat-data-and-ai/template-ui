@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
-import { getAgentName, getSettings } from "../utils/settings.js";
+import { getAgentName, getSettings, resolveAgentHost } from "../utils/settings.js";
 import { toClientUserData } from "../utils/session-identity.js";
 import {
   buildSandboxCspHeader,
@@ -124,8 +124,7 @@ async function routes(fastify: FastifyInstance) {
   })
   
   fastify.get("/mcp/oauth/callback", async (request: FastifyRequest, reply: FastifyReply) => {
-    const cfg = getSettings();
-    const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+    const agentHost = resolveAgentHost();
     const qs = request.url.split("?")[1] || "";
     const agentUrl = `${agentHost}/mcp/oauth/callback${qs ? `?${qs}` : ""}`;
     const resp = await fetch(agentUrl, {

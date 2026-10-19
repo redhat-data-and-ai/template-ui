@@ -24,7 +24,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import { markdownSanitizeSchema } from "../lib/markdown-sanitize";
-import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
+import { isSubAgentToolCall, detectArtifactKind, extractDelegationText, extractSubAgentName } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
 import { McpAppHostFromToolCall } from "./McpAppHost";
@@ -33,6 +33,17 @@ import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButt
 import { ForkButton } from "./ForkButton";
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
+import {
+  authRequestsFromProvenance,
+  parseReloadedTools,
+  stripReloadedMarkers,
+  parseAuthRequests,
+  stripAuthMarkers,
+} from '../lib/mcp-auth-marker';
+import { JumpToLatest } from './JumpToLatest';
+import { McpAuthPrompt } from './McpAuthPrompt';
+import { progressForDelegation } from '../lib/subagent-match';
+import type { DelegationProgress } from '../lib/subagent-steps';
 import { MessageProvenance, type Provenance } from './MessageProvenance';
 
 function extractMessageText(content: unknown): string {
@@ -50,6 +61,18 @@ function extractMessageText(content: unknown): string {
       .join('');
   }
   return '';
+}
+
+/**
+ * Did this assistant message actually say anything?
+ *
+ * A turn that delegates produces two assistant messages: one whose
+ * only payload is `task` tool calls, and one with the answer. The
+ * first is machinery — it renders as the subagent boxes — so the
+ * actions that belong to an answer do not belong to it.
+ */
+function hasRenderableText(message: { content?: unknown }): boolean {
+  return extractMessageText(message.content).trim().length > 0;
 }
 
 function stripThinkingFromPlainText(text: string): { thinking: string; display: string } {
@@ -73,9 +96,13 @@ function stripThinkingFromPlainText(text: string): { thinking: string; display: 
 }
 
 function partitionMessageContent(content: unknown): { thinkingText: string; markdownForDisplay: string } {
+  // The AUTH_REQUIRED marker is for McpAuthPrompt to read, not for
+  // the reader. The sentence after it already says what is wrong in
+  // prose, so stripping the bracket loses nothing and showing it
+  // leaks an internal token into the answer.
   if (typeof content === 'string') {
     const { thinking, display } = stripThinkingFromPlainText(content);
-    return { thinkingText: thinking, markdownForDisplay: display };
+    return { thinkingText: thinking, markdownForDisplay: stripReloadedMarkers(stripAuthMarkers(display)) };
   }
   if (Array.isArray(content)) {
     const thinkingFromBlocks: string[] = [];
@@ -111,7 +138,7 @@ function partitionMessageContent(content: unknown): { thinkingText: string; mark
       .join('');
     const { thinking: thinkingInText, display: afterTags } = stripThinkingFromPlainText(restJoined);
     const thinkingText = [thinkingFromBlocks.join('\n\n'), thinkingInText].filter(Boolean).join('\n\n');
-    return { thinkingText, markdownForDisplay: afterTags };
+    return { thinkingText, markdownForDisplay: stripReloadedMarkers(stripAuthMarkers(afterTags)) };
   }
   return { thinkingText: '', markdownForDisplay: '' };
 }
@@ -534,9 +561,22 @@ interface AIMessageRendererProps {
   totalActionRequests?: number;
   allDecisionsMade?: boolean;
   onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
+  /** Live progress per nested-graph namespace, keyed by namespace. */
+  subagentProgress?: Record<string, DelegationProgress>;
+  /** Set only when the reader has scrolled away from the newest message. */
+  jumpToLatest?: () => void;
 }
 
-export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
+/** The question this reply was answering, for replay after a connect. */
+function lastQuestionBefore(messages: Message[], index: number): string {
+  for (let i = index - 1; i >= 0; i--) {
+    if (messages[i]?.type !== 'human') continue;
+    return extractMessageText(messages[i].content).trim();
+  }
+  return '';
+}
+
+export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, subagentProgress = {} }: AIMessageRendererProps) {
   const { t } = useTranslation();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
@@ -629,8 +669,33 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
       const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
       const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
 
+      // What the agent said before it delegated.
+      //
+      // This branch used to return only the boxes, so a message
+      // carrying both an intent line and its tool calls had the
+      // sentence thrown away — the reader watched two subagents
+      // start with no idea why. The agent writes it; the UI has to
+      // show it, and above the boxes it explains, not annotates.
+      const { markdownForDisplay: intentMd } = partitionMessageContent(message.content);
+
       return (
         <div className="space-y-2 w-full" aria-live="off">
+          {intentMd.trim().length > 0 && (
+            <div className="flex items-start gap-3" data-testid="delegation-intent">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+                <Bot className="w-4 h-4 text-white" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1 pt-1 text-sm">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]}
+                  components={mdComponents}
+                >
+                  {intentMd}
+                </ReactMarkdown>
+              </div>
+            </div>
+          )}
           {subAgentCalls.map((toolCall, idx) => {
             const tcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
             const slot = approvalSlotByToolCallId.get(tcId);
@@ -646,6 +711,11 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                 onSingleDecision={totalActionRequests > 1 ? onSingleDecision : undefined}
                 isCurrentApproval={totalActionRequests > 1 ? isThisCurrent : undefined}
                 onAlwaysAllow={onAlwaysAllow}
+                progress={progressForDelegation(
+                  Object.values(subagentProgress),
+                  extractDelegationText(toolCall as { args?: Record<string, unknown> | string }),
+                  extractSubAgentName(toolCall as { name: string; args?: Record<string, unknown> }),
+                )}
               />
             );
           })}
@@ -872,7 +942,7 @@ interface ChatMessagesViewProps {
   onAlwaysAllow?: (toolNames: string[]) => void;
   interruptContent?: React.ReactNode;
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
-  onSubmit: (inputValue: string) => void;
+  onSubmit: (inputValue: string, options?: { silent?: boolean }) => void;
   onRetry?: () => void;
   errorMessage?: string | null;
   onCancel: () => void;
@@ -881,6 +951,9 @@ interface ChatMessagesViewProps {
   isRateLimited?: boolean;
   rateLimitRemainingSeconds?: number;
   mcpEvents?: Array<{ tool: string; status: string; timestamp: number }>;
+  subagentProgress?: Record<string, DelegationProgress>;
+  /** Set only when the reader has scrolled away from the newest message. */
+  jumpToLatest?: () => void;
   chatId: string;
   traceId: string | null;
   userId?: string;
@@ -910,6 +983,8 @@ export function ChatMessagesView({
   isRateLimited = false,
   rateLimitRemainingSeconds = 0,
   mcpEvents = [],
+  subagentProgress = {},
+  jumpToLatest,
   chatId,
   traceId,
   userId,
@@ -926,6 +1001,50 @@ export function ChatMessagesView({
   const prevPendingInterrupt = useRef(pendingInterrupt);
   const prevIsLoading = useRef(isLoading);
   const [srAnnouncement, setSrAnnouncement] = useState('');
+
+  // Retry the question once when a system authorized itself mid-turn.
+  //
+  // Tool lists are fixed when a run starts, so a server that becomes
+  // reachable part-way through cannot be queried until the next
+  // turn. Asked to use Dataverse while it was still connecting, the
+  // agent spent 38 seconds hunting for another way in and then
+  // answered from Atlan — a different system, silently, for a
+  // question that had named one. The honest recovery is one more
+  // turn, and making the reader ask again for it is the part worth
+  // removing.
+  const retriedTurns = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (isLoading) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.type !== 'ai') return;
+
+    const key = String(last.id ?? messages.length);
+    if (retriedTurns.current.has(key)) return;
+
+    // The marker arrives on the *tool result*, which is merged onto
+    // the originating call rather than appended as a message — so
+    // reading `message.content` alone never saw it and this retry
+    // had never once fired. The user was left reading "prompt me
+    // again", which is the thing it exists to avoid.
+    const raw = messages
+      .slice(-6)
+      .flatMap((m) => [
+        extractMessageText(m.content),
+        ...((m as { tool_calls?: Array<{ content?: unknown }> }).tool_calls ?? []).map(
+          (tc) => (typeof tc?.content === 'string' ? tc.content : ''),
+        ),
+      ])
+      .join('\n');
+    if (parseReloadedTools(raw).length === 0) return;
+
+    const question = lastQuestionBefore(messages, messages.length - 1);
+    if (!question) return;
+
+    retriedTurns.current.add(key);
+    // Silent: the reader asked once. Re-posting their question makes
+    // the thread read as though they asked twice for one answer.
+    onSubmit(question, { silent: true });
+  }, [messages, isLoading, onSubmit]);
 
   const globalActionRequests = useMemo(() => {
     const v = pendingInterrupt?.value;
@@ -1022,14 +1141,18 @@ export function ChatMessagesView({
     return () => clearTimeout(timer);
   }, [rawNoResponse]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // No auto-scroll here. The page owns it (useStickToBottom): two
+  // mechanisms scrolling the same container, one smooth and one
+  // instant, fought each other on every token.
 
   const showExport = Boolean(onExportMarkdown && onExportJson && messages.length > 0);
 
   return (
     <div className="relative flex flex-col h-full min-h-0 overflow-hidden">
+      {/* Positioned against this container, which already has
+          `relative` — the scroll area itself moves under the
+          button, so anchoring there would scroll it away. */}
+      <JumpToLatest hidden={!jumpToLatest} onClick={() => jumpToLatest?.()} />
       <div
         aria-live="polite"
         aria-atomic="true"
@@ -1074,6 +1197,16 @@ export function ChatMessagesView({
         <div role="log" aria-label={t('chat.messages')} aria-live="off" aria-busy={isLoading} className="chat-turns px-4 md:px-8 pb-6 pt-6 max-w-3xl mx-auto">
           {messages.map((message, messageIndex) => {
             if (message.type === 'tool') {
+              return <Fragment key={message.id ?? `m-${messageIndex}`} />;
+            }
+            // A question the interface re-sent on the reader's
+            // behalf. The agent needs it; the transcript does not
+            // need it twice.
+            if (
+              message.type === 'human' &&
+              (message as { additional_kwargs?: { silent_retry?: boolean } })
+                .additional_kwargs?.silent_retry
+            ) {
               return <Fragment key={message.id ?? `m-${messageIndex}`} />;
             }
             const copyText = getCopyableAiMessageText(message.content, t('chat.aiGeneratedMarker'));
@@ -1121,7 +1254,16 @@ export function ChatMessagesView({
                     totalActionRequests={globalActionRequests.length}
                     allDecisionsMade={globalAllDecisionsMade}
                     onSingleDecision={handleGlobalSingleDecision}
+                    subagentProgress={subagentProgress}
                   />
+                  {/* Only on a message that said something.
+                      A delegation message carries tool calls and no
+                      text — it renders as the subagent boxes — and
+                      giving it copy, feedback and an "AI-generated"
+                      tag produced a second actions row per turn,
+                      offering a thumbs-up on "I called two
+                      subagents". */}
+                  {hasRenderableText(message) && (
                   <MessageActionsRow
                     isLastAiInTurn={isLastAiInTurn}
                     copyText={copyText}
@@ -1133,6 +1275,47 @@ export function ChatMessagesView({
                     // +1 because forking "at" a message keeps it.
                     forkIndex={messageIndex + 1}
                   />
+                  )}
+                  {/* Above the provenance line and below the answer:
+                      this one *is* something to do. The agent used to
+                      say "connect it in Settings", three navigations
+                      from the sentence saying so. */}
+                  <div className="pl-11">
+                    <McpAuthPrompt
+                      requests={(() => {
+                        // Provenance first; the text marker is a
+                        // fallback for when the model quotes it.
+                        const fromMeta = authRequestsFromProvenance(
+                          (message as Record<string, unknown>).provenance as
+                            | Provenance
+                            | undefined,
+                          (message as Record<string, unknown>)
+                            .additional_kwargs as
+                            | {
+                                auth_required?: Array<{
+                                  mcp_name: string;
+                                  reason: string;
+                                  connect_url: string;
+                                }>;
+                              }
+                            | undefined,
+                        );
+                        return fromMeta.length > 0
+                          ? fromMeta
+                          : parseAuthRequests(extractMessageText(message.content));
+                      })()}
+                      onConnected={() => {
+                        // Connecting is not the goal; the answer is.
+                        //
+                        // Ending on "now ask again" leaves the user
+                        // to retype a question the page is already
+                        // showing, after a detour they only took
+                        // because we sent them on it. Replay it.
+                        const question = lastQuestionBefore(messages, messageIndex);
+                        if (question) onSubmit(question);
+                      }}
+                    />
+                  </div>
                   {/* Below the actions, not above: it explains the
                       answer rather than offering anything to do. */}
                   <div className="pl-11">

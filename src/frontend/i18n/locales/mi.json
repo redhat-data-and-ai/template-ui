@@ -48,7 +48,12 @@
       "degraded": "Pokapū: kua heke — kei te whakautu, engari kua hinga tētahi whakawhirinakitanga",
       "unhealthy": "Pokapū: kua weto",
       "unknown": "Pokapū: kāore e mōhiotia ana"
-    }
+    },
+    "sectionNeedsInput": "E hiahia whakaurunga",
+    "sectionInProgress": "Kei te haere",
+    "sectionCompleted": "Kua oti",
+    "statusRunning": "Kei te rere",
+    "statusNeedsInput": "Kei te tatari ki a koe"
   },
   "input": {
     "typeMessage": "Tuhia he karere",
@@ -108,6 +113,7 @@
     "succeeded": "I angitu",
     "tokensIn": "Tohu kuhu",
     "tokensOut": "Tohu puta",
+    "cached": "Keteroki",
     "thumbsUp": "Ngā whakaae",
     "thumbsDown": "Ngā whakahē",
     "ratedGood": "I kīia he pai",
@@ -187,7 +193,8 @@
     "loadingMessages": "Te uta i ngā karere…",
     "loadingChat": "Te uta i te kōrerorero…",
     "noResponse": "Kāore te pokapū i whakautu. He raru poto pea tēnei.",
-    "agentError": "I pā he hapa ki te pokapū:"
+    "agentError": "I pā he hapa ki te pokapū:",
+    "jumpToLatest": "Peke ki te mea hou"
   },
   "skills": {
     "title": "Ngā Pūkenga",
@@ -255,7 +262,13 @@
     "rejectAction": "Paopao i te mahi a te pokapū-iti: {{name}}",
     "alwaysAllowTool": "Whakaaetia te taputapu i ngā wā katoa: {{name}}",
     "alwaysAllowAgent": "Whakaaetia te pokapū-iti i ngā wā katoa: {{name}}",
-    "approvalRequired": "E hiahiatia ana he whakaaetanga"
+    "approvalRequired": "E hiahiatia ana he whakaaetanga",
+    "processing": "Kei te tukatuka te kaihoko-iti…",
+    "inNode": "Kei te rere {{node}}…",
+    "calling": "Kei te karanga {{tool}}…",
+    "writing": "kei te tuhi…",
+    "steps": "Ngā hipanga",
+    "stopped": "Kua mutu"
   },
   "prompt": {
     "description": "Te tuakiri o te kaiwhakahaere, tana ripanga arataki me ōna ture — tāna mahi i mua i te tuku.",
@@ -334,7 +347,8 @@
     "response": "Whakautu ki te aukati",
     "placeholder": "Tuhia tō whakautu...",
     "authenticate": "Whakamotuhēhē",
-    "connectFailed": "I rahua te hono"
+    "connectFailed": "I rahua te hono",
+    "resumeNow": "Haere tonu"
   },
   "projects": {
     "loading": "Te uta i te kaupapa",
@@ -388,5 +402,17 @@
     "guardrailDetail": "Ka tirotirohia ngā whakautu i mua i te taenga mai ki a koe.",
     "tokenBudget": "Tahua tohu",
     "tokenBudgetDetail": "Ka whakamutua te rere ina pau tana tahua."
+  },
+  "mcpAuth": {
+    "connect": "Tūhono",
+    "connecting": "Kei te tūhono…",
+    "done": "Kua tūhono",
+    "failed": "I rahua te tūhono",
+    "connected": "Kua tūhono a {{name}}",
+    "notConnected": "Kāore a {{name}} i te tūhono.",
+    "expired": "Kua pau te wā o tō wātū {{name}}."
+  },
+  "subagent": {
+    "working": "Kei te mahi…"
   }
 }

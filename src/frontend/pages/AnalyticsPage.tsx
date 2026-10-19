@@ -190,6 +190,14 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
             <Panel label={t('analytics.tokens')}>
               <Figure label={t('analytics.tokensIn')} value={compact(summary.input_tokens)} />
               <Figure label={t('analytics.tokensOut')} value={compact(summary.output_tokens)} />
+              {/*
+                Most input tokens are the system prompt and tool
+                schemas, identical on every turn. What share of them
+                the provider served from cache is the difference
+                between paying for that once an hour and paying for
+                it on every message.
+              */}
+              <Figure label={t('analytics.cached')} value={pct(summary.cache_hit_rate)} />
             </Panel>
 
             <Panel label={t('analytics.feedback')}>

@@ -146,7 +146,44 @@ interface FeaturesConfig {
 interface AgentConfig {
   endpoint: string;
   timeout_ms: number;
+  /**
+   * How long one streaming turn may take.
+   *
+   * Separate from `timeout_ms`, which covers ordinary request/response
+   * calls. A delegated turn is not one of those: it can run a subagent
+   * through a dozen tool calls, and a 300s ceiling cut one off mid-
+   * answer after the work had been done. Floor, not a target — the
+   * fix for a slow turn is a faster turn.
+   */
+  stream_timeout_ms: number;
+  /**
+   * What happens to a run when the browser goes away.
+   *
+   * `"continue"`: a refresh, a closed laptop or a flaky network
+   * leaves the turn running and it is there when you come back.
+   * `"cancel"` is the agent's default and means a refresh silently
+   * throws away a two-minute delegation — and the tokens it spent.
+   *
+   * With `"continue"`, stopping has to be said explicitly rather
+   * than implied by disconnecting; the client calls the run's
+   * cancel endpoint.
+   */
+  on_disconnect: "continue" | "cancel";
   streaming: boolean;
+  /**
+   * Stream the inner workings of delegated subagents.
+   *
+   * A `task` call is opaque from outside: the orchestrator waits,
+   * the subagent works — over a hundred seconds on a three-part
+   * question — and the reader sees a spinner. With this on, the
+   * agent's nested graph events arrive namespaced and are rendered
+   * as a progress line, never as transcript content.
+   *
+   * Config rather than a constant because it is a real trade: more
+   * events on the wire, and a glimpse of machinery some deployments
+   * would rather not show.
+   */
+  stream_subgraphs: boolean;
 }
 
 interface AuthConfig {
@@ -261,7 +298,10 @@ const DEFAULTS: UISettings = {
   agent: {
     endpoint: "",
     timeout_ms: 30000,
+    stream_timeout_ms: 900000,
+    on_disconnect: "continue",
     streaming: true,
+    stream_subgraphs: true,
   },
   auth: {
     enabled: true,
@@ -426,8 +466,21 @@ function validateConfig(config: UISettings): void {
       `Config validation error: agent.endpoint must be a valid URL (got '${config.agent.endpoint}')`,
     );
   }
+  if (
+    typeof config.agent.stream_timeout_ms !== "number" ||
+    config.agent.stream_timeout_ms <= 0
+  ) {
+    throw new Error(
+      "Config validation error: agent.stream_timeout_ms must be a positive number",
+    );
+  }
   if (typeof config.agent.timeout_ms !== "number" || config.agent.timeout_ms <= 0) {
     throw new Error("Config validation error: agent.timeout_ms must be a positive number");
+  }
+  if (typeof config.agent.stream_subgraphs !== "boolean") {
+    throw new Error(
+      "Config validation error: agent.stream_subgraphs must be boolean",
+    );
   }
   if (typeof config.agent.streaming !== "boolean") {
     throw new Error("Config validation error: agent.streaming must be boolean");
@@ -525,6 +578,12 @@ function applyEnvOverrides(config: UISettings): void {
     const timeout = Number.parseInt(process.env.AGENT_TIMEOUT_MS, 10);
     if (!Number.isNaN(timeout)) {
       config.agent.timeout_ms = timeout;
+    }
+  }
+  if (process.env.AGENT_STREAM_TIMEOUT_MS) {
+    const streamTimeout = Number.parseInt(process.env.AGENT_STREAM_TIMEOUT_MS, 10);
+    if (!Number.isNaN(streamTimeout)) {
+      config.agent.stream_timeout_ms = streamTimeout;
     }
   }
 
@@ -717,6 +776,21 @@ export function getSettings(): UISettings {
 }
 
 // For testing only - clears the cached settings and agent name
+/**
+ * Where the agent lives, resolved once.
+ *
+ * The same `cfg.agent.endpoint || AGENT_HOST || "http://localhost:5002"`
+ * expression was copied into six files. A loopback default repeated
+ * six times is six places to miss when it is wrong, and a literal
+ * host in a router is a deployment detail in the wrong layer.
+ */
+const AGENT_HOST_FALLBACK = "http://localhost:5002";
+
+export function resolveAgentHost(): string {
+  const cfg = getSettings();
+  return cfg.agent.endpoint || process.env.AGENT_HOST || AGENT_HOST_FALLBACK;
+}
+
 export function resetSettings(): void {
   _settings = undefined;
   _agentName = null;
@@ -725,8 +799,7 @@ export function resetSettings(): void {
 export async function getAgentName(): Promise<string> {
   if (_agentName !== null) return _agentName;
 
-  const cfg = getSettings();
-  const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+  const agentHost = resolveAgentHost();
 
   try {
     const resp = await fetch(`${agentHost}/info`, { signal: AbortSignal.timeout(3000) });

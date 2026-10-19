@@ -20,6 +20,14 @@ export interface AnalyticsSummary {
   p95_seconds: number;
   input_tokens: number;
   output_tokens: number;
+  /** Subset of input_tokens served from a cached prompt prefix. */
+  cached_tokens: number;
+  /**
+   * null when nothing was recorded, which is not the same as 0%: a
+   * provider that reports no cache field and a genuine run of misses
+   * look identical, and 0% would be a confident wrong answer.
+   */
+  cache_hit_rate: number | null;
   feedback_up: number;
   feedback_down: number;
   /** null when nobody has rated anything. */
@@ -99,6 +107,8 @@ export async function fetchSummary(days: number): Promise<AnalyticsSummary> {
     p95_seconds: num(body.p95_seconds),
     input_tokens: num(body.input_tokens),
     output_tokens: num(body.output_tokens),
+    cached_tokens: num(body.cached_tokens),
+    cache_hit_rate: rate(body.cache_hit_rate),
     feedback_up: num(body.feedback_up),
     feedback_down: num(body.feedback_down),
     satisfaction: rate(body.satisfaction),

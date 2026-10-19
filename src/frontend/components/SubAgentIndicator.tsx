@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Card,
   CardBody,
@@ -9,6 +9,13 @@ import {
 import { Bot, Check, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import type { ToolCallWithContent, InterruptInfo } from '../types/deep-agent';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
+import { markdownSanitizeSchema } from '../lib/markdown-sanitize';
+import { markdownComponentsCompact } from '../lib/markdown-compact';
+import { SubagentCurrentStep, SubagentElapsed, SubagentTimeline } from './SubagentTimeline';
+import type { DelegationProgress } from '../lib/subagent-steps';
 import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
 
 interface SubAgentIndicatorProps {
@@ -20,9 +27,18 @@ interface SubAgentIndicatorProps {
   readonly onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
   readonly isCurrentApproval?: boolean;
   readonly onAlwaysAllow?: (toolNames: string[]) => void;
+  /**
+   * Live progress from this subagent's nested graph, when streaming
+   * it is enabled. Absent means the delegation is opaque, which is
+   * what this box showed for every delegation before: a static
+   * "processing" line for a run that can last two minutes.
+   */
+  readonly progress?: DelegationProgress;
 }
 
-type VisualStatus = 'delegating' | 'complete' | 'error';
+type VisualStatus = 'delegating' | 'complete' | 'error' | 'stopped';
+
+
 
 function hasContent(toolCall: ToolCallWithContent): boolean {
   if (toolCall.content == null) return false;
@@ -31,6 +47,16 @@ function hasContent(toolCall: ToolCallWithContent): boolean {
 }
 
 function deriveStatus(toolCall: ToolCallWithContent): VisualStatus {
+  // An explicit terminal status outranks the content.
+  //
+  // When a turn ends with a delegation unresolved — timed out,
+  // errored, stopped — the reducer stamps `status` and sets content
+  // to the error message, which is the empty string when there is
+  // nothing to say. `hasContent` is false for '', so the box went on
+  // reporting "Working" with a live clock for a turn that had been
+  // over for seventeen minutes.
+  if (toolCall.status === 'cancelled') return 'stopped';
+  if (toolCall.status === 'error') return 'error';
   if (!hasContent(toolCall)) return 'delegating';
   if (typeof toolCall.content === 'string' && toolCall.content.startsWith('Error')) return 'error';
   return 'complete';
@@ -48,12 +74,37 @@ const STATUS_CONFIG: Record<VisualStatus, {
   delegating: { labelKey: 'subagents.working', color: 'blue', icon: Loader2, animate: true },
   complete:   { labelKey: 'subagents.complete', color: 'green', icon: CheckCircle, animate: false },
   error:      { labelKey: 'common.error', color: 'red', icon: AlertCircle, animate: false },
+  stopped:    { labelKey: 'subagents.stopped', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow, progress }: SubAgentIndicatorProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const streamRef = useRef<HTMLDivElement>(null);
+  const streamedText = progress?.latest ?? '';
+
+  // What the Result block shows: the finished content once there is
+  // one, the live stream until then.
+  const finished = hasContent(toolCall);
+  const resultText = finished
+    ? typeof toolCall.content === 'string'
+      ? toolCall.content
+      : JSON.stringify(toolCall.content, null, 2)
+    : streamedText;
+  // A tool that returned JSON is not prose and must not be reflowed
+  // as if it were; everything else is a written report.
+  const resultIsMarkdown = finished ? typeof toolCall.content === 'string' : true;
+
+  // Keep the newest text in view while it streams, unless the reader
+  // has scrolled up to read something — yanking them back to the
+  // bottom mid-sentence is worse than letting the tail run off.
+  useEffect(() => {
+    const el = streamRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }, [streamedText]);
   const name = extractSubAgentName(toolCall);
   const delegationText = extractDelegationText(toolCall);
   const status = deriveStatus(toolCall);
@@ -76,6 +127,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
       setExpanded(true);
     }
   }, [needsApproval, pendingInterrupt]);
+
 
   return (
     <div className="flex items-start gap-3">
@@ -114,6 +166,12 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                   }
                 >
                   {needsApproval ? t('subagents.approvalRequired') : t(config.labelKey)}
+                  {status === 'delegating' && !needsApproval && progress && (
+                    <>
+                      {' · '}
+                      <SubagentElapsed since={progress.startedAt} />
+                    </>
+                  )}
                 </Label>
               </div>
               <span aria-hidden="true">
@@ -126,40 +184,92 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
             </div>
           </CardHeader>
 
+          {/* Outside the collapse: the current operation only.
+              A delegation runs for minutes behind one opaque call,
+              and what the reader needs here is what it is doing and
+              how far along — not the report, which the orchestrator
+              relays in the answer anyway, and not the full history,
+              which is one click down. */}
+          {status === 'delegating' && !needsApproval && (
+            <div className="px-4 pb-3">
+              {progress && progress.steps.length > 0 ? (
+                <SubagentCurrentStep steps={progress.steps} runningSince={progress.startedAt} />
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-blue-500 animate-pulse" />
+                  <span aria-live="polite">{t('subagents.processing')}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {expanded && (
             <CardBody
               id={`subagent-body-${messageId}-${index}`}
               className="border-t border-border pt-3 space-y-3 !pb-0"
             >
+              {progress && progress.steps.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                    {t('subagents.steps')}
+                  </p>
+                  <SubagentTimeline
+                    steps={progress.steps}
+                    runningSince={status === 'delegating' ? progress.startedAt : undefined}
+                  />
+                </div>
+              )}
+              {(hasContent(toolCall) || streamedText) && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-2">
+                    {t('common.result')}
+                    {!hasContent(toolCall) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    )}
+                  </p>
+                  <div
+                    ref={streamRef}
+                    data-testid={hasContent(toolCall) ? 'subagent-result' : 'subagent-stream'}
+                    aria-live={hasContent(toolCall) ? undefined : 'polite'}
+                    className="text-xs text-foreground bg-muted p-3 rounded-lg overflow-auto max-h-60 break-words"
+                  >
+                    {/* Rendered, not quoted. A subagent report is
+                        markdown — headings, lists, a table of merge
+                        requests — and as raw text in a monospace
+                        block it arrived as a wall of `###` and `|`.
+                        Streaming markdown reflows a little as it
+                        lands, the same as the main answer does. */}
+                    {resultIsMarkdown ? (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]}
+                        components={markdownComponentsCompact}
+                      >
+                        {resultText}
+                      </ReactMarkdown>
+                    ) : (
+                      <pre className="font-mono whitespace-pre-wrap">{resultText}</pre>
+                    )}
+                  </div>
+                </div>
+              )}
               {delegationText && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                     {t('subagents.delegation')}
                   </p>
-                  <p className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg whitespace-pre-wrap">
+                  <p className="text-xs text-foreground whitespace-pre-wrap">
                     {delegationText}
                   </p>
                 </div>
               )}
-              {hasContent(toolCall) && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    {t('common.result')}
-                  </p>
-                  <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono max-h-60">
-                    {typeof toolCall.content === 'string'
-                      ? toolCall.content
-                      : JSON.stringify(toolCall.content, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {status === 'delegating' && !needsApproval && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                  Sub-agent is processing&hellip;
-                </div>
-              )}
-
+              {/* One Result block, filled either way.
+                  While the subagent works it holds the streamed text
+                  and grows; when the delegation finishes the final
+                  content takes its place in the same spot. Streaming
+                  into a separate block above meant the result still
+                  arrived in a single jump, which is what "it does
+                  not appear as streaming" was describing. */}
               {isInnerToolApproval && needsApproval && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -169,7 +279,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     <div key={r.name} className="space-y-1.5">
                       <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{r.name}</code>
                       {r.args && Object.keys(r.args).length > 0 && (
-                        <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                        <pre className="text-xs text-foreground bg-muted p-3 rounded-lg overflow-auto font-mono">
                           {JSON.stringify(r.args, null, 2)}
                         </pre>
                       )}

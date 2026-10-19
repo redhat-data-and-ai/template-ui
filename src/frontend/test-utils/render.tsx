@@ -9,8 +9,10 @@ interface WrapperProps {
   children: React.ReactNode;
 }
 
+let preloaded: Record<string, unknown> | undefined;
+
 function AllProviders({ children }: WrapperProps) {
-  const store = createTestStore();
+  const store = createTestStore(preloaded);
   return (
     <Provider store={store}>
       <MemoryRouter>{children}</MemoryRouter>
@@ -18,8 +20,17 @@ function AllProviders({ children }: WrapperProps) {
   );
 }
 
-function renderWithProviders(ui: React.ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
-  return render(ui, { wrapper: AllProviders, ...options });
+function renderWithProviders(
+  ui: React.ReactElement,
+  options?: Omit<RenderOptions, 'wrapper'> & { preloadedState?: Record<string, unknown> },
+) {
+  const { preloadedState, ...rest } = options ?? {};
+  preloaded = preloadedState;
+  try {
+    return render(ui, { wrapper: AllProviders, ...rest });
+  } finally {
+    preloaded = undefined;
+  }
 }
 
 export { renderWithProviders };

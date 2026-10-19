@@ -48,7 +48,12 @@
       "degraded": "Agent: degraded — answering, but a dependency is down",
       "unhealthy": "Agent: offline",
       "unknown": "Agent: status unknown"
-    }
+    },
+    "sectionNeedsInput": "Needs input",
+    "sectionInProgress": "In progress",
+    "sectionCompleted": "Completed",
+    "statusRunning": "Running",
+    "statusNeedsInput": "Waiting for you"
   },
   "input": {
     "typeMessage": "Type a message",
@@ -108,6 +113,7 @@
     "succeeded": "Succeeded",
     "tokensIn": "Tokens in",
     "tokensOut": "Tokens out",
+    "cached": "Cached",
     "thumbsUp": "Thumbs up",
     "thumbsDown": "Thumbs down",
     "ratedGood": "Rated good",
@@ -187,7 +193,8 @@
     "loadingMessages": "Loading messages…",
     "loadingChat": "Loading chat…",
     "noResponse": "The agent didn't respond. This could be a temporary issue.",
-    "agentError": "The agent encountered an error:"
+    "agentError": "The agent encountered an error:",
+    "jumpToLatest": "Jump to latest"
   },
   "skills": {
     "title": "Skills",
@@ -255,7 +262,13 @@
     "rejectAction": "Reject sub-agent action: {{name}}",
     "alwaysAllowTool": "Always allow tool: {{name}}",
     "alwaysAllowAgent": "Always allow sub-agent: {{name}}",
-    "approvalRequired": "Approval required"
+    "approvalRequired": "Approval required",
+    "processing": "Sub-agent is processing…",
+    "inNode": "Running {{node}}…",
+    "calling": "Calling {{tool}}…",
+    "writing": "writing…",
+    "steps": "Steps",
+    "stopped": "Stopped"
   },
   "prompt": {
     "description": "The orchestrator's identity, routing table and rules — what it does before it delegates.",
@@ -334,7 +347,8 @@
     "response": "Interrupt response",
     "placeholder": "Type your response...",
     "authenticate": "Authenticate",
-    "connectFailed": "Connect failed"
+    "connectFailed": "Connect failed",
+    "resumeNow": "Resume now"
   },
   "projects": {
     "loading": "Loading project",
@@ -388,5 +402,17 @@
     "guardrailDetail": "Screens replies before they reach you.",
     "tokenBudget": "Token budget",
     "tokenBudgetDetail": "Stops a run once it has spent its allowance."
+  },
+  "mcpAuth": {
+    "connect": "Connect",
+    "connecting": "Connecting…",
+    "done": "Connected",
+    "failed": "Connect failed",
+    "connected": "Connected {{name}}",
+    "notConnected": "{{name}} is not connected.",
+    "expired": "Your {{name}} session expired."
+  },
+  "subagent": {
+    "working": "Working…"
   }
 }

@@ -32,6 +32,10 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { logout } from '../services/logout';
+import { useSelector } from 'react-redux';
+import type { StreamingState } from '../redux/slices/chats';
+import { ChatStatusDot } from './ChatStatusDot';
+import { activityByChat, type ChatActivity } from '../lib/chat-activity';
 import { cn } from '@/lib/utils';
 import type { SidebarChatItem, SidebarProject } from '../types/chat';
 import { SearchResults } from './SearchResults';
@@ -83,6 +87,11 @@ function SidebarComponent({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const agentHealth = useAgentHealth();
+  const streamingStates = useSelector(
+    (state: { chats: { streamingStates: Record<string, StreamingState> } }) =>
+      state.chats.streamingStates,
+  );
+  const activity = useMemo(() => activityByChat(streamingStates), [streamingStates]);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -129,6 +138,32 @@ function SidebarComponent({
       ),
     [filteredChats, knownProjectIds],
   );
+
+  // Grouped by what each conversation needs from the reader.
+  //
+  // Flat and ordered by time, a chat waiting on an approval sat
+  // wherever it happened to fall, and the only way to find it was to
+  // remember it existed. Order is deliberate: blocked on you, then
+  // working, then everything else.
+  const unassignedSections = useMemo(() => {
+    const buckets: Record<ChatActivity, SidebarChatItem[]> = {
+      'needs-input': [],
+      running: [],
+      idle: [],
+    };
+    for (const chat of unassignedChats) {
+      buckets[activity[chat.id] ?? 'idle'].push(chat);
+    }
+    return (
+      [
+        { key: 'needs-input', labelKey: 'sidebar.sectionNeedsInput' },
+        { key: 'running', labelKey: 'sidebar.sectionInProgress' },
+        { key: 'idle', labelKey: 'sidebar.sectionCompleted' },
+      ] as const
+    )
+      .map((section) => ({ ...section, chats: buckets[section.key] }))
+      .filter((section) => section.chats.length > 0);
+  }, [unassignedChats, activity]);
 
   const chatsByProject = useMemo(() => {
     const map: Record<string, SidebarChatItem[]> = {};
@@ -212,7 +247,10 @@ function SidebarComponent({
                 isActive ? 'text-foreground' : 'text-foreground/70 hover:text-foreground',
               )}
             >
-              <span className="block truncate">{chat.title}</span>
+              <span className="flex items-center gap-2 min-w-0">
+                <ChatStatusDot activity={activity[chat.id] ?? 'idle'} />
+                <span className="block truncate">{chat.title}</span>
+              </span>
               {isActive && activeSubAgent && (
                 <span className="flex items-center gap-1.5 mt-0.5">
                   <Label
@@ -487,7 +525,23 @@ function SidebarComponent({
               aria-label={t('sidebar.chatHistory')}
               className="px-0 space-y-1 list-none pb-3"
             >
-              {unassignedChats.map((chat) => renderChatRow(chat))}
+              {unassignedSections.map(({ key, labelKey, chats }) => (
+                <li key={key} className="list-none">
+                  {/* Only a section that has something in it. An empty
+                      "Needs input" heading is a question the reader
+                      has to answer by reading nothing. */}
+                  <p
+                    data-testid={`sidebar-section-${key}`}
+                    className="px-3 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                  >
+                    {t(labelKey)}{' '}
+                    <span className="tabular-nums opacity-70">{chats.length}</span>
+                  </p>
+                  <ul className="px-0 space-y-1 list-none">
+                    {chats.map((chat) => renderChatRow(chat))}
+                  </ul>
+                </li>
+              ))}
             </ul>
           )}
 

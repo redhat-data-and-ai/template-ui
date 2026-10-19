@@ -455,6 +455,227 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(runBody.config.configurable.user_id).toBe('johnwick');
   });
 
+  it('keeps the text of a tool-calling message so the UI can show why it delegated', async () => {
+    // The agent writes a one-line intent before it delegates. This used
+    // to be forwarded as content:'' and the browser only ever saw the
+    // tool boxes — the sentence streamed in as tokens, then vanished
+    // when the draft was discarded.
+    const agentSSE =
+      `event: messages/partial\ndata: [{"id":"m1","type":"ai","content":"Checking GitLab for your open merge requests."}]\n\n` +
+      `event: updates\ndata: ${JSON.stringify({
+        agent: {
+          messages: [{
+            id: 'm1',
+            type: 'ai',
+            content: 'Checking GitLab for your open merge requests.',
+            tool_calls: [{ id: 'tc1', name: 'task', args: { subagent_type: 'investigator' } }],
+          }],
+        },
+      })}\n\n`;
+
+    stubFetch(
+      okJson({ thread_id: 'th-intent' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'any MRs?', thread_id: 'th-intent', user_id: 'u1' },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const messageChunk = res.body
+      .split('\n')
+      .filter((l) => l.startsWith('data: '))
+      .map((l) => { try { return JSON.parse(l.slice(6)); } catch { return null; } })
+      .find((c) => c?.type === 'message' && Array.isArray(c?.content?.tool_calls) && c.content.tool_calls.length > 0);
+
+    expect(messageChunk).toBeDefined();
+    expect(messageChunk.content.content).toBe('Checking GitLab for your open merge requests.');
+  });
+
+  it('forwards auth_required from thread state so the Connect button can render', async () => {
+    // The answer reaches the browser as tokens, and a token carries
+    // no metadata. Without this hop the assembled message has no
+    // auth_required and the inline Connect button never appears,
+    // however correctly the agent stamped it.
+    const agentSSE =
+      `event: messages/partial\ndata: [{"id":"m1","type":"ai","content":"Dataverse is not connected."}]\n\n`;
+
+    stubFetch(
+      okJson({ thread_id: 'th-auth' }),
+      makeSSEResponse(agentSSE),
+      okJson({
+        messages: [
+          {
+            id: 'm1',
+            type: 'ai',
+            content: 'Dataverse is not connected.',
+            additional_kwargs: {
+              auth_required: [{ mcp_name: 'dataverse', reason: 'expired' }],
+            },
+          },
+        ],
+        tasks: [],
+      }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'who is my manager?', thread_id: 'th-auth', user_id: 'u1' },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const chunk = res.body
+      .split('\n')
+      .filter((l) => l.startsWith('data: '))
+      .map((l) => { try { return JSON.parse(l.slice(6)); } catch { return null; } })
+      .find((c) => c?.type === 'auth_required');
+
+    expect(chunk).toBeDefined();
+    expect(chunk.content).toEqual([{ mcp_name: 'dataverse', reason: 'expired' }]);
+  });
+
+  it('tells the agent not to cancel the run when the browser goes away', async () => {
+    // A refresh, a closed laptop or a dropped network used to throw
+    // away a two-minute delegation: the agent cancels on client
+    // disconnect by default, and nothing said otherwise.
+    const agentSSE = `event: messages/partial\ndata: [{"type":"ai","content":"Hi"}]\n\n`;
+
+    const fetchMock = stubFetch(
+      okJson({ thread_id: 'th-bg' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-bg', user_id: 'u1' },
+    });
+
+    const runBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(runBody.on_disconnect).toBe('continue');
+  });
+
+  it('attaches to a running run and streams its chunks', async () => {
+    // A reader who refreshed used to get a spinner and the answer in
+    // one lump at the end, because the translation pipeline lived
+    // inside the route that starts a run.
+    const agentSSE = `event: messages/partial\ndata: [{"id":"m9","type":"ai","content":"Still going"}]\n\n`;
+
+    const fetchMock = stubFetch(
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream/attach',
+      payload: { thread_id: 'th-attach', run_id: 'run-7' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    expect(res.body).toContain('Still going');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/threads/th-attach/runs/run-7/stream');
+    expect(init.method).toBe('GET');
+  });
+
+  it('refuses to attach without a run to attach to', async () => {
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream/attach',
+      payload: { thread_id: 'th-attach' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('deletes every thread server-side, so a refresh cannot abandon it', async () => {
+    // Sweeping from the browser left survivors, and with the listing
+    // capped at 50 they still filled the sidebar — it looked as if
+    // nothing had been deleted.
+    const fetchMock = stubFetch(
+      okJson([{ thread_id: 'a' }, { thread_id: 'b' }]),  // listing
+      okJson({}),                                         // DELETE a
+      okJson({}),                                         // DELETE b
+      okJson([]),                                         // listing: empty
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/threads/delete-all',
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ deleted: 2, failed: 0, skipped: 0 });
+
+    const deletes = fetchMock.mock.calls.filter(
+      (c) => (c[1] as RequestInit)?.method === 'DELETE',
+    );
+    expect(deletes).toHaveLength(2);
+  });
+
+  it('stops rather than looping when the agent refuses a delete', async () => {
+    const fetchMock = stubFetch(
+      okJson([{ thread_id: 'a' }]),
+      new Response('', { status: 500 }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/threads/delete-all',
+      payload: {},
+    });
+
+    expect(JSON.parse(res.body)).toEqual({ deleted: 0, failed: 1, skipped: 0 });
+    // One listing + one delete: it does not retry the same failure.
+    expect(fetchMock.mock.calls).toHaveLength(2);
+  });
+
+  it('skips an id the agent will never accept, and deletes the rest', async () => {
+    // A thread created outside the app has a non-UUID id and the
+    // agent answers 400. Counting that as a failure aborted the
+    // sweep and left every deletable thread in place.
+    stubFetch(
+      okJson([{ thread_id: 'probe-123' }, { thread_id: 'b' }]),
+      new Response('', { status: 400 }),    // probe-123: never deletable
+      okJson({}),                            // b: deleted
+      okJson([{ thread_id: 'probe-123' }]),  // pass 2: only the undeletable
+      new Response('', { status: 400 }),     // rejected again
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/threads/delete-all',
+      payload: {},
+    });
+
+    // One real thread gone; the undeletable one skipped, not retried
+    // forever, and it never blocked the deletable one.
+    const body = JSON.parse(res.body);
+    expect(body.deleted).toBe(1);
+    expect(body.failed).toBe(0);
+    expect(body.skipped).toBeGreaterThanOrEqual(1);
+  });
+
   it('emits a token chunk when the agent sends messages/partial', async () => {
     const agentSSE =
       `event: messages/partial\ndata: [{"type":"ai","content":"Hi there"}]\n\n`;

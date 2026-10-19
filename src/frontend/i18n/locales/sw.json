@@ -48,7 +48,12 @@
       "degraded": "Wakala: umepungua — unajibu, lakini tegemezi moja limesimama",
       "unhealthy": "Wakala: nje ya mtandao",
       "unknown": "Wakala: hali haijulikani"
-    }
+    },
+    "sectionNeedsInput": "Inahitaji jibu",
+    "sectionInProgress": "Inaendelea",
+    "sectionCompleted": "Imekamilika",
+    "statusRunning": "Inaendelea",
+    "statusNeedsInput": "Inakusubiri"
   },
   "input": {
     "typeMessage": "Andika ujumbe",
@@ -108,6 +113,7 @@
     "succeeded": "Zilizofanikiwa",
     "tokensIn": "Tokeni zilizoingia",
     "tokensOut": "Tokeni zilizotoka",
+    "cached": "Iliyohifadhiwa",
     "thumbsUp": "Maoni chanya",
     "thumbsDown": "Maoni hasi",
     "ratedGood": "Zilizopewa alama nzuri",
@@ -187,7 +193,8 @@
     "loadingMessages": "Inapakia ujumbe…",
     "loadingChat": "Inapakia gumzo…",
     "noResponse": "Wakala hakujibu. Hili linaweza kuwa tatizo la muda.",
-    "agentError": "Wakala amekumbana na hitilafu:"
+    "agentError": "Wakala amekumbana na hitilafu:",
+    "jumpToLatest": "Nenda kwa mpya zaidi"
   },
   "skills": {
     "title": "Ujuzi",
@@ -255,7 +262,13 @@
     "rejectAction": "Kataa kitendo cha wakala mdogo: {{name}}",
     "alwaysAllowTool": "Ruhusu zana kila wakati: {{name}}",
     "alwaysAllowAgent": "Ruhusu wakala mdogo kila wakati: {{name}}",
-    "approvalRequired": "Idhini inahitajika"
+    "approvalRequired": "Idhini inahitajika",
+    "processing": "Wakala mdogo anachakata…",
+    "inNode": "Inaendesha {{node}}…",
+    "calling": "Inaita {{tool}}…",
+    "writing": "inaandika…",
+    "steps": "Hatua",
+    "stopped": "Imesimamishwa"
   },
   "prompt": {
     "description": "Utambulisho wa mratibu, jedwali la uelekezaji na kanuni zake — anachofanya kabla ya kukabidhi.",
@@ -334,7 +347,8 @@
     "response": "Jibu la kukatiza",
     "placeholder": "Andika jibu lako...",
     "authenticate": "Thibitisha utambulisho",
-    "connectFailed": "Muunganisho umeshindikana"
+    "connectFailed": "Muunganisho umeshindikana",
+    "resumeNow": "Endelea sasa"
   },
   "projects": {
     "loading": "Inapakia mradi",
@@ -388,5 +402,17 @@
     "guardrailDetail": "Huchunguza majibu kabla hayajakufikia.",
     "tokenBudget": "Bajeti ya tokeni",
     "tokenBudgetDetail": "Husimamisha utekelezaji baada ya kutumia mgao wake."
+  },
+  "mcpAuth": {
+    "connect": "Unganisha",
+    "connecting": "Inaunganisha…",
+    "done": "Imeunganishwa",
+    "failed": "Kuunganisha kumeshindikana",
+    "connected": "{{name}} imeunganishwa",
+    "notConnected": "{{name}} haijaunganishwa.",
+    "expired": "Kipindi chako cha {{name}} kimeisha."
+  },
+  "subagent": {
+    "working": "Inafanya kazi…"
   }
 }

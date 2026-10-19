@@ -10,6 +10,19 @@ export interface Provenance {
   fallback_from?: string;
   cached?: boolean;
   empty?: boolean;
+  /**
+   * Integrations this turn could not reach.
+   *
+   * Carried structurally rather than left in the prose: the model
+   * rewrites tool output in its own words, so a marker in the text
+   * is not a channel the UI can rely on. Rendered by McpAuthPrompt,
+   * not by this component.
+   */
+  auth_required?: Array<{
+    mcp_name: string;
+    reason: string;
+    connect_url: string;
+  }>;
 }
 
 /**

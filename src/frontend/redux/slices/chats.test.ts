@@ -3,12 +3,17 @@ import type { Message } from '@langchain/langgraph-sdk';
 import chatsReducer, {
   addChat,
   appendMessageToChat,
+  applySubagentProgress,
+  clearSubagentProgress,
+  closeSubagentSteps,
   clearAllChats,
   deleteChat,
+  markThreadsDeleted,
   mergeToolResult,
   resolveAllPendingToolCalls,
   selectChatsByProject,
   setChats,
+  setAuthRequiredOnLastMessage,
   setMessageFeedback,
   updateChat,
   updateLastMessageInChat,
@@ -437,5 +442,165 @@ describe('chats slice — project assignment', () => {
     );
     expect(s.chats).toHaveLength(1);
     expect(s.chats[0].project_id).toBeNull();
+  });
+});
+
+describe('chats slice — setAuthRequiredOnLastMessage', () => {
+  const ai = (content: string, toolCalls: unknown[] = []) =>
+    ({ type: 'ai', content, tool_calls: toolCalls, id: content }) as unknown as Message;
+
+  function withMessages(messages: Message[]) {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    for (const m of messages) {
+      s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: m }));
+    }
+    return s;
+  }
+
+  const requests = [{ mcp_name: 'dataverse', reason: 'expired' }];
+
+  it('attaches the requests to the last AI reply', () => {
+    const s = chatsReducer(
+      withMessages([ai('Dataverse is not connected.')]),
+      setAuthRequiredOnLastMessage({ chatId: 'c1', requests }),
+    );
+    const last = s.chats[0].messages.at(-1) as Message & {
+      additional_kwargs?: Record<string, unknown>;
+    };
+    expect(last.additional_kwargs?.auth_required).toEqual(requests);
+  });
+
+  it('skips the delegation message and lands on the reply', () => {
+    // The tool-calling message carries the intent line; the button
+    // belongs on the answer, not on the box above it.
+    const s = chatsReducer(
+      withMessages([
+        ai('Asking the curator subagent.', [{ id: 't1', name: 'task', args: {} }]),
+        ai('Dataverse is not connected.'),
+      ]),
+      setAuthRequiredOnLastMessage({ chatId: 'c1', requests }),
+    );
+    const msgs = s.chats[0].messages as Array<Message & { additional_kwargs?: Record<string, unknown> }>;
+    expect(msgs[0].additional_kwargs?.auth_required).toBeUndefined();
+    expect(msgs[1].additional_kwargs?.auth_required).toEqual(requests);
+  });
+
+  it('is a no-op for an empty list', () => {
+    const s = chatsReducer(
+      withMessages([ai('All good.')]),
+      setAuthRequiredOnLastMessage({ chatId: 'c1', requests: [] }),
+    );
+    const last = s.chats[0].messages.at(-1) as Message & {
+      additional_kwargs?: Record<string, unknown>;
+    };
+    expect(last.additional_kwargs?.auth_required).toBeUndefined();
+  });
+});
+
+describe('chats slice — subagent progress survives navigation', () => {
+  const evt = (ns: string, over: Record<string, unknown> = {}) =>
+    ({ ns, agent: 'curator', ...over }) as never;
+
+  it('keeps each chat\'s progress under its own key', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('a')));
+    s = chatsReducer(s, addChat(makeChat('b')));
+    s = chatsReducer(
+      s,
+      applySubagentProgress({ chatId: 'a', event: evt('tools:1'), at: 1000 }),
+    );
+    s = chatsReducer(
+      s,
+      applySubagentProgress({ chatId: 'b', event: evt('tools:2'), at: 1000 }),
+    );
+
+    // Opening chat b must not disturb what chat a is doing.
+    expect(Object.keys(s.subagentProgress.a)).toEqual(['tools:1']);
+    expect(Object.keys(s.subagentProgress.b)).toEqual(['tools:2']);
+  });
+
+  it('accumulates while the reader is looking at another chat', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('a')));
+    s = chatsReducer(
+      s,
+      applySubagentProgress({ chatId: 'a', event: evt('tools:1'), at: 1000 }),
+    );
+    s = chatsReducer(
+      s,
+      applySubagentProgress({
+        chatId: 'a',
+        event: evt('tools:1', { latest: 'half an answer' }),
+        at: 2000,
+      }),
+    );
+
+    expect(s.subagentProgress.a['tools:1'].latest).toBe('half an answer');
+  });
+
+  it('closes open steps when the turn ends', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('a')));
+    s = chatsReducer(
+      s,
+      applySubagentProgress({
+        chatId: 'a',
+        event: evt('tools:1', { calls: [{ id: 'c1', name: 'dataverse_execute_sql' }] }),
+        at: 1000,
+      }),
+    );
+    s = chatsReducer(s, closeSubagentSteps({ chatId: 'a', at: 5000 }));
+
+    const steps = s.subagentProgress.a['tools:1'].steps;
+    expect(steps.length).toBeGreaterThan(0);
+    expect(steps.every((step) => step.endedAt !== undefined)).toBe(true);
+  });
+
+  it('forgets a chat when its turn is restarted', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('a')));
+    s = chatsReducer(
+      s,
+      applySubagentProgress({ chatId: 'a', event: evt('tools:1'), at: 1000 }),
+    );
+    s = chatsReducer(s, clearSubagentProgress({ chatId: 'a' }));
+
+    expect(s.subagentProgress.a).toBeUndefined();
+  });
+});
+
+describe('chats slice — deleted conversations stay deleted', () => {
+  const item = (id: string) => ({
+    id,
+    title: id,
+    timestamp: new Date().toISOString(),
+    preview: '',
+    messages: [],
+    historicalActivities: {},
+    feedback: {},
+  }) as never;
+
+  it('does not let a server refresh resurrect a deleted chat', () => {
+    // Deleting hundreds of conversations takes time, and the layout
+    // reconciles the sidebar against the server while it runs. The
+    // ones not yet gone came straight back.
+    let s = chatsReducer(initialState(), setChats([item('a'), item('b')]));
+    s = chatsReducer(s, markThreadsDeleted({ ids: ['a'] }));
+
+    expect(s.chats.map((c) => c.id)).toEqual(['b']);
+
+    s = chatsReducer(s, setChats([item('a'), item('b')]));
+    expect(s.chats.map((c) => c.id)).toEqual(['b']);
+  });
+
+  it('tombstones a single deleted chat too', () => {
+    let s = chatsReducer(initialState(), setChats([item('a'), item('b')]));
+    s = chatsReducer(s, deleteChat('a'));
+    s = chatsReducer(s, setChats([item('a'), item('b')]));
+
+    expect(s.chats.map((c) => c.id)).toEqual(['b']);
+  });
+
+  it('still accepts genuinely new chats', () => {
+    let s = chatsReducer(initialState(), markThreadsDeleted({ ids: ['a'] }));
+    s = chatsReducer(s, setChats([item('a'), item('c')]));
+
+    expect(s.chats.map((c) => c.id)).toEqual(['c']);
   });
 });

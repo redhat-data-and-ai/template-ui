@@ -48,7 +48,12 @@
       "degraded": "Agent : dégradé — répond, mais une dépendance est indisponible",
       "unhealthy": "Agent : hors ligne",
       "unknown": "Agent : état inconnu"
-    }
+    },
+    "sectionNeedsInput": "Action requise",
+    "sectionInProgress": "En cours",
+    "sectionCompleted": "Terminé",
+    "statusRunning": "En cours",
+    "statusNeedsInput": "En attente de vous"
   },
   "input": {
     "typeMessage": "Écrivez un message",
@@ -108,6 +113,7 @@
     "succeeded": "Réussites",
     "tokensIn": "Jetons en entrée",
     "tokensOut": "Jetons en sortie",
+    "cached": "En cache",
     "thumbsUp": "Avis positifs",
     "thumbsDown": "Avis négatifs",
     "ratedGood": "Jugées bonnes",
@@ -187,7 +193,8 @@
     "loadingMessages": "Chargement des messages…",
     "loadingChat": "Chargement de la conversation…",
     "noResponse": "L'agent n'a pas répondu. Le problème est peut-être temporaire.",
-    "agentError": "L'agent a rencontré une erreur :"
+    "agentError": "L'agent a rencontré une erreur :",
+    "jumpToLatest": "Aller au plus récent"
   },
   "skills": {
     "title": "Compétences",
@@ -255,7 +262,13 @@
     "rejectAction": "Refuser l'action du sous-agent : {{name}}",
     "alwaysAllowTool": "Toujours autoriser l'outil : {{name}}",
     "alwaysAllowAgent": "Toujours autoriser le sous-agent : {{name}}",
-    "approvalRequired": "Approbation requise"
+    "approvalRequired": "Approbation requise",
+    "processing": "Le sous-agent travaille…",
+    "inNode": "Exécution de {{node}}…",
+    "calling": "Appel de {{tool}}…",
+    "writing": "rédaction…",
+    "steps": "Étapes",
+    "stopped": "Arrêté"
   },
   "prompt": {
     "description": "L'identité de l'orchestrateur, sa table de routage et ses règles — ce qu'il fait avant de déléguer.",
@@ -334,7 +347,8 @@
     "response": "Réponse à l'interruption",
     "placeholder": "Saisissez votre réponse...",
     "authenticate": "S'authentifier",
-    "connectFailed": "Échec de la connexion"
+    "connectFailed": "Échec de la connexion",
+    "resumeNow": "Reprendre"
   },
   "projects": {
     "loading": "Chargement du projet",
@@ -388,5 +402,17 @@
     "guardrailDetail": "Filtre les réponses avant qu'elles vous parviennent.",
     "tokenBudget": "Budget de jetons",
     "tokenBudgetDetail": "Arrête une exécution une fois son allocation épuisée."
+  },
+  "mcpAuth": {
+    "connect": "Connecter",
+    "connecting": "Connexion…",
+    "done": "Connecté",
+    "failed": "Échec de la connexion",
+    "connected": "{{name}} connecté",
+    "notConnected": "{{name}} n'est pas connecté.",
+    "expired": "Votre session {{name}} a expiré."
+  },
+  "subagent": {
+    "working": "En cours…"
   }
 }

@@ -48,7 +48,12 @@
       "degraded": "エージェント: 低下 — 応答していますが依存先が停止しています",
       "unhealthy": "エージェント: オフライン",
       "unknown": "エージェント: 状態不明"
-    }
+    },
+    "sectionNeedsInput": "入力待ち",
+    "sectionInProgress": "進行中",
+    "sectionCompleted": "完了",
+    "statusRunning": "実行中",
+    "statusNeedsInput": "あなたの応答待ち"
   },
   "input": {
     "typeMessage": "メッセージを入力",
@@ -108,6 +113,7 @@
     "succeeded": "成功率",
     "tokensIn": "入力トークン",
     "tokensOut": "出力トークン",
+    "cached": "キャッシュ済み",
     "thumbsUp": "高評価",
     "thumbsDown": "低評価",
     "ratedGood": "良い評価の割合",
@@ -187,7 +193,8 @@
     "loadingMessages": "メッセージを読み込み中…",
     "loadingChat": "チャットを読み込み中…",
     "noResponse": "エージェントから応答がありませんでした。一時的な問題の可能性があります。",
-    "agentError": "エージェントでエラーが発生しました:"
+    "agentError": "エージェントでエラーが発生しました:",
+    "jumpToLatest": "最新へ移動"
   },
   "skills": {
     "title": "スキル",
@@ -255,7 +262,13 @@
     "rejectAction": "サブエージェントの操作を拒否: {{name}}",
     "alwaysAllowTool": "このツールを常に許可: {{name}}",
     "alwaysAllowAgent": "このサブエージェントを常に許可: {{name}}",
-    "approvalRequired": "承認が必要です"
+    "approvalRequired": "承認が必要です",
+    "processing": "サブエージェントが処理中…",
+    "inNode": "{{node}} を実行中…",
+    "calling": "{{tool}} を呼び出し中…",
+    "writing": "作成中…",
+    "steps": "ステップ",
+    "stopped": "停止"
   },
   "prompt": {
     "description": "オーケストレーターの役割、ルーティング表、ルール — 委譲する前の振る舞い。",
@@ -334,7 +347,8 @@
     "response": "割り込みへの応答",
     "placeholder": "応答を入力してください...",
     "authenticate": "認証する",
-    "connectFailed": "接続に失敗しました"
+    "connectFailed": "接続に失敗しました",
+    "resumeNow": "再開"
   },
   "projects": {
     "loading": "プロジェクトを読み込み中",
@@ -388,5 +402,17 @@
     "guardrailDetail": "応答が届く前に検査します。",
     "tokenBudget": "トークン予算",
     "tokenBudgetDetail": "割り当てを使い切った時点で実行を停止します。"
+  },
+  "mcpAuth": {
+    "connect": "接続",
+    "connecting": "接続中…",
+    "done": "接続済み",
+    "failed": "接続に失敗しました",
+    "connected": "{{name}} に接続しました",
+    "notConnected": "{{name}} は接続されていません。",
+    "expired": "{{name}} のセッションが期限切れです。"
+  },
+  "subagent": {
+    "working": "処理中…"
   }
 }

@@ -13,11 +13,24 @@ import * as projectsApi from '../../services/projects-api';
 vi.mock('../../services/chatStorage', () => ({
   chatStorage: {
     clearChats: vi.fn(),
+    // The sweep is recorded on disk so a refresh cannot abandon it.
+    saveDeletedThreadIds: vi.fn(),
+    clearDeletedThreadIds: vi.fn(),
+    loadDeletedThreadIds: () => [],
   },
 }));
 
 vi.mock('../../services/agent-rest', () => ({
   deleteThread: vi.fn(async () => true),
+  // "Delete all" asks the agent what the user owns rather than
+  // trusting the pages the sidebar has loaded.
+  listAllThreadIds: vi.fn(async () => []),
+  deleteThreads: vi.fn(async (ids: string[]) => ({
+    deleted: ids.length,
+    failed: 0,
+  })),
+  // The sweep runs server-side now, in one request.
+  deleteAllThreads: vi.fn(async () => ({ deleted: 3, failed: 0 })),
 }));
 
 vi.mock('../../lib/streaming/streamingManagerRegistry', () => ({

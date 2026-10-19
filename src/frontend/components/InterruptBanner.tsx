@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -6,13 +6,14 @@ import {
   Button,
   TextInput,
 } from '@patternfly/react-core';
-import { Bot, CheckCircle, Link2, XCircle } from 'lucide-react';
+import { Bot, CheckCircle, XCircle } from 'lucide-react';
 import {
   openMcpOAuthPopup,
   startMcpOAuthConnect,
   verifyMcpOAuthConnected,
 } from '../services/mcp-oauth-api';
 import type { InterruptInfo } from '../types/deep-agent';
+import { McpConnectRow } from './McpConnectRow';
 
 interface InterruptBannerProps {
   readonly interrupt: InterruptInfo;
@@ -93,12 +94,26 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
 
   const mcpAuth = parseMcpAuthPayload(interrupt);
 
+  // Resume the paused run as soon as the connection verifies.
+  //
+  // The run is interrupted, not finished: it is sitting on the tool
+  // call that needed authorization and will carry on from there. The
+  // reader has already said what they want by connecting, so a
+  // second button saying "continue" asks them to confirm a decision
+  // they just made — and leaving it unpressed looks exactly like the
+  // agent having silently given up.
+  const onResumeRef = useRef(onResume);
+  onResumeRef.current = onResume;
+  const resumedRef = useRef(false);
+
   const verifyAndSetReady = useCallback(async (mcpName: string) => {
     const connected = await verifyMcpOAuthConnected(mcpName);
-    if (connected) {
-      setOauthReady(true);
-      setConnectError(null);
-    }
+    if (!connected) return;
+    setOauthReady(true);
+    setConnectError(null);
+    if (resumedRef.current) return;
+    resumedRef.current = true;
+    onResumeRef.current('continue');
   }, []);
 
   useEffect(() => {
@@ -151,37 +166,19 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
             <Bot className="w-4 h-4 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="md-prose max-w-none text-foreground">
-              <p>
-                To access external tools, you need to authenticate first.
-                Click the button below to securely connect your account.
-              </p>
-            </div>
+            {/* The same component the inline prompt uses. Two
+                renderings of one event is how the reader ends up
+                thinking they are two different problems. */}
+            <McpConnectRow
+              mcpName={mcpAuth.mcp_name}
+              reason={mcpAuth.reason}
+              busy={connecting}
+              connected={oauthReady}
+              onConnect={() => void handleConnect()}
+            />
             {connectError && (
               <p className="text-sm text-red-600 mt-2">{connectError}</p>
             )}
-            <div className="mt-3">
-              {!oauthReady ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={<Link2 className="w-3.5 h-3.5" />}
-                  isLoading={connecting}
-                  onClick={() => void handleConnect()}
-                >
-                  {t('interrupt.authenticate')}
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={<CheckCircle className="w-3.5 h-3.5" />}
-                  onClick={() => onResume('continue')}
-                >
-                  {t('common.continue')}
-                </Button>
-              )}
-            </div>
           </div>
         </div>
       </div>

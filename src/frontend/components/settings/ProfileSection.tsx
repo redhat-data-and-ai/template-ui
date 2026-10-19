@@ -5,11 +5,11 @@ import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant } from
 import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import type { RootState } from '../../redux/store';
-import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
+import { clearAllChats, markThreadsDeleted, selectAllChats } from '../../redux/slices/chats';
 import { selectDeveloperMode, setDeveloperMode } from '../../redux/slices/userSettings';
 import { loadProjectsThunk } from '../../redux/slices/projects';
 import { addToast } from '../../redux/slices/toasts';
-import { deleteThread } from '../../services/agent-rest';
+import { deleteAllThreads, listAllThreadIds } from '../../services/agent-rest';
 import { chatStorage } from '../../services/chatStorage';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
 import { isPrivilegedUser } from '../../lib/role-utils';
@@ -40,13 +40,36 @@ export function ProfileSection() {
     chatStorage.clearChats();
     setConfirmDelete(false);
 
-    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
-    void dispatch(loadProjectsThunk());
-    const failures = results.filter((r) => !r).length;
+    // Everything the user owns, not everything the sidebar happens to
+    // have loaded. The store holds the pages fetched so far; asking
+    // the agent found 354 threads where the list showed a couple of
+    // dozen, so "delete all" cleared the screen and the rest came
+    // back on the next load.
+    const serverIds = await listAllThreadIds();
+    const allIds = [...new Set([...ids, ...serverIds])];
 
-    if (failures > 0 && failures < ids.length) {
-      dispatch(addToast({ title: `${ids.length - failures} chats deleted, ${failures} failed on server`, variant: 'warning' }));
-    } else if (failures === ids.length) {
+    // Mark them gone before the deletes start. They take a while at
+    // this volume, and the layout reconciles the sidebar against the
+    // server meanwhile — without this the not-yet-deleted ones came
+    // back and the whole thing looked like it had failed.
+    dispatch(markThreadsDeleted({ ids: allIds }));
+    // On disk too: the sweep outlives this page only if the intent
+    // does. A refresh halfway through used to abandon the rest and
+    // forget what was meant to go.
+    chatStorage.saveDeletedThreadIds(allIds);
+
+    // Server-side sweep: one request that finishes whatever this
+    // page does next.
+    const { deleted, failed } = await deleteAllThreads();
+    if (failed === 0) {
+      chatStorage.clearDeletedThreadIds();
+    }
+    void dispatch(loadProjectsThunk());
+    const failures = failed;
+
+    if (failures > 0 && failures < allIds.length) {
+      dispatch(addToast({ title: `${deleted} chats deleted, ${failures} failed on server`, variant: 'warning' }));
+    } else if (allIds.length > 0 && failures === allIds.length) {
       dispatch(addToast({ title: t('toast.allChatsDeletedLocally'), variant: 'warning' }));
     } else {
       dispatch(addToast({ title: t('toast.allChatsDeleted'), variant: 'success' }));

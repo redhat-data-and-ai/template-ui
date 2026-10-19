@@ -140,11 +140,17 @@ describe('InterruptBanner — MCP auth branch', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the Authenticate button for mcp_auth_required', () => {
+  it('names the integration and offers Connect, like the inline prompt', () => {
     render(
       <InterruptBanner interrupt={mcpAuthInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />,
     );
-    expect(screen.getByRole('button', { name: /authenticate/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /connect/i })).toBeInTheDocument();
+    // It knew the integration all along and never said so: the old
+    // copy was "To access external tools, you need to authenticate".
+    expect(screen.getByText(/github/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/to access external tools/i),
+    ).not.toBeInTheDocument();
   });
 
   it('does NOT render Approve / Reject buttons for MCP auth', () => {
@@ -155,15 +161,16 @@ describe('InterruptBanner — MCP auth branch', () => {
     expect(screen.queryByRole('button', { name: /reject/i })).not.toBeInTheDocument();
   });
 
-  it('opens the OAuth popup when Authenticate is clicked', async () => {
+  it('opens the OAuth popup when Connect is clicked', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ authorize_url: 'https://oauth.example.com/auth' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
     );
-    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />);
-    await userEvent.click(screen.getByRole('button', { name: /authenticate/i }));
+    const onResume = vi.fn();
+    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={onResume} onDismiss={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /connect/i }));
     await waitFor(() => {
       expect(vi.mocked(open)).toHaveBeenCalledWith(
         'https://oauth.example.com/auth',
@@ -178,14 +185,15 @@ describe('InterruptBanner — MCP auth branch', () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response('', { status: 401 }),
     );
-    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />);
-    await userEvent.click(screen.getByRole('button', { name: /authenticate/i }));
+    const onResume = vi.fn();
+    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={onResume} onDismiss={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /connect/i }));
     await waitFor(() => {
       expect(screen.getByText(/connect failed/i)).toBeInTheDocument();
     });
   });
 
-  it('shows Continue button after mcp_oauth_done postMessage + connected status', async () => {
+  it('resumes the paused run on its own once the connection verifies', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify({ connected: true }), {
         status: 200,
@@ -193,7 +201,11 @@ describe('InterruptBanner — MCP auth branch', () => {
       }),
     );
 
-    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />);
+    // The run is interrupted, not finished. Connecting is the
+    // decision; asking for a second click to confirm it is what made
+    // the agent look like it had given up.
+    const onResume = vi.fn();
+    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={onResume} onDismiss={vi.fn()} />);
 
     fireEvent(
       window,
@@ -203,9 +215,7 @@ describe('InterruptBanner — MCP auth branch', () => {
       }),
     );
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
-    });
+    await waitFor(() => expect(onResume).toHaveBeenCalledWith('continue'));
   });
 
   it('ignores mcp_oauth_done postMessage from a different origin', async () => {
@@ -225,7 +235,7 @@ describe('InterruptBanner — MCP auth branch', () => {
     expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument();
   });
 
-  it('accepts mcp_oauth_done from the OAuth provider origin after Authenticate', async () => {
+  it('accepts mcp_oauth_done from the OAuth provider origin after Connect', async () => {
     vi.mocked(open).mockReturnValue(window);
     vi.mocked(fetch)
       .mockResolvedValueOnce(
@@ -241,8 +251,9 @@ describe('InterruptBanner — MCP auth branch', () => {
         }),
       );
 
-    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />);
-    await userEvent.click(screen.getByRole('button', { name: /authenticate/i }));
+    const onResume = vi.fn();
+    render(<InterruptBanner interrupt={mcpAuthInterrupt} onResume={onResume} onDismiss={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /connect/i }));
     await waitFor(() => expect(vi.mocked(open)).toHaveBeenCalled());
     expect(screen.queryByText(/popup blocked by browser/i)).not.toBeInTheDocument();
 
@@ -255,11 +266,12 @@ describe('InterruptBanner — MCP auth branch', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+      // Trusted provider origin accepted: the run resumes.
+      expect(onResume).toHaveBeenCalledWith('continue');
     });
   });
 
-  it('calls onResume("continue") when Continue is clicked', async () => {
+  it('resumes only once, however many times verification reports success', async () => {
     const onResume = vi.fn();
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify({ connected: true }), {
@@ -278,9 +290,19 @@ describe('InterruptBanner — MCP auth branch', () => {
       }),
     );
 
-    await waitFor(() => screen.getByRole('button', { name: /continue/i }));
-    await userEvent.click(screen.getByRole('button', { name: /continue/i }));
-    expect(onResume).toHaveBeenCalledWith('continue');
+    await waitFor(() => expect(onResume).toHaveBeenCalledWith('continue'));
+
+    // A second signal — focus, or another postMessage — must not
+    // re-send a run that is already going again.
+    fireEvent(
+      window,
+      new MessageEvent('message', {
+        data: { type: 'mcp_oauth_done', mcp_name: 'github' },
+        origin: window.location.origin,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    expect(onResume).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -348,5 +370,19 @@ describe('InterruptBanner — approval risk', () => {
 
     expect(screen.getByRole('button', { name: /approve/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /reject/i })).toBeInTheDocument();
+  });
+});
+
+describe('one auth design, not several', () => {
+  it('renders the same connect row the inline prompt uses', () => {
+    render(
+      <InterruptBanner interrupt={mcpAuthInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />,
+    );
+
+    // The shared component. A subagent's interrupt used to render a
+    // blue pill under a sentence about "external tools" while the
+    // orchestrator's own failure rendered an amber row naming the
+    // integration — one event, two designs.
+    expect(screen.getByTestId('mcp-connect-github')).toBeInTheDocument();
   });
 });
