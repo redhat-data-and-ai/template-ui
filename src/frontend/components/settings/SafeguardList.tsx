@@ -31,7 +31,16 @@ export function SafeguardList() {
       try {
         const res = await fetch(buildAgentApiUrl('/safeguards'), { cache: 'no-store' });
         if (!res.ok) throw new Error(`Could not load safeguards (${res.status})`);
-        const body = await res.json();
+        const raw = await res.json();
+        // Defaulted, not trusted. A 200 without `pii.entities` threw
+        // during render and blanked the whole panel, which reads as
+        // "no safeguards" rather than "could not load them".
+        const body = {
+          ...raw,
+          pii: { entities: [], ...(raw?.pii ?? {}) },
+          guardrail: raw?.guardrail ?? null,
+          token_budget: raw?.token_budget ?? null,
+        };
         if (!cancelled) {
           setData(body);
           setError(null);

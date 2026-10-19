@@ -2,7 +2,13 @@
 	render-deployment render-deployment-check test
 
 # Detect npm/node path (supports nvm, system install, etc)
-NPM := $(shell command -v npm 2>/dev/null || echo /Users/sodutta/.nvm/versions/node/v24.18.0/bin/npm)
+# No fallback path. A machine-specific one resolves to nothing on
+# anyone else's checkout and the failure arrives later, as a
+# missing binary rather than a missing npm.
+NPM := $(shell command -v npm 2>/dev/null)
+ifeq ($(NPM),)
+$(error npm not found on PATH. Install Node, or `nvm use`, and try again)
+endif
 NODE_DIR := $(dir $(NPM))
 export PATH := $(NODE_DIR):$(PATH)
 

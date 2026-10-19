@@ -107,6 +107,10 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { t } = useTranslation();
+  // Read inside effects that must not rerun when the language
+  // changes, so the text is current without `t` in the deps.
+  const tRef = useRef(t);
+  tRef.current = t;
   const dispatch = useAppDispatch();
   const chats = useAppSelector(selectAllChats);
   const branding = useAppSelector((state: RootState) => state.config.branding);
@@ -156,9 +160,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     let cancelled = false;
 
     void (async () => {
-      const remaining = new Set(await listAllThreadIds());
-      const unfinished = pending.filter((id) => remaining.has(id));
+      const all = await listAllThreadIds();
       if (cancelled) return;
+      // `null` means the listing failed. Treating that as "nothing
+      // left" dropped the persisted deletion intent after a single
+      // 5xx or an offline load, and the threads came back.
+      if (all === null) return;
+      const remaining = new Set(all);
+      const unfinished = pending.filter((id) => remaining.has(id));
       if (unfinished.length === 0) {
         chatStorage.clearDeletedThreadIds();
         return;
@@ -288,14 +297,19 @@ export function AppLayout({ children }: AppLayoutProps) {
         dispatch(setThreadsListHydrated(true));
       } catch (error) {
         console.error('Failed to load user history:', error);
-        dispatch(addToast({ title: t('toast.loadHistoryFailed'), variant: 'warning' }));
+        dispatch(addToast({ title: tRef.current('toast.loadHistoryFailed'), variant: 'warning' }));
       } finally {
         dispatch(setLoadingThreads(false));
       }
     }
 
     loadUserHistory();
-  }, [dispatch, t]);
+    // `t` deliberately absent. It changes identity on every language
+    // switch, and refetching history there reconciles and overwrites
+    // chat state for a reason that has nothing to do with the data.
+    // The toast text is read through a ref instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch]);
 
   useEffect(() => {
     if (chats.length > 0) {

@@ -293,10 +293,12 @@ export function McpServerList() {
                 question nobody asks of a list. What the server
                 *offers* is the useful detail, and that is a click
                 away. */}
+            {/* Always clickable. Gating on `isConnected` locked
+                session-auth servers out of their own capability
+                modal, because those never report as connected. */}
             <button
               type="button"
               onClick={() => void openServer(server.name)}
-              disabled={!isConnected}
               className="min-w-0 flex-1 flex items-center gap-2.5 text-left bg-transparent border-0 p-0 disabled:cursor-default"
             >
               {/* Served from our own origin by the agent, not linked

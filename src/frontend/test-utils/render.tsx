@@ -9,28 +9,26 @@ interface WrapperProps {
   children: React.ReactNode;
 }
 
-let preloaded: Record<string, unknown> | undefined;
-
-function AllProviders({ children }: WrapperProps) {
-  const store = createTestStore(preloaded);
-  return (
-    <Provider store={store}>
-      <MemoryRouter>{children}</MemoryRouter>
-    </Provider>
-  );
-}
-
 function renderWithProviders(
   ui: React.ReactElement,
   options?: Omit<RenderOptions, 'wrapper'> & { preloadedState?: Record<string, unknown> },
 ) {
   const { preloadedState, ...rest } = options ?? {};
-  preloaded = preloadedState;
-  try {
-    return render(ui, { wrapper: AllProviders, ...rest });
-  } finally {
-    preloaded = undefined;
+  // Built once per call and closed over, rather than read from a
+  // module variable that is cleared when `render` returns. A test
+  // calling the returned `rerender` used to get a fresh default
+  // store and silently lose everything it had seeded.
+  const store = createTestStore(preloadedState);
+
+  function AllProviders({ children }: WrapperProps) {
+    return (
+      <Provider store={store}>
+        <MemoryRouter>{children}</MemoryRouter>
+      </Provider>
+    );
   }
+
+  return render(ui, { wrapper: AllProviders, ...rest });
 }
 
 export { renderWithProviders };

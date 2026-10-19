@@ -581,7 +581,7 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     const res = await server.inject({
       method: 'POST',
       url: '/api/proxy/agent/v1/stream/attach',
-      payload: { thread_id: 'th-attach', run_id: 'run-7' },
+      payload: { thread_id: '11111111-1111-4111-8111-111111111111', run_id: '22222222-2222-4222-8222-222222222222' },
     });
 
     expect(res.statusCode).toBe(200);
@@ -589,7 +589,7 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(res.body).toContain('Still going');
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain('/threads/th-attach/runs/run-7/stream');
+    expect(String(url)).toContain('/threads/11111111-1111-4111-8111-111111111111/runs/22222222-2222-4222-8222-222222222222/stream');
     expect(init.method).toBe('GET');
   });
 

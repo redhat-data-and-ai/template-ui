@@ -70,6 +70,9 @@ export function DocumentList() {
   };
 
   const handleDelete = async (path: string) => {
+    // Shared, and gone for everyone. A single click with no step in
+    // between is the wrong amount of friction for that.
+    if (!window.confirm(t('documents.confirmDelete', { path }))) return;
     setBusy(`delete:${path}`);
     try {
       await deleteDocument(path);

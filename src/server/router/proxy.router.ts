@@ -55,6 +55,10 @@ function countingStream(source: Readable, limit: number): Readable {
 }
 
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
+/** Thread and run ids are UUIDs; anything else must not reach a URL path. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
 const CACHE_TTL_MS = 3_000; // 3s — short TTL for recovery polling compatibility
 const CACHE_MAX_ENTRIES = 50;
@@ -596,7 +600,20 @@ async function pumpAgentStream(opts: {
         const stateMessages = Array.isArray(stateValues?.messages)
           ? (stateValues.messages as Array<Record<string, any>>)
           : [];
+        // The newest AI message only, not the newest message that
+        // happens to carry the flag. Scanning backwards past it
+        // re-emitted an `auth_required` from some earlier turn, and
+        // the client stamps whatever arrives onto the latest reply,
+        // so an old Connect prompt reappeared under every answer
+        // that followed it.
+        let lastAi = -1;
         for (let i = stateMessages.length - 1; i >= 0; i--) {
+          if (stateMessages[i]?.type === 'ai') {
+            lastAi = i;
+            break;
+          }
+        }
+        for (let i = lastAi; i >= lastAi && i >= 0; i--) {
           const authRequired = stateMessages[i]?.additional_kwargs?.auth_required;
           if (!Array.isArray(authRequired) || authRequired.length === 0) continue;
           reply.raw.write(
@@ -1011,6 +1028,14 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const { thread_id, run_id, last_event_id } = request.body ?? {};
       if (!thread_id || !run_id) {
         return reply.status(400).send({ error: 'thread_id and run_id are required' });
+      }
+      // Both go into the agent URL as path segments, and both come
+      // from the request body. A value like `../../x` normalises to a
+      // different agent endpoint, which this hop would then call with
+      // the user's bearer token. They are UUIDs; anything else is not
+      // a thread we have.
+      if (!UUID_RE.test(String(thread_id)) || !UUID_RE.test(String(run_id))) {
+        return reply.status(400).send({ error: 'thread_id and run_id must be UUIDs' });
       }
 
       const headers: Record<string, string> = {
@@ -1437,11 +1462,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
             (fetchOptions as any).duplex = 'half';
             const original = request.headers['content-type'];
             if (original) headers['Content-Type'] = String(original);
-            // Forwarded when the client declared one, so the agent can
-            // reject an oversized upload on the header instead of
-            // after reading it. Not trusted as a limit by either side.
-            const declared = request.headers['content-length'];
-            if (declared) headers['Content-Length'] = String(declared);
+            // Deliberately not forwarding Content-Length. The body is
+            // streamed through a counter that can end it early, so a
+            // declared length the stream then disagrees with leaves
+            // the agent reading a truncated or mismatched body. Let
+            // undici chunk it; the size limit is enforced by the
+            // counter and by the agent, not by a header.
           } else if (Buffer.isBuffer(request.body)) {
             fetchOptions.body = request.body;
             const original = request.headers['content-type'];

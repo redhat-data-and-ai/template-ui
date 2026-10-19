@@ -54,7 +54,14 @@ export function progressForDelegation<T extends ProgressEntry>(
     if (byName) return byName;
   }
 
-  if (entries.length === 1) return entries[0];
+  // Not when the one entry names a different agent. Two delegations
+  // running with only `curator` reporting gave the `workspace` box
+  // curator's steps, which is worse than showing none.
+  if (entries.length === 1) {
+    const only = entries[0];
+    if (subagentName && only.agent && only.agent !== subagentName) return undefined;
+    return only;
+  }
   if (!delegationText) return undefined;
 
   const target = normalise(delegationText);

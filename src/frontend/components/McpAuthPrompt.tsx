@@ -119,8 +119,12 @@ export function McpAuthPrompt({ requests, onConnected }: Props) {
         if (!popup.closed) return;
         clearPoll();
         void (async () => {
-          const alreadyResumed = resumed.current.has(req.mcpName);
           const ok = await verifyMcpOAuthConnected(req.mcpName);
+          // Read after the await, not before. The focus recheck can
+          // resume while this request is in flight, and a stale read
+          // meant both paths called `onConnected` and the question
+          // went twice.
+          const alreadyResumed = resumed.current.has(req.mcpName);
           setBusy(null);
           if (!ok) return;
           setDone((d) => [...d, req.mcpName]);

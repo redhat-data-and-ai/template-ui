@@ -7,6 +7,9 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { getSettings, resolveAgentHost } from "../utils/settings.js";
 import { toClientUserData } from "../utils/session-identity.js";
 
+/** Bound the agent fan-out: each admin call makes an outbound /auth/whoami. */
+const ADMIN_RATE_LIMIT = { rateLimit: { max: 30, timeWindow: "1 minute" } };
+
 /**
  * One error shape across both hosts.
  *
@@ -77,7 +80,10 @@ async function apiRoutes(fastify: FastifyInstance) {
    * an operator capability — the same bar as the Usage and Documents
    * surfaces.
    */
-  fastify.get("/admin/features", async (request, reply) => {
+  // Rate limited per route: every call here makes an outbound
+  // `/auth/whoami` to the agent before it does anything, so an
+  // unbounded caller turns one request into two and fans out.
+  fastify.get("/admin/features", { config: ADMIN_RATE_LIMIT }, async (request, reply) => {
     if (!(await isPrivilegedCaller(request))) {
       return reply.status(403).send(errorBody("Developer access required"));
     }
@@ -89,7 +95,7 @@ async function apiRoutes(fastify: FastifyInstance) {
     };
   });
 
-  fastify.put("/admin/features", async (request, reply) => {
+  fastify.put("/admin/features", { config: ADMIN_RATE_LIMIT }, async (request, reply) => {
     if (!(await isPrivilegedCaller(request))) {
       return reply.status(403).send(errorBody("Developer access required"));
     }
@@ -99,10 +105,12 @@ async function apiRoutes(fastify: FastifyInstance) {
       request.log.info({ overrides }, "feature overrides updated");
       return { features: { ...cfg.features, ...overrides } };
     } catch (error) {
+      // Logged, not returned. ioredis messages carry host names and
+      // sometimes credentials, and the caller can do nothing with
+      // them either way.
+      request.log.error({ err: error }, "feature override write failed");
       return reply.status(503).send(
-        errorBody(
-          error instanceof Error ? error.message : "Could not save overrides",
-        ),
+        errorBody("Could not save overrides"),
       );
     }
   });

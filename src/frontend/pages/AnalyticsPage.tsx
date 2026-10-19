@@ -52,7 +52,7 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (isStale: () => boolean = () => false) => {
     setLoading(true);
     setError(null);
     try {
@@ -62,6 +62,7 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
         fetchModels(days),
         fetchErrors(days),
       ]);
+      if (isStale()) return;
       setSummary(s);
       // Array.isArray rather than a truthiness check: `{}` is
       // truthy and still has no `.map`.
@@ -69,18 +70,26 @@ export function AnalyticsPage({ embedded = false }: { embedded?: boolean }) {
       setModels(Array.isArray(m) ? m : []);
       setErrorClasses(Array.isArray(e) ? e : []);
     } catch (err) {
+      if (isStale()) return;
       // Showing zeroes here would be worse than showing nothing: a
       // flat chart reads as "nobody used it", and somebody will act
       // on that.
       setError(err instanceof Error ? err.message : t('analytics.loadFailed'));
       setSummary(null);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [days, t]);
 
   useEffect(() => {
-    void refresh();
+    // Only the newest window may write. Changing `days` quickly
+    // started overlapping loads, and a slower earlier response
+    // overwrote the data for the window actually selected.
+    let cancelled = false;
+    void refresh(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   const peak = Math.max(1, ...points.map((p) => p.runs));

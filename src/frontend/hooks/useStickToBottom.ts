@@ -73,6 +73,11 @@ export function useStickToBottom(
     // door.
     if (!measuredRef.current) {
       measuredRef.current = true;
+      // Pinned first, then measured. A long existing transcript
+      // mounts scrolled to the top, so measuring first recorded it
+      // as "the reader scrolled away" and the effect below never
+      // brought them to the latest message.
+      if (pinnedRef.current) el.scrollTop = el.scrollHeight;
       onScroll();
     }
     return () => el.removeEventListener('scroll', onScroll);

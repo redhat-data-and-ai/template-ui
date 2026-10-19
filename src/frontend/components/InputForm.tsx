@@ -55,6 +55,14 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
   const [attachError, setAttachError] = useState<string | null>(null);
   const [draggingFiles, setDraggingFiles] = useState(false);
 
+  // Attachments belong to the thread they were staged for. Without
+  // this the composer carried them into the next conversation and
+  // showed files as attached that the new thread has never seen.
+  useEffect(() => {
+    setAttached([]);
+    setAttachError(null);
+  }, [threadId]);
+
   const onUploaded = useCallback(
     (files: Attachment[], summary: string) => {
       setAttachError(null);

@@ -123,6 +123,19 @@ export async function setupServer(): Promise<FastifyInstance> {
       if (!url || url.startsWith('/') || url.startsWith('data:')) continue;
       try {
         const parsed = new URL(url);
+        // Scheme first. `javascript:` and `data:` have no meaningful
+        // origin and widening img-src with one is a gift; plain http
+        // is allowed only outside production, where a local asset
+        // server is normal.
+        const allowed =
+          parsed.protocol === "https:" ||
+          (parsed.protocol === "http:" && process.env.NODE_ENV !== "production");
+        if (!allowed) {
+          fastify.log.warn(
+            `Branding image URL is not https, not added to CSP img-src: ${url}`,
+          );
+          continue;
+        }
         const origin = `${parsed.protocol}//${parsed.host}`;
         if (!imgSrc.includes(origin)) imgSrc.push(origin);
       } catch {

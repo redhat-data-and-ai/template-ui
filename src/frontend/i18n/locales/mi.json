@@ -301,7 +301,8 @@
     "view": "Tirohia {{name}}",
     "remove": "Mukua {{name}}",
     "truncated": "He rahi rawa tēnei kōnae hei whakatika i konei; e whakaatuhia ana hei pānui anake.",
-    "content": "Ngā ihirangi o {{name}}"
+    "content": "Ngā ihirangi o {{name}}",
+    "confirmDelete": "Delete {{path}}? This removes it for everyone."
   },
   "layout": {
     "skipToContent": "Peke ki te ihirangi matua",

@@ -301,7 +301,8 @@
     "view": "{{name}} を表示",
     "remove": "{{name}} を削除",
     "truncated": "このファイルは大きすぎるため、読み取り専用で表示しています。",
-    "content": "{{name}} の内容"
+    "content": "{{name}} の内容",
+    "confirmDelete": "Delete {{path}}? This removes it for everyone."
   },
   "layout": {
     "skipToContent": "メインコンテンツへスキップ",

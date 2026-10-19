@@ -15,7 +15,10 @@ const TABS: Record<string, { outer: string; inner?: string; heading?: string }> 
   Authorization: { outer: 'Account', heading: 'Authorization' },
   'Your memories': { outer: 'Personalisation', heading: 'Your memories' },
   'Custom rules': { outer: 'Personalisation', heading: 'Custom rules' },
-  Appearance: { outer: 'Appearance', heading: 'Appearance' },
+  // 'Theme', not 'Appearance': the panel's own <h2> says
+  // Appearance and stays rendered even when AppearanceSettings
+  // is not, so the check passed on an empty panel.
+  Appearance: { outer: 'Appearance', heading: 'Theme' },
   MCP: { outer: 'Components', inner: 'MCP', heading: 'MCP servers' },
   'Tool approvals': { outer: 'Components', inner: 'MCP', heading: 'Tool approvals' },
   // No `heading`: these panels are a description plus a list, with

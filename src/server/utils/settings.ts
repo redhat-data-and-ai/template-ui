@@ -661,9 +661,18 @@ function applyEnvOverrides(config: UISettings): void {
     }
   }
   if (process.env.SECURITY_RATE_LIMIT_TRUST_PROXY) {
-    const hops = Number.parseInt(process.env.SECURITY_RATE_LIMIT_TRUST_PROXY, 10);
-    if (Number.isFinite(hops) && hops >= 0) {
+    // Whole string or nothing. `parseInt` reads "1abc" as 1 and "2.5"
+    // as 2, so a typo silently changed how many proxy hops are
+    // trusted, and that count decides which address the rate limiter
+    // keys on.
+    const raw = process.env.SECURITY_RATE_LIMIT_TRUST_PROXY.trim();
+    const hops = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+    if (Number.isFinite(hops)) {
       config.security.rate_limit.trust_proxy = hops === 0 ? false : hops;
+    } else {
+      console.warn(
+        `SECURITY_RATE_LIMIT_TRUST_PROXY is not a whole number: "${raw}"; ignoring it`,
+      );
     }
   }
 

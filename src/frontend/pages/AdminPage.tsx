@@ -43,7 +43,7 @@ export function AdminPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isStale: () => boolean = () => false) => {
     try {
       const res = await fetch(adminApi('/features'), {
         cache: 'no-store',
@@ -51,17 +51,28 @@ export function AdminPage({ embedded = false }: { embedded?: boolean } = {}) {
       });
       if (res.status === 403) throw new Error(t('admin.forbidden'));
       if (!res.ok) throw new Error(`Could not load flags (${res.status})`);
-      setState(await res.json());
+      const body = await res.json();
+      if (isStale()) return;
+      setState(body);
       setError(null);
     } catch (e) {
+      if (isStale()) return;
       setError(e instanceof Error ? e.message : 'Could not load flags');
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [t, token]);
 
   useEffect(() => {
-    void load();
+    // Guarded, because `load` is rebuilt on every token refresh and
+    // this effect runs again with it. An in-flight GET that lands
+    // after a PUT would otherwise overwrite the newer result with
+    // the older flags.
+    let cancelled = false;
+    void load(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   const toggle = async (key: string, next: boolean) => {

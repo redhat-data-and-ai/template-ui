@@ -485,11 +485,13 @@ describe('listAllThreadIds', () => {
     expect(await listAllThreadIds()).toEqual([uuid(1), uuid(2)]);
   });
 
-  it('returns nothing when the thread list cannot be fetched', async () => {
-    // Deleting nothing is the safe failure here: a partial list would
-    // make "delete all" quietly mean "delete some".
+  it('says it could not ask, rather than answering "none"', async () => {
+    // `null`, not `[]`. Deleting nothing is the safe failure here, and
+    // the caller needs to tell "no threads left" from "could not
+    // reach the agent": the first means the sweep is done and the
+    // stored deletion intent can go, the second means keep it.
     vi.mocked(authenticatedFetch).mockResolvedValue(new Response('', { status: 503 }));
-    expect(await listAllThreadIds()).toEqual([]);
+    expect(await listAllThreadIds()).toBeNull();
   });
 });
 

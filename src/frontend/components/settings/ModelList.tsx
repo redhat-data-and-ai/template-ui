@@ -118,7 +118,10 @@ export function ModelList() {
           advertises the capability, so without this the absence is
           invisible — the agent simply cannot do something the list
           says it can. */}
-      {(model.excluded_tools?.length || model.excluded_middleware?.length) && (
+      {/* `> 0`, not truthiness: two empty arrays make this `0`,
+          and React renders a literal 0 into the row. */}
+      {((model.excluded_tools?.length ?? 0) > 0 ||
+        (model.excluded_middleware?.length ?? 0) > 0) && (
         <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-amber-600 dark:text-amber-500">
           <span>{t('models.excluded')}</span>
           {[...(model.excluded_tools ?? []), ...(model.excluded_middleware ?? [])].map(

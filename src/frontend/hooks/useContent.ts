@@ -43,7 +43,10 @@ export function useContent(): ResolvedContent {
     const agent = window.APP_DATA?.agentName || 'Agent';
     const user = window.USER_DATA?.displayName || window.USER_DATA?.given_name || '';
     const tokens = { agent, user };
-    const render = (s: string) => substitute(s ?? '', tokens);
+    // `String(...)`, not `?? ''`: the null guard covered null and
+    // undefined, and a non-string entry in `quickPrompts` reached
+    // `.replace` and took the page down.
+    const render = (s: unknown) => substitute(String(s ?? ''), tokens);
 
     return {
       greeting: render(cfg.greeting),

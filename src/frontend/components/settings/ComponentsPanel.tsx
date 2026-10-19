@@ -189,19 +189,21 @@ export function useVisibleComponentSections(): Section[] {
 export function ComponentsPanel() {
   const { t } = useTranslation();
   const sections = useVisibleComponentSections();
-  const [active, setActive] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   if (sections.length === 0) return null;
 
-  // Clamped rather than stored by key: hiding a section while it is
-  // selected would otherwise leave the panel pointing past the end
-  // of the list and render nothing.
-  const index = Math.min(active, sections.length - 1);
+  // Keyed by section, not by position. Clamping an index kept the
+  // panel in range but pointed it at a different section whenever a
+  // section *before* the selected one was hidden, so the reader was
+  // silently moved somewhere they had not chosen.
+  const found = sections.findIndex((section) => section.key === activeId);
+  const index = found >= 0 ? found : 0;
 
   return (
     <Tabs
       activeKey={index}
-      onSelect={(_e, key) => setActive(Number(key))}
+      onSelect={(_e, key) => setActiveId(sections[Number(key)]?.key ?? null)}
       aria-label={t('components.title')}
     >
       {sections.map((section, i) => (

@@ -301,7 +301,8 @@
     "view": "View {{name}}",
     "remove": "Delete {{name}}",
     "truncated": "This file is too large to edit here and is shown read-only.",
-    "content": "Contents of {{name}}"
+    "content": "Contents of {{name}}",
+    "confirmDelete": "Delete {{path}}? This removes it for everyone."
   },
   "layout": {
     "skipToContent": "Skip to main content",

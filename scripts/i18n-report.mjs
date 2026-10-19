@@ -14,8 +14,12 @@
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('../src/frontend', import.meta.url).pathname;
+// `fileURLToPath`, not `.pathname`: the latter keeps percent
+// encoding, so a checkout under a path with a space resolves to
+// nothing, and on Windows it carries a leading slash.
+const ROOT = fileURLToPath(new URL('../src/frontend', import.meta.url));
 
 // Attributes that reach a human. `className`, `id`, `key`, `role`,
 // `type` and friends never do, and counting them would bury the real

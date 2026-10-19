@@ -94,11 +94,18 @@ export function SubagentList() {
                 {agent.description}
               </p>
             )}
-            {(agent.mcps.length > 0 || agent.skills.length > 0) && (
+            {/* Defaulted, and keyed by kind as well as name: a
+                payload without these threw during render, and an MCP
+                and a skill with the same name produced two children
+                with one key. */}
+            {((agent.mcps ?? []).length > 0 || (agent.skills ?? []).length > 0) && (
               <p className="mt-1.5 flex flex-wrap gap-1">
-                {[...agent.mcps, ...agent.skills].map((item) => (
+                {[
+                  ...(agent.mcps ?? []).map((n: string) => ({ kind: 'mcp', name: n })),
+                  ...(agent.skills ?? []).map((n: string) => ({ kind: 'skill', name: n })),
+                ].map(({ kind, name: item }) => (
                   <code
-                    key={item}
+                    key={`${kind}:${item}`}
                     className="rounded bg-secondary/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
                   >
                     {item}

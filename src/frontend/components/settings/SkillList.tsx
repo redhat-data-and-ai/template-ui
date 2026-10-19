@@ -115,9 +115,9 @@ export function SkillList() {
               {skill.description}
             </p>
           )}
-          {skill.agents.length > 0 && (
+          {(skill.agents ?? []).length > 0 && (
             <p className="mt-1.5 text-xs text-muted-foreground/80">
-              {t('skills.usedBy')} {skill.agents.join(', ')}
+              {t('skills.usedBy')} {(skill.agents ?? []).join(', ')}
             </p>
           )}
           </button>

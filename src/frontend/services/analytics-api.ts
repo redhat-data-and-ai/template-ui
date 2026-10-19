@@ -128,13 +128,24 @@ export async function fetchTimeseries(
   // otherwise puts `undefined` into state and the next `.map()`
   // takes the whole page down with a blank screen rather than an
   // error message.
-  return body.points ?? [];
+  // Numbers coerced too, not just the array. A row missing `runs`
+  // makes `Math.max` return NaN and the chart draws nothing; a row
+  // missing `p95_seconds` reaches `.toFixed()` and throws.
+  return (body.points ?? []).map((pt) => ({
+    ...pt,
+    runs: num((pt as unknown as Record<string, unknown>).runs),
+    p95_seconds: num((pt as unknown as Record<string, unknown>).p95_seconds),
+  }));
 }
 
 export async function fetchModels(days: number): Promise<ModelRow[]> {
   const response = await fetch(buildAgentApiUrl(`/analytics/models?days=${days}`));
   const body = await json<{ models?: ModelRow[] }>(response, 'Could not load models');
-  return body.models ?? [];
+  return (body.models ?? []).map((row) => ({
+    ...row,
+    runs: num((row as unknown as Record<string, unknown>).runs),
+    p95_seconds: num((row as unknown as Record<string, unknown>).p95_seconds),
+  }));
 }
 
 export async function fetchErrors(days: number): Promise<ErrorClass[]> {

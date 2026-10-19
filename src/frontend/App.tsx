@@ -115,7 +115,10 @@ export default function App() {
               {/* Deployment-wide flags. Not under /settings because
                   Settings is per-user preference and these change
                   what everybody sees. */}
-              <Route path="/admin" element={<AdminPage />} />
+              <Route
+                path="/admin"
+                element={isPrivilegedUser() ? <AdminPage /> : <Navigate to="/" replace />}
+              />
               {/* Usage lives as a Settings tab now. A redirect
                   rather than a removal: this URL is in people's
                   history and in the sidebar of any tab they left

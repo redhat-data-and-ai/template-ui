@@ -1641,7 +1641,11 @@ export function useStreamingAPI(threadId: string) {
           dispatch(
             updateStreamingState({
               chatId: threadId,
-              state: { pendingInterrupt: payload as never, isLoading: false },
+              // Enriched like every other path. Storing the raw
+              // interrupt left a reattached `mcp_auth_required`
+              // without its `payload`, so the banner had nothing to
+              // render the Connect button from.
+              state: { pendingInterrupt: enrichInterrupt(payload), isLoading: false },
             }),
           );
         },

@@ -21,10 +21,14 @@ const initialState: ConfigState = {
 export const loadConfig = createAsyncThunk(
   "config/load",
   async () => {
+    // Content is allowed to fail on its own. `Promise.all` rejected
+    // the whole thunk when `/content` did, so a missing content file
+    // also threw away branding and the feature flags, and `useContent`
+    // never reached the fallback it has for exactly this.
     const [branding, features, content] = await Promise.all([
       fetchBranding(),
       fetchFeatures(),
-      fetchContent(),
+      fetchContent().catch(() => null),
     ]);
     return { branding, features, content };
   }

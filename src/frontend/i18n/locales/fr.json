@@ -301,7 +301,8 @@
     "view": "Voir {{name}}",
     "remove": "Supprimer {{name}}",
     "truncated": "Ce fichier est trop volumineux pour être modifié ici ; il est en lecture seule.",
-    "content": "Contenu de {{name}}"
+    "content": "Contenu de {{name}}",
+    "confirmDelete": "Delete {{path}}? This removes it for everyone."
   },
   "layout": {
     "skipToContent": "Aller au contenu principal",

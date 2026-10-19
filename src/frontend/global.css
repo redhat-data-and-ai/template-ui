@@ -576,61 +576,65 @@
  * blockquote rule. It looked like a styling opinion; it was a
  * missing plugin.
  *
- * Unlayered on purpose. PatternFly's resets live in a cascade layer,
- * and unlayered rules beat every layered one regardless of
- * specificity — the same mechanism that made `py-3` compute to 0px
- * earlier in this project, used deliberately here instead of being
- * tripped over.
+ * In `@layer components`, which sits after `patternfly` and before
+ * `utilities` in the order declared at the top of this file. That
+ * beats PatternFly's resets, which was the point of leaving these
+ * unlayered originally, and still loses to Tailwind utilities, which
+ * unlayered did not: `my-0` on a markdown child was silently
+ * ineffective because an unlayered rule outranks every layered one
+ * whatever its specificity.
  */
-.md-prose > :first-child { margin-top: 0; }
-.md-prose > :last-child { margin-bottom: 0; }
-.md-prose h1,
-.md-prose h2,
-.md-prose h3 {
-  font-weight: 600;
-  line-height: 1.3;
-  margin: 1.25em 0 0.5em;
-  color: var(--foreground);
+@layer components {
+  .md-prose > :first-child { margin-top: 0; }
+  .md-prose > :last-child { margin-bottom: 0; }
+  .md-prose h1,
+  .md-prose h2,
+  .md-prose h3 {
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 1.25em 0 0.5em;
+    color: var(--foreground);
+  }
+  .md-prose h1 { font-size: 1.25rem; }
+  .md-prose h2 { font-size: 1.05rem; }
+  .md-prose h3 { font-size: 0.95rem; }
+  .md-prose p { margin: 0.6em 0; line-height: 1.6; }
+  .md-prose ul,
+  .md-prose ol { margin: 0.6em 0; padding-left: 1.4em; }
+  .md-prose ul { list-style: disc; }
+  .md-prose ol { list-style: decimal; }
+  .md-prose li { margin: 0.25em 0; }
+  .md-prose code {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.85em;
+    background: color-mix(in srgb, var(--secondary) 60%, transparent);
+    border-radius: 0.25rem;
+    padding: 0.1em 0.35em;
+  }
+  .md-prose pre {
+    background: color-mix(in srgb, var(--secondary) 45%, transparent);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    overflow-x: auto;
+    margin: 0.75em 0;
+  }
+  .md-prose pre code { background: none; padding: 0; font-size: 0.8rem; }
+  .md-prose blockquote {
+    border-left: 3px solid var(--border);
+    margin: 0.75em 0;
+    padding-left: 0.85em;
+    color: var(--muted-foreground);
+  }
+  .md-prose table { border-collapse: collapse; margin: 0.75em 0; width: 100%; }
+  .md-prose th,
+  .md-prose td {
+    border: 1px solid var(--border);
+    padding: 0.35em 0.6em;
+    text-align: left;
+    font-size: 0.85em;
+  }
+  .md-prose th { font-weight: 600; background: color-mix(in srgb, var(--secondary) 35%, transparent); }
+  .md-prose hr { border: 0; border-top: 1px solid var(--border); margin: 1.1em 0; }
+  .md-prose a { color: var(--primary); text-decoration: underline; }
+  .md-prose strong { font-weight: 600; color: var(--foreground); }
 }
-.md-prose h1 { font-size: 1.25rem; }
-.md-prose h2 { font-size: 1.05rem; }
-.md-prose h3 { font-size: 0.95rem; }
-.md-prose p { margin: 0.6em 0; line-height: 1.6; }
-.md-prose ul,
-.md-prose ol { margin: 0.6em 0; padding-left: 1.4em; }
-.md-prose ul { list-style: disc; }
-.md-prose ol { list-style: decimal; }
-.md-prose li { margin: 0.25em 0; }
-.md-prose code {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.85em;
-  background: color-mix(in srgb, var(--secondary) 60%, transparent);
-  border-radius: 0.25rem;
-  padding: 0.1em 0.35em;
-}
-.md-prose pre {
-  background: color-mix(in srgb, var(--secondary) 45%, transparent);
-  border-radius: 0.5rem;
-  padding: 0.75rem;
-  overflow-x: auto;
-  margin: 0.75em 0;
-}
-.md-prose pre code { background: none; padding: 0; font-size: 0.8rem; }
-.md-prose blockquote {
-  border-left: 3px solid var(--border);
-  margin: 0.75em 0;
-  padding-left: 0.85em;
-  color: var(--muted-foreground);
-}
-.md-prose table { border-collapse: collapse; margin: 0.75em 0; width: 100%; }
-.md-prose th,
-.md-prose td {
-  border: 1px solid var(--border);
-  padding: 0.35em 0.6em;
-  text-align: left;
-  font-size: 0.85em;
-}
-.md-prose th { font-weight: 600; background: color-mix(in srgb, var(--secondary) 35%, transparent); }
-.md-prose hr { border: 0; border-top: 1px solid var(--border); margin: 1.1em 0; }
-.md-prose a { color: var(--primary); text-decoration: underline; }
-.md-prose strong { font-weight: 600; color: var(--foreground); }

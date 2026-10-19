@@ -147,7 +147,12 @@ export function SettingsPage() {
     // `?tab=tool-approvals` on MCP, and so on.
     const resolved = param && (LEGACY_TAB_IDS[param] ?? param);
     if (resolved && VALID_TABS.has(resolved)) {
-      if (resolved === 'developer' && !developerMode) return 'account';
+      // `'developers'`, not `'developer'`: LEGACY_TAB_IDS maps the
+      // old id to the new one before this runs, so the old spelling
+      // never matched and `?tab=developers` opened for anyone. The
+      // visibleTabs effect corrected it a moment later, which made
+      // it a flash rather than a hole, but the gate here was dead.
+      if (resolved === 'developers' && !developerMode) return 'account';
       return resolved as TabId;
     }
     return 'account';

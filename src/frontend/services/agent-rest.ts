@@ -219,13 +219,18 @@ export async function deleteAllThreads(): Promise<{ deleted: number; failed: num
  * couple of dozen of 354 and left the rest to reappear on the next
  * load — the delete worked, it was just aimed at the wrong set.
  */
-export async function listAllThreadIds(): Promise<string[]> {
+export async function listAllThreadIds(): Promise<string[] | null> {
+  // `null` for "could not ask", not `[]`. The two are different
+  // answers and the caller acts on them differently: an empty list
+  // means the sweep is finished and the stored deletion intent can
+  // go, while a 5xx or an offline load means we simply do not know
+  // and must keep it.
   try {
     const resp = await authenticatedFetch(buildAgentApiUrl('/threads'), {
       method: 'GET',
       headers: getAuthHeaders(false),
     });
-    if (!resp.ok) return [];
+    if (!resp.ok) return null;
     const body = (await resp.json()) as unknown;
     const rows = Array.isArray(body)
       ? body
@@ -236,7 +241,7 @@ export async function listAllThreadIds(): Promise<string[]> {
       .map((t) => t?.thread_id)
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
   } catch {
-    return [];
+    return null;
   }
 }
 

@@ -301,7 +301,8 @@
     "view": "Tazama {{name}}",
     "remove": "Futa {{name}}",
     "truncated": "Faili hili ni kubwa mno kuhaririwa hapa; linaonyeshwa kwa kusoma tu.",
-    "content": "Yaliyomo ya {{name}}"
+    "content": "Yaliyomo ya {{name}}",
+    "confirmDelete": "Delete {{path}}? This removes it for everyone."
   },
   "layout": {
     "skipToContent": "Rukia hadi maudhui makuu",

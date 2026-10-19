@@ -45,7 +45,7 @@ export function ProfileSection() {
     // the agent found 354 threads where the list showed a couple of
     // dozen, so "delete all" cleared the screen and the rest came
     // back on the next load.
-    const serverIds = await listAllThreadIds();
+    const serverIds = (await listAllThreadIds()) ?? [];
     const allIds = [...new Set([...ids, ...serverIds])];
 
     // Mark them gone before the deletes start. They take a while at
@@ -67,9 +67,15 @@ export function ProfileSection() {
     void dispatch(loadProjectsThunk());
     const failures = failed;
 
-    if (failures > 0 && failures < allIds.length) {
+    // Nothing deleted and something failed means the request itself
+    // failed, whatever the counts say: `deleteAllThreads` reports
+    // `{deleted: 0, failed: 1}` for a dead request regardless of how
+    // many chats were meant to go. Comparing `failures` against
+    // `allIds.length` read that as a partial failure and told the
+    // user "0 chats deleted, 1 failed on server".
+    if (deleted > 0 && failures > 0) {
       dispatch(addToast({ title: `${deleted} chats deleted, ${failures} failed on server`, variant: 'warning' }));
-    } else if (allIds.length > 0 && failures === allIds.length) {
+    } else if (allIds.length > 0 && failures > 0) {
       dispatch(addToast({ title: t('toast.allChatsDeletedLocally'), variant: 'warning' }));
     } else {
       dispatch(addToast({ title: t('toast.allChatsDeleted'), variant: 'success' }));
