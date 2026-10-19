@@ -148,8 +148,17 @@ export class StreamingManager {
     this.processedChunkIds.clear();
     this.streamError = null;
 
-    this.abortController = new AbortController();
-    const signal = this.abortController.signal;
+    // Held locally as well as on `this`. A later `stream()` replaces
+    // `this.abortController`, and the AbortError this attach then
+    // raises used to land on the *new* stream: status went
+    // `cancelled` and `finally` nulled the controller out from under
+    // it, so Stop had nothing to abort and the `streaming` guards
+    // read as idle. Every write below is conditional on still owning
+    // the controller.
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
+    const owns = () => this.abortController === controller;
 
     this.setStatus('connecting');
     callbacks.onStatusChange('connecting');
@@ -174,6 +183,7 @@ export class StreamingManager {
       reader = response.body?.getReader();
       if (!reader) throw new Error('Failed to get reader from attach response');
 
+      if (!owns()) return;
       this.setStatus('streaming');
       callbacks.onStatusChange('streaming');
 
@@ -189,6 +199,7 @@ export class StreamingManager {
       const flush = decoder.decode();
       if (flush.length > 0) this.handleEvents(this.processor.feed(flush), callbacks);
 
+      if (!owns()) return;
       if (this.streamError) {
         this.setStatus('error');
         callbacks.onStatusChange('error');
@@ -199,6 +210,7 @@ export class StreamingManager {
       }
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error('Unknown attach error');
+      if (!owns()) return;
       if (err.name === 'AbortError') {
         this.setStatus('cancelled');
         callbacks.onStatusChange('cancelled');
@@ -209,7 +221,7 @@ export class StreamingManager {
       }
     } finally {
       reader?.releaseLock?.();
-      this.abortController = null;
+      if (owns()) this.abortController = null;
     }
   }
 

@@ -464,6 +464,10 @@ export function useStreamingAPI(threadId: string) {
       if (!manager || !threadId) return;
 
       userCancelledRef.current = false;
+      // The previous run's id must not outlive it: Stop pressed before
+      // this run's metadata arrives would otherwise cancel the run
+      // that already finished.
+      liveRunIdRef.current = null;
       setRetryCount(0);
       setWasInterrupted(false);
       const initialMessageCount = messagesRef.current.length;
@@ -1377,6 +1381,16 @@ export function useStreamingAPI(threadId: string) {
 
             dispatch(appendMessageToChat({ chatId: threadId, message: m }));
           },
+          // Resuming is the same stream as any other, and a
+          // delegation started before the pause keeps reporting
+          // through it. Without this the four stream paths disagreed:
+          // submit, resume-with-decisions and attach all forwarded
+          // progress and this one dropped it, so connecting an
+          // integration mid-turn froze every subagent box at the step
+          // it had reached when the run paused.
+          onSubagentProgress(evt) {
+            dispatch(applySubagentProgress({ chatId: threadId, event: evt, at: Date.now() }));
+          },
           onInterrupt(interrupt) {
             resumeStreamHadInterrupt = true;
             dispatch(
@@ -1498,19 +1512,60 @@ export function useStreamingAPI(threadId: string) {
       // agent supports resuming from an event id; until the BFF
       // carries ids through the translation, ignoring ids we are
       // already showing is what keeps the answer from doubling.
-      const preExisting = new Set(
-        (messagesRef.current ?? [])
-          .map((m) => (m as { id?: string }).id)
-          .filter((id): id is string => Boolean(id)),
-      );
+      //
+      // How much of each message this tab has already rendered, by
+      // id. A Set of ids was not enough: dropping every replayed
+      // token for a known id also dropped the part of the answer
+      // that arrived *after* the connection was lost, so a reader who
+      // watched half a reply and came back kept the half. Counting
+      // characters lets the replay run past what is on screen and
+      // emit only the remainder.
+      const seenChars = new Map<string, number>();
+      for (const m of messagesRef.current ?? []) {
+        const id = (m as { id?: string }).id;
+        if (!id) continue;
+        const c = (m as { content?: unknown }).content;
+        seenChars.set(id, typeof c === 'string' ? c.length : 0);
+      }
+      const preExisting = new Set(seenChars.keys());
+      /** Characters of a replayed message consumed so far. */
+      const replayed = new Map<string, number>();
+      // Only the message still being written can gain a tail, and
+      // `updateLastMessageInChat` can only append to the last one.
+      // Anything earlier is complete, so replay of it is just replay.
+      const lastId = (() => {
+        const all = messagesRef.current ?? [];
+        return (all[all.length - 1] as { id?: string } | undefined)?.id;
+      })();
       // Frozen on purpose: ids created *during* this attach must not
       // land in it, or the first token of a new message would make
       // every token after it look like replay.
       const appendedHere = new Set<string>();
 
+      // `attach` reports failure through `onError` and returns
+      // normally, so the `catch` below never ran: a 404 or a dropped
+      // connection left the chat `isLoading: true, isConnected: true`
+      // with no error and no poller — stuck, silently. Record it here
+      // and check after.
+      let attachFailed = false;
+
       const attachCallbacks: StreamCallback = {
         onToken(content, messageId) {
-          if (messageId && preExisting.has(messageId)) return;
+          if (messageId && preExisting.has(messageId)) {
+            // Replay of something already on screen. Skip while the
+            // replay is still behind what was rendered; once it
+            // passes, append the tail only.
+            if (messageId !== lastId) return;
+            const already = seenChars.get(messageId) ?? 0;
+            const before = replayed.get(messageId) ?? 0;
+            const after = before + content.length;
+            replayed.set(messageId, after);
+            if (after <= already) return;
+            const tail = content.slice(Math.max(0, already - before));
+            if (!tail) return;
+            dispatch(updateLastMessageInChat({ chatId: threadId, content: tail }));
+            return;
+          }
           if (!streamingTokens) {
             streamingTokens = true;
             dispatch(
@@ -1595,7 +1650,7 @@ export function useStreamingAPI(threadId: string) {
           liveRunIdRef.current = data.run_id;
         },
         onError() {
-          // Handled by the fall-through below.
+          attachFailed = true;
         },
         onStatusChange() {},
         onDone() {
@@ -1612,7 +1667,7 @@ export function useStreamingAPI(threadId: string) {
 
       try {
         await manager.attach({ threadId, runId }, attachCallbacks);
-        return;
+        if (!attachFailed) return;
       } catch {
         // Fall through to polling: the run is known to be going, and
         // a slower way to see the result beats none.
@@ -1673,10 +1728,21 @@ export function useStreamingAPI(threadId: string) {
     // Aborting the fetch only detaches this browser. The run is
     // deliberately independent of the connection now, so stopping it
     // has to be said out loud.
+    //
+    // The id is only known once metadata arrives. Stop pressed while
+    // still connecting therefore had either a stale id from the last
+    // finished run — cancelling nothing — or none at all, and the
+    // run it meant to stop carried on server-side under
+    // `on_disconnect: "continue"` until the next focus rejoined it.
+    // Ask the agent which run is actually in flight in that case.
     const runId = liveRunIdRef.current;
+    liveRunIdRef.current = null;
     if (runId) {
-      liveRunIdRef.current = null;
       void cancelRun(threadId, runId);
+    } else {
+      void getInFlightRun(threadId)
+        .then((live) => (live ? cancelRun(threadId, live) : undefined))
+        .catch(() => undefined);
     }
     dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'cancelled' }));
     closeAllSubagentSteps();

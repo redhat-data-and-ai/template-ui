@@ -42,9 +42,15 @@ function countingStream(source: Readable, limit: number): Readable {
       callback(null, chunk);
     },
   });
-  // Without this, aborting the upload leaves the inbound socket
-  // paused and the connection hanging until it times out.
+  // Both directions.
+  //
+  // `counter.on('error')` already tore down the source when the cap
+  // was hit, but nothing carried a failure the other way: an aborted
+  // or errored request left `counter` open and un-destroyed, so the
+  // `fetch` reading from it waited for a body that would never end.
   counter.on('error', () => source.destroy());
+  source.on('error', (err) => counter.destroy(err));
+  source.on('aborted', () => counter.destroy(new Error('request aborted')));
   return source.pipe(counter);
 }
 

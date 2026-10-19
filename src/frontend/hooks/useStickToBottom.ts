@@ -46,6 +46,16 @@ export function useStickToBottom(
     setIsPinned(value);
   }, []);
 
+  // Whether the listener has ever been attached, so re-running this
+  // effect does not re-measure.
+  const measuredRef = useRef(false);
+
+  // `dependency` is in the deps so this re-runs when content arrives.
+  // A RefObject keeps the same identity when `ref.current` goes from
+  // null to an element, so with only [ref, setPinned] the effect ran
+  // once against the loading view, found nothing, and never looked
+  // again: scrolling up never unpinned, and every new token dragged
+  // the reader back to the bottom.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -56,9 +66,17 @@ export function useStickToBottom(
     };
 
     el.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
+    // Measured on first attach only. Re-measuring on every token
+    // reads the height *before* the pinned scroll that follows it,
+    // which looks like the reader scrolled away and unpins the view
+    // — the bug this effect exists to prevent, arriving by the other
+    // door.
+    if (!measuredRef.current) {
+      measuredRef.current = true;
+      onScroll();
+    }
     return () => el.removeEventListener('scroll', onScroll);
-  }, [ref, setPinned]);
+  }, [ref, setPinned, dependency]);
 
   useEffect(() => {
     const el = ref.current;

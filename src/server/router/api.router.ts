@@ -193,18 +193,31 @@ async function apiRoutes(fastify: FastifyInstance) {
  * two authorities disagreed about one person. One authority, one
  * answer, for the browser and for CI alike.
  *
- * The Authorization header is forwarded when present. With auth
- * disabled there is none, and the agent says so itself rather than
+ * The Authorization header is forwarded when present, and the
+ * session's own access token when it is not. A browser does not send
+ * a bearer — it sends a session cookie — so with auth *enabled* the
+ * header was absent, the agent rejected the unauthenticated call, and
+ * `!res.ok` turned that into a flat `false`: both admin endpoints
+ * answered 403 to the very people allowed to use them. With auth
+ * disabled there is neither, and the agent says so itself rather than
  * this server guessing on its behalf.
  */
 async function isPrivilegedCaller(request: {
   headers?: Record<string, unknown>;
+  session?: { token?: { access_token?: string } };
 }): Promise<boolean> {
   try {
     const host = resolveAgentHost();
-    const auth = request.headers?.authorization;
+    const header = request.headers?.authorization;
+    const sessionToken = request.session?.token?.access_token;
+    const auth =
+      typeof header === "string"
+        ? header
+        : sessionToken
+          ? `Bearer ${sessionToken}`
+          : undefined;
     const res = await fetch(`${host}/auth/whoami`, {
-      headers: typeof auth === "string" ? { Authorization: auth } : {},
+      headers: auth ? { Authorization: auth } : {},
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return false;

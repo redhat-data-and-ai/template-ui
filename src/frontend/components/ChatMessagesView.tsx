@@ -924,7 +924,11 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
 
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId]);
+    // `subagentProgress` is read inside, so it belongs here: without
+    // it a delegation box kept showing the step it had when the
+    // message last changed, which for a long delegation is the whole
+    // delegation.
+  }, [messageKey, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId, subagentProgress]);
 
   return (
     <div className="space-y-2 w-full">
@@ -1026,8 +1030,17 @@ export function ChatMessagesView({
     // reading `message.content` alone never saw it and this retry
     // had never once fired. The user was left reading "prompt me
     // again", which is the thing it exists to avoid.
+    // Scoped to this turn, not to a fixed window. A six-message
+    // window still contained the old `[TOOLS_RELOADED]` tool result
+    // after the silent retry had already run, and the fresh AI reply
+    // carried a fresh key, so the retry fired again — three times
+    // over for one marker. Everything after the last human message
+    // is exactly one turn, and the retry posts a human message, so
+    // its own marker falls out of scope the moment it runs.
+    let turnStart = messages.length - 1;
+    while (turnStart > 0 && messages[turnStart].type !== 'human') turnStart--;
     const raw = messages
-      .slice(-6)
+      .slice(turnStart)
       .flatMap((m) => [
         extractMessageText(m.content),
         ...((m as { tool_calls?: Array<{ content?: unknown }> }).tool_calls ?? []).map(
@@ -1280,7 +1293,18 @@ export function ChatMessagesView({
                       this one *is* something to do. The agent used to
                       say "connect it in Settings", three navigations
                       from the sentence saying so. */}
+                  {/* The newest answer only.
+                      Every older message that ever carried
+                      `auth_required` was mounting its own prompt.
+                      Each one recorded the integration as
+                      disconnected and each one fired `onConnected`
+                      on the transition — so a single connection,
+                      even one made in Settings, resubmitted a
+                      handful of old questions at once. Only the
+                      question still waiting for an answer should
+                      act on connecting. */}
                   <div className="pl-11">
+                    {messageIndex === lastAiMessageIndex && (
                     <McpAuthPrompt
                       requests={(() => {
                         // Provenance first; the text marker is a
@@ -1315,6 +1339,7 @@ export function ChatMessagesView({
                         if (question) onSubmit(question);
                       }}
                     />
+                    )}
                   </div>
                   {/* Below the actions, not above: it explains the
                       answer rather than offering anything to do. */}
