@@ -318,7 +318,6 @@ describe('Sidebar — activity grouping', () => {
     isConnected: true,
     error: null,
     currentRunId: null,
-    activeSubAgent: null,
     pendingInterrupt: null,
     taskSteps: [],
     isReconnecting: false,

@@ -5,7 +5,6 @@ import {
   Dropdown,
   DropdownItem,
   DropdownList,
-  Label,
   MenuToggle,
   type MenuToggleElement,
   Modal,
@@ -17,7 +16,6 @@ import {
   Tooltip,
 } from '@patternfly/react-core';
 import {
-  Loader2,
   MessageSquare,
   Trash2,
   Edit3,
@@ -40,7 +38,6 @@ import { cn } from '@/lib/utils';
 import type { SidebarChatItem, SidebarProject } from '../types/chat';
 import { SearchResults } from './SearchResults';
 import { useThreadSearch } from '../hooks/useThreadSearch';
-import type { SubAgentInfo } from '../types/deep-agent';
 import { useAgentHealth } from '../hooks/useAgentHealth';
 import { useSidebarDragDrop } from '../hooks/useSidebarDragDrop';
 import { ProjectEditModal } from './ProjectEditModal';
@@ -50,7 +47,6 @@ interface SidebarProps {
   currentChatId?: string;
   chatHistory: SidebarChatItem[];
   tokenExpiry?: Date;
-  activeSubAgent?: SubAgentInfo | null;
   onNewChat: (projectId?: string) => void;
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
@@ -72,7 +68,6 @@ function SidebarComponent({
   chatHistory,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tokenExpiry,
-  activeSubAgent,
   onNewChat,
   onSelectChat,
   onDeleteChat,
@@ -247,21 +242,15 @@ function SidebarComponent({
                 isActive ? 'text-foreground' : 'text-foreground/70 hover:text-foreground',
               )}
             >
+              {/* The dot carries this. A second row naming the running
+                  subagent pushed the list item to two lines, moved
+                  every row below it, and repeated what the transcript
+                  already shows in full. Which subagent is working is
+                  detail for the conversation, not the index of it. */}
               <span className="flex items-center gap-2 min-w-0">
                 <ChatStatusDot activity={activity[chat.id] ?? 'idle'} />
                 <span className="block truncate">{chat.title}</span>
               </span>
-              {isActive && activeSubAgent && (
-                <span className="flex items-center gap-1.5 mt-0.5">
-                  <Label
-                    isCompact
-                    color="blue"
-                    icon={<Loader2 className="w-2.5 h-2.5 animate-spin" />}
-                  >
-                    <span className="capitalize">{activeSubAgent.name}</span>
-                  </Label>
-                </span>
-              )}
             </button>
 
             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
