@@ -108,15 +108,19 @@ export function ProfileSection() {
             above it is a development stand-in and nothing has been
             authenticated at all. A security claim that is sometimes
             wrong is worse than no claim. */}
+        {/* amber-700, not amber-600: #e17100 on white is 3.19:1 and
+            WCAG AA wants 4.5:1 at this size, so the axe run in the
+            e2e suite fails the Profile tab. amber-700 is 5.03:1 and
+            reads the same. Dark mode was already fine. */}
         <div className="flex items-center gap-3 text-sm">
           <Shield
-            className={`w-4 h-4 ${authEnabled ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-500'}`}
+            className={`w-4 h-4 ${authEnabled ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-500'}`}
           />
           <span
             className={
               authEnabled
                 ? 'text-muted-foreground'
-                : 'text-amber-600 dark:text-amber-500'
+                : 'text-amber-700 dark:text-amber-500'
             }
           >
             {authEnabled ? t('profile.ssoAuthenticated') : t('profile.authDisabled')}
