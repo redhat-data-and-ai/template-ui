@@ -103,6 +103,7 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
     ? rootSubagentNames
     : Object.keys(structure.subagents);
   const mcpServers = Object.entries(structure.mcp_servers);
+  const availableSkills = Object.keys(structure.skills ?? {});
 
   return (
     <div className="mt-6 space-y-6 border-t border-border pt-6">
@@ -120,14 +121,14 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
           </div>
         ) : null}
       </div>
-      {structure.available_skills.length > 0 ? (
+      {availableSkills.length > 0 ? (
         <div className="space-y-2 border-t border-border mt-2 pt-5">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
             Available skills
           </div>
           <div className="flex flex-wrap gap-1.5 pl-6">
-            {structure.available_skills.map((skill) => (
+            {availableSkills.map((skill) => (
               <span
                 key={skill}
                 onClick={() => setSelectedSkill(skill)}
@@ -166,7 +167,7 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
       {selectedSkill ? (
         <SkillContentModal
           name={selectedSkill}
-          content={structure.skill_contents?.[selectedSkill] ?? ''}
+          content={structure.skills?.[selectedSkill] ?? ''}
           onClose={() => setSelectedSkill(null)}
         />
       ) : null}

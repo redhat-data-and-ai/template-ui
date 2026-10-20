@@ -14,8 +14,7 @@ export interface AgentStructure {
   orchestrator: AgentNode;
   subagents: Record<string, AgentNode>;
   mcp_servers: Record<string, { display_name?: string }>;
-  available_skills: string[];
-  skill_contents: Record<string, string>;
+  skills: Record<string, string>;
 }
 
 export async function fetchAgentStructure(): Promise<AgentStructure> {
