@@ -14,6 +14,7 @@ describe('fetchAgentStructure', () => {
       subagents: {},
       mcp_servers: {},
       available_skills: [],
+      skill_contents: {},
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,

@@ -6,6 +6,8 @@ export interface AgentNode {
   skills?: string[];
   mcps?: string[];
   subagents?: string[];
+  /** The full system prompt configured for this agent. */
+  body?: string;
 }
 
 export interface AgentStructure {
@@ -14,6 +16,8 @@ export interface AgentStructure {
   subagents: Record<string, AgentNode>;
   mcp_servers: Record<string, { display_name?: string }>;
   available_skills: string[];
+  /** Complete SKILL.md source indexed by skill name. */
+  skill_contents: Record<string, string>;
 }
 
 export async function fetchAgentStructure(): Promise<AgentStructure> {
