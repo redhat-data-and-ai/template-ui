@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Check, ChevronDown, Copy, FileCode2, FileText, FolderTree, LoaderCircle, Plug, Wrench, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EvalDashboard } from './eval';
@@ -97,6 +97,7 @@ function AgentTreeNode({ node }: { node: AgentNode }) {
 
 function AgentStructureTree({ structure }: { structure: AgentStructure }) {
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [skillTrigger, setSkillTrigger] = useState<HTMLElement | null>(null);
   const rootSubagentNames = (structure.orchestrator.subagents ?? [])
     .filter((name) => structure.subagents[name]);
   const displayedSubagentNames = rootSubagentNames.length > 0
@@ -131,10 +132,14 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
             {availableSkills.map((skill) => (
               <span
                 key={skill}
-                onClick={() => setSelectedSkill(skill)}
+                onClick={(event) => {
+                  setSkillTrigger(event.currentTarget);
+                  setSelectedSkill(skill);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
+                    setSkillTrigger(event.currentTarget);
                     setSelectedSkill(skill);
                   }
                 }}
@@ -168,15 +173,31 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
         <SkillContentModal
           name={selectedSkill}
           content={structure.skills?.[selectedSkill] ?? ''}
-          onClose={() => setSelectedSkill(null)}
+          triggerElement={skillTrigger}
+          onClose={() => {
+            setSelectedSkill(null);
+            setSkillTrigger(null);
+          }}
         />
       ) : null}
     </div>
   );
 }
 
-function SkillContentModal({ name, content, onClose }: { name: string; content: string; onClose: () => void }) {
+function SkillContentModal({
+  name,
+  content,
+  triggerElement,
+  onClose,
+}: {
+  name: string;
+  content: string;
+  triggerElement: HTMLElement | null;
+  onClose: () => void;
+}) {
   const [copied, setCopied] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const lineCount = content ? content.split('\n').length : 0;
 
   useEffect(() => {
@@ -185,20 +206,55 @@ function SkillContentModal({ name, content, onClose }: { name: string; content: 
     return () => document.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    return () => triggerElement?.focus();
+  }, [triggerElement]);
+
   const copyContent = async () => {
-    await navigator.clipboard?.writeText(content);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2_000);
+    if (!navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2_000);
+    } catch {
+      // Clipboard access can be unavailable or denied by browser permissions.
+    }
+  };
+
+  const trapFocus = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Tab') return;
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    if (!focusable?.length) {
+      event.preventDefault();
+      dialogRef.current?.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={onClose}>
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="skill-content-title"
+        tabIndex={-1}
         className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={trapFocus}
       >
         <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div className="min-w-0">
@@ -209,10 +265,10 @@ function SkillContentModal({ name, content, onClose }: { name: string; content: 
             <p className="mt-1 text-xs text-muted-foreground">{lineCount} lines · {content.length.toLocaleString()} characters</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <button type="button" onClick={copyContent} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground" aria-label={copied ? 'Skill instructions copied' : 'Copy skill instructions'}>
+            <button type="button" onClick={() => { void copyContent(); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground" aria-label={copied ? 'Skill instructions copied' : 'Copy skill instructions'}>
               {copied ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
             </button>
-            <button type="button" onClick={onClose} className="rounded p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Close skill instructions">
+            <button ref={closeButtonRef} type="button" onClick={onClose} className="rounded p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Close skill instructions">
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
@@ -237,9 +293,14 @@ function AgentDetails({ agent, isMainAgent = false }: { agent: AgentNode; isMain
   );
 
   const copyPrompt = async () => {
-    await navigator.clipboard?.writeText(agent.body ?? '');
-    setPromptCopied(true);
-    window.setTimeout(() => setPromptCopied(false), 2_000);
+    if (!navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(agent.body ?? '');
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 2_000);
+    } catch {
+      // Clipboard access can be unavailable or denied by browser permissions.
+    }
   };
 
   return (
