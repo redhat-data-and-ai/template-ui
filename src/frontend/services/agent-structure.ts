@@ -6,6 +6,7 @@ export interface AgentNode {
   skills?: string[];
   mcps?: string[];
   subagents?: string[];
+  body?: string;
 }
 
 export interface AgentStructure {
@@ -13,7 +14,7 @@ export interface AgentStructure {
   orchestrator: AgentNode;
   subagents: Record<string, AgentNode>;
   mcp_servers: Record<string, { display_name?: string }>;
-  available_skills: string[];
+  skills: Record<string, string>;
 }
 
 export async function fetchAgentStructure(): Promise<AgentStructure> {

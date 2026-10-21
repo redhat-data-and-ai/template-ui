@@ -14,8 +14,8 @@ afterEach(() => {
 });
 
 describe('GET /api/config/agent-structure', () => {
-  it('proxies the sanitized structure from the agent', async () => {
-    const structure = { name: 'orchestrator', orchestrator: {}, subagents: {}, mcp_servers: {}, available_skills: [] };
+  it('proxies the developer structure from the agent', async () => {
+    const structure = { name: 'orchestrator', orchestrator: {}, subagents: {}, mcp_servers: {}, skills: {} };
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(structure), {
       status: 200,
       headers: { 'content-type': 'application/json' },

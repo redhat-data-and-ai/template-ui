@@ -13,7 +13,7 @@ describe('fetchAgentStructure', () => {
       orchestrator: { name: 'orchestrator' },
       subagents: {},
       mcp_servers: {},
-      available_skills: [],
+      skills: {},
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
