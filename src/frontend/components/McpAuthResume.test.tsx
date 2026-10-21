@@ -42,7 +42,10 @@ const MESSAGES = [
   },
 ] as unknown as Message[];
 
-function renderView(onSubmit: () => void) {
+function renderView(
+  onSubmit: () => void,
+  opts: { pendingInterrupt?: unknown } = {},
+) {
   const store = configureStore({
     reducer: {
       chats: chatsReducer,
@@ -59,7 +62,7 @@ function renderView(onSubmit: () => void) {
         <ChatMessagesView
           messages={MESSAGES}
           isLoading={false}
-          pendingInterrupt={undefined as never}
+          pendingInterrupt={(opts.pendingInterrupt ?? undefined) as never}
           scrollAreaRef={React.createRef<HTMLDivElement>()}
           onSubmit={onSubmit}
           onCancel={vi.fn()}
@@ -105,6 +108,28 @@ describe('connecting an MCP resumes the question', () => {
       await new Promise((r) => setTimeout(r, 700));
     });
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(QUESTION));
+    // Silently: the question is already on screen, and posting it
+    // again reads as though the reader asked twice for one answer.
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(QUESTION, { silent: true }),
+    );
+  });
+
+  it('does not re-send when a paused run will resume itself', async () => {
+    // `InterruptBanner` continues the same run from where it
+    // stopped. Resubmitting here as well ran the question twice,
+    // side by side, for one connection.
+    const onSubmit = vi.fn();
+    renderView(onSubmit, { pendingInterrupt: { value: 'paused', resumable: true } });
+
+    const button = await screen.findByRole('button', { name: /connect/i });
+    vi.mocked(verifyMcpOAuthConnected).mockResolvedValue(true);
+    button.click();
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 700));
+    });
+
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

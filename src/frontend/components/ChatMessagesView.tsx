@@ -1334,9 +1334,22 @@ export function ChatMessagesView({
                         // Ending on "now ask again" leaves the user
                         // to retype a question the page is already
                         // showing, after a detour they only took
-                        // because we sent them on it. Replay it.
+                        // because we sent them on it.
+                        //
+                        // A paused run resumes itself. When the agent
+                        // interrupted for this, `InterruptBanner`
+                        // continues the same run from where it
+                        // stopped, and resubmitting here would run
+                        // the question a second time alongside it.
+                        if (pendingInterrupt) return;
+                        // No pause to resume — the agent answered in
+                        // prose instead, which happens once the
+                        // ask-again cooldown is set. Replay the
+                        // question, but silently: posting it again
+                        // makes the thread read as though the reader
+                        // asked twice for one answer.
                         const question = lastQuestionBefore(messages, messageIndex);
-                        if (question) onSubmit(question);
+                        if (question) onSubmit(question, { silent: true });
                       }}
                     />
                     )}

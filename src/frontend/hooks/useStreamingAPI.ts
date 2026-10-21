@@ -4,7 +4,6 @@ import type { AIMessage, Message } from '@langchain/langgraph-sdk';
 import type { StreamEvent } from '@/hooks/useDataStream';
 import {
   type StreamingManager,
-  type InterruptPayload,
   type StreamCallback,
   type StreamStatus,
 } from '@/lib/streaming/StreamingManager';
@@ -39,31 +38,11 @@ import { assignThreadToProjectThunk } from '@/redux/slices/projects';
 import { isClientCreatedChat } from '@/services/newChatTracker';
 import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
-import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
+import type { HITLInterruptValue } from '@/types/deep-agent';
+import { enrichInterrupt } from '@/lib/enrich-interrupt';
 import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
 
 
-function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
-  const raw = interrupt.value as string | HITLInterruptValue;
-  if (typeof raw === 'object' && raw !== null && (raw as { type?: string }).type === 'mcp_auth_required') {
-    return { ...interrupt, value: raw, payload: raw as unknown as NonNullable<InterruptInfo['payload']> };
-  }
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (
-        parsed
-        && typeof parsed === 'object'
-        && (parsed as { type?: string }).type === 'mcp_auth_required'
-      ) {
-        return { ...interrupt, value: raw, payload: parsed as NonNullable<InterruptInfo['payload']> };
-      }
-    } catch {
-      // plain-text interrupt
-    }
-  }
-  return { ...interrupt, value: raw };
-}
 
 function cloneMessages(messages: Message[]): Message[] {
   return messages.map((m) => JSON.parse(JSON.stringify(m)) as Message);

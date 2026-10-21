@@ -28,6 +28,7 @@ import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
+import { enrichInterrupt } from '../lib/enrich-interrupt';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -150,12 +151,12 @@ export function ChatPage({ threadId }: { threadId: string }) {
         if (pendingInterrupt) {
           dispatch(updateStreamingState({
             chatId,
-            state: {
-              pendingInterrupt: {
-                value: pendingInterrupt.value as any,
-                resumable: pendingInterrupt.resumable,
-              },
-            },
+            // Enriched, not stored raw. The agent sends an MCP
+            // authorization pause as a JSON string, and the Connect
+            // row renders from `payload`, so opening a paused thread
+            // showed no Connect box and the run looked stuck for no
+            // stated reason.
+            state: { pendingInterrupt: enrichInterrupt(pendingInterrupt) },
           }));
         }
         setHydrating(false);
@@ -483,10 +484,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
                   chatId: threadId,
                   state: {
                     error: null, isLoading: false, isConnected: false,
-                    pendingInterrupt: {
-                      value: interrupt.value as any,
-                      resumable: interrupt.resumable,
-                    },
+                    pendingInterrupt: enrichInterrupt(interrupt),
                   },
                 }));
                 clearInterval(recoveryPoll);

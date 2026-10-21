@@ -116,6 +116,24 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
     onResumeRef.current('continue');
   }, []);
 
+  // Polled, not only pushed.
+  //
+  // The two signals this had were a `postMessage` from the callback
+  // page and a window `focus`. The message is sent to `UI_ORIGIN`,
+  // so it is dropped whenever the reader is on a different origin
+  // than that setting names — a port-forward on :8080 against an
+  // ingress on :8081, which is the ordinary local setup. And
+  // connecting from Settings in the same tab produces no popup and
+  // no focus change at all. Either way the integration connected and
+  // the banner sat there telling the reader to connect it.
+  useEffect(() => {
+    if (!mcpAuth || oauthReady) return undefined;
+    const timer = window.setInterval(() => {
+      void verifyAndSetReady(mcpAuth.mcp_name);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [mcpAuth, oauthReady, verifyAndSetReady]);
+
   useEffect(() => {
     if (!mcpAuth) return undefined;
 

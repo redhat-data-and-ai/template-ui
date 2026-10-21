@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const store = new Map<string, string>();
+const hashes = new Map<string, Record<string, string>>();
 vi.mock('../utils/redis', () => ({
   getRedisClient: () => ({
     get: async (k: string) => store.get(k) ?? null,
     set: async (k: string, v: string) => void store.set(k, v),
+    hgetall: async (k: string) => ({ ...(hashes.get(k) ?? {}) }),
+    hset: async (k: string, fields: Record<string, string>) => {
+      hashes.set(k, { ...(hashes.get(k) ?? {}), ...fields });
+    },
   }),
 }));
 
@@ -12,7 +17,10 @@ const { readOverrides, writeOverrides, OVERRIDABLE } = await import(
   '../utils/feature-overrides'
 );
 
-beforeEach(() => store.clear());
+beforeEach(() => {
+  store.clear();
+  hashes.clear();
+});
 
 describe('feature overrides', () => {
   it('is empty before anything is set', async () => {
@@ -42,6 +50,28 @@ describe('feature overrides', () => {
     const out = await readOverrides();
     expect(out).not.toHaveProperty('auth_enabled');
     expect(out.skills_visible_to_all).toBe(false);
+  });
+
+  it('a concurrent write to another flag is not lost', async () => {
+    // Both callers read the same empty snapshot, then write. Under
+    // the old read-merge-set this ended with one flag only: each
+    // wrote the whole object and the second overwrote the first.
+    await Promise.all([
+      writeOverrides({ skills_visible_to_all: false }),
+      writeOverrides({ memory_enabled: false }),
+    ]);
+    expect(await readOverrides()).toEqual({
+      skills_visible_to_all: false,
+      memory_enabled: false,
+    });
+  });
+
+  it('reads flags written in the old JSON format', async () => {
+    store.set(
+      'ui:feature-overrides',
+      JSON.stringify({ skills_visible_to_all: false }),
+    );
+    expect(await readOverrides()).toEqual({ skills_visible_to_all: false });
   });
 
   it('ignores non-boolean values', async () => {

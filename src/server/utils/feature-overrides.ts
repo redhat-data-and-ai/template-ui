@@ -18,7 +18,18 @@ import { getRedisClient } from './redis.js';
  * reviewed value rather than to whatever was last clicked.
  */
 
-const KEY = 'ui:feature-overrides';
+// A hash, one field per flag.
+//
+// It used to be a single JSON string, read-merged-written. Two
+// operators flipping two different flags at the same moment each
+// merged into the snapshot they had read, and whichever wrote second
+// silently reverted the other. `HSET` writes one field and leaves
+// the rest alone, so there is nothing to lose.
+const KEY = 'ui:feature-overrides:h';
+
+// The JSON string this replaced. Read once, so an upgrade does not
+// drop the flags an operator had already set.
+const LEGACY_KEY = 'ui:feature-overrides';
 
 /** Only these may be overridden at runtime. */
 export const OVERRIDABLE = [
@@ -57,8 +68,16 @@ export async function readOverrides(): Promise<FeatureOverrides> {
   const redis = getRedisClient();
   if (!redis) return {};
   try {
-    const raw = await redis.get(KEY);
-    return raw ? sanitise(JSON.parse(raw)) : {};
+    const fields = await redis.hgetall(KEY);
+    if (fields && Object.keys(fields).length > 0) {
+      const parsed: Record<string, boolean> = {};
+      for (const [key, value] of Object.entries(fields)) {
+        parsed[key] = value === 'true';
+      }
+      return sanitise(parsed);
+    }
+    const legacy = await redis.get(LEGACY_KEY);
+    return legacy ? sanitise(JSON.parse(legacy)) : {};
   } catch {
     // A flag store that is down must not take the app with it. The
     // reviewed config is a safe answer; a 500 on every page load is
@@ -76,9 +95,16 @@ export async function writeOverrides(
       'Feature overrides need Redis, which is not configured for this deployment.',
     );
   }
-  // Merged, not replaced: a client sending one flag must not clear
-  // the others it did not mention.
-  const merged = { ...(await readOverrides()), ...sanitise(input) };
-  await redis.set(KEY, JSON.stringify(merged));
-  return merged;
+  // Only the fields this request names are written. The others are
+  // left where they are, rather than re-written from a snapshot
+  // that may already be stale.
+  const incoming = sanitise(input);
+  const entries = Object.entries(incoming);
+  if (entries.length > 0) {
+    await redis.hset(
+      KEY,
+      Object.fromEntries(entries.map(([key, value]) => [key, String(value)])),
+    );
+  }
+  return readOverrides();
 }

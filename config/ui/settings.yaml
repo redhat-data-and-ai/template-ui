@@ -1,8 +1,13 @@
 branding:
   title: "Workpilot"
   version: "v1.0.0"
-  logo_url: "https://cdn.prod.website-files.com/6447ad3a38d5f03bc4e0a3b2/69e9fcfe18543c02af4fde56_WorkPilot.jpg"
-  favicon_url: "https://cdn.prod.website-files.com/6447ad3a38d5f03bc4e0a3b2/69e9fcfe18543c02af4fde56_WorkPilot.jpg"
+  # Local by default. An off-origin URL is supported and the BFF
+  # widens `img-src` to match it (see `server.ts`), but shipping one
+  # as the default makes every deployment fetch a third-party asset
+  # on first paint and relaxes the policy for everybody. Point these
+  # at your own CDN per deployment if you want that.
+  logo_url: "/workpilot-logo.jpg"
+  favicon_url: "/workpilot-logo.jpg"
   colors:
     light:
       primary: "#0066cc"
@@ -42,6 +47,12 @@ agent:
   endpoint: ""
   timeout_ms: 30000
   streaming: true
+  # Show what delegated subagents are doing while they do it.
+  # A `task` call is otherwise opaque: the orchestrator waits, the
+  # subagent works for a minute or more, and the reader sees only a
+  # spinner. Rendered as a progress line, never as transcript
+  # content. Turn off to keep the machinery out of sight.
+  stream_subgraphs: true
 
 quick_prompts:
   - What can Agent do for me?
