@@ -1,20 +1,64 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
+import { looksLikeJson, NestedStreamTracker } from '../utils/nested-stream.js';
+import { summariseSubagentEvent } from '../utils/subagent-progress.js';
 import { randomUUID } from 'node:crypto';
-import { getSettings } from '../utils/settings.js';
+import { Readable, Transform } from 'node:stream';
+import { getSettings, resolveAgentHost as getAgentHost } from '../utils/settings.js';
 import authCheckPlugin from '../plugins/auth-check.plugin.js';
 import { resolveXUserIdFromSession } from '../utils/session-identity.js';
 
-function getAgentHost(): string {
-  const cfg = getSettings();
-  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
-}
 
 /** Identity forwarded to the agent — same as prod: session username, else ``default``. */
 function resolveXUserId(request: { session?: { user?: { preferred_username?: string; sub?: string; email?: string }; token?: { access_token?: string; id_token?: string } } }): string {
   return resolveXUserIdFromSession(request.session);
 }
 
+/** Thrown when a streamed upload runs past the cap mid-flight. */
+class UploadTooLarge extends Error {
+  constructor(readonly limit: number) {
+    super(`Upload exceeds ${Math.floor(limit / 1024 / 1024)} MB`);
+    this.name = 'UploadTooLarge';
+  }
+}
+
+/**
+ * Re-impose a size cap on a stream Fastify is no longer bounding.
+ *
+ * A declared `content-length` is not a limit — a client can declare
+ * 1 KB and send a gigabyte — so the bytes are counted as they pass.
+ * The agent counts them again on its own side; this exists so a
+ * runaway upload dies at the proxy instead of travelling a second hop
+ * first.
+ */
+function countingStream(source: Readable, limit: number): Readable {
+  let seen = 0;
+  const counter = new Transform({
+    transform(chunk, _encoding, callback) {
+      seen += chunk.length;
+      if (seen > limit) {
+        callback(new UploadTooLarge(limit));
+        return;
+      }
+      callback(null, chunk);
+    },
+  });
+  // Both directions.
+  //
+  // `counter.on('error')` already tore down the source when the cap
+  // was hit, but nothing carried a failure the other way: an aborted
+  // or errored request left `counter` open and un-destroyed, so the
+  // `fetch` reading from it waited for a body that would never end.
+  counter.on('error', () => source.destroy());
+  source.on('error', (err) => counter.destroy(err));
+  source.on('aborted', () => counter.destroy(new Error('request aborted')));
+  return source.pipe(counter);
+}
+
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
+/** Thread and run ids are UUIDs; anything else must not reach a URL path. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
 const CACHE_TTL_MS = 3_000; // 3s — short TTL for recovery polling compatibility
 const CACHE_MAX_ENTRIES = 50;
@@ -119,6 +163,65 @@ function buildToolMessageContent(msg: Record<string, any>): Record<string, unkno
  *
  * Returns [uiChunk | null, updatedPrevPartial].
  */
+
+/**
+ * Text from a nested `messages/*` payload.
+ *
+ * Whole thing, not a tail: these chunks are cumulative, so each one
+ * is the subagent's full output so far and the box renders it
+ * growing. Trimming to a tail gave a status line that jumped around
+ * mid-sentence.
+ */
+function extractNestedText(payload: unknown): string | undefined {
+  if (!Array.isArray(payload) || payload.length === 0) return undefined;
+  const first = payload[0];
+  if (!first || typeof first !== 'object') return undefined;
+
+  // Only what the subagent *wrote*.
+  //
+  // Its tool messages stream through this same channel, and an MCP
+  // tool answers with a JSON blob — a hundred lines of GitLab API
+  // response dumped into the box, which is not progress and is not
+  // something anyone wants to read. The subagent's own prose is the
+  // only part worth showing; the tool call behind it is reported as
+  // activity instead.
+  const type = (first as { type?: unknown }).type;
+  if (type !== 'ai' && type !== 'AIMessageChunk') return undefined;
+
+  const text = extractText((first as { content?: unknown }).content);
+  if (!text) return undefined;
+
+  // Belt and braces: a model that emits a raw JSON object as its
+  // content is relaying a payload, not writing. Better to show the
+  // tool name than a brace.
+  return looksLikeJson(text) ? undefined : text;
+}
+
+
+/**
+ * The tool calls a subagent has emitted so far.
+ *
+ * Returned as a list with ids, not a joined label. These chunks are
+ * cumulative — each one carries the whole array as the model
+ * streams it — so joining produced a different string every chunk
+ * ("a", then "a, b", then "a, b, c") and every one of those looked
+ * like a new step. The id is what makes a call the same call.
+ *
+ * Reported apart from the written text because a tool name is
+ * activity, not a result, and must not be rendered as one.
+ */
+function extractNestedCalls(
+  payload: unknown,
+): { id: string; name: string }[] | undefined {
+  if (!Array.isArray(payload) || payload.length === 0) return undefined;
+  const first = payload[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const calls = extractToolCalls(first as Record<string, any>)
+    .filter((c) => c.name)
+    .map((c, i) => ({ id: c.id || `${c.name}-${i}`, name: c.name }));
+  return calls.length > 0 ? calls : undefined;
+}
+
 /**
  * Extract a HITL interrupt payload from a LangGraph `updates` stream event.
  * LangGraph 1.x surfaces interrupts as:
@@ -164,6 +267,402 @@ function extractToolCalls(raw: Record<string, any>): { name: string; args: any; 
   return [];
 }
 
+
+/**
+ * Translate one Aegra SSE stream into the UI's chunk format.
+ *
+ * Shared by the route that starts a run and the route that attaches
+ * to one already running. Reattaching used to mean polling thread
+ * state because this lived inside the first route — so a reader who
+ * refreshed got the answer in one lump at the end instead of
+ * watching it arrive.
+ */
+/** Parallel deletes in one sweep. */
+const DELETE_ALL_CONCURRENCY = 8;
+/** Passes before giving up, so a racing writer cannot loop forever. */
+const DELETE_ALL_MAX_PASSES = 20;
+
+async function pumpAgentStream(opts: {
+  fastify: FastifyInstance;
+  reply: FastifyReply;
+  upstream: Response;
+  thread_id: string;
+  traceId: string;
+  headers: Record<string, string>;
+}): Promise<void> {
+  const { fastify, reply, upstream, thread_id, traceId, headers } = opts;
+  const cfg = getSettings();
+  const runResp = upstream;
+  // Per stream: run ids are unique to one stream, and a tracker
+  // shared across requests would leak one user's ids into another's.
+  const nestedStreams = new NestedStreamTracker();
+  // ── 3. Translate Aegra SSE → UI chunk format ──
+  await reply.hijack();
+  reply.raw.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Trace-ID': traceId,
+    'X-Accel-Buffering': 'no',
+  });
+  reply.raw.flushHeaders();
+
+  const reader = (runResp.body as ReadableStream<Uint8Array>).getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let chunkId = 0;
+  let clientGone = false;
+  let prevPartial = '';
+  const sentMsgIds = new Set<string>();
+  const completedTexts: string[] = [];
+
+  reply.raw.on('close', () => {
+    clientGone = true;
+    reader.cancel().catch(() => {});
+  });
+  reply.raw.on('error', () => {
+    clientGone = true;
+    reader.cancel().catch(() => {});
+  });
+
+  let hasEmittedTextTokens = false;
+  let interruptEmittedFromStream = false;
+  let streamEndedNormally = false;
+  // Per-message tracking for draft_discard (suppress text from tool-call messages)
+  let currentStreamingMsgId = '';
+  let textEmittedForCurrentMsg = false;
+  const discardedMsgIds = new Set<string>();
+  // Text we discarded as a draft because it belonged to a tool-calling
+  // message. It is not lost — that message now carries it, and the UI
+  // renders it above the tool boxes. But discarding resets
+  // hasEmittedTextTokens, so the end-of-stream flush would re-send it
+  // as a loose bubble whenever nothing streams after the tool call
+  // (a cancelled or failed delegation). Remember it and don't.
+  let discardedDraftText = '';
+
+  try {
+    while (!clientGone) {
+      let done: boolean;
+      let value: Uint8Array | undefined;
+      try {
+        ({ done, value } = await reader.read());
+      } catch {
+        fastify.log.warn({ traceId }, 'Agent stream connection lost — agent may have been killed');
+        break;
+      }
+      if (done) {
+        streamEndedNormally = true;
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const segments = buffer.split('\n\n');
+      buffer = segments.pop() ?? '';
+
+      for (const segment of segments) {
+        if (clientGone) break;
+        const trimmed = segment.trim();
+        if (!trimmed) continue;
+
+        let sseType = '';
+        let sseData = '';
+        for (const line of trimmed.split('\n')) {
+          if (line.startsWith('event:')) sseType = line.slice(6).trim();
+          else if (line.startsWith('data:')) sseData += line.slice(5).trim();
+        }
+
+        if (!sseData || sseType === 'end') continue;
+
+        // Nested-graph events arrive as `<mode>|<namespace>`.
+        // They must not reach the generic handling below: a
+        // subagent's internal messages are working notes, not
+        // the answer, and rendering them as assistant turns
+        // would duplicate the reply the orchestrator relays.
+        if (sseType.includes('|')) {
+          try {
+            const ns = sseType.slice(sseType.indexOf('|') + 1);
+            const parsedNs = JSON.parse(sseData) as Record<string, unknown>;
+            const progress = summariseSubagentEvent(ns, parsedNs);
+            if (progress) {
+              reply.raw.write(
+                `event: subagent_progress\ndata: ${JSON.stringify(progress)}\n\n`,
+              );
+            }
+          } catch {
+            fastify.log.debug({ traceId, sseType }, 'Unparseable subagent SSE');
+          }
+          continue;
+        }
+
+        if (sseType === 'metadata') {
+          try {
+            const parsed = JSON.parse(sseData) as Record<string, unknown>;
+            fastify.log.info({ traceId, sseType, parsedKeys: Object.keys(parsed) }, 'Raw metadata SSE from agent');
+
+            if (
+              typeof parsed === 'object' &&
+              parsed !== null &&
+              !Array.isArray(parsed)
+            ) {
+              // LangGraph Platform metadata has { run_id } at top level
+              // Emit in the format the frontend expects: { type: 'metadata', content: { run_id, trace_id, thread_id } }
+              const runId = (parsed.run_id as string) || '';
+              const metaPayload = {
+                type: 'metadata',
+                content: {
+                  run_id: runId,
+                  trace_id: runId,
+                  thread_id: thread_id,
+                },
+              };
+              reply.raw.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
+              chunkId++;
+            }
+          } catch {
+            fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
+          }
+          continue;
+        }
+
+        try {
+          const parsed = JSON.parse(sseData) as unknown;
+
+          // A subagent's model output arrives on the *same*
+          // `messages` channel as the orchestrator's, with no
+          // namespace on the event name. Left alone it is
+          // appended to the transcript next to the
+          // orchestrator's relay of the same text, and because
+          // both streams are cumulative the answer appears
+          // repeated, each copy slightly longer.
+          if (sseType === 'messages/metadata') {
+            nestedStreams.observeMetadata(parsed);
+          } else if (
+            sseType.startsWith('messages/') &&
+            nestedStreams.isNested(parsed)
+          ) {
+            const agent = nestedStreams.agentOf(parsed);
+            if (agent) {
+              reply.raw.write(
+                `event: subagent_progress\ndata: ${JSON.stringify({
+                  // Keyed by agent name: `lc_agent_name` here
+                  // is the same value as `args.subagent_type`
+                  // on the parent's `task` call, so the box
+                  // and the stream line up exactly rather than
+                  // by matching instruction text.
+                  ns: `agent:${agent}`,
+                  agent,
+                  latest: extractNestedText(parsed),
+                  calls: extractNestedCalls(parsed),
+                })}\n\n`,
+              );
+            }
+            continue;
+          }
+
+          if (sseType === 'updates') {
+            const interrupt = extractInterruptFromUpdates(parsed);
+            if (interrupt) {
+              const interruptChunk = {
+                type: 'interrupt',
+                content: { value: interrupt.value, resumable: interrupt.resumable },
+                chunk_id: chunkId,
+              };
+              reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
+              chunkId++;
+              interruptEmittedFromStream = true;
+              fastify.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
+            }
+          }
+
+          const isMcpStatus =
+            sseType === 'mcp_status' ||
+            (typeof parsed === 'object' &&
+              parsed !== null &&
+              !Array.isArray(parsed) &&
+              (parsed as Record<string, unknown>).type === 'mcp_status');
+          if (isMcpStatus) {
+            reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
+            chunkId++;
+            continue;
+          }
+
+          // Reset per-message state before translation
+          if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
+            const peekId = (parsed[0] as Record<string, any>)?.id ?? '';
+            if (peekId && peekId !== currentStreamingMsgId) {
+              currentStreamingMsgId = peekId;
+              textEmittedForCurrentMsg = false;
+              prevPartial = '';
+            } else if (!peekId) {
+              currentStreamingMsgId = '';
+            }
+          }
+
+          const [uiChunks, nextPartial] = translateMessageEvent(
+            sseType,
+            parsed,
+            chunkId,
+            prevPartial,
+            sentMsgIds,
+          );
+
+          // Detect tool_calls in partials and discard any text already streamed
+          if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
+            const partialMsg = parsed[0] as Record<string, any>;
+            const partialMsgId = partialMsg?.id ?? '';
+            const partialToolCalls = extractToolCalls(partialMsg ?? {});
+            if (partialToolCalls.length > 0 && textEmittedForCurrentMsg) {
+              reply.raw.write(`data: ${JSON.stringify({ type: 'draft_discard', chunk_id: chunkId })}\n\n`);
+              chunkId++;
+              textEmittedForCurrentMsg = false;
+              hasEmittedTextTokens = false;
+              prevPartial = nextPartial;
+              discardedMsgIds.add(partialMsgId);
+              discardedDraftText = nextPartial;
+              completedTexts.length = 0;
+            }
+          }
+
+          if (nextPartial.length > prevPartial.length && uiChunks.length === 0) {
+            const isEchoOfPrior = completedTexts.some(
+              (ct) => nextPartial.length <= ct.length && ct.startsWith(nextPartial),
+            );
+            if (!isEchoOfPrior) {
+              const delta = nextPartial.slice(prevPartial.length);
+              const tokenPayload: Record<string, unknown> = { type: 'token', content: delta, chunk_id: chunkId };
+              if (currentStreamingMsgId) {
+                tokenPayload.message_id = currentStreamingMsgId;
+              }
+              reply.raw.write(`data: ${JSON.stringify(tokenPayload)}\n\n`);
+              chunkId++;
+              hasEmittedTextTokens = true;
+              textEmittedForCurrentMsg = true;
+            }
+          }
+
+          if (sseType === 'messages/complete' && uiChunks.length === 0 && nextPartial.length > 0) {
+            const completeMsgId = Array.isArray(parsed) && parsed.length > 0
+              ? ((parsed[0] as Record<string, any>)?.id ?? '')
+              : '';
+            if (!discardedMsgIds.has(completeMsgId)) {
+              completedTexts.push(nextPartial);
+            }
+          }
+
+          prevPartial = nextPartial;
+          for (const chunk of uiChunks) {
+            reply.raw.write(`data: ${JSON.stringify({ ...chunk, chunk_id: chunkId })}\n\n`);
+            chunkId++;
+          }
+        } catch {
+          fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable SSE data');
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!clientGone) {
+    if (prevPartial.length > 0 && !hasEmittedTextTokens && prevPartial !== discardedDraftText) {
+      const isEcho = completedTexts.some(
+        (ct) => prevPartial.length <= ct.length && ct.startsWith(prevPartial),
+      );
+      if (!isEcho) {
+        const flush = { type: 'token', content: prevPartial, chunk_id: chunkId };
+        reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
+        chunkId++;
+      }
+    }
+
+    try {
+      const stateResp = await fetch(
+        `${getAgentHost()}/threads/${thread_id}/state`,
+        {
+          method: 'GET',
+          headers,
+          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
+        },
+      );
+      if (stateResp.ok) {
+        const threadState = await stateResp.json() as Record<string, unknown>;
+
+        // Carry the Connect actions back to the browser.
+        //
+        // The final answer reaches the client as tokens, and a
+        // token has no metadata — so the message the user sees
+        // was assembled without the `auth_required` the agent
+        // stamped on it, and the Connect button had nothing to
+        // render from. The agent was right, the state had it,
+        // and only this hop dropped it.
+        const stateValues = (threadState.values ?? threadState) as Record<string, unknown>;
+        const stateMessages = Array.isArray(stateValues?.messages)
+          ? (stateValues.messages as Array<Record<string, any>>)
+          : [];
+        // The newest AI message only, not the newest message that
+        // happens to carry the flag. Scanning backwards past it
+        // re-emitted an `auth_required` from some earlier turn, and
+        // the client stamps whatever arrives onto the latest reply,
+        // so an old Connect prompt reappeared under every answer
+        // that followed it.
+        let lastAi = -1;
+        for (let i = stateMessages.length - 1; i >= 0; i--) {
+          if (stateMessages[i]?.type === 'ai') {
+            lastAi = i;
+            break;
+          }
+        }
+        for (let i = lastAi; i >= lastAi && i >= 0; i--) {
+          const authRequired = stateMessages[i]?.additional_kwargs?.auth_required;
+          if (!Array.isArray(authRequired) || authRequired.length === 0) continue;
+          reply.raw.write(
+            `data: ${JSON.stringify({ type: 'auth_required', content: authRequired, chunk_id: chunkId })}\n\n`,
+          );
+          chunkId++;
+          break;
+        }
+
+        const tasks = Array.isArray(threadState.tasks) ? threadState.tasks : [];
+        const interrupted = tasks.find(
+          (t: any) => Array.isArray(t?.interrupts) && t.interrupts.length > 0,
+        );
+        if (interrupted && !interruptEmittedFromStream) {
+          const firstInterrupt = (interrupted as any).interrupts[0];
+          const interruptChunk = {
+            type: 'interrupt',
+            content: {
+              value: firstInterrupt?.value ?? null,
+              resumable: true,
+            },
+            chunk_id: chunkId,
+          };
+          reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
+          chunkId++;
+          fastify.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
+        }
+      }
+    } catch (err) {
+      fastify.log.warn({ traceId, err }, 'Failed to check thread state for interrupts');
+    }
+
+    if (!streamEndedNormally) {
+      fastify.log.warn({ traceId }, 'Agent stream ended abnormally — signalling error to frontend');
+      const errChunk = {
+        type: 'error',
+        message: 'Agent connection lost during streaming. Recovery in progress.',
+        chunk_id: chunkId,
+      };
+      reply.raw.write(`data: ${JSON.stringify(errChunk)}\n\n`);
+      chunkId++;
+    }
+
+    fastify.log.info({ traceId, chunkId, streamEndedNormally }, 'Stream complete');
+    invalidateThreadStateCache(thread_id);
+    reply.raw.end('data: [DONE]\n\n');
+  }
+}
+
 function translateMessageEvent(
   sseType: string,
   payload: unknown,
@@ -199,7 +698,7 @@ function translateMessageEvent(
           const toolCalls = extractToolCalls(msg);
           chunks.push({
             type: 'message',
-            content: { type: 'ai', content: '', tool_calls: toolCalls, id: msgId },
+            content: { type: 'ai', content: extractText(msg.content), tool_calls: toolCalls, id: msgId },
           });
         }
 
@@ -254,7 +753,7 @@ function translateMessageEvent(
         sentMsgIds.add(msgId);
         return [[{
           type: 'message',
-          content: { type: 'ai', content: '', tool_calls: toolCalls, id: msgId },
+          content: { type: 'ai', content: extractText(raw.content), tool_calls: toolCalls, id: msgId },
         }], prevPartial];
       }
       return [[], prevPartial];
@@ -353,6 +852,11 @@ function buildForwardedQueryString(query: Record<string, unknown>): string {
 async function proxyRoutes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);
 
+  // Must exceed the agent's own per-file limit, or the proxy rejects
+  // a file the agent would have accepted — and does it with a less
+  // useful message. Agent default is 50 MB.
+  const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+
   fastify.removeContentTypeParser('application/json');
   fastify.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 1048576 }, (req, body, done) => {
     if (!body || (typeof body === 'string' && body.trim() === '')) {
@@ -363,10 +867,224 @@ async function proxyRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * Forward multipart bodies as a **stream**, never as a buffer.
+   *
+   * Fastify refuses any content-type it has no parser for, so file
+   * uploads died at the proxy with 415 before reaching the agent —
+   * which looked exactly like the agent rejecting the file type.
+   *
+   * Not @fastify/multipart: parsing the parts here only to re-encode
+   * them would mean re-deriving the boundary and could silently alter
+   * bytes. The agent is the thing that validates uploads; the proxy's
+   * job is to carry them.
+   *
+   * And not `parseAs: 'buffer'`, which is what this did first. That
+   * holds the whole upload in memory for the life of the request, so
+   * concurrent uploads add up: a dozen simultaneous 50 MB files is
+   * 600 MB of heap and an OOMKill on a 1 Gi pod. The failure mode is
+   * the worst kind — fine in every test, fine in light use, and a
+   * restart loop exactly when the thing is busy.
+   *
+   * Streaming moves the bytes through with a bounded window, so proxy
+   * memory is a function of socket buffers rather than of file size.
+   */
+  fastify.addContentTypeParser('multipart/form-data', (_req, payload, done) => {
+    // `payload` is the raw request stream. Handing it straight to the
+    // route means Fastify's own bodyLimit no longer applies, so the
+    // cap is re-imposed below in `countingStream` — otherwise this
+    // would trade an OOM for an unbounded upload, which is not a
+    // trade.
+    done(null, payload);
+  });
+
+  /**
    * Streaming endpoint — translates between the UI's simple
    * {message, thread_id, user_id} payload and Aegra's LangGraph
    * Platform API (POST /threads/{id}/runs/stream).
    */
+  /**
+   * Delete every thread the caller owns, server-side.
+   *
+   * Sweeping from the browser could not finish: it is hundreds of
+   * requests, and a refresh or navigation part-way through abandons
+   * the rest. The user saw the count drop a little, reloaded, and
+   * found them back — the listing is capped at 50, so any sizeable
+   * remainder still fills the screen and nothing looks deleted.
+   *
+   * One request instead. The sweep belongs somewhere it cannot be
+   * interrupted by the page that asked for it.
+   */
+  fastify.post('/proxy/agent/v1/threads/delete-all', async (request, reply) => {
+    const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
+    const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
+    if (refreshFailed) return sessionExpiredReply(reply);
+    if (!accessToken && process.env.AUTH_ENABLED === 'true') {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Trace-ID': traceId,
+    };
+    if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+    if (refreshToken) headers['X-Refresh-Token'] = refreshToken;
+    headers['X-User-ID'] = resolveXUserId(request);
+
+    const cfg = getSettings();
+    const host = getAgentHost();
+    let deleted = 0;
+    let failed = 0;
+    // Ids the agent will never accept a delete for; counted, not retried.
+    let skipped = 0;
+
+    // Loop: `GET /threads` is the only unpaginated listing, and one
+    // pass can race a thread created while it runs.
+    for (let pass = 0; pass < DELETE_ALL_MAX_PASSES; pass++) {
+      let ids: string[] = [];
+      try {
+        const listed = await fetch(`${host}/threads`, {
+          method: 'GET',
+          headers,
+          signal: AbortSignal.timeout(cfg.agent.timeout_ms),
+        });
+        if (!listed.ok) break;
+        const body = (await listed.json()) as unknown;
+        const rows = Array.isArray(body)
+          ? body
+          : ((body as { threads?: unknown[] })?.threads ?? []);
+        ids = (rows as Array<{ thread_id?: string }>)
+          .map((t) => t?.thread_id)
+          .filter((id): id is string => typeof id === 'string');
+      } catch {
+        break;
+      }
+      if (ids.length === 0) break;
+      const deletedBefore = deleted;
+
+      // A bounded window: the agent's connection budget is small and
+      // tidying a sidebar must not take the service down.
+      const queue = [...ids];
+      const worker = async () => {
+        for (;;) {
+          const id = queue.shift();
+          if (id === undefined) return;
+          try {
+            const res = await fetch(`${host}/threads/${id}`, {
+              method: 'DELETE',
+              headers,
+              signal: AbortSignal.timeout(cfg.agent.timeout_ms),
+            });
+            if (res.ok || res.status === 404) {
+              deleted++;
+            } else if (res.status === 400) {
+              // The agent rejects ids that are not UUIDs — a thread
+              // created outside the app, which it will never accept
+              // a delete for. Counting that as a failure aborted the
+              // sweep and left every *deletable* thread in place.
+              skipped++;
+            } else {
+              failed++;
+            }
+          } catch {
+            failed++;
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(DELETE_ALL_CONCURRENCY, ids.length) }, worker),
+      );
+      // Progress, not perfection: stop when a whole pass deleted
+      // nothing, so undeletable ids cannot loop us forever — but one
+      // bad id never blocks the rest.
+      if (deleted === deletedBefore) break;
+    }
+
+    fastify.log.info({ traceId, deleted, failed, skipped }, 'Delete-all complete');
+    return reply.send({ deleted, failed, skipped });
+  });
+
+  /**
+   * Attach to a run that is already executing.
+   *
+   * The run outlives the connection that started it, so a reader who
+   * refreshes, closes the laptop or loses the network comes back to a
+   * turn still in progress. This hands them the live stream rather
+   * than a spinner and a result that lands in one lump at the end.
+   *
+   * The agent's own reattach endpoint deliberately does not cancel on
+   * disconnect — several readers can be attached to one run.
+   */
+  fastify.post<{ Body: { thread_id?: string; run_id?: string; last_event_id?: string } }>(
+    '/proxy/agent/v1/stream/attach',
+    async (request, reply) => {
+      const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
+      const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
+
+      if (refreshFailed) return sessionExpiredReply(reply);
+      if (!accessToken && process.env.AUTH_ENABLED === 'true') {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { thread_id, run_id, last_event_id } = request.body ?? {};
+      if (!thread_id || !run_id) {
+        return reply.status(400).send({ error: 'thread_id and run_id are required' });
+      }
+      // Both go into the agent URL as path segments, and both come
+      // from the request body. A value like `../../x` normalises to a
+      // different agent endpoint, which this hop would then call with
+      // the user's bearer token. They are UUIDs; anything else is not
+      // a thread we have.
+      if (!UUID_RE.test(String(thread_id)) || !UUID_RE.test(String(run_id))) {
+        return reply.status(400).send({ error: 'thread_id and run_id must be UUIDs' });
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Trace-ID': traceId,
+        Accept: 'text/event-stream',
+      };
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      if (refreshToken) headers['X-Refresh-Token'] = refreshToken;
+      headers['X-User-ID'] = resolveXUserId(request);
+      // Resume where this reader left off rather than replaying the
+      // turn from its first token.
+      if (last_event_id) headers['Last-Event-ID'] = last_event_id;
+
+      const cfg = getSettings();
+      try {
+        const upstream = await fetch(
+          `${getAgentHost()}/threads/${thread_id}/runs/${run_id}/stream`,
+          {
+            method: 'GET',
+            headers,
+            signal: AbortSignal.timeout(
+              Math.max(cfg.agent.timeout_ms, cfg.agent.stream_timeout_ms),
+            ),
+          },
+        );
+
+        if (!upstream.ok || !upstream.body) {
+          const body = await upstream.text().catch(() => '');
+          fastify.log.warn(
+            { traceId, status: upstream.status, body },
+            'Agent run attach failed',
+          );
+          return reply.status(upstream.status).send({ error: 'Attach failed' });
+        }
+
+        await pumpAgentStream({ fastify, reply, upstream, thread_id, traceId, headers });
+      } catch (error: unknown) {
+        if ((error as Error).name === 'AbortError') {
+          fastify.log.info({ traceId }, 'Attach aborted');
+          return;
+        }
+        fastify.log.error({ traceId, err: error }, 'Attach stream error');
+        if (reply.raw.headersSent) reply.raw.end();
+        else reply.status(502).send({ error: 'Failed to attach to run' });
+      }
+    },
+  );
+
   fastify.post<{ Body: StreamRequestBody }>(
     '/proxy/agent/v1/stream',
     async (request, reply) => {
@@ -382,7 +1100,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, resume: isResume, project_id } = request.body;
+      const {
+        message,
+        thread_id,
+        resume: isResume,
+        project_id,
+      } = request.body;
 
       if (project_id != null && typeof project_id !== 'string') {
         return reply.status(400).send({ error: 'project_id must be a string when provided' });
@@ -412,6 +1135,13 @@ async function proxyRoutes(fastify: FastifyInstance) {
               threadId: thread_id,
               metadata: {
                 user_identity: xUserId,
+                // Without a graph association a thread rejects any
+                // state update — so attaching a file before the first
+                // message failed with "has no associated graph".
+                // A run sets this implicitly; creation has to as well,
+                // because attachments can precede the first run.
+                graph_id: 'agent',
+                assistant_id: 'agent',
                 ...(project_id ? { project_id } : {}),
               },
               ifExists: 'do_nothing',
@@ -445,6 +1175,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
         const runBody: Record<string, unknown> = {
           assistant_id: 'agent',
           stream_mode: ['messages', 'updates'],
+          // Aegra namespaces nested graph events as
+          // `updates|tools:<id>`; they are forwarded below as
+          // `subagent_progress`, never as transcript content.
+          stream_subgraphs: cfg.agent.stream_subgraphs,
+          // The browser leaving is not a decision to stop.
+          on_disconnect: cfg.agent.on_disconnect,
         };
         if (isResume) {
           runBody.command = { resume: message };
@@ -453,11 +1189,16 @@ async function proxyRoutes(fastify: FastifyInstance) {
         }
 
         runBody.config = {
-          metadata: { trace_id: traceId, user_id: xUserId },
-          configurable: { user_id: xUserId },
+          metadata: {
+            trace_id: traceId,
+            user_id: xUserId,
+          },
+          configurable: {
+            user_id: xUserId,
+          },
         };
 
-        const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);
+        const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, cfg.agent.stream_timeout_ms);
         const runResp = await fetch(runUrl, {
           method: 'POST',
           headers: { ...headers, Accept: 'text/event-stream' },
@@ -477,274 +1218,14 @@ async function proxyRoutes(fastify: FastifyInstance) {
           });
         }
 
-        // ── 3. Translate Aegra SSE → UI chunk format ──
-        await reply.hijack();
-        reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'X-Trace-ID': traceId,
-          'X-Accel-Buffering': 'no',
+        await pumpAgentStream({
+          fastify,
+          reply,
+          upstream: runResp,
+          thread_id,
+          traceId,
+          headers,
         });
-        reply.raw.flushHeaders();
-
-        const reader = (runResp.body as ReadableStream<Uint8Array>).getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let chunkId = 0;
-        let clientGone = false;
-        let prevPartial = '';
-        const sentMsgIds = new Set<string>();
-        const completedTexts: string[] = [];
-
-        reply.raw.on('close', () => {
-          clientGone = true;
-          reader.cancel().catch(() => {});
-        });
-        reply.raw.on('error', () => {
-          clientGone = true;
-          reader.cancel().catch(() => {});
-        });
-
-        let hasEmittedTextTokens = false;
-        let interruptEmittedFromStream = false;
-        let streamEndedNormally = false;
-        // Per-message tracking for draft_discard (suppress text from tool-call messages)
-        let currentStreamingMsgId = '';
-        let textEmittedForCurrentMsg = false;
-        const discardedMsgIds = new Set<string>();
-
-        try {
-          while (!clientGone) {
-            let done: boolean;
-            let value: Uint8Array | undefined;
-            try {
-              ({ done, value } = await reader.read());
-            } catch {
-              fastify.log.warn({ traceId }, 'Agent stream connection lost — agent may have been killed');
-              break;
-            }
-            if (done) {
-              streamEndedNormally = true;
-              break;
-            }
-
-            buffer += decoder.decode(value, { stream: true });
-
-            const segments = buffer.split('\n\n');
-            buffer = segments.pop() ?? '';
-
-            for (const segment of segments) {
-              if (clientGone) break;
-              const trimmed = segment.trim();
-              if (!trimmed) continue;
-
-              let sseType = '';
-              let sseData = '';
-              for (const line of trimmed.split('\n')) {
-                if (line.startsWith('event:')) sseType = line.slice(6).trim();
-                else if (line.startsWith('data:')) sseData += line.slice(5).trim();
-              }
-
-              if (!sseData || sseType === 'end') continue;
-
-              if (sseType === 'metadata') {
-                try {
-                  const parsed = JSON.parse(sseData) as Record<string, unknown>;
-                  fastify.log.info({ traceId, sseType, parsedKeys: Object.keys(parsed) }, 'Raw metadata SSE from agent');
-
-                  if (
-                    typeof parsed === 'object' &&
-                    parsed !== null &&
-                    !Array.isArray(parsed)
-                  ) {
-                    // LangGraph Platform metadata has { run_id } at top level
-                    // Emit in the format the frontend expects: { type: 'metadata', content: { run_id, trace_id, thread_id } }
-                    const runId = (parsed.run_id as string) || '';
-                    const metaPayload = {
-                      type: 'metadata',
-                      content: {
-                        run_id: runId,
-                        trace_id: runId,
-                        thread_id: thread_id,
-                      },
-                    };
-                    reply.raw.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
-                    chunkId++;
-                  }
-                } catch {
-                  fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
-                }
-                continue;
-              }
-
-              try {
-                const parsed = JSON.parse(sseData) as unknown;
-
-                if (sseType === 'updates') {
-                  const interrupt = extractInterruptFromUpdates(parsed);
-                  if (interrupt) {
-                    const interruptChunk = {
-                      type: 'interrupt',
-                      content: { value: interrupt.value, resumable: interrupt.resumable },
-                      chunk_id: chunkId,
-                    };
-                    reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
-                    chunkId++;
-                    interruptEmittedFromStream = true;
-                    fastify.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
-                  }
-                }
-
-                const isMcpStatus =
-                  sseType === 'mcp_status' ||
-                  (typeof parsed === 'object' &&
-                    parsed !== null &&
-                    !Array.isArray(parsed) &&
-                    (parsed as Record<string, unknown>).type === 'mcp_status');
-                if (isMcpStatus) {
-                  reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
-                  chunkId++;
-                  continue;
-                }
-
-                // Reset per-message state before translation
-                if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
-                  const peekId = (parsed[0] as Record<string, any>)?.id ?? '';
-                  if (peekId && peekId !== currentStreamingMsgId) {
-                    currentStreamingMsgId = peekId;
-                    textEmittedForCurrentMsg = false;
-                    prevPartial = '';
-                  } else if (!peekId) {
-                    currentStreamingMsgId = '';
-                  }
-                }
-
-                const [uiChunks, nextPartial] = translateMessageEvent(
-                  sseType,
-                  parsed,
-                  chunkId,
-                  prevPartial,
-                  sentMsgIds,
-                );
-
-                // Detect tool_calls in partials and discard any text already streamed
-                if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
-                  const partialMsg = parsed[0] as Record<string, any>;
-                  const partialMsgId = partialMsg?.id ?? '';
-                  const partialToolCalls = extractToolCalls(partialMsg ?? {});
-                  if (partialToolCalls.length > 0 && textEmittedForCurrentMsg) {
-                    reply.raw.write(`data: ${JSON.stringify({ type: 'draft_discard', chunk_id: chunkId })}\n\n`);
-                    chunkId++;
-                    textEmittedForCurrentMsg = false;
-                    hasEmittedTextTokens = false;
-                    prevPartial = nextPartial;
-                    discardedMsgIds.add(partialMsgId);
-                    completedTexts.length = 0;
-                  }
-                }
-
-                if (nextPartial.length > prevPartial.length && uiChunks.length === 0) {
-                  const isEchoOfPrior = completedTexts.some(
-                    (ct) => nextPartial.length <= ct.length && ct.startsWith(nextPartial),
-                  );
-                  if (!isEchoOfPrior) {
-                    const delta = nextPartial.slice(prevPartial.length);
-                    const tokenPayload: Record<string, unknown> = { type: 'token', content: delta, chunk_id: chunkId };
-                    if (currentStreamingMsgId) {
-                      tokenPayload.message_id = currentStreamingMsgId;
-                    }
-                    reply.raw.write(`data: ${JSON.stringify(tokenPayload)}\n\n`);
-                    chunkId++;
-                    hasEmittedTextTokens = true;
-                    textEmittedForCurrentMsg = true;
-                  }
-                }
-
-                if (sseType === 'messages/complete' && uiChunks.length === 0 && nextPartial.length > 0) {
-                  const completeMsgId = Array.isArray(parsed) && parsed.length > 0
-                    ? ((parsed[0] as Record<string, any>)?.id ?? '')
-                    : '';
-                  if (!discardedMsgIds.has(completeMsgId)) {
-                    completedTexts.push(nextPartial);
-                  }
-                }
-
-                prevPartial = nextPartial;
-                for (const chunk of uiChunks) {
-                  reply.raw.write(`data: ${JSON.stringify({ ...chunk, chunk_id: chunkId })}\n\n`);
-                  chunkId++;
-                }
-              } catch {
-                fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable SSE data');
-              }
-            }
-          }
-        } finally {
-          reader.releaseLock();
-        }
-
-        if (!clientGone) {
-          if (prevPartial.length > 0 && !hasEmittedTextTokens) {
-            const isEcho = completedTexts.some(
-              (ct) => prevPartial.length <= ct.length && ct.startsWith(prevPartial),
-            );
-            if (!isEcho) {
-              const flush = { type: 'token', content: prevPartial, chunk_id: chunkId };
-              reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
-              chunkId++;
-            }
-          }
-
-          try {
-            const stateResp = await fetch(
-              `${getAgentHost()}/threads/${thread_id}/state`,
-              {
-                method: 'GET',
-                headers,
-                signal: AbortSignal.timeout(cfg.agent.timeout_ms),
-              },
-            );
-            if (stateResp.ok) {
-              const threadState = await stateResp.json() as Record<string, unknown>;
-              const tasks = Array.isArray(threadState.tasks) ? threadState.tasks : [];
-              const interrupted = tasks.find(
-                (t: any) => Array.isArray(t?.interrupts) && t.interrupts.length > 0,
-              );
-              if (interrupted && !interruptEmittedFromStream) {
-                const firstInterrupt = (interrupted as any).interrupts[0];
-                const interruptChunk = {
-                  type: 'interrupt',
-                  content: {
-                    value: firstInterrupt?.value ?? null,
-                    resumable: true,
-                  },
-                  chunk_id: chunkId,
-                };
-                reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
-                chunkId++;
-                fastify.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
-              }
-            }
-          } catch (err) {
-            fastify.log.warn({ traceId, err }, 'Failed to check thread state for interrupts');
-          }
-
-          if (!streamEndedNormally) {
-            fastify.log.warn({ traceId }, 'Agent stream ended abnormally — signalling error to frontend');
-            const errChunk = {
-              type: 'error',
-              message: 'Agent connection lost during streaming. Recovery in progress.',
-              chunk_id: chunkId,
-            };
-            reply.raw.write(`data: ${JSON.stringify(errChunk)}\n\n`);
-            chunkId++;
-          }
-
-          fastify.log.info({ traceId, chunkId, streamEndedNormally }, 'Stream complete');
-          invalidateThreadStateCache(thread_id);
-          reply.raw.end('data: [DONE]\n\n');
-        }
       } catch (error: unknown) {
         const errName = (error as Error).name;
         if (errName === 'AbortError') {
@@ -971,7 +1452,29 @@ async function proxyRoutes(fastify: FastifyInstance) {
         };
 
         if (request.method !== 'GET' && request.method !== 'HEAD' && request.body) {
-          fetchOptions.body = JSON.stringify(request.body);
+          if (request.body instanceof Readable) {
+            // Multipart, streamed. The original content-type carries
+            // the boundary the body is framed with, so it has to be
+            // forwarded verbatim — re-deriving it is how a proxy
+            // corrupts an upload it never looked at.
+            fetchOptions.body = countingStream(request.body, MAX_UPLOAD_BYTES) as any;
+            // Required by undici for a streaming request body.
+            (fetchOptions as any).duplex = 'half';
+            const original = request.headers['content-type'];
+            if (original) headers['Content-Type'] = String(original);
+            // Deliberately not forwarding Content-Length. The body is
+            // streamed through a counter that can end it early, so a
+            // declared length the stream then disagrees with leaves
+            // the agent reading a truncated or mismatched body. Let
+            // undici chunk it; the size limit is enforced by the
+            // counter and by the agent, not by a header.
+          } else if (Buffer.isBuffer(request.body)) {
+            fetchOptions.body = request.body;
+            const original = request.headers['content-type'];
+            if (original) headers['Content-Type'] = String(original);
+          } else {
+            fetchOptions.body = JSON.stringify(request.body);
+          }
         }
 
         const agentResponse = await fetch(agentUrl, fetchOptions);
@@ -984,6 +1487,22 @@ async function proxyRoutes(fastify: FastifyInstance) {
           reply.header('Content-Type', contentType);
         }
 
+        // Binary responses must not go through `.text()`. Decoding
+        // an image as UTF-8 replaces every invalid byte with U+FFFD
+        // and re-encoding inflates it — a 1309-byte PNG arrived as
+        // 2262 bytes of mush, which the browser renders as nothing.
+        // Only text is safe to treat as text.
+        const isText =
+          !contentType ||
+          /^(text\/|application\/(json|xml|javascript|x-ndjson))/.test(contentType);
+
+        if (!isText) {
+          const bytes = Buffer.from(await agentResponse.arrayBuffer());
+          const cacheControl = agentResponse.headers.get('cache-control');
+          if (cacheControl) reply.header('Cache-Control', cacheControl);
+          return reply.send(bytes);
+        }
+
         const responseBody = await agentResponse.text();
 
         // Cache successful thread state responses
@@ -994,6 +1513,19 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         return reply.send(responseBody);
       } catch (error) {
+        // An upload killed mid-stream is the client's problem, not the
+        // agent's — 502 "failed to connect" would send someone to
+        // check a service that is perfectly healthy. undici wraps the
+        // stream error, so the cause has to be unwrapped.
+        const tooLarge =
+          error instanceof UploadTooLarge ||
+          (error as { cause?: unknown })?.cause instanceof UploadTooLarge;
+        if (tooLarge) {
+          fastify.log.warn({ traceId }, 'Upload exceeded the proxy limit');
+          return reply.status(413).send({
+            error: `Upload is larger than ${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)} MB`,
+          });
+        }
         fastify.log.error({ traceId, err: error }, 'Proxy error');
         return reply.status(502).send({ error: 'Failed to connect to agent service' });
       }

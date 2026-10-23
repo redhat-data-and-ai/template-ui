@@ -1,18 +1,23 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant } from '@patternfly/react-core';
 import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
-import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
+import type { RootState } from '../../redux/store';
+import { clearAllChats, markThreadsDeleted, selectAllChats } from '../../redux/slices/chats';
 import { selectDeveloperMode, setDeveloperMode } from '../../redux/slices/userSettings';
 import { loadProjectsThunk } from '../../redux/slices/projects';
 import { addToast } from '../../redux/slices/toasts';
-import { deleteThread } from '../../services/agent-rest';
+import { deleteAllThreads, listAllThreadIds } from '../../services/agent-rest';
 import { chatStorage } from '../../services/chatStorage';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
 import { isPrivilegedUser } from '../../lib/role-utils';
 
 export function ProfileSection() {
+  const { t } = useTranslation();
+  const authEnabled =
+    useAppSelector((state: RootState) => state.config.features?.auth_enabled) ?? true;
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const chats = useAppSelector(selectAllChats);
@@ -35,16 +40,45 @@ export function ProfileSection() {
     chatStorage.clearChats();
     setConfirmDelete(false);
 
-    const results = await Promise.all(ids.map((id) => deleteThread(id).catch(() => false)));
-    void dispatch(loadProjectsThunk());
-    const failures = results.filter((r) => !r).length;
+    // Everything the user owns, not everything the sidebar happens to
+    // have loaded. The store holds the pages fetched so far; asking
+    // the agent found 354 threads where the list showed a couple of
+    // dozen, so "delete all" cleared the screen and the rest came
+    // back on the next load.
+    const serverIds = (await listAllThreadIds()) ?? [];
+    const allIds = [...new Set([...ids, ...serverIds])];
 
-    if (failures > 0 && failures < ids.length) {
-      dispatch(addToast({ title: `${ids.length - failures} chats deleted, ${failures} failed on server`, variant: 'warning' }));
-    } else if (failures === ids.length) {
-      dispatch(addToast({ title: 'Chats cleared locally but server deletion failed', variant: 'warning' }));
+    // Mark them gone before the deletes start. They take a while at
+    // this volume, and the layout reconciles the sidebar against the
+    // server meanwhile — without this the not-yet-deleted ones came
+    // back and the whole thing looked like it had failed.
+    dispatch(markThreadsDeleted({ ids: allIds }));
+    // On disk too: the sweep outlives this page only if the intent
+    // does. A refresh halfway through used to abandon the rest and
+    // forget what was meant to go.
+    chatStorage.saveDeletedThreadIds(allIds);
+
+    // Server-side sweep: one request that finishes whatever this
+    // page does next.
+    const { deleted, failed } = await deleteAllThreads();
+    if (failed === 0) {
+      chatStorage.clearDeletedThreadIds();
+    }
+    void dispatch(loadProjectsThunk());
+    const failures = failed;
+
+    // Nothing deleted and something failed means the request itself
+    // failed, whatever the counts say: `deleteAllThreads` reports
+    // `{deleted: 0, failed: 1}` for a dead request regardless of how
+    // many chats were meant to go. Comparing `failures` against
+    // `allIds.length` read that as a partial failure and told the
+    // user "0 chats deleted, 1 failed on server".
+    if (deleted > 0 && failures > 0) {
+      dispatch(addToast({ title: `${deleted} chats deleted, ${failures} failed on server`, variant: 'warning' }));
+    } else if (allIds.length > 0 && failures > 0) {
+      dispatch(addToast({ title: t('toast.allChatsDeletedLocally'), variant: 'warning' }));
     } else {
-      dispatch(addToast({ title: 'All chats deleted', variant: 'success' }));
+      dispatch(addToast({ title: t('toast.allChatsDeleted'), variant: 'success' }));
     }
     navigate('/');
   };
@@ -74,9 +108,29 @@ export function ProfileSection() {
           <User className="w-4 h-4 text-muted-foreground" />
           <span className="text-foreground">{username || displayName}</span>
         </div>
+        {/* Stated, not assumed. This line sat under a shield icon
+            claiming SSO whatever was actually true — including on a
+            local cluster with ENABLE_AUTH=false, where the identity
+            above it is a development stand-in and nothing has been
+            authenticated at all. A security claim that is sometimes
+            wrong is worse than no claim. */}
+        {/* amber-700, not amber-600: #e17100 on white is 3.19:1 and
+            WCAG AA wants 4.5:1 at this size, so the axe run in the
+            e2e suite fails the Profile tab. amber-700 is 5.03:1 and
+            reads the same. Dark mode was already fine. */}
         <div className="flex items-center gap-3 text-sm">
-          <Shield className="w-4 h-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Authenticated via SSO</span>
+          <Shield
+            className={`w-4 h-4 ${authEnabled ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-500'}`}
+          />
+          <span
+            className={
+              authEnabled
+                ? 'text-muted-foreground'
+                : 'text-amber-700 dark:text-amber-500'
+            }
+          >
+            {authEnabled ? t('profile.ssoAuthenticated') : t('profile.authDisabled')}
+          </span>
         </div>
       </div>
 
@@ -84,16 +138,16 @@ export function ProfileSection() {
         <div className="pt-4 border-t border-border">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-medium text-foreground">Developer Mode</h3>
+              <h3 className="text-sm font-medium text-foreground">{t('profile.developerMode')}</h3>
               <p className="text-xs text-muted-foreground">
-                Show the Developer tab with advanced tools and agent evaluation.
+                {t('profile.developerModeHint')}
               </p>
             </div>
             <button
               type="button"
               role="switch"
               aria-checked={developerMode}
-              aria-label="Enable Developer Mode"
+              aria-label={t('profile.enableDeveloperMode')}
               onClick={() => dispatch(setDeveloperMode(!developerMode))}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
                 developerMode ? 'bg-primary' : 'bg-muted'
@@ -111,16 +165,16 @@ export function ProfileSection() {
 
       {chats.length > 0 && (
         <div className="pt-4 border-t border-border">
-          <h3 className="text-sm font-medium text-destructive mb-2">Danger Zone</h3>
+          <h3 className="text-sm font-medium text-destructive mb-2">{t('profile.dangerZone')}</h3>
           <div className="flex items-center justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/5">
             <div>
-              <p className="text-sm font-medium text-foreground">Delete all conversations</p>
+              <p className="text-sm font-medium text-foreground">{t('profile.deleteAllConversations')}</p>
               <p className="text-xs text-muted-foreground">
                 Permanently remove all {chats.length} chat{chats.length !== 1 ? 's' : ''}
               </p>
             </div>
             <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)} icon={<Trash2 className="w-3.5 h-3.5" />}>
-              Delete all
+              {t('profile.deleteAll')}
             </Button>
           </div>
         </div>
@@ -130,18 +184,18 @@ export function ProfileSection() {
         variant={ModalVariant.small}
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        aria-label="Delete all chats confirmation"
+        aria-label={t('profile.deleteAllChatsConfirm')}
       >
-        <ModalHeader title="Delete all chats" />
+        <ModalHeader title={t('profile.deleteAllChats')} />
         <ModalBody>
-          This will permanently delete all {chats.length} conversations. This action cannot be undone.
+          {t('profile.deleteAllBody', { count: chats.length })}
         </ModalBody>
         <ModalFooter>
           <Button variant="danger" onClick={handleDeleteAll}>
-            Delete all
+            {t('profile.deleteAll')}
           </Button>
           <Button variant="link" onClick={() => setConfirmDelete(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </ModalFooter>
       </Modal>

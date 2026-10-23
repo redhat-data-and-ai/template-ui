@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant, Spinner } from '@patternfly/react-core';
 import { Plus, MessageSquare, FolderMinus } from 'lucide-react';
@@ -15,6 +16,7 @@ import { addToast } from '../redux/slices/toasts';
 import { markChatAsClientCreated } from '../services/newChatTracker';
 
 export function ProjectChatPage() {
+  const { t } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -34,6 +36,7 @@ export function ProjectChatPage() {
     markChatAsClientCreated(newId);
     const newChat: ChatItem = {
       id: newId,
+      // Persisted and compared downstream — see AppLayout.
       title: 'New Chat',
       timestamp: new Date().toISOString(),
       preview: 'Start a new conversation',
@@ -52,20 +55,20 @@ export function ProjectChatPage() {
     setUnassignBusy(true);
     try {
       await dispatch(unassignAllThreadsThunk(projectId)).unwrap();
-      dispatch(addToast({ title: 'Conversations moved to Chats', variant: 'success' }));
+      dispatch(addToast({ title: t('toast.conversationsMoved'), variant: 'success' }));
       setUnassignConfirmOpen(false);
     } catch {
-      dispatch(addToast({ title: 'Failed to unassign conversations', variant: 'danger' }));
+      dispatch(addToast({ title: t('toast.unassignFailed'), variant: 'danger' }));
     } finally {
       setUnassignBusy(false);
     }
-  }, [dispatch, projectId]);
+  }, [dispatch, projectId, t]);
 
   if (isLoading && !project) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <Spinner size="lg" aria-label="Loading project" />
-        <p className="text-muted-foreground">Loading project...</p>
+        <Spinner size="lg" aria-label={t('projects.loading')} />
+        <p className="text-muted-foreground">{t('projects.loadingEllipsis')}</p>
       </div>
     );
   }
@@ -73,7 +76,7 @@ export function ProjectChatPage() {
   if (!project) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Project not found</p>
+        <p className="text-muted-foreground">{t('projects.notFound')}</p>
       </div>
     );
   }
@@ -94,7 +97,7 @@ export function ProjectChatPage() {
 
       <div className="shrink-0 flex flex-wrap gap-2">
         <Button variant="primary" onClick={startChat} icon={<Plus className="w-4 h-4" />}>
-          New Chat in Project
+          {t('projects.newChatInProject')}
         </Button>
         {visibleCount > 0 && (
           <Button
@@ -102,7 +105,7 @@ export function ProjectChatPage() {
             onClick={() => setUnassignConfirmOpen(true)}
             icon={<FolderMinus className="w-4 h-4" />}
           >
-            Unassign all
+            {t('sidebar.unassignAllShort')}
           </Button>
         )}
       </div>
@@ -110,12 +113,12 @@ export function ProjectChatPage() {
       <div
         className="mt-6 flex-1 min-h-0 overflow-y-auto space-y-2"
         role="region"
-        aria-label="Project conversations"
+        aria-label={t('projects.conversations')}
       >
         {projectChats.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            <p>No conversations yet. Start one above.</p>
+            <p>{t('projects.noConversations')}</p>
           </div>
         ) : (
           projectChats.map((chat) => (
@@ -145,24 +148,24 @@ export function ProjectChatPage() {
         onClose={() => {
           if (!unassignBusy) setUnassignConfirmOpen(false);
         }}
-        aria-label="Unassign all conversations confirmation"
+        aria-label={t('sidebar.unassignAllConfirm')}
       >
-        <ModalHeader title="Unassign all conversations" />
-        <ModalBody>Move every conversation in this project back to Chats?</ModalBody>
+        <ModalHeader title={t('sidebar.unassignAll')} />
+        <ModalBody>{t('sidebar.unassignAllBody')}</ModalBody>
         <ModalFooter>
           <Button
             variant="danger"
             isDisabled={unassignBusy}
             onClick={() => void unassignAll()}
           >
-            Unassign
+            {t('sidebar.unassign')}
           </Button>
           <Button
             variant="link"
             isDisabled={unassignBusy}
             onClick={() => setUnassignConfirmOpen(false)}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
         </ModalFooter>
       </Modal>

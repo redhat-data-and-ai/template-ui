@@ -1,0 +1,419 @@
+{
+  "common": {
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "save": "Enregistrer",
+    "close": "Fermer",
+    "loading": "Chargement…",
+    "none": "—",
+    "error": "Erreur",
+    "logIn": "Se connecter",
+    "result": "Résultat",
+    "continue": "Continuer"
+  },
+  "sidebar": {
+    "newChat": "Nouvelle conversation",
+    "startNewChat": "Démarrer une conversation",
+    "chats": "Conversations",
+    "chatHistory": "Historique des conversations",
+    "noChatsYet": "Aucune conversation pour l’instant",
+    "noUnassignedChats": "Aucune conversation non affectée",
+    "projects": "Projets",
+    "noProjectsYet": "Aucun projet pour l’instant",
+    "createProject": "Créer un projet",
+    "editProject": "Modifier le projet",
+    "newProject": "Nouveau projet",
+    "searchThreads": "Rechercher des conversations",
+    "searchChatThreads": "Rechercher dans les conversations",
+    "deleteChat": "Supprimer la conversation",
+    "deleteProject": "Supprimer le projet",
+    "unassignAll": "Retirer toutes les conversations du projet",
+    "openSettings": "Ouvrir les paramètres",
+    "logOut": "Se déconnecter",
+    "noChats": "Aucune conversation",
+    "deleteChatConfirm": "Confirmation de suppression de la conversation",
+    "deleteChatBody": "Voulez-vous vraiment supprimer cette conversation ? Cette action est irréversible.",
+    "deleteProjectConfirm": "Confirmation de suppression du projet",
+    "keepConversationsHint": "Pour conserver les conversations, utilisez Retirer et supprimer : elles seront déplacées vers Conversations.",
+    "unassign": "Retirer",
+    "unassignAndDelete": "Retirer et supprimer",
+    "unassignAllConfirm": "Confirmation du retrait de toutes les conversations",
+    "unassignAllBody": "Déplacer toutes les conversations de ce projet vers Conversations ?",
+    "unassignChat": "Retirer la conversation : {{title}}",
+    "unassignAllFrom": "Retirer toutes les conversations de {{name}}",
+    "deleteProjectBody": "Supprimer ce projet et toutes ses conversations ? Cette action est irréversible.",
+    "unassignAllShort": "Tout retirer",
+    "agent": {
+      "healthy": "Agent : opérationnel",
+      "degraded": "Agent : dégradé — répond, mais une dépendance est indisponible",
+      "unhealthy": "Agent : hors ligne",
+      "unknown": "Agent : état inconnu"
+    },
+    "sectionNeedsInput": "Action requise",
+    "sectionInProgress": "En cours",
+    "sectionCompleted": "Terminé",
+    "statusRunning": "En cours",
+    "statusNeedsInput": "En attente de vous"
+  },
+  "input": {
+    "typeMessage": "Écrivez un message",
+    "askAnything": "Posez-moi vos questions sur les données...",
+    "waiting": "En attente de la réponse...",
+    "sendMessage": "Envoyer le message",
+    "cancelStreaming": "Interrompre la réponse",
+    "attachFiles": "Joindre des fichiers",
+    "attachedFiles": "Fichiers joints",
+    "notReadable": "(illisible)",
+    "truncated": "(tronqué)",
+    "basicParse": "(lecture simplifiée)",
+    "uploadFailed": "Échec de l’envoi",
+    "dropToAttach": "Déposez des fichiers pour les joindre",
+    "attaching": "Ajout en cours…"
+  },
+  "tags": {
+    "label": "Étiquettes",
+    "add": "Ajouter une étiquette",
+    "placeholder": "nom de l’étiquette",
+    "none": "Aucune étiquette",
+    "tooMany": "Une conversation peut porter au maximum {{max}} étiquettes",
+    "filteredBy": "Étiquetées « {{tag}} »",
+    "clearFilter": "Retirer le filtre"
+  },
+  "share": {
+    "share": "Partager",
+    "shareConversation": "Partager la conversation",
+    "copyLink": "Copier le lien",
+    "copied": "Copié",
+    "revoke": "Arrêter le partage",
+    "notShared": "Cette conversation n’est pas partagée.",
+    "scope": "Qui peut l’ouvrir",
+    "scopeAuthenticated": "Toute personne connectée disposant du lien",
+    "scopePublic": "Toute personne disposant du lien",
+    "expiry": "Le lien expire au bout de",
+    "days": "{{count}} jours",
+    "expiresOn": "Expire le {{date}}",
+    "viewCount_one": "Ouvert une fois",
+    "viewCount_other": "Ouvert {{count}} fois",
+    "neverOpened": "Jamais ouvert",
+    "snapshotNote": "Un partage est un instantané pris maintenant. Les messages ultérieurs n’y figurent pas, et les fichiers joints sont nommés mais pas transmis.",
+    "attachmentsNamed": "Fichiers mentionnés dans cette conversation",
+    "linkRevoked": "Ce lien a été révoqué",
+    "linkExpired": "Ce lien a expiré",
+    "linkInvalid": "Ce lien n’est pas valide",
+    "sharedOn": "Conversation partagée, capturée le {{date}}"
+  },
+  "analytics": {
+    "title": "Utilisation",
+    "subtitle": "Données agrégées uniquement. Le contenu des messages n’est jamais affiché ici.",
+    "window": "Période",
+    "runs": "Exécutions",
+    "calls": "Appels",
+    "conversations": "Conversations",
+    "people": "Personnes",
+    "succeeded": "Réussites",
+    "tokensIn": "Jetons en entrée",
+    "tokensOut": "Jetons en sortie",
+    "cached": "En cache",
+    "thumbsUp": "Avis positifs",
+    "thumbsDown": "Avis négatifs",
+    "ratedGood": "Jugées bonnes",
+    "inFlight": "En cours",
+    "interrupted": "Interrompues",
+    "runsOverTime": "Exécutions dans le temps",
+    "byModel": "Par modèle",
+    "model": "Modèle",
+    "errors": "Erreurs",
+    "failures": "Échecs",
+    "failuresNote": "Regroupés par type. Le texte de l’erreur n’est pas affiché : il contient souvent les données qui l’ont provoquée.",
+    "kind": "Type",
+    "count": "Nombre",
+    "lastSeen": "Vu pour la dernière fois",
+    "noRuns": "Aucune exécution sur cette période.",
+    "noFailures": "Aucun échec sur cette période.",
+    "loadFailed": "Impossible de charger les statistiques",
+    "stale": "Abandonnés",
+    "threads": "Fils (tous)",
+    "speed": "Vitesse",
+    "tokens": "Jetons",
+    "feedback": "Retours",
+    "rightNow": "En ce moment",
+    "peak": "pic {{count}}/jour"
+  },
+  "errorClass": {
+    "model_timeout": "Le modèle a dépassé le délai",
+    "model_rate_limit": "Débit limité par le fournisseur",
+    "model_refused": "Le modèle a refusé de répondre",
+    "model_config": "Identifiants ou nom du modèle incorrects",
+    "context_too_long": "La conversation a dépassé la fenêtre de contexte",
+    "retries_exhausted": "Abandon après des échecs répétés",
+    "storage": "Base de données ou cache injoignable",
+    "cancelled": "Annulé par l’utilisateur",
+    "agent_defect": "Anomalie dans l’agent",
+    "tool_failure": "Un outil a échoué",
+    "other": "Non classé",
+    "unknown": "Aucun message d’erreur enregistré"
+  },
+  "settings": {
+    "language": "Langue",
+    "languageHint": "S’applique uniquement à ce navigateur.",
+    "languageUnreviewed": "* Traduit par un modèle, pas encore relu par un locuteur.",
+    "tabs": {
+      "account": "Compte",
+      "appearance": "Apparence",
+      "personalisation": "Personnalisation",
+      "components": "Composants",
+      "developers": "Développeurs"
+    }
+  },
+  "chat": {
+    "messages": "Messages de la conversation",
+    "aiGenerated": "Généré par IA",
+    "aiGeneratedContent": "Contenu généré par IA",
+    "thinking": "Réflexion...",
+    "agentThinking": "L’agent réfléchit",
+    "waiting": "En attente...",
+    "retry": "Réessayer",
+    "retryOperation": "Réessayer l’opération",
+    "editMessage": "Modifier le message",
+    "saveEdit": "Enregistrer le message modifié",
+    "cancelEdit": "Annuler la modification",
+    "export": "Exporter la conversation",
+    "exportMarkdown": "Exporter en Markdown",
+    "exportJson": "Exporter en JSON",
+    "arguments": "Arguments",
+    "interactiveUi": "Interface interactive",
+    "approve": "Approuver",
+    "reject": "Refuser",
+    "alwaysAllow": "Toujours autoriser",
+    "notFound": "Conversation introuvable",
+    "notFoundBody": "La conversation demandée est introuvable.",
+    "goHome": "Retour à l'accueil",
+    "loading": "Chargement de la conversation",
+    "aiGeneratedMarker": "Généré par IA",
+    "loadingMessages": "Chargement des messages…",
+    "loadingChat": "Chargement de la conversation…",
+    "noResponse": "L'agent n'a pas répondu. Le problème est peut-être temporaire.",
+    "agentError": "L'agent a rencontré une erreur :",
+    "jumpToLatest": "Aller au plus récent"
+  },
+  "skills": {
+    "title": "Compétences",
+    "empty": "Cet agent n'a aucune compétence configurée.",
+    "notAttached": "non rattachée",
+    "usedBy": "Utilisée par",
+    "view": "Voir la source de {{name}}",
+    "files": "Fichiers de la compétence",
+    "readOnly": "lecture seule",
+    "truncated": "Fichier tronqué pour l'affichage.",
+    "noFiles": "Cette compétence n'a aucun fichier lisible.",
+    "source": "Source",
+    "rendered": "Rendu"
+  },
+  "mcp": {
+    "readOnly": "lecture seule",
+    "destructive": "destructif"
+  },
+  "admin": {
+    "title": "Indicateurs de déploiement",
+    "subtitle": "Options qui changent ce que voit chaque utilisateur. Enregistrées pour tout le déploiement, pas seulement ce navigateur.",
+    "forbidden": "Accès développeur requis.",
+    "flags": {
+      "skills_visible_to_all": {
+        "title": "Compétences visibles par tous",
+        "detail": "Désactivé, masque l'onglet Compétences à tous sauf aux développeurs."
+      },
+      "subagents_visible_to_all": {
+        "title": "Sous-agents visibles par tous",
+        "detail": "Désactivé, masque l'onglet Sous-agents à tous sauf aux développeurs."
+      },
+      "prompt_visible_to_all": {
+        "title": "Prompt visible par tous",
+        "detail": "Désactivé, masque le prompt de l'orchestrateur à tous sauf aux développeurs."
+      },
+      "memory_enabled": {
+        "title": "Mémoire",
+        "detail": "Permet à l'agent de retenir des informations sur un utilisateur d'une conversation à l'autre."
+      },
+      "mcp_apps_enabled": {
+        "title": "Applications MCP",
+        "detail": "Autorise les serveurs MCP à afficher des interfaces interactives dans une conversation."
+      },
+      "models_visible_to_all": {
+        "title": "Modèles visibles par tous",
+        "detail": "Désactivé, masque l'onglet Modèles à tous sauf aux développeurs."
+      },
+      "safeguards_visible_to_all": {
+        "title": "Garde-fous visibles par tous",
+        "detail": "Désactivé, masque l'onglet Garde-fous à tous sauf aux développeurs."
+      }
+    }
+  },
+  "subagents": {
+    "title": "Sous-agents",
+    "empty": "Cet agent n'a pas de sous-agents.",
+    "view": "Voir la définition de {{name}}",
+    "delegation": "Délégation",
+    "working": "En cours",
+    "complete": "Terminé",
+    "userRejected": "L'utilisateur a refusé cette action.",
+    "approveTool": "Approuver l'outil : {{name}}",
+    "approveAction": "Approuver l'action du sous-agent : {{name}}",
+    "rejectTool": "Refuser l'outil : {{name}}",
+    "rejectAction": "Refuser l'action du sous-agent : {{name}}",
+    "alwaysAllowTool": "Toujours autoriser l'outil : {{name}}",
+    "alwaysAllowAgent": "Toujours autoriser le sous-agent : {{name}}",
+    "approvalRequired": "Approbation requise",
+    "processing": "Le sous-agent travaille…",
+    "inNode": "Exécution de {{node}}…",
+    "calling": "Appel de {{tool}}…",
+    "writing": "rédaction…",
+    "steps": "Étapes",
+    "stopped": "Arrêté"
+  },
+  "prompt": {
+    "description": "L'identité de l'orchestrateur, sa table de routage et ses règles — ce qu'il fait avant de déléguer.",
+    "view": "Voir l'invite",
+    "title": "Prompt"
+  },
+  "components": {
+    "title": "Composants",
+    "mcpServers": "Serveurs MCP",
+    "toolApprovals": "Approbation des outils",
+    "skillsDescription": "Les procédures que suit cet agent, chacune avec ses propres règles sur ce qu'elle peut et ne peut pas faire.",
+    "subagentsDescription": "Les spécialistes auxquels l'orchestrateur délègue, et ce que chacun peut atteindre.",
+    "documentsDescription": "Documents que l'agent peut lire pour répondre. Il ne peut pas y écrire : les envois et modifications se font ici. Ils sont montés en lecture seule sur {{path}}, le chemin que voit l'agent."
+  },
+  "developers": {
+    "title": "Développeurs",
+    "tabs": {
+      "usage": "Utilisation",
+      "flags": "Indicateurs de fonctionnalité",
+      "evaluations": "Évaluations"
+    }
+  },
+  "documents": {
+    "title": "Documents",
+    "upload": "Téléverser des fichiers",
+    "empty": "Aucun document.",
+    "of": "sur",
+    "usage": "Utilisation du volume",
+    "nearlyFull": "Le stockage est presque plein. Supprimez un document avant d'en ajouter.",
+    "view": "Voir {{name}}",
+    "remove": "Supprimer {{name}}",
+    "truncated": "Ce fichier est trop volumineux pour être modifié ici ; il est en lecture seule.",
+    "content": "Contenu de {{name}}",
+    "confirmDelete": "Delete {{path}}? This removes it for everyone."
+  },
+  "layout": {
+    "skipToContent": "Aller au contenu principal",
+    "toggleSidebar": "Afficher ou masquer la barre latérale",
+    "sidebarNavigation": "Navigation latérale"
+  },
+  "toast": {
+    "chatDeleted": "Conversation supprimée",
+    "chatDeletedLocally": "Conversation effacée localement, mais la suppression sur le serveur a échoué",
+    "projectDeleted": "Projet supprimé",
+    "projectDeletedWithChats": "Projet supprimé. Les conversations ont été déplacées vers Conversations.",
+    "conversationsMoved": "Conversations déplacées vers Conversations",
+    "deleteProjectFailed": "Échec de la suppression du projet",
+    "loadHistoryFailed": "Échec du chargement de l'historique",
+    "unassignFailed": "Échec du retrait des conversations",
+    "sendFailed": "Échec de l'envoi du message",
+    "editFailed": "Échec de l'envoi du message modifié",
+    "retryFailed": "Échec de la nouvelle tentative",
+    "resumeFailed": "Échec de la reprise",
+    "allChatsDeleted": "Toutes les conversations ont été supprimées",
+    "allChatsDeletedLocally": "Conversations effacées localement, mais la suppression sur le serveur a échoué"
+  },
+  "session": {
+    "title": "Session expirée",
+    "expired": "Session expirée",
+    "body": "Votre session a expiré. Reconnectez-vous pour continuer.",
+    "workSaved": "Votre travail a été enregistré."
+  },
+  "errors": {
+    "title": "Une erreur est survenue",
+    "maxRetries": "Nombre maximal de tentatives atteint",
+    "startOver": "Recommencer",
+    "refreshPage": "Actualiser la page",
+    "technicalDetails": "Détails techniques",
+    "errorId": "Identifiant de l'erreur",
+    "message": "Message",
+    "retrying": "Nouvelle tentative",
+    "retryAttempt": "Réessayer (tentative {{count}}/{{max}})",
+    "tryAgain": "Veuillez réessayer."
+  },
+  "interrupt": {
+    "title": "Réponse requise",
+    "response": "Réponse à l'interruption",
+    "placeholder": "Saisissez votre réponse...",
+    "authenticate": "S'authentifier",
+    "connectFailed": "Échec de la connexion",
+    "resumeNow": "Reprendre"
+  },
+  "projects": {
+    "loading": "Chargement du projet",
+    "loadingEllipsis": "Chargement du projet…",
+    "notFound": "Projet introuvable",
+    "conversations": "Conversations du projet",
+    "noConversations": "Aucune conversation pour l'instant. Commencez-en une ci-dessus.",
+    "newChatInProject": "Nouvelle conversation dans le projet"
+  },
+  "profile": {
+    "ssoAuthenticated": "Authentifié via SSO",
+    "developerMode": "Mode développeur",
+    "enableDeveloperMode": "Activer le mode développeur",
+    "developerModeHint": "Affiche l'onglet Développeurs avec les outils avancés et l'évaluation de l'agent.",
+    "dangerZone": "Zone sensible",
+    "deleteAll": "Tout supprimer",
+    "deleteAllChats": "Supprimer toutes les conversations",
+    "deleteAllChatsConfirm": "Confirmation de suppression de toutes les conversations",
+    "deleteAllConversations": "Supprimer toutes les conversations",
+    "deleteAllBody": "Cela supprimera définitivement les {{count}} conversations. Cette action est irréversible.",
+    "authDisabled": "Authentification désactivée — cette identité est un substitut local"
+  },
+  "models": {
+    "title": "Modèles",
+    "description": "Quel modèle répond, et lequel utilise chaque sous-agent.",
+    "empty": "Aucun modèle configuré.",
+    "answering": "Répond",
+    "perSubagent": "Par sous-agent",
+    "inherited": "hérité",
+    "routing": "Routage",
+    "routingHint": "Chaque tour est envoyé à un niveau selon ce qu'il demande.",
+    "excluded": "indisponible avec ce modèle :"
+  },
+  "provenance": {
+    "truncated": "tronqué : le modèle a manqué de place",
+    "empty": "le modèle n'a rien renvoyé",
+    "fallback": "répondu par un modèle de secours après l'échec de {{from}}",
+    "routed": "routé vers {{tier}}",
+    "routedBy": "routé vers {{tier}} par {{how}}",
+    "cached": "depuis le cache"
+  },
+  "safeguards": {
+    "title": "Garde-fous",
+    "description": "Ce qui s'applique à un message en plus du modèle.",
+    "on": "activé",
+    "off": "désactivé",
+    "pii": "Masquage des données personnelles",
+    "piiDetail": "Remplace les valeurs détectées dans votre message avant que le modèle le voie.",
+    "traceStrategy": "Dans les traces, les valeurs détectées sont traitées en « {{strategy}} ».",
+    "guardrail": "Garde-fou",
+    "guardrailDetail": "Filtre les réponses avant qu'elles vous parviennent.",
+    "tokenBudget": "Budget de jetons",
+    "tokenBudgetDetail": "Arrête une exécution une fois son allocation épuisée."
+  },
+  "mcpAuth": {
+    "connect": "Connecter",
+    "connecting": "Connexion…",
+    "done": "Connecté",
+    "failed": "Échec de la connexion",
+    "connected": "{{name}} connecté",
+    "notConnected": "{{name}} n'est pas connecté.",
+    "expired": "Votre session {{name}} a expiré."
+  },
+  "subagent": {
+    "working": "En cours…"
+  }
+}

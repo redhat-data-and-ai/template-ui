@@ -201,7 +201,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
                 <div className="text-sm font-medium text-orange-100 mb-2">
                   AI Response
                 </div>
-                <div className="text-sm text-neutral-200 prose prose-sm prose-invert max-w-none">
+                <div className="md-prose max-w-none text-sm text-neutral-200">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]}>
                     {typeof event.content === "string"
                       ? event.content

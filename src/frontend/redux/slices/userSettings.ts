@@ -3,6 +3,14 @@ import { scopedStorageKey } from '../../lib/app-paths';
 
 type Theme = 'light' | 'dark';
 
+/**
+ * How much air the interface uses.
+ *
+ * `comfortable` is the default; `compact` is for people reading long
+ * transcripts on small screens, where the spacing that makes a short
+ * exchange readable turns a long one into scrolling.
+ */
+
 interface UserSettingsState {
   theme: Theme;
   debugMode: boolean;
@@ -113,6 +121,7 @@ export const {
   setAutoApproveAllTools,
   toggleAutoApproveAllTools,
 } = userSettingsSlice.actions;
+
 
 export const selectTheme = (state: { userSettings: UserSettingsState }) => state.userSettings.theme;
 export const selectDebugMode = (state: { userSettings: UserSettingsState }) => state.userSettings.debugMode;

@@ -191,7 +191,154 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
  * Delete a thread from the backend (LangGraph Platform).
  * Returns true if the deletion succeeded (or thread was already gone).
  */
+/** Ask the server to delete every thread this user owns.
+ *
+ * One request, because the sweep must outlive the page. Doing it
+ * from the browser meant a refresh abandoned whatever was left, and
+ * with the listing capped at 50 the remainder still filled the
+ * sidebar — so it looked as though nothing had been deleted.
+ */
+export async function deleteAllThreads(): Promise<{ deleted: number; failed: number }> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/v1/threads/delete-all'), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return { deleted: 0, failed: 1 };
+    const body = (await resp.json()) as { deleted?: number; failed?: number };
+    return { deleted: body.deleted ?? 0, failed: body.failed ?? 0 };
+  } catch {
+    return { deleted: 0, failed: 1 };
+  }
+}
+
+/** Every thread the signed-in user owns, straight from the agent.
+ *
+ * The store holds the pages the sidebar has loaded, which is not the
+ * same thing. Deleting "all conversations" from that list removed a
+ * couple of dozen of 354 and left the rest to reappear on the next
+ * load — the delete worked, it was just aimed at the wrong set.
+ */
+export async function listAllThreadIds(): Promise<string[] | null> {
+  // `null` for "could not ask", not `[]`. The two are different
+  // answers and the caller acts on them differently: an empty list
+  // means the sweep is finished and the stored deletion intent can
+  // go, while a 5xx or an offline load means we simply do not know
+  // and must keep it.
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/threads'), {
+      method: 'GET',
+      headers: getAuthHeaders(false),
+    });
+    if (!resp.ok) return null;
+    const body = (await resp.json()) as unknown;
+    const rows = Array.isArray(body)
+      ? body
+      : ((body as { threads?: unknown[]; data?: unknown[] })?.threads ??
+         (body as { data?: unknown[] })?.data ??
+         []);
+    return (rows as Array<{ thread_id?: string }>)
+      .map((t) => t?.thread_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  } catch {
+    return null;
+  }
+}
+
+/** Delete many threads without stampeding the agent.
+ *
+ * `Promise.all` over every id opened 354 simultaneous connections,
+ * against a service whose whole connection budget was sized down
+ * deliberately. A small window finishes in about the same wall time
+ * and leaves the agent answering other people.
+ */
+export async function deleteThreads(
+  ids: string[],
+  concurrency = DELETE_CONCURRENCY,
+): Promise<{ deleted: number; failed: number }> {
+  let deleted = 0;
+  let failed = 0;
+  const queue = [...ids];
+
+  const worker = async () => {
+    for (;;) {
+      const id = queue.shift();
+      if (id === undefined) return;
+      const ok = await deleteThread(id).catch(() => false);
+      if (ok) deleted += 1;
+      else failed += 1;
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, ids.length || 1) }, worker),
+  );
+  return { deleted, failed };
+}
+
+/** Parallel deletes in flight at once. */
+const DELETE_CONCURRENCY = 8;
+
+/** Thread ids the server will accept. Anything else never reached it. */
+const SERVER_THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Stop a run that is still executing on the agent.
+ *
+ * Closing the browser tab no longer does this. The run is deliberately
+ * detached from the connection that started it — a refresh, a closed
+ * laptop or a dropped network leaves the turn running — so stopping
+ * has to be said rather than implied by going away.
+ */
+export async function cancelRun(threadId: string, runId: string): Promise<boolean> {
+  if (!threadId || !runId) return false;
+  try {
+    const resp = await authenticatedFetch(
+      buildAgentApiUrl(`/threads/${threadId}/runs/${runId}/cancel?action=cancel`),
+      { method: 'POST', headers: getAuthHeaders(false) },
+    );
+    // 404: already finished or already cancelled — the desired end state.
+    return resp.ok || resp.status === 404;
+  } catch {
+    return false;
+  }
+}
+
+/** The run still executing on this thread, if there is one.
+ *
+ * What makes a refresh survivable: on load the thread is asked
+ * whether anything is still going, rather than the browser assuming
+ * that what it cannot see is not happening.
+ */
+export async function getInFlightRun(threadId: string): Promise<string | null> {
+  if (!threadId) return null;
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/threads/${threadId}/runs`), {
+      method: 'GET',
+      headers: getAuthHeaders(false),
+    });
+    if (!resp.ok) return null;
+    const runs = (await resp.json()) as Array<{ run_id?: string; status?: string }>;
+    if (!Array.isArray(runs)) return null;
+    const live = runs.find(
+      (r) => r?.status === 'running' || r?.status === 'pending',
+    );
+    return live?.run_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteThread(threadId: string): Promise<boolean> {
+  // A chat opened but never sent exists only in the browser, under a
+  // locally minted id. Asking the server to delete it returns 400
+  // "Invalid thread_id format", which counted as a failure: deleting
+  // nineteen conversations of which seventeen were unsent drafts
+  // reported "2 chats deleted, 17 failed on server". Nothing failed.
+  // There was nothing there.
+  if (!SERVER_THREAD_ID.test(threadId)) {
+    return true;
+  }
+
   const deleteUrl = buildAgentApiUrl(`/threads/${threadId}`);
 
   try {
@@ -199,6 +346,7 @@ export async function deleteThread(threadId: string): Promise<boolean> {
       method: 'DELETE',
       headers: getAuthHeaders(false),
     });
+    // 404 is the desired end state reached by another route.
     return resp.ok || resp.status === 404;
   } catch {
     return false;

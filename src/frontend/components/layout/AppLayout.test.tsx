@@ -39,6 +39,11 @@ vi.mock('../../services/chatStorage', () => ({
     loadChats: () => [],
     saveChats: vi.fn(),
     clearChats: vi.fn(),
+    // A delete sweep can outlive the page; on load the app asks
+    // what was still meant to go.
+    loadDeletedThreadIds: () => [],
+    saveDeletedThreadIds: vi.fn(),
+    clearDeletedThreadIds: vi.fn(),
   },
 }));
 
