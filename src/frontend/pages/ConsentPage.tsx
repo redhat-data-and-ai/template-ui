@@ -49,8 +49,8 @@ export function ConsentPage() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="max-w-3xl w-full bg-card rounded-xl shadow-elevated border border-border animate-fadeInUp">
+    <div className="w-full h-dvh overflow-y-auto bg-background flex p-4">
+      <div className="max-w-3xl w-full m-auto bg-card rounded-xl shadow-elevated border border-border animate-fadeInUp">
         <div className="p-6 sm:p-8">
           {/* Header */}
           <div className="text-center mb-6">
