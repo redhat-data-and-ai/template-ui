@@ -551,6 +551,40 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(res.body).toContain('Hi there');
   });
 
+  it('keeps narration ahead of the task card when a partial gains tool calls', async () => {
+    const sentence = 'This looks like a data query.';
+    const toolCall = {
+      name: 'task',
+      id: 'tc1',
+      args: { subagent_type: 'identify-dp', description: 'q' },
+    };
+    const agentSSE = [
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: sentence }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: sentence, tool_calls: [toolCall] }])}\n\n`,
+      `event: updates\ndata: ${JSON.stringify({ model: { messages: [{ type: 'ai', id: 'msg-1', content: sentence, tool_calls: [toolCall] }] } })}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-narration' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-narration', user_id: 'u1' },
+    });
+
+    expect(res.body).not.toContain('draft_discard');
+    const tokenAt = res.body.indexOf(sentence);
+    const toolAt = res.body.indexOf('"tool_calls"');
+    expect(tokenAt).toBeGreaterThan(-1);
+    expect(toolAt).toBeGreaterThan(tokenAt);
+    expect(res.body.match(/This looks like a data query\./g)).toHaveLength(1);
+  });
+
   it('translates a LangGraph __interrupt__ update into an interrupt chunk', async () => {
     const interruptValue = {
       action_requests: [{ name: 'github_create_pr', args: { title: 'My PR' } }],

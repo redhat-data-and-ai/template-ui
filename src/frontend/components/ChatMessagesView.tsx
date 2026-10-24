@@ -612,9 +612,13 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     if (isToolCallStart) {
       const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
       const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
+      const narration = partitionMessageContent(message.content).markdownForDisplay.trim();
 
       return (
         <div className="space-y-2 w-full" aria-live="off">
+          {narration ? (
+            <AiMessageBubble message={{ ...message, content: narration }} />
+          ) : null}
           {subAgentCalls.map((toolCall, idx) => {
             const tcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
             const slot = approvalSlotByToolCallId.get(tcId);

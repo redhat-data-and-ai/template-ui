@@ -116,6 +116,28 @@ describe('chats slice — appendMessageToChat', () => {
     );
     expect(s.chats).toHaveLength(0);
   });
+
+  it('attaches tool calls to the streamed sentence with the same id', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const sentence: TestMessage = {
+      type: 'ai',
+      content: 'This looks like a data query.',
+      tool_calls: [],
+      id: 'msg-1',
+    };
+    const card: TestMessage = {
+      type: 'ai',
+      content: '',
+      id: 'msg-1',
+      tool_calls: [{ id: 'tc-1', name: 'identify-dp', args: { subagent_type: 'identify-dp' } }],
+    };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(sentence) }));
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(card) }));
+    expect(s.chats[0].messages).toHaveLength(1);
+    const stored = s.chats[0].messages[0] as TestMessage;
+    expect(stored.content).toBe('This looks like a data query.');
+    expect(stored.tool_calls).toEqual(card.tool_calls);
+  });
 });
 
 describe('chats slice — updateLastMessageInChat', () => {

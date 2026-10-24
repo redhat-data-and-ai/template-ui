@@ -175,6 +175,40 @@ const innerToolInterrupt: InterruptInfo = {
   resumable: true,
 };
 
+describe('AIMessageRenderer — narration before a task card', () => {
+  it('shows the spoken sentence above the task card', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          content: 'This looks like a data query.',
+          tool_calls: [SUBAGENT_TASK],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('This looks like a data query.')).toBeInTheDocument();
+    expect(screen.getByText('researcher')).toBeInTheDocument();
+  });
+
+  it('hides thinking blocks on a task-call message', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          content: [
+            { type: 'thinking', text: 'secret chain of thought' },
+            { type: 'text', text: 'This looks like a data query.' },
+          ],
+          tool_calls: [SUBAGENT_TASK],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('This looks like a data query.')).toBeInTheDocument();
+    expect(screen.queryByText('secret chain of thought')).not.toBeInTheDocument();
+    expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+  });
+});
+
 describe('AIMessageRenderer — nested subagent HITL', () => {
   it('shows approval buttons when a running subagent pauses on an inner tool', () => {
     render(
