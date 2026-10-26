@@ -1,13 +1,9 @@
 import fastifyPlugin from "fastify-plugin";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { getSettings } from "../utils/settings.js";
+import { getSettings, resolveAgentHost as getAgentHost } from "../utils/settings.js";
 import { resolveRole, type UserRole } from "../utils/role-resolver.js";
 import { safePostLoginRedirect } from "../utils/session-identity.js";
 
-function getAgentHost(): string {
-  const cfg = getSettings();
-  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
-}
 
 declare module "fastify" {
   interface Session {

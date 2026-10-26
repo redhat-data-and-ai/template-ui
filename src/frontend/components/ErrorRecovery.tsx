@@ -8,6 +8,7 @@ import {
   ExpandableSection,
 } from '@patternfly/react-core';
 import { ExclamationCircleIcon, ExclamationTriangleIcon } from '@patternfly/react-icons';
+import { useTranslation } from 'react-i18next';
 
 export interface ErrorRecoveryProps {
   title?: string;
@@ -20,7 +21,8 @@ export interface ErrorRecoveryProps {
   retryCount?: number;
   maxRetries?: number;
   isRetrying?: boolean;
-  /** Shown on the reload/refresh action. Defaults to "Refresh Page". */
+  /** Shown on the reload/refresh action. Defaults to the translated
+      "Refresh Page". */
   refreshButtonLabel?: string;
   /** When true, the refresh/reload button uses the primary variant. */
   isRefreshPrimary?: boolean;
@@ -29,7 +31,10 @@ export interface ErrorRecoveryProps {
 }
 
 export function ErrorRecovery({
-  title = 'Something went wrong',
+  // `title` and `refreshButtonLabel` cannot default in the signature:
+  // a default there is evaluated before any hook runs, so it would
+  // pin English no matter the language. Resolved below instead.
+  title,
   errorMessage,
   errorDetails,
   errorId,
@@ -39,10 +44,11 @@ export function ErrorRecovery({
   retryCount,
   maxRetries,
   isRetrying = false,
-  refreshButtonLabel = 'Refresh Page',
+  refreshButtonLabel,
   isRefreshPrimary = false,
   status = 'danger',
 }: ErrorRecoveryProps) {
+  const { t } = useTranslation();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
   const maxRetriesReached =
@@ -54,8 +60,8 @@ export function ErrorRecovery({
     maxRetries != null && retryCount != null && maxRetries > 0;
 
   const retryLabel = showRetryCounter
-    ? `Retry (attempt ${retryCount}/${maxRetries})`
-    : 'Retry';
+    ? t('errors.retryAttempt', { count: retryCount, max: maxRetries })
+    : t('chat.retry');
 
   const handleRefresh = () => {
     if (onRefresh) {
@@ -77,13 +83,13 @@ export function ErrorRecovery({
     <EmptyState
       status={status}
       icon={stateIcon}
-      titleText={title}
+      titleText={title ?? t('errors.title')}
       headingLevel="h2"
     >
       <EmptyStateBody>
         <Alert
           variant={status === 'warning' ? 'warning' : 'danger'}
-          title="Error"
+          title={t('common.error')}
           isInline
           role="alert"
           className="pf-v6-u-mb-md"
@@ -92,12 +98,12 @@ export function ErrorRecovery({
         </Alert>
 
         {maxRetriesReached && (
-          <Alert variant="info" isInline title="Maximum retries reached" role="alert" className="pf-v6-u-mb-md" />
+          <Alert variant="info" isInline title={t('errors.maxRetries')} role="alert" className="pf-v6-u-mb-md" />
         )}
 
         {showTechnicalDetails && (
           <ExpandableSection
-            toggleText="Technical details"
+            toggleText={t('errors.technicalDetails')}
             isExpanded={detailsExpanded}
             onToggle={(_e, expanded) => setDetailsExpanded(expanded)}
             className="pf-v6-u-mb-md"
@@ -106,12 +112,12 @@ export function ErrorRecovery({
             <div className="text-left font-mono text-sm py-2">
               {errorId != null && errorId !== '' && (
                 <p className="mb-2">
-                  <strong>Error ID:</strong> {errorId}
+                  <strong>{t('errors.errorId')}:</strong> {errorId}
                 </p>
               )}
               {errorMessage !== '' && (
                 <p className="mb-2">
-                  <strong>Message:</strong> {errorMessage}
+                  <strong>{t('errors.message')}:</strong> {errorMessage}
                 </p>
               )}
               {errorDetails != null && errorDetails !== '' && (
@@ -127,7 +133,7 @@ export function ErrorRecovery({
       <EmptyStateActions>
         {onGoHome !== undefined && (
           <Button variant="secondary" onClick={onGoHome} isDisabled={isRetrying}>
-            Start Over
+            {t('errors.startOver')}
           </Button>
         )}
         {onRetry !== undefined && (
@@ -136,8 +142,8 @@ export function ErrorRecovery({
             onClick={onRetry}
             isDisabled={maxRetriesReached || isRetrying}
             isLoading={isRetrying}
-            spinnerAriaValueText="Retrying"
-            aria-label="Retry operation"
+            spinnerAriaValueText={t('errors.retrying')}
+            aria-label={t('chat.retryOperation')}
           >
             {retryLabel}
           </Button>
@@ -147,7 +153,7 @@ export function ErrorRecovery({
           onClick={handleRefresh}
           isDisabled={isRetrying}
         >
-          {refreshButtonLabel}
+          {refreshButtonLabel ?? t('errors.refreshPage')}
         </Button>
       </EmptyStateActions>
     </EmptyState>

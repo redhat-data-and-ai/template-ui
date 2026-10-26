@@ -5,7 +5,6 @@ import {
   Dropdown,
   DropdownItem,
   DropdownList,
-  Label,
   MenuToggle,
   type MenuToggleElement,
   Modal,
@@ -17,7 +16,6 @@ import {
   Tooltip,
 } from '@patternfly/react-core';
 import {
-  Loader2,
   MessageSquare,
   Trash2,
   Edit3,
@@ -30,10 +28,16 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { logout } from '../services/logout';
+import { useSelector } from 'react-redux';
+import type { StreamingState } from '../redux/slices/chats';
+import { ChatStatusDot } from './ChatStatusDot';
+import { activityByChat, type ChatActivity } from '../lib/chat-activity';
 import { cn } from '@/lib/utils';
 import type { SidebarChatItem, SidebarProject } from '../types/chat';
-import type { SubAgentInfo } from '../types/deep-agent';
+import { SearchResults } from './SearchResults';
+import { useThreadSearch } from '../hooks/useThreadSearch';
 import { useAgentHealth } from '../hooks/useAgentHealth';
 import { useSidebarDragDrop } from '../hooks/useSidebarDragDrop';
 import { ProjectEditModal } from './ProjectEditModal';
@@ -43,7 +47,6 @@ interface SidebarProps {
   currentChatId?: string;
   chatHistory: SidebarChatItem[];
   tokenExpiry?: Date;
-  activeSubAgent?: SubAgentInfo | null;
   onNewChat: (projectId?: string) => void;
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
@@ -65,7 +68,6 @@ function SidebarComponent({
   chatHistory,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   tokenExpiry,
-  activeSubAgent,
   onNewChat,
   onSelectChat,
   onDeleteChat,
@@ -77,8 +79,14 @@ function SidebarComponent({
   onAssignThread,
   onUnassignAll,
 }: SidebarProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const agentHealth = useAgentHealth();
+  const streamingStates = useSelector(
+    (state: { chats: { streamingStates: Record<string, StreamingState> } }) =>
+      state.chats.streamingStates,
+  );
+  const activity = useMemo(() => activityByChat(streamingStates), [streamingStates]);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -95,6 +103,9 @@ function SidebarComponent({
   const assignHandler = onAssignThread ?? (async () => false);
   const drag = useSidebarDragDrop(assignHandler);
 
+  // Two searches, deliberately. The local filter is instant and covers
+  // titles of threads already loaded; the server one covers message
+  // bodies, including threads this browser has never seen.
   const filteredChats = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return chatHistory;
@@ -103,6 +114,12 @@ function SidebarComponent({
         chat.title.toLowerCase().includes(q) || chat.preview.toLowerCase().includes(q)
     );
   }, [chatHistory, searchQuery]);
+
+  const contentSearch = useThreadSearch(searchQuery);
+  const locallyMatched = useMemo(
+    () => new Set(filteredChats.map((chat) => chat.id)),
+    [filteredChats],
+  );
 
   const knownProjectIds = useMemo(
     () => new Set(projects.map((p) => p.id)),
@@ -116,6 +133,32 @@ function SidebarComponent({
       ),
     [filteredChats, knownProjectIds],
   );
+
+  // Grouped by what each conversation needs from the reader.
+  //
+  // Flat and ordered by time, a chat waiting on an approval sat
+  // wherever it happened to fall, and the only way to find it was to
+  // remember it existed. Order is deliberate: blocked on you, then
+  // working, then everything else.
+  const unassignedSections = useMemo(() => {
+    const buckets: Record<ChatActivity, SidebarChatItem[]> = {
+      'needs-input': [],
+      running: [],
+      idle: [],
+    };
+    for (const chat of unassignedChats) {
+      buckets[activity[chat.id] ?? 'idle'].push(chat);
+    }
+    return (
+      [
+        { key: 'needs-input', labelKey: 'sidebar.sectionNeedsInput' },
+        { key: 'running', labelKey: 'sidebar.sectionInProgress' },
+        { key: 'idle', labelKey: 'sidebar.sectionCompleted' },
+      ] as const
+    )
+      .map((section) => ({ ...section, chats: buckets[section.key] }))
+      .filter((section) => section.chats.length > 0);
+  }, [unassignedChats, activity]);
 
   const chatsByProject = useMemo(() => {
     const map: Record<string, SidebarChatItem[]> = {};
@@ -195,22 +238,19 @@ function SidebarComponent({
               onClick={() => onSelectChat(chat.id)}
               aria-current={isActive ? 'page' : undefined}
               className={cn(
-                'w-full text-left text-sm px-2.5 py-2 pr-24 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                'w-full text-left text-sm px-3 py-2.5 pr-24 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                 isActive ? 'text-foreground' : 'text-foreground/70 hover:text-foreground',
               )}
             >
-              <span className="block truncate">{chat.title}</span>
-              {isActive && activeSubAgent && (
-                <span className="flex items-center gap-1.5 mt-0.5">
-                  <Label
-                    isCompact
-                    color="blue"
-                    icon={<Loader2 className="w-2.5 h-2.5 animate-spin" />}
-                  >
-                    <span className="capitalize">{activeSubAgent.name}</span>
-                  </Label>
-                </span>
-              )}
+              {/* The dot carries this. A second row naming the running
+                  subagent pushed the list item to two lines, moved
+                  every row below it, and repeated what the transcript
+                  already shows in full. Which subagent is working is
+                  detail for the conversation, not the index of it. */}
+              <span className="flex items-center gap-2 min-w-0">
+                <ChatStatusDot activity={activity[chat.id] ?? 'idle'} />
+                <span className="block truncate">{chat.title}</span>
+              </span>
             </button>
 
             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -222,7 +262,7 @@ function SidebarComponent({
                   size="sm"
                   className="h-7 w-7 !p-0 text-muted-foreground hover:text-foreground focus-visible:opacity-100"
                   onClick={() => void onAssignThread(chat.id, null)}
-                  aria-label={`Unassign chat: ${chat.title}`}
+                  aria-label={t('sidebar.unassignChat', { title: chat.title })}
                 >
                   <FolderMinus className="w-3 h-3" />
                 </Button>
@@ -291,16 +331,20 @@ function SidebarComponent({
   return (
     <div className="flex flex-col h-full min-h-0 bg-sidebar border-r border-sidebar-border text-sidebar-foreground">
       <div className="shrink-0 p-3 pb-2">
-        <Button variant="primary" isBlock onClick={() => onNewChat()} aria-label="Start new chat" icon={<Plus className="w-4 h-4" />}>
-          New Chat
+        <Button variant="primary" isBlock onClick={() => onNewChat()} aria-label={t('sidebar.startNewChat')} icon={<Plus className="w-4 h-4" />}>
+          {/* The label only. `'New Chat'` is also a thread *title*
+              sentinel that AppLayout and ChatPage compare against to
+              decide when to replace a placeholder title — translating
+              that would silently stop titles updating. */}
+          {t('sidebar.newChat')}
         </Button>
       </div>
 
       {chatHistory.length > 3 && (
         <div className="shrink-0 px-3 py-1.5">
           <SearchInput
-            placeholder="Search threads"
-            aria-label="Search chat threads"
+            placeholder={t('sidebar.searchThreads')}
+            aria-label={t('sidebar.searchChatThreads')}
             value={searchQuery}
             onChange={(_e, value) => setSearchQuery(value)}
           />
@@ -308,8 +352,8 @@ function SidebarComponent({
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto chat-scroll">
-        <div className="shrink-0 px-3 pt-3 pb-1.5 flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Projects</p>
+        <div className="shrink-0 px-3 pt-5 pb-2 flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('sidebar.projects')}</p>
           {onCreateProject && (
             <Button
               variant="plain"
@@ -319,7 +363,7 @@ function SidebarComponent({
                 setEditingProject(null);
                 setProjectModalOpen(true);
               }}
-              aria-label="Create project"
+              aria-label={t('sidebar.createProject')}
             >
               <FolderPlus className="w-3.5 h-3.5" />
             </Button>
@@ -327,9 +371,9 @@ function SidebarComponent({
         </div>
 
         {projects.length === 0 ? (
-          <p className="px-3 pb-2 text-xs text-muted-foreground">No projects yet</p>
+          <p className="px-3 pb-2 text-xs text-muted-foreground">{t('sidebar.noProjectsYet')}</p>
         ) : (
-          <ul className="px-1.5 space-y-0.5 list-none mb-2" aria-label="Projects">
+          <ul className="px-1.5 space-y-1 list-none mb-3" aria-label={t('sidebar.projects')}>
             {projects.map((project) => {
               const expanded = isProjectExpanded(project.id);
               const projectChats = chatsByProject[project.id] ?? [];
@@ -362,7 +406,7 @@ function SidebarComponent({
                       <button
                         type="button"
                         onClick={() => navigate(`/project/${project.id}`)}
-                        className="flex-1 min-w-0 flex items-center gap-1.5 py-1.5 pr-24 text-left text-sm hover:text-foreground"
+                        className="flex-1 min-w-0 flex items-center gap-1.5 py-2 pr-24 text-left text-sm hover:text-foreground"
                       >
                         <Folder className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         <span className="truncate font-medium">{project.name}</span>
@@ -386,7 +430,7 @@ function SidebarComponent({
                             size="sm"
                             className="h-6 w-6 !p-0 text-muted-foreground hover:text-foreground"
                             onClick={() => setUnassigningProjectId(project.id)}
-                            aria-label={`Unassign all chats from ${project.name}`}
+                            aria-label={t('sidebar.unassignAllFrom', { name: project.name })}
                           >
                             <FolderMinus className="w-3 h-3" />
                           </Button>
@@ -431,7 +475,7 @@ function SidebarComponent({
                           aria-label={`${project.name} chats`}
                         >
                           {projectChats.length === 0 ? (
-                            <li className="px-2.5 py-1 text-xs text-muted-foreground">No chats</li>
+                            <li className="px-2.5 py-1 text-xs text-muted-foreground">{t('sidebar.noChats')}</li>
                           ) : (
                             projectChats.map((chat) => renderChatRow(chat))
                           )}
@@ -454,54 +498,72 @@ function SidebarComponent({
             drag.dragOverTarget === 'unassigned' && 'ring-2 ring-primary/50 bg-primary/5',
           )}
         >
-          <div className="shrink-0 px-1.5 pt-3 pb-1.5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Chats</p>
+          <div className="shrink-0 px-3 pt-5 pb-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('sidebar.chats')}</p>
           </div>
 
           {unassignedChats.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
               <MessageSquare className="w-6 h-6 text-muted-foreground/40 mb-2" aria-hidden="true" />
               <p className="text-sm text-muted-foreground">
-                {chatHistory.length === 0 ? 'No chats yet' : 'No unassigned chats'}
+                {chatHistory.length === 0 ? t('sidebar.noChatsYet') : t('sidebar.noUnassignedChats')}
               </p>
             </div>
           ) : (
             <ul
-              aria-label="Chat history"
-              className="px-0 space-y-0.5 list-none pb-2"
+              aria-label={t('sidebar.chatHistory')}
+              className="px-0 space-y-1 list-none pb-3"
             >
-              {unassignedChats.map((chat) => renderChatRow(chat))}
+              {unassignedSections.map(({ key, labelKey, chats }) => (
+                <li key={key} className="list-none">
+                  {/* Only a section that has something in it. An empty
+                      "Needs input" heading is a question the reader
+                      has to answer by reading nothing. */}
+                  <p
+                    data-testid={`sidebar-section-${key}`}
+                    className="px-3 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                  >
+                    {t(labelKey)}{' '}
+                    <span className="tabular-nums opacity-70">{chats.length}</span>
+                  </p>
+                  <ul className="px-0 space-y-1 list-none">
+                    {chats.map((chat) => renderChatRow(chat))}
+                  </ul>
+                </li>
+              ))}
             </ul>
+          )}
+
+          {searchQuery.trim() && (
+            <SearchResults
+              hits={contentSearch.hits}
+              loading={contentSearch.loading}
+              error={contentSearch.error}
+              excludeIds={locallyMatched}
+              onSelect={onSelectChat}
+            />
           )}
         </div>
       </div>
 
-      <div className="shrink-0 px-3 py-2 border-t border-sidebar-border">
+      <div className="shrink-0 px-3 py-3 border-t border-sidebar-border">
         <Tooltip
-          content={
-            agentHealth.status === 'healthy'
-              ? 'Agent: healthy'
-              : agentHealth.status === 'unhealthy'
-                ? 'Agent: offline'
-                : 'Agent: status unknown'
-          }
+          content={t(`sidebar.agent.${agentHealth.status}`)}
         >
           <div className="flex items-center gap-2 text-xs text-muted-foreground cursor-default">
             <span
               className={cn(
                 'h-2 w-2 rounded-full shrink-0',
                 agentHealth.status === 'healthy' && 'bg-green-500',
+                // Amber, not red: it is still answering.
+                agentHealth.status === 'degraded' && 'bg-amber-500',
                 agentHealth.status === 'unhealthy' && 'bg-red-500',
                 agentHealth.status === 'unknown' && 'bg-gray-400',
               )}
               aria-hidden
             />
             <span className="truncate">
-              {agentHealth.status === 'healthy'
-                ? 'Agent: healthy'
-                : agentHealth.status === 'unhealthy'
-                  ? 'Agent: offline'
-                  : 'Agent: unknown'}
+              {t(`sidebar.agent.${agentHealth.status}`)}
             </span>
           </div>
         </Tooltip>
@@ -515,11 +577,17 @@ function SidebarComponent({
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{userName}</p>
           </div>
+          {/* Settings and sign out only.
+              Every operator surface — Usage, Feature flags, Skills,
+              Documents — is a tab inside Settings, so putting a
+              shortcut to each one beside the user name grew a row of
+              icons that said nothing about the person they sat next
+              to. One door into Settings, one way out. */}
           <button
             type="button"
             onClick={() => navigate('/settings')}
             className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
-            aria-label="Open settings"
+            aria-label={t('sidebar.openSettings')}
           >
             <Settings className="w-4 h-4" />
           </button>
@@ -529,7 +597,7 @@ function SidebarComponent({
               void logout();
             }}
             className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
-            aria-label="Log out"
+            aria-label={t('sidebar.logOut')}
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -540,12 +608,10 @@ function SidebarComponent({
         variant={ModalVariant.small}
         isOpen={deletingChatId !== null}
         onClose={() => setDeletingChatId(null)}
-        aria-label="Delete chat confirmation"
+        aria-label={t('sidebar.deleteChatConfirm')}
       >
-        <ModalHeader title="Delete chat" />
-        <ModalBody>
-          Are you sure you want to delete this chat? This action cannot be undone.
-        </ModalBody>
+        <ModalHeader title={t('sidebar.deleteChat')} />
+        <ModalBody>{t('sidebar.deleteChatBody')}</ModalBody>
         <ModalFooter>
           <Button
             variant="danger"
@@ -556,10 +622,10 @@ function SidebarComponent({
               }
             }}
           >
-            Delete
+            {t('common.delete')}
           </Button>
           <Button variant="link" onClick={() => setDeletingChatId(null)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </ModalFooter>
       </Modal>
@@ -570,14 +636,14 @@ function SidebarComponent({
         onClose={() => {
           if (!projectDeleteBusy) setDeletingProjectId(null);
         }}
-        aria-label="Delete project confirmation"
+        aria-label={t('sidebar.deleteProjectConfirm')}
       >
-        <ModalHeader title="Delete project" />
+        <ModalHeader title={t('sidebar.deleteProject')} />
         <ModalBody>
-          Delete this project and all of its conversations? This cannot be undone.
+          {t('sidebar.deleteProjectBody')}
           {deletingThreadCount > 0 && (
             <p className="mt-2 text-sm text-muted-foreground">
-              To keep the conversations, use Unassign and delete — they will move to Chats.
+              {t('sidebar.keepConversationsHint')}
             </p>
           )}
         </ModalBody>
@@ -601,7 +667,7 @@ function SidebarComponent({
                 })();
               }}
             >
-              Unassign and delete
+              {t('sidebar.unassignAndDelete')}
             </Button>
           )}
           <Button
@@ -638,10 +704,10 @@ function SidebarComponent({
         onClose={() => {
           if (!unassignBusy) setUnassigningProjectId(null);
         }}
-        aria-label="Unassign all conversations confirmation"
+        aria-label={t('sidebar.unassignAllConfirm')}
       >
-        <ModalHeader title="Unassign all conversations" />
-        <ModalBody>Move every conversation in this project back to Chats?</ModalBody>
+        <ModalHeader title={t('sidebar.unassignAll')} />
+        <ModalBody>{t('sidebar.unassignAllBody')}</ModalBody>
         <ModalFooter>
           <Button
             variant="danger"
@@ -659,14 +725,14 @@ function SidebarComponent({
               })();
             }}
           >
-            Unassign
+            {t('sidebar.unassign')}
           </Button>
           <Button
             variant="link"
             isDisabled={unassignBusy}
             onClick={() => setUnassigningProjectId(null)}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
         </ModalFooter>
       </Modal>
@@ -677,7 +743,7 @@ function SidebarComponent({
           setProjectModalOpen(false);
           setEditingProject(null);
         }}
-        title={editingProject ? 'Edit Project' : 'New Project'}
+        title={editingProject ? t('sidebar.editProject') : t('sidebar.newProject')}
         initialName={editingProject?.name ?? ''}
         initialDescription={editingProject?.description ?? ''}
         onSave={async (name, description) => {

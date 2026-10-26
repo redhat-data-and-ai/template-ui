@@ -12,6 +12,9 @@ export type McpStatusData = {
   status: string;
 };
 
+/** Integrations the turn could not reach, for the inline Connect action. */
+export type AuthRequiredPayload = Array<{ mcp_name: string; reason: string }>;
+
 export type SSEMetadataPayload = {
   run_id: string;
   trace_id: string;
@@ -21,7 +24,9 @@ export type SSEMetadataPayload = {
 export type SSEEvent =
   | { kind: 'chunk'; data: SSEChunk }
   | { kind: 'mcp_status'; data: McpStatusData }
+  | { kind: 'subagent_progress'; data: SubagentProgressData }
   | { kind: 'metadata'; data: SSEMetadataPayload }
+  | { kind: 'auth_required'; data: AuthRequiredPayload }
   | { kind: 'done' }
   | { kind: 'error'; message: string };
 
@@ -114,6 +119,57 @@ function extractEventType(block: string): string | null {
   return null;
 }
 
+/**
+ * One line of progress from a delegated subagent.
+ *
+ * A `task` call is opaque from outside: the orchestrator waits, the
+ * subagent works for a minute or more, and the user sees a spinner
+ * with no indication anything is happening.
+ */
+export interface SubagentProgressData {
+  ns: string;
+  node?: string;
+  instruction?: string;
+  latest?: string;
+  /**
+   * The subagent that produced this.
+   *
+   * The same value as `args.subagent_type` on the parent's `task`
+   * call, so it matches the box exactly. Dropping it here left the
+   * box matching on instruction text, which fails as soon as there
+   * is more than one progress entry — and there are two, because
+   * namespaced `updates` and nested `messages` arrive under
+   * different keys.
+   */
+  agent?: string;
+  /** Every tool call emitted so far, cumulative and id-keyed. */
+  calls?: { id: string; name: string }[];
+}
+
+function parseSubagentProgress(
+  parsed: unknown,
+  eventType: string | null,
+): SubagentProgressData | null {
+  if (eventType !== 'subagent_progress' || !isRecord(parsed)) return null;
+  const ns = typeof parsed.ns === 'string' ? parsed.ns : '';
+  if (!ns) return null;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+  return {
+    ns,
+    node: str(parsed.node),
+    instruction: str(parsed.instruction),
+    latest: str(parsed.latest),
+    agent: str(parsed.agent),
+    calls: Array.isArray(parsed.calls)
+      ? (parsed.calls as unknown[]).flatMap((c) =>
+          isRecord(c) && typeof c.id === 'string' && typeof c.name === 'string'
+            ? [{ id: c.id, name: c.name }]
+            : [],
+        )
+      : undefined,
+  };
+}
+
 function parseMcpStatusPayload(parsed: unknown, eventType: string | null): McpStatusData | null {
   if (!isRecord(parsed)) return null;
   const isMcp = eventType === 'mcp_status' || parsed.type === 'mcp_status';
@@ -132,6 +188,21 @@ function parseMetadataPayload(parsed: unknown): SSEMetadataPayload | null {
   const thread_id = typeof content.thread_id === 'string' ? content.thread_id : '';
   if (!run_id || !trace_id || !thread_id) return null;
   return { run_id, trace_id, thread_id };
+}
+
+function parseAuthRequiredPayload(parsed: unknown): AuthRequiredPayload | null {
+  if (!isRecord(parsed) || parsed.type !== 'auth_required') return null;
+  const content = parsed.content;
+  if (!Array.isArray(content) || content.length === 0) return null;
+  const out: AuthRequiredPayload = [];
+  for (const entry of content) {
+    if (!isRecord(entry)) continue;
+    const mcp_name = typeof entry.mcp_name === 'string' ? entry.mcp_name : '';
+    if (!mcp_name) continue;
+    const reason = typeof entry.reason === 'string' ? entry.reason : 'not_connected';
+    out.push({ mcp_name, reason });
+  }
+  return out.length > 0 ? out : null;
 }
 
 export class SSEProcessor {
@@ -172,6 +243,12 @@ export class SSEProcessor {
         continue;
       }
 
+      const subagent = parseSubagentProgress(parsed, sseEventName);
+      if (subagent) {
+        events.push({ kind: 'subagent_progress', data: subagent });
+        continue;
+      }
+
       const mcpStatus = parseMcpStatusPayload(parsed, sseEventName);
       if (mcpStatus) {
         events.push({ kind: 'mcp_status', data: mcpStatus });
@@ -181,6 +258,12 @@ export class SSEProcessor {
       const metadata = parseMetadataPayload(parsed);
       if (metadata) {
         events.push({ kind: 'metadata', data: metadata });
+        continue;
+      }
+
+      const authRequired = parseAuthRequiredPayload(parsed);
+      if (authRequired) {
+        events.push({ kind: 'auth_required', data: authRequired });
         continue;
       }
 

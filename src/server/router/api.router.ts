@@ -1,14 +1,30 @@
+import {
+  OVERRIDABLE,
+  readOverrides,
+  writeOverrides,
+} from "../utils/feature-overrides.js";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { handleHistoryGet, handleStreamPost } from "../controllers/v1/agent.js";
-import { getSettings } from "../utils/settings.js";
-import authCheckPlugin from "../plugins/auth-check.plugin.js";
+import { getSettings, resolveAgentHost } from "../utils/settings.js";
 import { toClientUserData } from "../utils/session-identity.js";
 
-interface StreamRequest {
-  message: string;
-  thread_id: string;
-  session_id: string;
-  user_id: string;
+/** Bound the agent fan-out: each admin call makes an outbound /auth/whoami. */
+const ADMIN_RATE_LIMIT = { rateLimit: { max: 30, timeWindow: "1 minute" } };
+
+/**
+ * One error shape across both hosts.
+ *
+ * The agent is FastAPI, so every failure it reports is
+ * `{"detail": "..."}` — that is `HTTPException`, not a choice. This
+ * server grew up saying `{"error": "..."}` instead, in about twenty
+ * places. A client driving the operator endpoints hits both and has
+ * to guess which key holds the message.
+ *
+ * Both are sent, same string. `detail` is the one to read — it is the
+ * key that works against either host — and `error` stays so the
+ * existing callers here keep working until they move.
+ */
+function errorBody(message: string): { error: string; detail: string } {
+  return { error: message, detail: message };
 }
 
 async function apiRoutes(fastify: FastifyInstance) {
@@ -50,7 +66,59 @@ async function apiRoutes(fastify: FastifyInstance) {
   fastify.get("/config/features", async (_request, reply) => {
     const cfg = getSettings();
     reply.header("Cache-Control", "no-store");
-    return cfg.features;
+    // Config is the default; Redis holds what an operator changed.
+    // Merged on read so every consumer sees one answer rather than
+    // each deciding how to combine them.
+    return { ...cfg.features, ...(await readOverrides()) };
+  });
+
+  /**
+   * Runtime feature flags.
+   *
+   * Privileged role required, checked against the session the SSO
+   * login established. These decide what every user sees, so this is
+   * an operator capability — the same bar as the Usage and Documents
+   * surfaces.
+   */
+  // Rate limited per route: every call here makes an outbound
+  // `/auth/whoami` to the agent before it does anything, so an
+  // unbounded caller turns one request into two and fans out.
+  fastify.get("/admin/features", { config: ADMIN_RATE_LIMIT }, async (request, reply) => {
+    if (!(await isPrivilegedCaller(request))) {
+      return reply.status(403).send(errorBody("Developer access required"));
+    }
+    const cfg = getSettings();
+    reply.header("Cache-Control", "no-store");
+    return {
+      features: { ...cfg.features, ...(await readOverrides()) },
+      overridable: OVERRIDABLE,
+    };
+  });
+
+  fastify.put("/admin/features", { config: ADMIN_RATE_LIMIT }, async (request, reply) => {
+    if (!(await isPrivilegedCaller(request))) {
+      return reply.status(403).send(errorBody("Developer access required"));
+    }
+    try {
+      const overrides = await writeOverrides(request.body);
+      const cfg = getSettings();
+      request.log.info({ overrides }, "feature overrides updated");
+      return { features: { ...cfg.features, ...overrides } };
+    } catch (error) {
+      // Logged, not returned. ioredis messages carry host names and
+      // sometimes credentials, and the caller can do nothing with
+      // them either way.
+      request.log.error({ err: error }, "feature override write failed");
+      return reply.status(503).send(
+        errorBody("Could not save overrides"),
+      );
+    }
+  });
+
+  fastify.get("/config/content", async (_request, reply) => {
+    const cfg = getSettings();
+    reply.header("Cache-Control", "no-store");
+    return cfg.content;
   });
 
   fastify.get("/config/compliance", async (_request, reply) => {
@@ -112,21 +180,62 @@ async function apiRoutes(fastify: FastifyInstance) {
         userRole: null,
       };
     }
-    return reply.code(401).send({ error: "unauthenticated" });
+    return reply.code(401).send(errorBody("unauthenticated"));
   });
 
-  // Protected routes — auth required
-  await fastify.register(async (protectedRoutes) => {
-    await protectedRoutes.register(authCheckPlugin);
+}
 
-    protectedRoutes.post("/v1/stream", async (request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) => {
-      return handleStreamPost(protectedRoutes, request, reply);
+/**
+ * One definition of "privileged", not a second copy.
+ *
+ * `role-resolver` already owns the set. Re-declaring it here would
+ * drift the moment a role is added, and the two would disagree
+ * silently about who may change a deployment-wide flag.
+ */
+/**
+ * Is this caller an operator?
+ *
+ * Always asked of the agent, never decided here. The session role
+ * is not consulted: this server assigns `owners` to everyone when
+ * auth is off while the agent resolved the same user as `users`, so
+ * two authorities disagreed about one person. One authority, one
+ * answer, for the browser and for CI alike.
+ *
+ * The Authorization header is forwarded when present, and the
+ * session's own access token when it is not. A browser does not send
+ * a bearer — it sends a session cookie — so with auth *enabled* the
+ * header was absent, the agent rejected the unauthenticated call, and
+ * `!res.ok` turned that into a flat `false`: both admin endpoints
+ * answered 403 to the very people allowed to use them. With auth
+ * disabled there is neither, and the agent says so itself rather than
+ * this server guessing on its behalf.
+ */
+async function isPrivilegedCaller(request: {
+  headers?: Record<string, unknown>;
+  session?: { token?: { access_token?: string } };
+}): Promise<boolean> {
+  try {
+    const host = resolveAgentHost();
+    const header = request.headers?.authorization;
+    const sessionToken = request.session?.token?.access_token;
+    const auth =
+      typeof header === "string"
+        ? header
+        : sessionToken
+          ? `Bearer ${sessionToken}`
+          : undefined;
+    const res = await fetch(`${host}/auth/whoami`, {
+      headers: auth ? { Authorization: auth } : {},
+      signal: AbortSignal.timeout(10_000),
     });
-
-    protectedRoutes.get("/v1/history/:threadId", async (request: FastifyRequest<{ Params: { threadId: string } }>, reply: FastifyReply) => {
-      return handleHistoryGet(protectedRoutes, request, reply);
-    });
-  });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { is_developer?: boolean | null };
+    // `null` means the role lookup failed. Anything other than a
+    // clear yes is a no — an outage must not grant access.
+    return body.is_developer === true;
+  } catch {
+    return false;
+  }
 }
 
 export { apiRoutes };

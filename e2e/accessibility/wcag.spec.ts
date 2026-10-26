@@ -115,7 +115,19 @@ test.describe('Chat page — WCAG 2.1 AA', () => {
 // active panel is in the visible DOM at a time.
 // ---------------------------------------------------------------------------
 
-const SETTINGS_TABS = ['Profile', 'Your Memories', 'Custom Rules', 'Appearance', 'Tool Approvals', 'MCP OAuth'] as const;
+// One per destination, not per outer tab: the point is to scan each
+// panel's own markup, and panels mount only while selected.
+const SETTINGS_TABS = [
+  'Profile',
+  'Authorization',
+  'Your memories',
+  'Custom rules',
+  'Appearance',
+  'MCP',
+  'Tool approvals',
+  'Skills',
+  'Subagents',
+] as const;
 
 test.describe('Settings page — WCAG 2.1 AA', () => {
   test.beforeEach(async ({ page }) => {

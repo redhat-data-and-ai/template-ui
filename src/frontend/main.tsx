@@ -5,9 +5,14 @@ import { Provider } from 'react-redux';
 import { store } from './redux/store';
 import App from './App';
 import { getAppBasePath } from './lib/app-paths';
+// Side-effect import: initialises i18next before the first render,
+// so no component ever renders an untranslated first frame.
+import './i18n';
 
-import '@patternfly/patternfly/patternfly.css';
-import '@patternfly/patternfly/patternfly-addons.css';
+// PatternFly's stylesheets are imported from global.css into a
+// cascade layer — see the note there. Importing them here would put
+// them outside every layer, where they beat all Tailwind utilities
+// on specificity grounds that do not apply.
 
 import './global.css';
 

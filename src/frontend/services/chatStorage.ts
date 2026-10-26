@@ -12,6 +12,9 @@ function omitPrevProjectId(chats: ChatItem[]): ChatItem[] {
 class ChatStorageService {
   private readonly CHATS_STORAGE_KEY = scopedStorageKey('dataverse-ai-chats');
   private readonly MAX_CHATS = 50; // Limit to prevent localStorage bloat
+  private readonly DELETED_KEY = scopedStorageKey('dataverse-ai-deleted-threads');
+  // Deleting hundreds of threads takes longer than a page lives.
+  private readonly MAX_DELETED = 2000;
 
   /**
    * Save chats to localStorage with error handling and size limits
@@ -115,6 +118,50 @@ class ChatStorageService {
     } catch (error) {
       console.error('Error getting storage info:', error);
       return { used: 0, total: 5242880, chatsCount: 0 };
+    }
+  }
+
+  /**
+   * Remember threads the user deleted, across reloads.
+   *
+   * Deleting every conversation is hundreds of requests, and the
+   * page may not outlive them: a refresh halfway through abandoned
+   * the rest *and* forgot which ones were meant to go, so the
+   * survivors reappeared and the whole thing looked like it had
+   * failed. Persisted, the intent outlives the reload and the sweep
+   * can be finished.
+   */
+  saveDeletedThreadIds(ids: string[]): boolean {
+    try {
+      localStorage.setItem(
+        this.DELETED_KEY,
+        JSON.stringify(ids.slice(-this.MAX_DELETED)),
+      );
+      return true;
+    } catch (error) {
+      console.error('Error saving deleted thread ids:', error);
+      return false;
+    }
+  }
+
+  loadDeletedThreadIds(): string[] {
+    try {
+      const raw = localStorage.getItem(this.DELETED_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === 'string')
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  clearDeletedThreadIds(): void {
+    try {
+      localStorage.removeItem(this.DELETED_KEY);
+    } catch {
+      // The list is an optimisation, not a record.
     }
   }
 }

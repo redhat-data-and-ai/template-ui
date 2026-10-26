@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useStickToBottom } from '../hooks/useStickToBottom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { Message } from '@langchain/langgraph-sdk';
 import { Button, Spinner } from '@patternfly/react-core';
 
@@ -26,6 +28,7 @@ import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
+import { enrichInterrupt } from '../lib/enrich-interrupt';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -43,6 +46,7 @@ import {
 import { formatMcpModelContext } from '../types/mcp-apps';
 
 export function ChatPage({ threadId }: { threadId: string }) {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -147,12 +151,12 @@ export function ChatPage({ threadId }: { threadId: string }) {
         if (pendingInterrupt) {
           dispatch(updateStreamingState({
             chatId,
-            state: {
-              pendingInterrupt: {
-                value: pendingInterrupt.value as any,
-                resumable: pendingInterrupt.resumable,
-              },
-            },
+            // Enriched, not stored raw. The agent sends an MCP
+            // authorization pause as a JSON string, and the Connect
+            // row renders from `payload`, so opening a paused thread
+            // showed no Connect box and the run looked stuck for no
+            // stated reason.
+            state: { pendingInterrupt: enrichInterrupt(pendingInterrupt) },
           }));
         }
         setHydrating(false);
@@ -207,12 +211,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, hasMessages]);
 
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      const el = scrollAreaRef.current;
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [thread.messages]);
+  // Follow the stream, but stop the moment the reader scrolls up.
+  // This used to scroll unconditionally on every message change —
+  // several times a second during a long answer — so re-reading
+  // anything meant being thrown back to the bottom repeatedly.
+  const { isPinned, jumpToBottom } = useStickToBottom(scrollAreaRef, thread.messages);
 
   const previousMessagesLength = useRef(0);
   useEffect(() => {
@@ -269,17 +272,24 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, []);
 
   const handleSubmit = useCallback(
-    async (inputValue: string) => {
+    async (inputValue: string, options?: { silent?: boolean }) => {
       if (!threadId || !currentChat) return;
 
       const trimmed = inputValue.trim();
       if (!trimmed) return;
 
+      // A silent submit is a retry the interface decided on, not a
+      // thing the reader typed. The agent still needs the question —
+      // it is how the turn continues — but showing it again makes
+      // the conversation look as though they asked twice.
       const userMessage: Message = {
         id: `msg-${Date.now()}`,
         type: 'human',
         content: trimmed,
-      };
+        ...(options?.silent
+          ? { additional_kwargs: { silent_retry: true } }
+          : {}),
+      } as Message;
 
       const currentThread = threadRef.current;
       const messages = [...currentThread.messages, userMessage];
@@ -297,10 +307,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to submit message:', err);
-        dispatch(addToast({ title: 'Failed to send message', message: 'Please try again.', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.sendFailed'), message: t('errors.tryAgain'), variant: 'danger' }));
       }
     },
-    [threadId, currentChat, dispatch]
+    [threadId, currentChat, dispatch, t]
   );
 
   const chatActions = useMemo(
@@ -336,10 +346,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to edit message:', err);
-        dispatch(addToast({ title: 'Failed to send edited message', message: 'Please try again.', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.editFailed'), message: t('errors.tryAgain'), variant: 'danger' }));
       }
     },
-    [thread, threadId, currentChat, dispatch],
+    [thread, threadId, currentChat, dispatch, t],
   );
 
   const handleRetry = useCallback(() => {
@@ -362,9 +372,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
       }, 100);
     } catch (err) {
       console.error('Failed to retry:', err);
-      dispatch(addToast({ title: 'Failed to retry', message: 'Please try again.', variant: 'danger' }));
+      dispatch(addToast({ title: t('toast.retryFailed'), message: t('errors.tryAgain'), variant: 'danger' }));
     }
-  }, [threadId, currentChat, dispatch]);
+  }, [threadId, currentChat, dispatch, t]);
 
   const handleInterruptResume = useCallback(
     async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
@@ -376,10 +386,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
-        dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.resumeFailed'), variant: 'danger' }));
       }
     },
-    [thread, threadId, currentChat, dispatch],
+    [thread, threadId, currentChat, dispatch, t],
   );
 
   const handleMCPOAuthResume = useCallback(
@@ -392,10 +402,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
-        dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+        dispatch(addToast({ title: t('toast.resumeFailed'), variant: 'danger' }));
       }
     },
-    [thread, threadId, currentChat, dispatch],
+    [thread, threadId, currentChat, dispatch, t],
   );
 
   const handleInterruptDismiss = useCallback(() => {
@@ -474,10 +484,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
                   chatId: threadId,
                   state: {
                     error: null, isLoading: false, isConnected: false,
-                    pendingInterrupt: {
-                      value: interrupt.value as any,
-                      resumable: interrupt.resumable,
-                    },
+                    pendingInterrupt: enrichInterrupt(interrupt),
                   },
                 }));
                 clearInterval(recoveryPoll);
@@ -538,8 +545,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
   if (chatsLoading || hydrating) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <Spinner size="lg" aria-label="Loading chat" />
-        <p className="text-muted-foreground">{hydrating ? 'Loading messages...' : 'Loading chat...'}</p>
+        <Spinner size="lg" aria-label={t('chat.loading')} />
+        <p className="text-muted-foreground">{hydrating ? t('chat.loadingMessages') : t('chat.loadingChat')}</p>
       </div>
     );
   }
@@ -547,9 +554,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
   if (threadId && !currentChat) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
-        <p className="text-muted-foreground">The requested chat could not be found.</p>
-        <Button variant="primary" onClick={() => navigate('/')}>Go Home</Button>
+        <h1 className="text-2xl text-muted-foreground font-bold">{t('chat.notFound')}</h1>
+        <p className="text-muted-foreground">{t('chat.notFoundBody')}</p>
+        <Button variant="primary" onClick={() => navigate('/')}>{t('chat.goHome')}</Button>
       </div>
     );
   }
@@ -613,6 +620,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
               onRetry={handleStreamRetry}
               errorMessage={streamingState.error}
               scrollAreaRef={scrollAreaRef}
+              jumpToLatest={isPinned ? undefined : jumpToBottom}
               onSubmit={handleSubmit}
               onEditMessage={handleEditMessage}
               onCancel={handleCancel}
@@ -621,6 +629,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
               isRateLimited={rateLimit.isRateLimited}
               rateLimitRemainingSeconds={rateLimit.retryAfterSeconds}
               mcpEvents={thread.mcpEvents}
+              subagentProgress={thread.subagentProgress}
               chatId={threadId}
               traceId={thread.traceId}
               userId={feedbackUserId}

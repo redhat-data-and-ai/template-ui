@@ -4,7 +4,6 @@ import type { AIMessage, Message } from '@langchain/langgraph-sdk';
 import type { StreamEvent } from '@/hooks/useDataStream';
 import {
   type StreamingManager,
-  type InterruptPayload,
   type StreamCallback,
   type StreamStatus,
 } from '@/lib/streaming/StreamingManager';
@@ -20,42 +19,30 @@ import {
   selectStreamingState,
   updateChat,
   updateLastMessageInChat,
+  setAuthRequiredOnLastMessage,
   updateStreamingState,
   type StreamingState,
+  applySubagentProgress,
+  closeSubagentSteps,
+  clearSubagentProgress,
+  selectSubagentProgress,
 } from '@/redux/slices/chats';
 import { chatStorage } from '@/services/chatStorage';
-import { getThreadState, getThreadStateAndInterrupt } from '@/services/agent-rest';
+import { getThreadState, getThreadStateAndInterrupt,
+  cancelRun,
+  getInFlightRun,
+} from '@/services/agent-rest';
 import { buildAppPath } from '@/lib/app-paths';
 import { addToast } from '@/redux/slices/toasts';
 import { assignThreadToProjectThunk } from '@/redux/slices/projects';
 import { isClientCreatedChat } from '@/services/newChatTracker';
 import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
-import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
+import type { HITLInterruptValue } from '@/types/deep-agent';
+import { enrichInterrupt } from '@/lib/enrich-interrupt';
 import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
 
 
-function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
-  const raw = interrupt.value as string | HITLInterruptValue;
-  if (typeof raw === 'object' && raw !== null && (raw as { type?: string }).type === 'mcp_auth_required') {
-    return { ...interrupt, value: raw, payload: raw as unknown as NonNullable<InterruptInfo['payload']> };
-  }
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (
-        parsed
-        && typeof parsed === 'object'
-        && (parsed as { type?: string }).type === 'mcp_auth_required'
-      ) {
-        return { ...interrupt, value: raw, payload: parsed as NonNullable<InterruptInfo['payload']> };
-      }
-    } catch {
-      // plain-text interrupt
-    }
-  }
-  return { ...interrupt, value: raw };
-}
 
 function cloneMessages(messages: Message[]): Message[] {
   return messages.map((m) => JSON.parse(JSON.stringify(m)) as Message);
@@ -83,6 +70,12 @@ const HISTORY_REFETCH_THRESHOLD_MS = 10000;
 const RECOVERY_POLL_INTERVAL_MS = 5000;
 /** Max time to poll for recovery before giving up (ms) */
 export const RECOVERY_POLL_TIMEOUT_MS = 120000;
+/** Max time to wait for a run picked up after a reload (ms).
+ *
+ * Longer than the recovery timeout: that one covers a stream that
+ * broke and may never come back, this one covers a turn known to be
+ * running, and a delegated turn can take minutes. */
+export const REATTACH_POLL_TIMEOUT_MS = 900000;
 
 function computeRetryDelayMs(retryAttemptNumber: number): number {
   const capped = Math.min(BASE_DELAY_MS * 2 ** retryAttemptNumber, 30000);
@@ -308,6 +301,27 @@ export function useStreamingAPI(threadId: string) {
   const [wasInterrupted, setWasInterruptedState] = useState(false);
   const setWasInterrupted = useCallback((v: boolean) => { wasInterruptedRef.current = v; setWasInterruptedState(v); }, []);
   const [mcpEvents, setMcpEvents] = useState<Array<{ tool: string; status: string; timestamp: number }>>([]);
+  // Keyed by namespace, so two concurrent delegations stay apart and
+  // each row updates in place rather than appending a log.
+  // Keyed by namespace, so two concurrent delegations stay apart.
+  // Each entry accumulates the tool calls as steps — see
+  // lib/subagent-steps.
+  // Progress lives in the store, not here.
+  //
+  // Held as component state it vanished the moment the reader opened
+  // another chat, while the run — which outlives the tab that
+  // started it — carried on calling a setter nobody was listening
+  // to. Coming back showed a subagent box with no steps, stuck on
+  // "Working". Messages were in the store and survived; this is now
+  // in the same place, keyed by chat.
+  const subagentProgress = useAppSelector((state) =>
+    selectSubagentProgress(state as never, threadId),
+  );
+
+  const closeAllSubagentSteps = useCallback(() => {
+    dispatch(closeSubagentSteps({ chatId: threadId, at: Date.now() }));
+  }, [dispatch, threadId]);
+
   const [traceId, setTraceId] = useState<string | null>(null);
   const [lastStreamTiming, setLastStreamTiming] = useState<{
     streamStartTime: number;
@@ -338,6 +352,8 @@ export function useStreamingAPI(threadId: string) {
   chatRef.current = chat;
   const wasInterruptedRef = useRef(false);
   const messagesRef = useRef<Message[]>(EMPTY_MESSAGES);
+  // The run currently executing on the agent, so Stop can name it.
+  const liveRunIdRef = useRef<string | null>(null);
   const recoveryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recoveryDeadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
@@ -427,6 +443,10 @@ export function useStreamingAPI(threadId: string) {
       if (!manager || !threadId) return;
 
       userCancelledRef.current = false;
+      // The previous run's id must not outlive it: Stop pressed before
+      // this run's metadata arrives would otherwise cancel the run
+      // that already finished.
+      liveRunIdRef.current = null;
       setRetryCount(0);
       setWasInterrupted(false);
       const initialMessageCount = messagesRef.current.length;
@@ -443,6 +463,7 @@ export function useStreamingAPI(threadId: string) {
       }
       setIsStreamStale(false);
       setMcpEvents([]);
+      dispatch(clearSubagentProgress({ chatId: threadId }));
       setTraceId(null);
       setLastStreamTiming(null);
       streamClockRef.current = {
@@ -545,6 +566,8 @@ export function useStreamingAPI(threadId: string) {
           const finish = (r: StreamOutcome) => {
             if (settled) return;
             settled = true;
+            // However the turn ended, no delegation is still running.
+            closeAllSubagentSteps();
             resolve(r);
           };
 
@@ -945,8 +968,17 @@ export function useStreamingAPI(threadId: string) {
             onMcpStatus(evt) {
               setMcpEvents((prev) => [...prev, evt]);
             },
+            onSubagentProgress(evt) {
+              dispatch(applySubagentProgress({ chatId: threadId, event: evt, at: Date.now() }));
+            },
+            onAuthRequired(requests) {
+              dispatch(
+                setAuthRequiredOnLastMessage({ chatId: threadId, requests }),
+              );
+            },
             onMetadata(data) {
               setTraceId(data.trace_id);
+              liveRunIdRef.current = data.run_id;
             },
           };
 
@@ -1085,7 +1117,7 @@ export function useStreamingAPI(threadId: string) {
         }, RECOVERY_POLL_INTERVAL_MS);
       }
     },
-    [dispatch, threadId, handleStreamActivityStatus, clearReconnectTimers, setMessages, setWasInterrupted],
+    [dispatch, threadId, handleStreamActivityStatus, clearReconnectTimers, setMessages, setWasInterrupted, closeAllSubagentSteps],
   );
 
   /**
@@ -1235,8 +1267,15 @@ export function useStreamingAPI(threadId: string) {
         onMcpStatus(evt) {
           setMcpEvents((prev) => [...prev, evt]);
         },
+        onSubagentProgress(evt) {
+          dispatch(applySubagentProgress({ chatId: threadId, event: evt, at: Date.now() }));
+        },
+        onAuthRequired(requests) {
+          dispatch(setAuthRequiredOnLastMessage({ chatId: threadId, requests }));
+        },
         onMetadata(data) {
           setTraceId(data.trace_id);
+          liveRunIdRef.current = data.run_id;
         },
       };
 
@@ -1321,6 +1360,16 @@ export function useStreamingAPI(threadId: string) {
 
             dispatch(appendMessageToChat({ chatId: threadId, message: m }));
           },
+          // Resuming is the same stream as any other, and a
+          // delegation started before the pause keeps reporting
+          // through it. Without this the four stream paths disagreed:
+          // submit, resume-with-decisions and attach all forwarded
+          // progress and this one dropped it, so connecting an
+          // integration mid-turn froze every subagent box at the step
+          // it had reached when the run paused.
+          onSubagentProgress(evt) {
+            dispatch(applySubagentProgress({ chatId: threadId, event: evt, at: Date.now() }));
+          },
           onInterrupt(interrupt) {
             resumeStreamHadInterrupt = true;
             dispatch(
@@ -1370,10 +1419,316 @@ export function useStreamingAPI(threadId: string) {
     return () => clearTimeout(id);
   }, [streamingState.pendingInterrupt, threadId]);
 
+  // Pick a turn back up after a reload.
+  //
+  // The run no longer belongs to the connection that started it, so
+  // closing the tab, refreshing, or losing the network leaves it
+  // going. The browser therefore cannot assume that what it cannot
+  // see is not happening: on mount it asks the thread whether
+  // anything is still running and, if so, shows it as working and
+  // waits for the result rather than rendering a half-finished
+  // answer as if it were final.
+  //
+  // Polled, not re-streamed. The agent does expose a reattach
+  // endpoint with Last-Event-ID, which would restore live tokens;
+  // this gets the answer in front of the reader without touching the
+  // streaming translation, and is the smaller thing to get wrong.
+  useEffect(() => {
+    if (!threadId) return;
+    let cancelled = false;
+    let rejoining = false;
+
+    const rejoin = async () => {
+      if (cancelled || rejoining) return;
+      // A stream this tab already owns needs no recovery — and
+      // "owns" includes the moment before the first byte arrives.
+      // Checking only for 'streaming' left a window during
+      // 'connecting' where a focus event would tear down the turn
+      // the user had just started.
+      const status = managerRef.current?.getStatus();
+      if (status === 'streaming' || status === 'connecting') return;
+
+      rejoining = true;
+      try {
+        await rejoinOnce();
+      } finally {
+        rejoining = false;
+      }
+    };
+
+    const rejoinOnce = async () => {
+      const runId = await getInFlightRun(threadId);
+      if (cancelled || !runId) return;
+      // Re-checked after the await: the user may have submitted
+      // while we were asking.
+      const now = managerRef.current?.getStatus();
+      if (now === 'streaming' || now === 'connecting') return;
+
+      liveRunIdRef.current = runId;
+      dispatch(
+        updateStreamingState({
+          chatId: threadId,
+          state: { isLoading: true, isConnected: true, error: null },
+        }),
+      );
+
+      // Attach to the live stream, so the turn carries on arriving
+      // token by token instead of landing in one lump when it ends.
+      const manager = getStreamingManager(threadId);
+      managerRef.current = manager;
+
+      // A reattached stream is still the same stream, so the same
+      // reducers handle it. Token accumulation is tracked locally:
+      // this browser joined partway through and owns none of the
+      // state the original call set up.
+      let streamingTokens = false;
+
+      // Everything already on screen, by id.
+      //
+      // Attaching without a Last-Event-ID replays the run from its
+      // first event, so a tab that watched half the turn and then
+      // lost its connection would see that half a second time. The
+      // agent supports resuming from an event id; until the BFF
+      // carries ids through the translation, ignoring ids we are
+      // already showing is what keeps the answer from doubling.
+      //
+      // How much of each message this tab has already rendered, by
+      // id. A Set of ids was not enough: dropping every replayed
+      // token for a known id also dropped the part of the answer
+      // that arrived *after* the connection was lost, so a reader who
+      // watched half a reply and came back kept the half. Counting
+      // characters lets the replay run past what is on screen and
+      // emit only the remainder.
+      const seenChars = new Map<string, number>();
+      for (const m of messagesRef.current ?? []) {
+        const id = (m as { id?: string }).id;
+        if (!id) continue;
+        const c = (m as { content?: unknown }).content;
+        seenChars.set(id, typeof c === 'string' ? c.length : 0);
+      }
+      const preExisting = new Set(seenChars.keys());
+      /** Characters of a replayed message consumed so far. */
+      const replayed = new Map<string, number>();
+      // Only the message still being written can gain a tail, and
+      // `updateLastMessageInChat` can only append to the last one.
+      // Anything earlier is complete, so replay of it is just replay.
+      const lastId = (() => {
+        const all = messagesRef.current ?? [];
+        return (all[all.length - 1] as { id?: string } | undefined)?.id;
+      })();
+      // Frozen on purpose: ids created *during* this attach must not
+      // land in it, or the first token of a new message would make
+      // every token after it look like replay.
+      const appendedHere = new Set<string>();
+
+      // `attach` reports failure through `onError` and returns
+      // normally, so the `catch` below never ran: a 404 or a dropped
+      // connection left the chat `isLoading: true, isConnected: true`
+      // with no error and no poller — stuck, silently. Record it here
+      // and check after.
+      let attachFailed = false;
+
+      const attachCallbacks: StreamCallback = {
+        onToken(content, messageId) {
+          if (messageId && preExisting.has(messageId)) {
+            // Replay of something already on screen. Skip while the
+            // replay is still behind what was rendered; once it
+            // passes, append the tail only.
+            if (messageId !== lastId) return;
+            const already = seenChars.get(messageId) ?? 0;
+            const before = replayed.get(messageId) ?? 0;
+            const after = before + content.length;
+            replayed.set(messageId, after);
+            if (after <= already) return;
+            const tail = content.slice(Math.max(0, already - before));
+            if (!tail) return;
+            dispatch(updateLastMessageInChat({ chatId: threadId, content: tail }));
+            return;
+          }
+          if (!streamingTokens) {
+            streamingTokens = true;
+            dispatch(
+              appendMessageToChat({
+                chatId: threadId,
+                message: {
+                  type: 'ai',
+                  content,
+                  tool_calls: [],
+                  id: messageId || `attach-${Date.now()}`,
+                } as AIMessage,
+              }),
+            );
+            return;
+          }
+          dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+        },
+        onDraftDiscard() {
+          if (!streamingTokens) return;
+          streamingTokens = false;
+          dispatch(removeLastMessageFromChat({ chatId: threadId }));
+        },
+        onMessage(m) {
+          streamingTokens = false;
+          if (m.type === 'human') return;
+
+          // A tool result is not a message in the transcript: it is
+          // the answer to a call already sitting in an assistant
+          // message, and it has to be merged onto that call.
+          // Appending it instead left `tool_calls[].content` empty,
+          // which is the only thing telling the subagent box the
+          // delegation is over — so the box sat on "Working" after
+          // the reply had arrived, for anyone who had refreshed or
+          // switched tabs and come back.
+          if (m.type === 'tool') {
+            const toolMsg = m as unknown as {
+              tool_call_id?: string;
+              content?: unknown;
+              status?: string;
+              artifact?: unknown;
+            };
+            if (!toolMsg.tool_call_id) return;
+            dispatch(
+              mergeToolResult({
+                chatId: threadId,
+                toolCallId: toolMsg.tool_call_id,
+                content: toolMsg.content,
+                status: toolMsg.status,
+                artifact: toolMsg.artifact,
+              }),
+            );
+            dispatch(
+              updateStreamingState({
+                chatId: threadId,
+                state: { activeSubAgent: null },
+              }),
+            );
+            return;
+          }
+
+          const id = (m as { id?: string }).id;
+          if (id && (preExisting.has(id) || appendedHere.has(id))) return;
+          if (id) appendedHere.add(id);
+          dispatch(appendMessageToChat({ chatId: threadId, message: m }));
+        },
+        onSubagentProgress(evt) {
+          dispatch(applySubagentProgress({ chatId: threadId, event: evt, at: Date.now() }));
+        },
+        onAuthRequired(requests) {
+          dispatch(setAuthRequiredOnLastMessage({ chatId: threadId, requests }));
+        },
+        onInterrupt(payload) {
+          dispatch(
+            updateStreamingState({
+              chatId: threadId,
+              // Enriched like every other path. Storing the raw
+              // interrupt left a reattached `mcp_auth_required`
+              // without its `payload`, so the banner had nothing to
+              // render the Connect button from.
+              state: { pendingInterrupt: enrichInterrupt(payload), isLoading: false },
+            }),
+          );
+        },
+        onMetadata(data) {
+          setTraceId(data.trace_id);
+          liveRunIdRef.current = data.run_id;
+        },
+        onError() {
+          attachFailed = true;
+        },
+        onStatusChange() {},
+        onDone() {
+          liveRunIdRef.current = null;
+          closeAllSubagentSteps();
+          dispatch(
+            updateStreamingState({
+              chatId: threadId,
+              state: { isLoading: false, error: null },
+            }),
+          );
+        },
+      };
+
+      try {
+        await manager.attach({ threadId, runId }, attachCallbacks);
+        if (!attachFailed) return;
+      } catch {
+        // Fall through to polling: the run is known to be going, and
+        // a slower way to see the result beats none.
+      }
+      if (cancelled) return;
+
+      _startRecoveryPolling(
+        threadId,
+        dispatch,
+        (msgs) => {
+          if (msgs.length === 0) return;
+          dispatch(updateChat({ id: threadId, updates: { messages: msgs } }));
+          setMessages(msgs.map((m) => JSON.parse(JSON.stringify(m))));
+          dispatch(
+            updateStreamingState({
+              chatId: threadId,
+              state: { isLoading: false, error: null },
+            }),
+          );
+        },
+        recoveryIntervalRef,
+        recoveryDeadlineRef,
+        wasInterruptedRef,
+        RECOVERY_POLL_INTERVAL_MS,
+        REATTACH_POLL_TIMEOUT_MS,
+      );
+    };
+
+    void rejoin();
+
+    // Also whenever the tab comes back.
+    //
+    // Switching tabs does not remount, so a mount-only check never
+    // ran again — and a browser is free to drop a long-lived
+    // connection in a backgrounded tab. The run carried on happily
+    // on the server while the tab that came back showed a stream
+    // that had quietly stopped arriving. Returning to the tab is
+    // exactly the moment to ask whether we are still attached.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void rejoin();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+    // Thread identity only: re-running this on every render would
+    // restart the poller underneath itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]);
+
   const stop = useCallback(() => {
     userCancelledRef.current = true;
     managerRef.current?.cancel();
+    // Aborting the fetch only detaches this browser. The run is
+    // deliberately independent of the connection now, so stopping it
+    // has to be said out loud.
+    //
+    // The id is only known once metadata arrives. Stop pressed while
+    // still connecting therefore had either a stale id from the last
+    // finished run — cancelling nothing — or none at all, and the
+    // run it meant to stop carried on server-side under
+    // `on_disconnect: "continue"` until the next focus rejoined it.
+    // Ask the agent which run is actually in flight in that case.
+    const runId = liveRunIdRef.current;
+    liveRunIdRef.current = null;
+    if (runId) {
+      void cancelRun(threadId, runId);
+    } else {
+      void getInFlightRun(threadId)
+        .then((live) => (live ? cancelRun(threadId, live) : undefined))
+        .catch(() => undefined);
+    }
     dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'cancelled' }));
+    closeAllSubagentSteps();
     clearReconnectTimers();
     if (recoveryIntervalRef.current) {
       clearInterval(recoveryIntervalRef.current);
@@ -1396,7 +1751,7 @@ export function useStreamingAPI(threadId: string) {
         },
       }),
     );
-  }, [dispatch, threadId, clearReconnectTimers]);
+  }, [dispatch, threadId, clearReconnectTimers, closeAllSubagentSteps]);
 
   return {
     messages,
@@ -1414,6 +1769,7 @@ export function useStreamingAPI(threadId: string) {
     isStreamStale,
     wasInterrupted,
     mcpEvents,
+    subagentProgress,
     traceId,
     streamStartTime: lastStreamTiming?.streamStartTime ?? null,
     firstTokenTime: lastStreamTiming?.firstTokenTime ?? null,

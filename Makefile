@@ -1,7 +1,14 @@
-.PHONY: dev clean local local-down container container-down deploy undeploy e2e opa-build
+.PHONY: dev clean local local-down container container-down deploy undeploy e2e opa-build \
+	render-deployment render-deployment-check test
 
 # Detect npm/node path (supports nvm, system install, etc)
-NPM := $(shell command -v npm 2>/dev/null || echo /Users/sodutta/.nvm/versions/node/v24.18.0/bin/npm)
+# No fallback path. A machine-specific one resolves to nothing on
+# anyone else's checkout and the failure arrives later, as a
+# missing binary rather than a missing npm.
+NPM := $(shell command -v npm 2>/dev/null)
+ifeq ($(NPM),)
+$(error npm not found on PATH. Install Node, or `nvm use`, and try again)
+endif
 NODE_DIR := $(dir $(NPM))
 export PATH := $(NODE_DIR):$(PATH)
 
@@ -30,6 +37,18 @@ opa-check:
 	@which opa > /dev/null || (echo "Error: opa CLI not found. Install from https://www.openpolicyagent.org/docs/latest/#running-opa" && exit 1)
 	opa check config/compliance/
 	@echo "OPA policy syntax OK"
+
+## Regenerate deployment overlays from config/ui/deployment/values.yaml
+render-deployment:
+	$(NPM) run render:deployment
+
+## Fail if the overlays have drifted from values.yaml (CI)
+render-deployment-check:
+	$(NPM) run render:deployment:check
+
+## Run unit tests once
+test:
+	$(NPM) run test:run
 
 clean:
 	@echo "Stopping containers and removing volumes..."

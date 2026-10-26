@@ -6,8 +6,9 @@ import toastsReducer from '../redux/slices/toasts';
 import userSettingsReducer from '../redux/slices/userSettings';
 import projectsReducer from '../redux/slices/projects';
 
-export function createTestStore() {
+export function createTestStore(preloadedState?: Record<string, unknown>) {
   return configureStore({
+    preloadedState: preloadedState as never,
     reducer: {
       chats: chatsReducer,
       config: configReducer,
