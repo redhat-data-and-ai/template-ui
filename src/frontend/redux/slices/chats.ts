@@ -129,13 +129,18 @@ const chatsSlice = createSlice({
         chat.messages.push(deepClone(message));
       }
     },
-    updateLastMessageInChat(state, action: PayloadAction<{ chatId: string; content: string }>) {
-      const { chatId, content } = action.payload;
+    updateLastMessageInChat(state, action: PayloadAction<{ chatId: string; content: string; part?: 'thinking' | 'text' }>) {
+      const { chatId, content, part } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
       if (!chat || chat.messages.length === 0) {
         return;
       }
-      const last = chat.messages.at(-1) as Message & { content?: unknown };
+      const last = chat.messages.at(-1) as Message & { content?: unknown; thinking?: string };
+      if (part === 'thinking') {
+        const prevThinking = typeof last.thinking === 'string' ? last.thinking : '';
+        last.thinking = prevThinking + content;
+        return;
+      }
       let prev = '';
       if (typeof last.content === 'string') {
         prev = last.content;

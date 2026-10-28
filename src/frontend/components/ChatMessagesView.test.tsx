@@ -177,3 +177,72 @@ describe('ChatMessagesView — errorMessage prop', () => {
     expect(screen.queryByText('Some error')).not.toBeInTheDocument();
   });
 });
+
+describe('ChatMessagesView — standby thinking row', () => {
+  it('shows the row after a finished tool while the run is still busy', () => {
+    const store = makeStore();
+    const finished = {
+      type: 'ai',
+      content: 'I will ask the analyst.',
+      id: 'msg-ai-1',
+      tool_calls: [{ id: 'tc-1', name: 'task', args: {}, content: 'done' }],
+    } as unknown as Message;
+
+    render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({ messages: [HUMAN_MESSAGE, finished], isLoading: true })}
+        />
+      </Provider>,
+    );
+
+    expect(screen.getByRole('status', { name: 'Agent is thinking' })).toBeInTheDocument();
+  });
+
+  it('hides the row while a tool is still running', () => {
+    const store = makeStore();
+    const running = {
+      type: 'ai',
+      content: 'I will ask the analyst.',
+      id: 'msg-ai-1',
+      tool_calls: [{ id: 'tc-1', name: 'task', args: {} }],
+    } as unknown as Message;
+
+    render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({ messages: [HUMAN_MESSAGE, running], isLoading: true })}
+        />
+      </Provider>,
+    );
+
+    expect(screen.queryByRole('status', { name: 'Agent is thinking' })).not.toBeInTheDocument();
+  });
+
+  it('hides the row once a later assistant reply starts', () => {
+    const store = makeStore();
+    const finished = {
+      type: 'ai',
+      content: 'I will ask the analyst.',
+      id: 'msg-ai-1',
+      tool_calls: [{ id: 'tc-1', name: 'task', args: {}, content: 'done' }],
+    } as unknown as Message;
+    const next = {
+      type: 'ai',
+      content: '',
+      thinking: 'Checking the result.',
+      id: 'msg-ai-2',
+      tool_calls: [],
+    } as unknown as Message;
+
+    render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({ messages: [HUMAN_MESSAGE, finished, next], isLoading: true })}
+        />
+      </Provider>,
+    );
+
+    expect(screen.queryByRole('status', { name: 'Agent is thinking' })).not.toBeInTheDocument();
+  });
+});

@@ -24,6 +24,7 @@ type TestMessage = {
   type: 'ai' | 'human';
   content: string;
   id: string;
+  thinking?: string;
   tool_calls?: TestToolCall[];
 };
 /** Cast a TestMessage fixture to the LangGraph Message type used by the chats slice. */
@@ -137,6 +138,17 @@ describe('chats slice — appendMessageToChat', () => {
     const stored = s.chats[0].messages[0] as TestMessage;
     expect(stored.content).toBe('This looks like a data query.');
     expect(stored.tool_calls).toEqual(card.tool_calls);
+  });
+
+  it('keeps a streamed thought separate from the answer', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const started: TestMessage = { type: 'ai', content: '', thinking: 'Let', id: 'msg-1', tool_calls: [] };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(started) }));
+    s = chatsReducer(s, updateLastMessageInChat({ chatId: 'c1', content: ' me', part: 'thinking' }));
+    s = chatsReducer(s, updateLastMessageInChat({ chatId: 'c1', content: 'The answer', part: 'text' }));
+    const stored = s.chats[0].messages[0] as TestMessage;
+    expect(stored.thinking).toBe('Let me');
+    expect(stored.content).toBe('The answer');
   });
 });
 

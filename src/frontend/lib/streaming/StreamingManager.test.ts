@@ -282,6 +282,18 @@ describe('StreamingManager', () => {
     expect(callbacks.onToken).toHaveBeenCalledWith('Hello', 'server-msg-uuid');
   });
 
+  it('forwards a thinking part from token SSE to onToken', async () => {
+    const payload = { type: 'token', content: 'Let me', chunk_id: 0, message_id: 'msg-1', part: 'thinking' };
+    const sseBody = `data: ${JSON.stringify(payload)}\n\n` + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(sseBody));
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onToken).toHaveBeenCalledWith('Let me', 'msg-1', 'thinking');
+  });
+
   // ── Error message extraction from non-2xx JSON body ───────────────────────
   it('extracts "message" field from JSON body on non-2xx response', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(

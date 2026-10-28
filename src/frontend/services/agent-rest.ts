@@ -2,6 +2,7 @@ import { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { authenticatedFetch } from "./authenticated-fetch";
 import { buildAgentApiUrl } from "../lib/app-paths";
 import { withMcpAppArguments } from "../types/mcp-apps";
+import { splitMessageParts } from "../../server/message-parts";
 
 export interface Thread {
   id: string;
@@ -49,28 +50,32 @@ function deduplicateEcho(text: string): string {
  * When mixed structured + raw-string blocks are detected (supervisor echo
  * pattern), applies deduplication.
  */
+function dedupeAnswer(content: unknown, answer: string): string {
+  if (!Array.isArray(content)) return answer;
+  const hasStructured = content.some((b: any) => b?.type === 'text' && b?.thought !== true);
+  const hasRaw = content.some((b: any) => typeof b === 'string');
+  return hasStructured && hasRaw ? deduplicateEcho(answer) : answer;
+}
+
 function normalizeContent(content: unknown): string {
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    const hasStructured = content.some((b: any) => b?.type === 'text');
-    const hasRaw = content.some((b: any) => typeof b === 'string');
-    const joined = content
-      .map((b: any) => {
-        if (typeof b === 'string') return b;
-        if (b?.type === 'text' && typeof b.text === 'string') return b.text;
-        return '';
-      })
-      .join('');
-    return hasStructured && hasRaw ? deduplicateEcho(joined) : joined;
-  }
-  return typeof content === 'object' ? JSON.stringify(content) : String(content ?? '');
+  return dedupeAnswer(content, splitMessageParts({ content }).answer);
 }
 
 function normalizeMessages(messages: any[]): Message[] {
-  return messages.map((m) => ({
-    ...m,
-    content: normalizeContent(m.content),
-  }));
+  return messages.map((m) => {
+    const isAi = String(m?.type ?? '').toLowerCase() === 'ai';
+    if (!isAi) {
+      const content = typeof m?.content === 'string'
+        ? m.content
+        : dedupeAnswer(m?.content, splitMessageParts({ content: m?.content }).answer);
+      return { ...m, content };
+    }
+    const { thinking, answer } = splitMessageParts(m);
+    const next = { ...m, content: dedupeAnswer(m?.content, answer) } as Message & { thinking?: string };
+    if (thinking) next.thinking = thinking;
+    return next;
+  });
 }
 
 function extractMcpAppFromToolMessage(

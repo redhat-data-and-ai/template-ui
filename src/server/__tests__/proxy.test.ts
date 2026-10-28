@@ -585,6 +585,61 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(res.body.match(/This looks like a data query\./g)).toHaveLength(1);
   });
 
+  it('streams a thought before the answer and keeps the thought out of the answer', async () => {
+    const agentSSE = [
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: [{ type: 'text', text: 'Looking', thought: true }] }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: [{ type: 'text', text: 'Looking at the schema', thought: true }, { type: 'text', text: 'Use the orders table.' }] }])}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-thinking' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-thinking', user_id: 'u1' },
+    });
+
+    const thoughtAt = res.body.indexOf('"part":"thinking"');
+    const answerAt = res.body.indexOf('"part":"text"');
+    expect(thoughtAt).toBeGreaterThan(-1);
+    expect(answerAt).toBeGreaterThan(thoughtAt);
+    expect(res.body).toContain('Looking');
+    expect(res.body).toContain(' at the schema');
+    expect(res.body).toContain('Use the orders table.');
+    const answerToken = res.body.slice(answerAt);
+    expect(answerToken).not.toContain('Looking at the schema');
+  });
+
+  it('keeps a growing think tag as one raw answer string', async () => {
+    const agentSSE = [
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: 'Answer <thi' }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: 'Answer <think>secret</think> yes' }])}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-tag' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-tag', user_id: 'u1' },
+    });
+
+    expect(res.body).toContain('Answer <thi');
+    expect(res.body).toContain('nk>secret</think> yes');
+    expect(res.body).not.toContain('Answer <thi yes');
+    expect(res.body).not.toContain('"part":"thinking"');
+  });
+
   it('translates a LangGraph __interrupt__ update into an interrupt chunk', async () => {
     const interruptValue = {
       action_requests: [{ name: 'github_create_pr', args: { title: 'My PR' } }],

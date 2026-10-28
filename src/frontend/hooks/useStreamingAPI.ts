@@ -34,6 +34,36 @@ import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
 import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
 
+type TokenPart = 'thinking' | 'text';
+
+function dispatchStreamToken(
+  dispatch: AppDispatch,
+  threadId: string,
+  content: string,
+  messageId: string | undefined,
+  part: TokenPart | undefined,
+  isStreamingTokensRef: { current: boolean },
+): void {
+  const isThinking = part === 'thinking';
+  if (!isStreamingTokensRef.current) {
+    const message = {
+      type: 'ai',
+      content: isThinking ? '' : content,
+      tool_calls: [],
+      id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      ...(isThinking ? { thinking: content } : {}),
+    } as AIMessage;
+    dispatch(appendMessageToChat({ chatId: threadId, message }));
+    isStreamingTokensRef.current = true;
+    return;
+  }
+  dispatch(updateLastMessageInChat({
+    chatId: threadId,
+    content,
+    part: isThinking ? 'thinking' : 'text',
+  }));
+}
+
 
 function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
   const raw = interrupt.value as string | HITLInterruptValue;
@@ -552,25 +582,14 @@ export function useStreamingAPI(threadId: string) {
           streamEndedWithInterruptRef.current = false;
 
           const callbacks: StreamCallback = {
-            onToken(content, messageId) {
+            onToken(content, messageId, part) {
               lastTokenTimeRef.current = Date.now();
               lastSuccessfulConnectionRef.current = Date.now();
               setIsStreamStale(false);
               if (streamClockRef.current.firstTokenTime == null) {
                 streamClockRef.current.firstTokenTime = Date.now();
               }
-              if (!isStreamingTokensRef.current) {
-                const message: AIMessage = {
-                  type: 'ai',
-                  content,
-                  tool_calls: [],
-                  id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                };
-                dispatch(appendMessageToChat({ chatId: threadId, message }));
-                isStreamingTokensRef.current = true;
-                return;
-              }
-              dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+              dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
             },
             onDraftDiscard() {
               if (isStreamingTokensRef.current) {
@@ -1151,20 +1170,9 @@ export function useStreamingAPI(threadId: string) {
       let resumeStreamHadError = false;
 
       const callbacks: StreamCallback = {
-        onToken(content, messageId) {
+        onToken(content, messageId, part) {
           lastTokenTimeRef.current = Date.now();
-          if (!isStreamingTokensRef.current) {
-            const message: AIMessage = {
-              type: 'ai',
-              content,
-              tool_calls: [],
-              id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            };
-            dispatch(appendMessageToChat({ chatId: threadId, message }));
-            isStreamingTokensRef.current = true;
-            return;
-          }
-          dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+          dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
         },
         onDraftDiscard() {
           if (isStreamingTokensRef.current) {
@@ -1280,20 +1288,9 @@ export function useStreamingAPI(threadId: string) {
 
       await new Promise<void>((resolve) => {
         const callbacks: StreamCallback = {
-          onToken(content, messageId) {
+          onToken(content, messageId, part) {
             lastTokenTimeRef.current = Date.now();
-            if (!isStreamingTokensRef.current) {
-              const message: AIMessage = {
-                type: 'ai',
-                content,
-                tool_calls: [],
-                id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-              };
-              dispatch(appendMessageToChat({ chatId: threadId, message }));
-              isStreamingTokensRef.current = true;
-              return;
-            }
-            dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+            dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
           },
           onDraftDiscard() {
             if (isStreamingTokensRef.current) {

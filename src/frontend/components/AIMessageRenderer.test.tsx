@@ -190,12 +190,12 @@ describe('AIMessageRenderer — narration before a task card', () => {
     expect(screen.getByText('researcher')).toBeInTheDocument();
   });
 
-  it('hides thinking blocks on a task-call message', () => {
+  it('shows a saved thought collapsed above the task card', () => {
     render(
       <AIMessageRenderer
         message={makeMsg({
           content: [
-            { type: 'thinking', text: 'secret chain of thought' },
+            { type: 'thinking', thinking: 'secret chain of thought' },
             { type: 'text', text: 'This looks like a data query.' },
           ],
           tool_calls: [SUBAGENT_TASK],
@@ -204,8 +204,37 @@ describe('AIMessageRenderer — narration before a task card', () => {
     );
 
     expect(screen.getByText('This looks like a data query.')).toBeInTheDocument();
-    expect(screen.queryByText('secret chain of thought')).not.toBeInTheDocument();
-    expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    expect(screen.getByText('Thought')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thought' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('researcher')).toBeInTheDocument();
+  });
+
+  it('shows the thought open while it is still streaming', () => {
+    render(
+      <AIMessageRenderer
+        thinkingLive
+        message={makeMsg({
+          content: '',
+          thinking: 'secret chain of thought',
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Thinking...' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('secret chain of thought')).toBeInTheDocument();
+  });
+
+  it('does not show a redacted tag that is the whole message', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          content: '<redacted_thinking>secret',
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('secret')).not.toBeInTheDocument();
+    expect(screen.queryByText(/redacted_thinking/)).not.toBeInTheDocument();
   });
 });
 
