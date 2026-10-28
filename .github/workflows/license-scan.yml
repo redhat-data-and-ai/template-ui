@@ -2,13 +2,13 @@ name: License Compliance
 
 on:
   push:
-    branches: [main, deep-agent]
+    branches: [main, deep-agent, dva]
     paths:
       - 'package.json'
       - 'package-lock.json'
       - 'Containerfile'
   pull_request:
-    branches: [main, deep-agent]
+    branches: [main, deep-agent, dva]
     paths:
       - 'package.json'
       - 'package-lock.json'
