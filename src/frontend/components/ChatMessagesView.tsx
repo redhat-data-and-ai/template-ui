@@ -10,7 +10,6 @@ import {
   Dropdown,
   DropdownItem,
   DropdownList,
-  ExpandableSection,
   Label,
   MenuToggle,
   type MenuToggleElement,
@@ -31,6 +30,7 @@ import { TodoStrip } from "./TodoStrip";
 import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButtons";
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
+import { splitMessageParts } from "../../server/message-parts";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -54,7 +54,6 @@ function stripThinkingFromPlainText(text: string): { thinking: string; display: 
   let display = text;
   const patterns: RegExp[] = [
     /<think>([\s\S]*?)<\/think>/gi,
-    /<redacted_thinking>([\s\S]*?)<\/redacted_thinking>/gi,
     /<thinking>([\s\S]*?)<\/thinking>/gi,
   ];
   for (const re of patterns) {
@@ -62,6 +61,11 @@ function stripThinkingFromPlainText(text: string): { thinking: string; display: 
       thinkingParts.push(String(inner).trim());
       return '';
     });
+  }
+  display = display.replace(/<redacted_thinking>[\s\S]*?<\/redacted_thinking>/gi, '');
+  const redactedOpen = display.search(/<redacted_thinking/i);
+  if (redactedOpen !== -1) {
+    display = display.slice(0, redactedOpen);
   }
   return {
     thinking: thinkingParts.filter(Boolean).join('\n\n'),
@@ -115,7 +119,8 @@ function partitionMessageContent(content: unknown): { thinkingText: string; mark
 
 function getCopyableAiMessageText(content: unknown): string {
   const { thinkingText, markdownForDisplay } = partitionMessageContent(content);
-  const main = markdownForDisplay || (thinkingText ? '' : extractMessageText(content));
+  const main = markdownForDisplay
+    || (thinkingText ? '' : (typeof content === 'string' ? '' : extractMessageText(content)));
   const body = thinkingText
     ? [thinkingText, main].filter((s) => s.length > 0).join('\n\n')
     : main;
@@ -456,22 +461,70 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
   );
 };
 
-interface AiMessageBubbleProps {
-  message: Message;
+function toolStillRunning(messages: Message[]): boolean {
+  return messages.some((message) => {
+    if (message.type !== 'ai') return false;
+    const calls = (message as { tool_calls?: Array<{ name?: string; content?: unknown }> }).tool_calls;
+    if (!Array.isArray(calls)) return false;
+    return calls.some((tc) => tc.name !== 'write_todos' && tc.content == null);
+  });
 }
 
-const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
-  const { thinkingText, markdownForDisplay } = partitionMessageContent(message.content);
-  const [thinkingExpanded, setThinkingExpanded] = useState(false);
+function waitingAfterFinishedTool(messages: Message[]): boolean {
+  if (toolStillRunning(messages)) return false;
+  let lastAi: Message | undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].type === 'ai') {
+      lastAi = messages[i];
+      break;
+    }
+  }
+  if (!lastAi) return false;
+  const calls = (lastAi as { tool_calls?: Array<{ name?: string }> }).tool_calls;
+  if (!Array.isArray(calls)) return false;
+  const visible = calls.filter((tc) => tc.name !== 'write_todos');
+  if (visible.length === 0) return false;
+  const last = messages.at(-1);
+  return last?.type !== 'ai' || last === lastAi;
+}
+
+function isThinkingLive(message: Message, isLoading: boolean, isLastAi: boolean): boolean {
+  if (!isLoading || !isLastAi) return false;
+  const tools = (message as { tool_calls?: unknown }).tool_calls;
+  if (Array.isArray(tools) && tools.length > 0) return false;
+  const stored = (message as { thinking?: unknown }).thinking;
+  const parts = splitMessageParts(message);
+  const thinking = typeof stored === 'string' && stored.trim().length > 0 ? stored : parts.thinking;
+  if (thinking.trim().length === 0) return false;
+  return parts.answer.trim().length === 0;
+}
+
+interface AiMessageBubbleProps {
+  message: Message;
+  thinkingLive?: boolean;
+}
+
+const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message, thinkingLive = false }) => {
+  const storedThinking = (message as { thinking?: unknown }).thinking;
+  const hasStoredThinking = typeof storedThinking === 'string' && storedThinking.length > 0;
+  const parts = splitMessageParts(message);
+  const thinkingText = hasStoredThinking ? storedThinking : parts.thinking;
+  const answer = parts.answer;
+  const userToggledThinking = useRef(false);
+  const [thinkingExpanded, setThinkingExpanded] = useState(thinkingLive);
+  useEffect(() => {
+    if (userToggledThinking.current) return;
+    setThinkingExpanded(thinkingLive);
+  }, [thinkingLive]);
   const customRaw = (message as Record<string, unknown>).custom_data;
   const customData =
     customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
       ? (customRaw as Record<string, unknown>)
       : null;
   const bodyMd =
-    markdownForDisplay.length > 0
-      ? markdownForDisplay
-      : thinkingText.length > 0
+    answer.length > 0
+      ? answer
+      : thinkingText.length > 0 || typeof message.content === 'string'
         ? ''
         : extractMessageText(message.content);
 
@@ -480,30 +533,40 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
       <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
         <Bot className="w-4 h-4 text-white" />
       </div>
-      <div className="flex-1 min-w-0 max-w-[85%] sm:max-w-[80%]">
-        <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-          {thinkingText.length > 0 && (
-            <div className="mb-3">
-              <ExpandableSection
-                toggleText="Thinking..."
-                isExpanded={thinkingExpanded}
-                onToggle={(_e, expanded) => setThinkingExpanded(expanded)}
-                isIndented
-                className="pf-v6-u-mb-0"
-              >
-                <div className="mt-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
-                  {thinkingText}
-                </div>
-              </ExpandableSection>
-            </div>
-          )}
-          {bodyMd.length > 0 && (
-            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
-            </div>
-          )}
-          {customData && <CustomDataRenderer data={customData} />}
-        </div>
+      <div className="flex-1 min-w-0 max-w-[85%] sm:max-w-[80%] space-y-2">
+        {thinkingText.length > 0 && (
+          <div className="border border-border rounded-xl bg-muted/30">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground"
+              aria-expanded={thinkingExpanded}
+              onClick={() => {
+                userToggledThinking.current = true;
+                setThinkingExpanded((open) => !open);
+              }}
+            >
+              {thinkingExpanded
+                ? <ChevronDown className="w-4 h-4 shrink-0" aria-hidden="true" />
+                : <ChevronRight className="w-4 h-4 shrink-0" aria-hidden="true" />}
+              {thinkingLive ? <span className="animate-pulse">Thinking...</span> : 'Thought'}
+            </button>
+            {thinkingExpanded && (
+              <div className="mx-3 mb-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
+                {thinkingText}
+              </div>
+            )}
+          </div>
+        )}
+        {(bodyMd.length > 0 || customData) && (
+          <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
+            {bodyMd.length > 0 && (
+              <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
+              </div>
+            )}
+            {customData && <CustomDataRenderer data={customData} />}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -519,9 +582,10 @@ interface AIMessageRendererProps {
   totalActionRequests?: number;
   allDecisionsMade?: boolean;
   onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
+  thinkingLive?: boolean;
 }
 
-export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
 
@@ -612,9 +676,20 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     if (isToolCallStart) {
       const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
       const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
+      const parts = splitMessageParts(message);
+      const storedThinking = (message as { thinking?: unknown }).thinking;
+      const thinkingText = typeof storedThinking === 'string' && storedThinking.length > 0
+        ? storedThinking
+        : parts.thinking;
+      const narration = (typeof storedThinking === 'string' && typeof message.content === 'string'
+        ? message.content
+        : parts.answer).trim();
 
       return (
         <div className="space-y-2 w-full" aria-live="off">
+          {(narration || thinkingText) ? (
+            <AiMessageBubble message={message} thinkingLive={thinkingLive} />
+          ) : null}
           {subAgentCalls.map((toolCall, idx) => {
             const tcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
             const slot = approvalSlotByToolCallId.get(tcId);
@@ -833,12 +908,12 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     }
 
     if (isNormalMessage) {
-      return <AiMessageBubble message={message} />;
+      return <AiMessageBubble message={message} thinkingLive={thinkingLive} />;
     }
 
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId]);
+  }, [messageKey, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId, thinkingLive]);
 
   return (
     <div className="space-y-2 w-full">
@@ -975,7 +1050,8 @@ export function ChatMessagesView({
     const lastAiMessage = [...messages].reverse().find((m) => m.type === 'ai');
     if (!lastAiMessage) return;
     const { markdownForDisplay } = partitionMessageContent(lastAiMessage.content);
-    const text = markdownForDisplay || extractMessageText(lastAiMessage.content);
+    const text = markdownForDisplay
+      || (typeof lastAiMessage.content === 'string' ? '' : extractMessageText(lastAiMessage.content));
     if (!text?.trim()) return;
     setSrAnnouncement('');
     const id = setTimeout(() => setSrAnnouncement(text), 50);
@@ -1104,6 +1180,7 @@ export function ChatMessagesView({
                     totalActionRequests={globalActionRequests.length}
                     allDecisionsMade={globalAllDecisionsMade}
                     onSingleDecision={handleGlobalSingleDecision}
+                    thinkingLive={isThinkingLive(message, isLoading, messageIndex === lastAiMessageIndex)}
                   />
                   <MessageActionsRow
                     isLastAiInTurn={isLastAiInTurn}
@@ -1132,7 +1209,7 @@ export function ChatMessagesView({
           );
           })}
 
-          {isLoading && (
+          {isLoading && (messages.at(-1)?.type === 'human' || waitingAfterFinishedTool(messages)) && (
             <div
               className="flex items-start gap-3 animate-fadeIn"
               role="status"

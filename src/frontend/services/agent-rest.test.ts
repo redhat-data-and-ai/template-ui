@@ -222,6 +222,73 @@ describe('agent-rest', () => {
       expect((msgs[0] as any).tool_calls[0].content).toBe('result data');
     });
 
+    it('keeps think tags inside a tool result', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            values: {
+              messages: [
+                {
+                  type: 'ai',
+                  content: '',
+                  tool_calls: [{ id: 'tc1', name: 'search', args: {} }],
+                },
+                {
+                  type: 'tool',
+                  content: 'result <think>hidden</think> tail',
+                  tool_call_id: 'tc1',
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const msgs = await getThreadState('t1');
+      expect((msgs[0] as any).tool_calls[0].content).toBe('result <think>hidden</think> tail');
+    });
+
+    it('keeps a saved thought after reload and leaves it out of the answer', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            values: {
+              messages: [{
+                type: 'ai',
+                content: [
+                  { type: 'thinking', thinking: 'secret chain of thought', signature: 'sig' },
+                  { type: 'text', text: 'The answer' },
+                ],
+              }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const msgs = await getThreadState('t1');
+      expect(msgs[0].content).toBe('The answer');
+      expect((msgs[0] as { thinking?: string }).thinking).toBe('secret chain of thought');
+    });
+
+    it('does not strip a think tag out of a human message', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            values: {
+              messages: [{ type: 'human', content: 'hello <think>rest' }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const msgs = await getThreadState('t1');
+      expect(msgs[0].content).toBe('hello <think>rest');
+      expect((msgs[0] as { thinking?: string }).thinking).toBeUndefined();
+    });
+
     it('normalizes object content to JSON string', async () => {
       vi.mocked(authenticatedFetch).mockResolvedValue(
         new Response(

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getSettings } from '../utils/settings.js';
 import authCheckPlugin from '../plugins/auth-check.plugin.js';
 import { resolveXUserIdFromSession } from '../utils/session-identity.js';
+import { splitMessageParts } from '../message-parts.js';
 
 function getAgentHost(): string {
   const cfg = getSettings();
@@ -68,6 +69,12 @@ function extractText(content: unknown): string {
       .join('');
   }
   return '';
+}
+
+/** Answer text for the live stream. A plain string is sent unchanged so a half-written tag is not erased. Block content is split into thought and answer. */
+function streamedAnswer(raw: Record<string, any>): string {
+  if (typeof raw.content === 'string') return raw.content;
+  return splitMessageParts(raw).answer;
 }
 
 /**
@@ -230,11 +237,11 @@ function translateMessageEvent(
     const toolCalls = extractToolCalls(raw);
 
     if (toolCalls.length > 0) {
-      const fullText = extractText(raw.content);
+      const fullText = streamedAnswer(raw);
       return [[], fullText || prevPartial];
     }
 
-    const fullText = extractText(raw.content);
+      const fullText = streamedAnswer(raw);
     return [[], fullText];
   }
 
@@ -272,7 +279,7 @@ function translateMessageEvent(
     }
 
     if (msgType === 'ai' || msgType === 'aimessage') {
-      const fullText = extractText(raw.content);
+      const fullText = streamedAnswer(raw);
       if (fullText.length > 0) {
         return [[], fullText];
       }
@@ -494,6 +501,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         let chunkId = 0;
         let clientGone = false;
         let prevPartial = '';
+        let prevThinking = '';
         const sentMsgIds = new Set<string>();
         const completedTexts: string[] = [];
 
@@ -509,10 +517,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         let hasEmittedTextTokens = false;
         let interruptEmittedFromStream = false;
         let streamEndedNormally = false;
-        // Per-message tracking for draft_discard (suppress text from tool-call messages)
         let currentStreamingMsgId = '';
-        let textEmittedForCurrentMsg = false;
-        const discardedMsgIds = new Set<string>();
 
         try {
           while (!clientGone) {
@@ -613,8 +618,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   const peekId = (parsed[0] as Record<string, any>)?.id ?? '';
                   if (peekId && peekId !== currentStreamingMsgId) {
                     currentStreamingMsgId = peekId;
-                    textEmittedForCurrentMsg = false;
                     prevPartial = '';
+                    prevThinking = '';
                   } else if (!peekId) {
                     currentStreamingMsgId = '';
                   }
@@ -628,20 +633,35 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   sentMsgIds,
                 );
 
-                // Detect tool_calls in partials and discard any text already streamed
-                if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
-                  const partialMsg = parsed[0] as Record<string, any>;
-                  const partialMsgId = partialMsg?.id ?? '';
-                  const partialToolCalls = extractToolCalls(partialMsg ?? {});
-                  if (partialToolCalls.length > 0 && textEmittedForCurrentMsg) {
-                    reply.raw.write(`data: ${JSON.stringify({ type: 'draft_discard', chunk_id: chunkId })}\n\n`);
-                    chunkId++;
-                    textEmittedForCurrentMsg = false;
-                    hasEmittedTextTokens = false;
-                    prevPartial = nextPartial;
-                    discardedMsgIds.add(partialMsgId);
-                    completedTexts.length = 0;
+                let nextThinking = prevThinking;
+                const partialMsg = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : undefined;
+                const partialContent = partialMsg && typeof partialMsg === 'object'
+                  ? (partialMsg as Record<string, unknown>).content
+                  : undefined;
+                if (
+                  (sseType === 'messages/partial' || sseType === 'messages/complete')
+                  && partialMsg
+                  && typeof partialMsg === 'object'
+                  && typeof partialContent !== 'string'
+                ) {
+                  nextThinking = splitMessageParts(partialMsg).thinking;
+                }
+                if (nextThinking.startsWith(prevThinking) && nextThinking.length > prevThinking.length) {
+                  const thinkingDelta = nextThinking.slice(prevThinking.length);
+                  const thinkingPayload: Record<string, unknown> = {
+                    type: 'token',
+                    content: thinkingDelta,
+                    chunk_id: chunkId,
+                    part: 'thinking',
+                  };
+                  if (currentStreamingMsgId) {
+                    thinkingPayload.message_id = currentStreamingMsgId;
                   }
+                  reply.raw.write(`data: ${JSON.stringify(thinkingPayload)}\n\n`);
+                  chunkId++;
+                }
+                if (nextThinking.startsWith(prevThinking)) {
+                  prevThinking = nextThinking;
                 }
 
                 if (nextPartial.length > prevPartial.length && uiChunks.length === 0) {
@@ -650,24 +670,23 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   );
                   if (!isEchoOfPrior) {
                     const delta = nextPartial.slice(prevPartial.length);
-                    const tokenPayload: Record<string, unknown> = { type: 'token', content: delta, chunk_id: chunkId };
+                    const tokenPayload: Record<string, unknown> = {
+                      type: 'token',
+                      content: delta,
+                      chunk_id: chunkId,
+                      part: 'text',
+                    };
                     if (currentStreamingMsgId) {
                       tokenPayload.message_id = currentStreamingMsgId;
                     }
                     reply.raw.write(`data: ${JSON.stringify(tokenPayload)}\n\n`);
                     chunkId++;
                     hasEmittedTextTokens = true;
-                    textEmittedForCurrentMsg = true;
                   }
                 }
 
                 if (sseType === 'messages/complete' && uiChunks.length === 0 && nextPartial.length > 0) {
-                  const completeMsgId = Array.isArray(parsed) && parsed.length > 0
-                    ? ((parsed[0] as Record<string, any>)?.id ?? '')
-                    : '';
-                  if (!discardedMsgIds.has(completeMsgId)) {
-                    completedTexts.push(nextPartial);
-                  }
+                  completedTexts.push(nextPartial);
                 }
 
                 prevPartial = nextPartial;

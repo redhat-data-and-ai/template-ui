@@ -175,6 +175,69 @@ const innerToolInterrupt: InterruptInfo = {
   resumable: true,
 };
 
+describe('AIMessageRenderer — narration before a task card', () => {
+  it('shows the spoken sentence above the task card', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          content: 'This looks like a data query.',
+          tool_calls: [SUBAGENT_TASK],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('This looks like a data query.')).toBeInTheDocument();
+    expect(screen.getByText('researcher')).toBeInTheDocument();
+  });
+
+  it('shows a saved thought collapsed above the task card', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          content: [
+            { type: 'thinking', thinking: 'secret chain of thought' },
+            { type: 'text', text: 'This looks like a data query.' },
+          ],
+          tool_calls: [SUBAGENT_TASK],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('This looks like a data query.')).toBeInTheDocument();
+    expect(screen.getByText('Thought')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thought' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('researcher')).toBeInTheDocument();
+  });
+
+  it('shows the thought open while it is still streaming', () => {
+    render(
+      <AIMessageRenderer
+        thinkingLive
+        message={makeMsg({
+          content: '',
+          thinking: 'secret chain of thought',
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Thinking...' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('secret chain of thought')).toBeInTheDocument();
+  });
+
+  it('does not show a redacted tag that is the whole message', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          content: '<redacted_thinking>secret',
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('secret')).not.toBeInTheDocument();
+    expect(screen.queryByText(/redacted_thinking/)).not.toBeInTheDocument();
+  });
+});
+
 describe('AIMessageRenderer — nested subagent HITL', () => {
   it('shows approval buttons when a running subagent pauses on an inner tool', () => {
     render(
