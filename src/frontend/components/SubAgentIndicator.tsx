@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import {
   Card,
   CardBody,
@@ -19,6 +19,7 @@ interface SubAgentIndicatorProps {
   readonly onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
   readonly isCurrentApproval?: boolean;
   readonly onAlwaysAllow?: (toolNames: string[]) => void;
+  readonly question?: ReactNode;
 }
 
 type VisualStatus = 'delegating' | 'complete' | 'error';
@@ -46,7 +47,7 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow, question }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const name = extractSubAgentName(toolCall);
@@ -71,6 +72,10 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
       setExpanded(true);
     }
   }, [needsApproval, pendingInterrupt]);
+
+  useEffect(() => {
+    if (question) setExpanded(true);
+  }, [question]);
 
   return (
     <div className="flex items-start gap-3">
@@ -148,7 +153,9 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                   </pre>
                 </div>
               )}
-              {status === 'delegating' && !needsApproval && (
+              {question ? (
+                <div className="pb-3">{question}</div>
+              ) : status === 'delegating' && !needsApproval && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                   Sub-agent is processing&hellip;

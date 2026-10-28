@@ -15,7 +15,7 @@ import {
 } from '../redux/slices/chats';
 import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
-import { useStreamingAPI, MAX_RETRIES } from '../hooks/useStreamingAPI';
+import { useStreamingAPI, MAX_RETRIES, queuedApprovalForInterrupt } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
@@ -54,6 +54,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const agentHealth = useAgentHealth();
   const prevHealthRef = useRef(agentHealth.status);
   const hasBeenHealthyRef = useRef(false);
+  const streamingLoadingRef = useRef(streamingState.isLoading);
+  streamingLoadingRef.current = streamingState.isLoading;
 
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({});
@@ -104,7 +106,24 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     if (!chatId || hydrating) return;
-    if (hasMessages && !needsServerRefresh) return;
+    if (hasMessages && !needsServerRefresh) {
+      if (isClientCreatedChat(chatId)) return;
+      let cancelled = false;
+      getThreadStateAndInterrupt(chatId).then(({ interrupt: serverInterrupt }) => {
+        // A late or empty miss must not wipe a card the stream already showed.
+        if (cancelled || streamingLoadingRef.current || !serverInterrupt) return;
+        dispatch(updateStreamingState({
+          chatId,
+          state: {
+            pendingInterrupt: {
+              value: serverInterrupt.value as any,
+              resumable: serverInterrupt.resumable,
+            },
+          },
+        }));
+      }).catch(() => {});
+      return () => { cancelled = true; };
+    }
 
     const locState = location.state as Record<string, unknown> | null;
     if (locState?.initialPrompt != null) return;
@@ -452,15 +471,16 @@ export function ChatPage({ threadId }: { threadId: string }) {
           try {
             const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
 
+            // Leave the live send alone; try again on the next poll tick.
+            if (streamingLoadingRef.current) return;
+
             if (interrupt) {
               dispatch(updateChat({ id: threadId, updates: { messages: msgs } }));
               thread.setMessages(msgs.map((m) => JSON.parse(JSON.stringify(m)) as Message));
 
-              const queueKey = `pending-decision:${threadId}`;
-              const raw = localStorage.getItem(queueKey);
-              if (raw) {
-                const { decisions } = JSON.parse(raw) as { decisions: Array<{ type: 'approve' | 'reject'; message?: string }> };
-                localStorage.removeItem(queueKey);
+              const decisions = queuedApprovalForInterrupt(threadId, interrupt.value);
+              if (decisions) {
+                try { localStorage.removeItem(`pending-decision:${threadId}`); } catch { /* ignore */ }
                 dispatch(updateStreamingState({
                   chatId: threadId,
                   state: { error: null, isLoading: false, isConnected: false, pendingInterrupt: null },

@@ -17,6 +17,8 @@ interface InterruptBannerProps {
   readonly interrupt: InterruptInfo;
   readonly onResume: (response: string) => void;
   readonly onDismiss: () => void;
+  /** Fill a subagent card instead of lining up under a main reply. */
+  readonly embedded?: boolean;
 }
 
 function isToolApproval(value: string): boolean {
@@ -28,6 +30,37 @@ function isToolApproval(value: string): boolean {
 function interruptValueAsString(value: string | object): string {
   if (typeof value === 'string') return value;
   return JSON.stringify(value, null, 2);
+}
+
+interface UserQuestion {
+  question: string;
+  options: string[];
+}
+
+function parseUserQuestion(interrupt: InterruptInfo): UserQuestion | null {
+  const record = readQuestionRecord(interrupt.value);
+  if (!record) return null;
+  const question = typeof record.question === 'string' ? record.question.trim() : '';
+  if (!question) return null;
+  const options = Array.isArray(record.options)
+    ? record.options
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .map((item) => item.trim())
+    : [];
+  return { question, options };
+}
+
+function readQuestionRecord(raw: unknown): { question?: unknown; options?: unknown } | null {
+  if (typeof raw === 'string') {
+    try {
+      return readQuestionRecord(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if ((raw as { type?: unknown }).type !== 'user_question') return null;
+  return raw as { question?: unknown; options?: unknown };
 }
 
 function parseMcpAuthPayload(interrupt: InterruptInfo): InterruptInfo['payload'] | null {
@@ -54,7 +87,7 @@ function parseMcpAuthPayload(interrupt: InterruptInfo): InterruptInfo['payload']
   return null;
 }
 
-export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBannerProps) {
+export function InterruptBanner({ interrupt, onResume, onDismiss, embedded = false }: InterruptBannerProps) {
   const [response, setResponse] = useState('');
   const [oauthReady, setOauthReady] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -62,6 +95,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
   const [oauthOrigin, setOauthOrigin] = useState<string | null>(null);
 
   const mcpAuth = parseMcpAuthPayload(interrupt);
+  const userQuestion = parseUserQuestion(interrupt);
 
   const verifyAndSetReady = useCallback(async (mcpName: string) => {
     const connected = await verifyMcpOAuthConnected(mcpName);
@@ -153,6 +187,80 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
               )}
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (userQuestion) {
+    const fields = (
+      <>
+          <p className="text-sm mb-3 whitespace-pre-wrap">{userQuestion.question}</p>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            {userQuestion.options.map((option, index) => (
+              <span key={`${index}-${option}`} className="pf-v6-c-form-control col-start-1 hover:brightness-110">
+                <button
+                  type="button"
+                  onClick={() => onResume(option)}
+                  className="col-span-full row-start-1 w-full cursor-pointer appearance-none border-0 bg-transparent text-left text-[var(--pf-v6-c-form-control--Color)]"
+                  style={{
+                    paddingBlockStart: 'var(--pf-v6-c-form-control__input--PaddingBlockStart)',
+                    paddingBlockEnd: 'var(--pf-v6-c-form-control__input--PaddingBlockEnd)',
+                    paddingInlineStart: 'var(--pf-v6-c-form-control__input--PaddingInlineStart)',
+                    paddingInlineEnd: 'var(--pf-v6-c-form-control__input--PaddingInlineEnd)',
+                    fontSize: 'var(--pf-v6-c-form-control--FontSize)',
+                    lineHeight: 'var(--pf-v6-c-form-control--LineHeight)',
+                  }}
+                >
+                  {option}
+                </button>
+              </span>
+            ))}
+            <TextInput
+              value={response}
+              onChange={(_e, val) => setResponse(val)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && response.trim()) onResume(response.trim());
+              }}
+              placeholder={userQuestion.options.length > 0 ? 'Or type your own answer...' : 'Type your answer...'}
+              aria-label="Your answer"
+              className="col-start-1"
+            />
+            <div
+              className="col-start-2 flex items-center gap-2"
+              style={{ gridRow: userQuestion.options.length + 1 }}
+            >
+              <Button
+                variant="primary"
+                size="sm"
+                isDisabled={!response.trim()}
+                onClick={() => onResume(response.trim())}
+              >
+                Send
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onResume('The user skipped this question.')}
+              >
+                Skip
+              </Button>
+            </div>
+          </div>
+      </>
+    );
+    if (embedded) {
+      return (
+        <div role="region" aria-label="Question from the agent">
+          {fields}
+        </div>
+      );
+    }
+    return (
+      <div className="mb-3 flex items-start gap-3" role="region" aria-label="Question from the agent">
+        <div className="w-8 shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1 max-w-[85%] sm:max-w-[80%]">
+          {fields}
         </div>
       </div>
     );

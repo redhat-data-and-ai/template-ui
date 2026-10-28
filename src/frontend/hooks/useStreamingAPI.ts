@@ -178,16 +178,39 @@ function isRecoverableStreamError(error: Error): boolean {
   return false;
 }
 
-function _tryReplayQueuedDecision(threadId: string): Array<{ type: 'approve' | 'reject'; message?: string }> | null {
+function isUserQuestionInterrupt(value: unknown): boolean {
+  if (typeof value === 'string') {
+    try {
+      return isUserQuestionInterrupt(JSON.parse(value));
+    } catch {
+      return false;
+    }
+  }
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && (value as { type?: unknown }).type === 'user_question',
+  );
+}
+
+export function queuedApprovalForInterrupt(
+  threadId: string,
+  interruptValue: unknown,
+): Array<{ type: 'approve' | 'reject'; message?: string }> | null {
+  const key = `pending-decision:${threadId}`;
   try {
-    const raw = localStorage.getItem(`pending-decision:${threadId}`);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
+    if (isUserQuestionInterrupt(interruptValue)) {
+      localStorage.removeItem(key);
+      return null;
+    }
     const { decisions, timestamp } = JSON.parse(raw) as {
       decisions: Array<{ type: 'approve' | 'reject'; message?: string }>;
       timestamp: number;
     };
     if (Date.now() - timestamp > 5 * 60 * 1000) {
-      localStorage.removeItem(`pending-decision:${threadId}`);
+      localStorage.removeItem(key);
       return null;
     }
     return decisions;
@@ -357,6 +380,7 @@ export function useStreamingAPI(threadId: string) {
   const userCancelledRef = useRef(false);
   const streamEndedWithInterruptRef = useRef(false);
   const pendingInterruptRef = useRef(streamingState.pendingInterrupt);
+  const resumeInFlightRef = useRef(false);
   pendingInterruptRef.current = streamingState.pendingInterrupt;
   const lastStreamErrorRef = useRef<Error | null>(null);
   const lastTokenTimeRef = useRef<number>(0);
@@ -693,7 +717,7 @@ export function useStreamingAPI(threadId: string) {
                       messagesRef.current = serverMsgs;
                       dispatch(updateChat({ id: threadId, updates: { messages: serverMsgs } }));
 
-                      const queued = _tryReplayQueuedDecision(threadId);
+                      const queued = queuedApprovalForInterrupt(threadId, interrupt.value);
                       if (queued) {
                         dispatch(updateStreamingState({
                           chatId: threadId,
@@ -1259,8 +1283,10 @@ export function useStreamingAPI(threadId: string) {
   const resumeInterrupt = useCallback(
     async (response: string) => {
       const manager = managerRef.current;
-      if (!manager || !threadId) return;
+      if (!manager || !threadId || resumeInFlightRef.current) return;
+      resumeInFlightRef.current = true;
 
+      const savedInterrupt = pendingInterruptRef.current;
       dispatch(
         updateStreamingState({
           chatId: threadId,
@@ -1285,72 +1311,108 @@ export function useStreamingAPI(threadId: string) {
       };
 
       let resumeStreamHadInterrupt = false;
+      let resumeStreamHadError = false;
+      let resumeStreamSawProgress = false;
+      let resumeError: Error | null = null;
 
-      await new Promise<void>((resolve) => {
-        const callbacks: StreamCallback = {
-          onToken(content, messageId, part) {
-            lastTokenTimeRef.current = Date.now();
-            dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
-          },
-          onDraftDiscard() {
-            if (isStreamingTokensRef.current) {
-              dispatch(removeLastMessageFromChat({ chatId: threadId }));
+      try {
+        await new Promise<void>((resolve) => {
+          const callbacks: StreamCallback = {
+            onToken(content, messageId, part) {
+              resumeStreamSawProgress = true;
+              lastTokenTimeRef.current = Date.now();
+              dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
+            },
+            onDraftDiscard() {
+              if (isStreamingTokensRef.current) {
+                dispatch(removeLastMessageFromChat({ chatId: threadId }));
+                isStreamingTokensRef.current = false;
+              }
+            },
+            onMessage(m) {
               isStreamingTokensRef.current = false;
-            }
-          },
-          onMessage(m) {
-            isStreamingTokensRef.current = false;
-            if (m.type === 'human') return;
+              if (m.type === 'human') return;
+              resumeStreamSawProgress = true;
 
-            if (m.type === 'tool') {
+              if (m.type === 'tool') {
+                dispatch(
+                  mergeToolResult({
+                    chatId: threadId,
+                    toolCallId: m.tool_call_id,
+                    content: m.content,
+                    status: (m as Record<string, unknown>).status as string | undefined,
+                    mcpApp: (m as { mcpApp?: Record<string, unknown> }).mcpApp,
+                    artifact: (m as { artifact?: unknown }).artifact,
+                  }),
+                );
+                dispatch(updateStreamingState({ chatId: threadId, state: { activeSubAgent: null } }));
+                return;
+              }
+
+              dispatch(appendMessageToChat({ chatId: threadId, message: m }));
+            },
+            onInterrupt(interrupt) {
+              resumeStreamHadInterrupt = true;
               dispatch(
-                mergeToolResult({
+                updateStreamingState({
                   chatId: threadId,
-                  toolCallId: m.tool_call_id,
-                  content: m.content,
-                  status: (m as Record<string, unknown>).status as string | undefined,
-                  mcpApp: (m as { mcpApp?: Record<string, unknown> }).mcpApp,
-                  artifact: (m as { artifact?: unknown }).artifact,
+                  state: { pendingInterrupt: enrichInterrupt(interrupt) },
                 }),
               );
-              return;
-            }
+            },
+            onError(error) {
+              resumeStreamHadError = true;
+              resumeError = error;
+            },
+            onStatusChange(status) {
+              const partial = nextStreamingPartialForStatus(status);
+              if (partial) {
+                dispatch(updateStreamingState({ chatId: threadId, state: partial }));
+              }
+            },
+            onDone() {
+              if (!resumeStreamHadInterrupt && !resumeStreamHadError) {
+                dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
+                dispatch(updateStreamingState({ chatId: threadId, state: { activeSubAgent: null } }));
+              }
+              resolve();
+            },
+          };
+          void manager.stream(streamRequest, callbacks).finally(() => resolve());
+        });
 
-            dispatch(appendMessageToChat({ chatId: threadId, message: m }));
-          },
-          onInterrupt(interrupt) {
-            resumeStreamHadInterrupt = true;
-            dispatch(
-              updateStreamingState({
-                chatId: threadId,
-                state: { pendingInterrupt: enrichInterrupt(interrupt) },
-              }),
-            );
-          },
-          onError(error) {
-            dispatch(resolveAllPendingToolCalls({ chatId: threadId, status: 'error', errorMessage: error.message }));
-            dispatch(
-              updateStreamingState({
-                chatId: threadId,
-                state: { error: error.message, isLoading: false, isConnected: false },
-              }),
-            );
-          },
-          onStatusChange(status) {
-            const partial = nextStreamingPartialForStatus(status);
-            if (partial) {
-              dispatch(updateStreamingState({ chatId: threadId, state: partial }));
+        if (resumeStreamHadError) {
+          // Only put the card back when the server is still waiting. An empty
+          // reload can mean a network miss after the answer already landed.
+          let pendingInterrupt = resumeStreamSawProgress ? null : savedInterrupt;
+          try {
+            const { messages, interrupt } = await getThreadStateAndInterrupt(threadId);
+            if (interrupt) {
+              pendingInterrupt = enrichInterrupt({
+                value: interrupt.value as InterruptPayload['value'],
+                resumable: interrupt.resumable,
+              });
+            } else if (messages.length > 0 || resumeStreamSawProgress) {
+              pendingInterrupt = null;
             }
-          },
-          onDone() {
-            if (!resumeStreamHadInterrupt) {
-              dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
-            }
-            resolve();
-          },
-        };
-        void manager.stream(streamRequest, callbacks);
-      });
+          } catch {
+            pendingInterrupt = resumeStreamSawProgress ? null : savedInterrupt;
+          }
+          dispatch(
+            updateStreamingState({
+              chatId: threadId,
+              state: {
+                pendingInterrupt,
+                error: resumeError?.message || 'Agent is unavailable. Please try again.',
+                isLoading: false,
+                isConnected: false,
+              },
+            }),
+          );
+        }
+      } finally {
+        resumeInFlightRef.current = false;
+      }
     },
     [dispatch, threadId],
   );
@@ -1360,7 +1422,7 @@ export function useStreamingAPI(threadId: string) {
   resumeWithDecisionsRef.current = resumeWithDecisions;
   useEffect(() => {
     if (!streamingState.pendingInterrupt || !threadId) return;
-    const decisions = _tryReplayQueuedDecision(threadId);
+    const decisions = queuedApprovalForInterrupt(threadId, streamingState.pendingInterrupt.value);
     if (!decisions) return;
     // Defer to avoid dispatching during render
     const id = setTimeout(() => resumeWithDecisionsRef.current(decisions), 0);

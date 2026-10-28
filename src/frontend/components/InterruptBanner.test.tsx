@@ -80,6 +80,72 @@ describe('InterruptBanner — tool approval branch', () => {
   // InterruptBanner.  Those flows are covered by AIMessageRenderer.test.tsx.
 });
 
+describe('InterruptBanner — user question', () => {
+  const questionInterrupt = {
+    value: {
+      type: 'user_question',
+      question: 'Do you approve kg or lbs?',
+      options: ['kg', '  ', 'lbs'],
+    },
+    resumable: true,
+  } as InterruptInfo;
+
+  it('shows the question and the suggested answers, with no close button', () => {
+    render(
+      <InterruptBanner interrupt={questionInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />,
+    );
+    expect(screen.getByText('Do you approve kg or lbs?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'kg' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'lbs' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /close/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^approve$/i })).not.toBeInTheDocument();
+  });
+
+  it('sends the chosen answer when a suggestion is clicked', async () => {
+    const onResume = vi.fn();
+    render(<InterruptBanner interrupt={questionInterrupt} onResume={onResume} onDismiss={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'kg' }));
+    expect(onResume).toHaveBeenCalledWith('kg');
+  });
+
+  it('sends the typed answer when Send is clicked', async () => {
+    const onResume = vi.fn();
+    render(<InterruptBanner interrupt={questionInterrupt} onResume={onResume} onDismiss={vi.fn()} />);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Your answer' }), 'stone');
+    await userEvent.click(screen.getByRole('button', { name: /send/i }));
+    expect(onResume).toHaveBeenCalledWith('stone');
+  });
+
+  it('fills its parent when embedded in a subagent card', () => {
+    render(
+      <InterruptBanner embedded interrupt={questionInterrupt} onResume={vi.fn()} onDismiss={vi.fn()} />,
+    );
+    const region = screen.getByRole('region', { name: 'Question from the agent' });
+    expect(region.className).not.toContain('max-w-');
+    expect(screen.getByRole('button', { name: 'Skip' })).toBeInTheDocument();
+  });
+
+  it('sends a skip answer and does not just hide the card', async () => {
+    const onResume = vi.fn();
+    const onDismiss = vi.fn();
+    render(<InterruptBanner interrupt={questionInterrupt} onResume={onResume} onDismiss={onDismiss} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(onResume).toHaveBeenCalledWith('The user skipped this question.');
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('shows only the text box when there are no suggestions', () => {
+    const textOnly = {
+      value: { type: 'user_question', question: 'What is your goal?', options: [] },
+      resumable: true,
+    } as InterruptInfo;
+    render(<InterruptBanner interrupt={textOnly} onResume={vi.fn()} onDismiss={vi.fn()} />);
+    expect(screen.getByText('What is your goal?')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Your answer' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'kg' })).not.toBeInTheDocument();
+  });
+});
+
 describe('InterruptBanner — generic input branch', () => {
   it('renders "Input Required" for a non-approval interrupt', () => {
     render(
