@@ -4,7 +4,7 @@ import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Downl
 import type { InterruptInfo } from "../types/deep-agent";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment, cloneElement, isValidElement } from "react";
 import { cn } from "../lib/utils";
 import {
   Dropdown,
@@ -31,6 +31,29 @@ import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButt
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
 import { splitMessageParts } from "../../server/message-parts";
+
+function isRunningToolCall(toolCall: { content?: unknown }): boolean {
+  if (toolCall.content == null) return true;
+  if (typeof toolCall.content === 'string') return toolCall.content.trim().length === 0;
+  return false;
+}
+
+function embedQuestion(node: ReactNode): ReactNode {
+  if (!isValidElement(node)) return node;
+  return cloneElement(node as React.ReactElement<{ embedded?: boolean }>, { embedded: true });
+}
+
+function answeredAskUser(toolCall: { name?: string; args?: unknown; content?: unknown }): { question: string; answer: string } | null {
+  if (toolCall.name !== 'ask_user') return null;
+  const args = toolCall.args;
+  const question = args && typeof args === 'object' && !Array.isArray(args)
+    && typeof (args as { question?: unknown }).question === 'string'
+    ? (args as { question: string }).question.trim()
+    : '';
+  const answer = typeof toolCall.content === 'string' ? toolCall.content.trim() : '';
+  if (!answer) return null;
+  return { question, answer };
+}
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -583,9 +606,10 @@ interface AIMessageRendererProps {
   allDecisionsMade?: boolean;
   onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
   thinkingLive?: boolean;
+  questionContent?: ReactNode;
 }
 
-export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false, questionContent }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
 
@@ -676,6 +700,8 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     if (isToolCallStart) {
       const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
       const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
+      const questionCalls = regularCalls.filter((tc) => tc.name === 'ask_user');
+      const otherCalls = regularCalls.filter((tc) => tc.name !== 'ask_user');
       const parts = splitMessageParts(message);
       const storedThinking = (message as { thinking?: unknown }).thinking;
       const thinkingText = typeof storedThinking === 'string' && storedThinking.length > 0
@@ -694,6 +720,10 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
             const tcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
             const slot = approvalSlotByToolCallId.get(tcId);
             const isThisCurrent = slot !== undefined && slot === globalApprovalIndex && !allDecisionsMade;
+            let runningSubagentIdx = -1;
+            subAgentCalls.forEach((call, callIdx) => {
+              if (isRunningToolCall(call as { content?: unknown })) runningSubagentIdx = callIdx;
+            });
             return (
               <SubAgentIndicator
                 key={`${message.id}-sa-${idx}`}
@@ -705,17 +735,40 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                 onSingleDecision={totalActionRequests > 1 ? onSingleDecision : undefined}
                 isCurrentApproval={totalActionRequests > 1 ? isThisCurrent : undefined}
                 onAlwaysAllow={onAlwaysAllow}
+                question={questionContent && idx === runningSubagentIdx ? embedQuestion(questionContent) : undefined}
               />
             );
           })}
 
-          {regularCalls.length > 0 && (
+          {questionCalls.map((toolCall, idx) => {
+            const exchange = answeredAskUser(toolCall);
+            if (!exchange) return null;
+            return (
+              <div key={`${message.id}-ask-${idx}`} className="flex items-start gap-3">
+                <div className="w-8 shrink-0" aria-hidden="true" />
+                <div
+                  className="min-w-0 flex-1 max-w-[85%] sm:max-w-[80%] bg-card border border-border rounded-xl px-4 py-3 text-sm"
+                  role="group"
+                  aria-label="Answered question"
+                >
+                  {exchange.question && (
+                    <p className="font-medium text-foreground">{exchange.question}</p>
+                  )}
+                  <p className={exchange.question ? 'mt-1 text-muted-foreground' : 'text-muted-foreground'}>
+                    {exchange.answer}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+
+          {otherCalls.length > 0 && (
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
                 <Settings className="w-4 h-4 text-muted-foreground" />
               </div>
               <div className="flex-1 min-w-0 space-y-2">
-                {regularCalls.map((toolCall, idx) => {
+                {otherCalls.map((toolCall, idx) => {
                   const itemId = `${message.id}-${idx}`;
                   const isExpanded = expandedItems.has(itemId);
                   const needsApproval = (pendingToolNames.has(toolCall.name) || pendingToolNames.has('task')) && !(toolCall as Record<string, unknown>).content;
@@ -1068,6 +1121,26 @@ export function ChatMessagesView({
     return { lastHumanMessageIndex: lastHuman, lastAiMessageIndex: lastAi };
   }, [messages]);
 
+  const questionNestMessageIndex = useMemo(() => {
+    let parentAsking = false;
+    let onlyIndex = -1;
+    let runningCount = 0;
+    messages.forEach((message, index) => {
+      if (message.type !== 'ai' || !Array.isArray(message.tool_calls)) return;
+      for (const toolCall of message.tool_calls) {
+        const call = toolCall as { name?: string; args?: Record<string, unknown>; content?: unknown };
+        if (!isRunningToolCall(call)) continue;
+        if (call.name === 'ask_user') parentAsking = true;
+        if (isSubAgentToolCall(call as { name: string; args?: Record<string, unknown> })) {
+          runningCount += 1;
+          onlyIndex = index;
+        }
+      }
+    });
+    if (parentAsking || runningCount !== 1) return -1;
+    return onlyIndex;
+  }, [messages]);
+
   const lastMessage = messages[messages.length - 1];
   const rawNoResponse = !isLoading && !pendingInterrupt && !interruptContent && messages.length > 0 && lastMessage?.type === 'human';
   const [showNoResponse, setShowNoResponse] = useState(false);
@@ -1083,7 +1156,7 @@ export function ChatMessagesView({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, interruptContent]);
 
   const showExport = Boolean(onExportMarkdown && onExportJson && messages.length > 0);
 
@@ -1181,16 +1254,21 @@ export function ChatMessagesView({
                     allDecisionsMade={globalAllDecisionsMade}
                     onSingleDecision={handleGlobalSingleDecision}
                     thinkingLive={isThinkingLive(message, isLoading, messageIndex === lastAiMessageIndex)}
+                    questionContent={messageIndex === questionNestMessageIndex ? interruptContent : undefined}
                   />
-                  <MessageActionsRow
-                    isLastAiInTurn={isLastAiInTurn}
-                    copyText={copyText}
-                    messageId={message.id ?? `msg-${messageIndex}`}
-                    chatId={chatId}
-                    traceId={traceId}
-                    userId={userId}
-                    existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
-                  />
+                  {messageIndex === lastAiMessageIndex && interruptContent && questionNestMessageIndex < 0 ? (
+                    interruptContent
+                  ) : (
+                    <MessageActionsRow
+                      isLastAiInTurn={isLastAiInTurn}
+                      copyText={copyText}
+                      messageId={message.id ?? `msg-${messageIndex}`}
+                      chatId={chatId}
+                      traceId={traceId}
+                      userId={userId}
+                      existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                    />
+                  )}
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
                       <div className="text-[11px] text-muted-foreground">
@@ -1282,7 +1360,7 @@ export function ChatMessagesView({
               </div>
             </div>
           )}
-          {interruptContent}
+          {lastAiMessageIndex < 0 && questionNestMessageIndex < 0 && interruptContent}
           <div ref={bottomRef} />
         </div>
       </div>

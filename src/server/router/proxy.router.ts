@@ -460,8 +460,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
         }
 
         runBody.config = {
-          metadata: { trace_id: traceId, user_id: xUserId },
-          configurable: { user_id: xUserId },
+          metadata: { trace_id: traceId, user_id: xUserId, source: 'ui' },
+          configurable: { user_id: xUserId, interactive: true },
         };
 
         const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);

@@ -34,6 +34,37 @@ const hitlInterrupt: InterruptInfo = {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+describe('AIMessageRenderer — answered question', () => {
+  it('shows the question and the answer instead of a tool box', () => {
+    const msg = makeMsg({
+      tool_calls: [{
+        id: 'tc-ask',
+        name: 'ask_user',
+        args: { question: 'Units?', options: ['kg', 'lbs'] },
+        content: 'kg',
+      }],
+    });
+
+    render(<AIMessageRenderer message={msg} />);
+
+    expect(screen.getByRole('group', { name: 'Answered question' })).toBeInTheDocument();
+    expect(screen.getByText('Units?')).toBeInTheDocument();
+    expect(screen.getByText('kg')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tool call: ask_user/i })).not.toBeInTheDocument();
+  });
+
+  it('leaves an unanswered question out of the transcript', () => {
+    const msg = makeMsg({
+      tool_calls: [{ id: 'tc-ask', name: 'ask_user', args: { question: 'Units?' } }],
+    });
+
+    render(<AIMessageRenderer message={msg} />);
+
+    expect(screen.queryByText('Units?')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tool call: ask_user/i })).not.toBeInTheDocument();
+  });
+});
+
 describe('AIMessageRenderer — HITL approval (production path for HITLInterruptValue)', () => {
   it('renders Approve and Reject buttons for a pending tool-call interrupt', () => {
     const msg = makeMsg({ tool_calls: [CREATE_PR_TOOL_CALL] });

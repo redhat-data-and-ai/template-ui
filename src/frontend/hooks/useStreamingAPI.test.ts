@@ -5,13 +5,14 @@ import { renderHook } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import React from 'react';
 import { configureStore } from '@reduxjs/toolkit';
-import chatsReducer, { addChat, selectStreamingState, updateChat } from '../redux/slices/chats';
+import chatsReducer, { addChat, selectStreamingState, updateChat, updateStreamingState } from '../redux/slices/chats';
 import configReducer from '../redux/slices/config';
 import personalizationReducer from '../redux/slices/personalization';
 import toastsReducer from '../redux/slices/toasts';
 import userSettingsReducer, { addAlwaysAllowedTool } from '../redux/slices/userSettings';
 import projectsReducer from '../redux/slices/projects';
 import { useStreamingAPI, RECOVERY_POLL_TIMEOUT_MS, _startRecoveryPolling, isNonRecoverableHttpStatus } from './useStreamingAPI';
+import { getThreadStateAndInterrupt } from '@/services/agent-rest';
 import * as projectsApi from '../services/projects-api';
 import { markChatAsClientCreated, unmarkChatAsClientCreated } from '../services/newChatTracker';
 
@@ -351,6 +352,87 @@ describe('useStreamingAPI — initial state and stop()', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(projectsApi.assignThreadToProject).not.toHaveBeenCalled();
+  });
+});
+
+describe('resumeInterrupt', () => {
+  let store: ReturnType<typeof makeStore>;
+
+  beforeEach(() => {
+    localStorage.clear();
+    store = makeStore();
+    seedChat(store);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 500 })));
+    vi.mocked(getThreadStateAndInterrupt).mockResolvedValue({
+      messages: [],
+      interrupt: {
+        value: { type: 'user_question', question: 'New?', options: [] },
+        resumable: true,
+      },
+    });
+    store.dispatch(updateStreamingState({
+      chatId: THREAD_ID,
+      state: {
+        pendingInterrupt: {
+          value: { type: 'user_question', question: 'Old?', options: [] } as never,
+          resumable: true,
+        },
+      },
+    }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('shows the server pause after a failed send and accepts another answer', async () => {
+    const { result } = renderHook(() => useStreamingAPI(THREAD_ID), {
+      wrapper: makeWrapper(store),
+    });
+
+    await act(async () => {
+      await result.current.resumeInterrupt('blue');
+    });
+
+    expect(result.current.pendingInterrupt?.value).toMatchObject({ question: 'New?' });
+
+    const callsAfterFirst = vi.mocked(fetch).mock.calls.length;
+    await act(async () => {
+      await result.current.resumeInterrupt('green');
+    });
+    expect(vi.mocked(fetch).mock.calls.length).toBe(callsAfterFirst + 1);
+  });
+
+  it('drops the card when the thread was read and is no longer waiting', async () => {
+    vi.mocked(getThreadStateAndInterrupt).mockResolvedValue({
+      messages: [{ type: 'ai', content: 'done', id: 'm1' } as Message],
+      interrupt: null,
+    });
+    const { result } = renderHook(() => useStreamingAPI(THREAD_ID), {
+      wrapper: makeWrapper(store),
+    });
+
+    await act(async () => {
+      await result.current.resumeInterrupt('blue');
+    });
+
+    expect(result.current.pendingInterrupt).toBeNull();
+  });
+
+  it('keeps the card when the send never reached the server', async () => {
+    vi.mocked(getThreadStateAndInterrupt).mockResolvedValue({
+      messages: [],
+      interrupt: null,
+    });
+    const { result } = renderHook(() => useStreamingAPI(THREAD_ID), {
+      wrapper: makeWrapper(store),
+    });
+
+    await act(async () => {
+      await result.current.resumeInterrupt('blue');
+    });
+
+    expect(result.current.pendingInterrupt?.value).toMatchObject({ question: 'Old?' });
   });
 });
 
