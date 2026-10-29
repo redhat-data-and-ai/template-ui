@@ -527,7 +527,9 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(JSON.parse(threadInit[1].body).metadata.user_identity).toBe('johnwick');
     const runBody = JSON.parse(runInit[1].body);
     expect(runBody.config.metadata.user_id).toBe('johnwick');
+    expect(runBody.config.metadata.source).toBe('ui');
     expect(runBody.config.configurable.user_id).toBe('johnwick');
+    expect(runBody.config.configurable.interactive).toBe(true);
   });
 
   it('emits a token chunk when the agent sends messages/partial', async () => {
