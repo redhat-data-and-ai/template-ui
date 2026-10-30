@@ -12,11 +12,11 @@ test.describe('Chat flow smoke test', () => {
     await mockAgentStream(page, MOCK_RESPONSE);
   });
 
-  test('home page loads with textarea and submit button', async ({ page }) => {
+  test('home page loads with text box and submit button', async ({ page }) => {
     const home = new HomePage(page);
     await home.goto();
 
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 

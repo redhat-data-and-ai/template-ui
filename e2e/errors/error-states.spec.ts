@@ -55,7 +55,7 @@ test.describe('Error states', () => {
     );
 
     // The app must still be interactive — no top-level error boundary message
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('Something went wrong');
   });
 

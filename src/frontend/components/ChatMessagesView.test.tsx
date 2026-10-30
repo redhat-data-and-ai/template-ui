@@ -4,6 +4,12 @@ import { render, screen, act } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
+import { underlineSubagentNames } from './subagentSlash';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import { markdownSanitizeSchema } from '../lib/markdown-sanitize';
 import { ChatMessagesView } from './ChatMessagesView';
 import chatsReducer from '../redux/slices/chats';
 import configReducer from '../redux/slices/config';
@@ -14,6 +20,58 @@ import projectsReducer from '../redux/slices/projects';
 
 // jsdom does not implement scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();
+
+describe('sent subagent underline', () => {
+  it('underlines /analyst and still renders markdown bold', () => {
+    render(
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema]]}
+      >
+        {underlineSubagentNames('/analyst **bold**', ['analyst'])}
+      </ReactMarkdown>,
+    );
+    expect(screen.getByText('/analyst').tagName).toBe('U');
+    expect(screen.getByText('bold').tagName).toBe('STRONG');
+  });
+
+  it('underlines a name saved on the message and leaves an unsaved name plain', () => {
+    const store = makeStore();
+    const { rerender } = render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({
+            isLoading: true,
+            messages: [{
+              type: 'human',
+              content: '/analyst **bold**',
+              id: 'm1',
+              additional_kwargs: { invoked_subagents: ['analyst'] },
+            }],
+          })}
+        />
+      </Provider>,
+    );
+    expect(screen.getByText('/analyst').tagName).toBe('U');
+    expect(screen.getByText('bold').tagName).toBe('STRONG');
+
+    rerender(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({
+            isLoading: true,
+            messages: [{
+              type: 'human',
+              content: '/analyst hello',
+              id: 'm2',
+            }],
+          })}
+        />
+      </Provider>,
+    );
+    expect(screen.getByText(/\/analyst hello/).closest('u')).toBeNull();
+  });
+});
 
 // ── Store factory ─────────────────────────────────────────────────────────────
 

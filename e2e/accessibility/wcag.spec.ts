@@ -50,7 +50,7 @@ test.describe('Home page — WCAG 2.1 AA', () => {
       localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'light' }));
     });
     await page.goto('/');
-    await page.waitForSelector('textarea', { state: 'visible' });
+    await page.getByRole('textbox').waitFor({ state: 'visible' });
     const violations = await runAxe(page);
     expect(violations, formatViolations(violations)).toHaveLength(0);
   });
@@ -61,7 +61,7 @@ test.describe('Home page — WCAG 2.1 AA', () => {
       localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'dark' }));
     });
     await page.goto('/');
-    await page.waitForSelector('textarea', { state: 'visible' });
+    await page.getByRole('textbox').waitFor({ state: 'visible' });
     const violations = await runAxe(page);
     expect(violations, formatViolations(violations)).toHaveLength(0);
   });

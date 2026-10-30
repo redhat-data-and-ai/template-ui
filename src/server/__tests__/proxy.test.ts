@@ -502,6 +502,37 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(res.body).toContain('[DONE]');
   });
 
+  it('stores invoked subagent names on the human message', async () => {
+    const agentSSE =
+      `event: messages/partial\ndata: [{"type":"ai","content":"Hello"}]\n\n`;
+
+    const fetchMock = stubFetch(
+      okJson({ thread_id: 'th1' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: {
+        message: '/analyst what is my BMI',
+        thread_id: 'th1',
+        user_id: 'u1',
+        invoked_subagents: ['analyst'],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const runInit = fetchMock.mock.calls[1][1] as RequestInit;
+    const runBody = JSON.parse(String(runInit.body));
+    expect(runBody.input.messages[0].content).toBe('/analyst what is my BMI');
+    expect(runBody.input.messages[0].additional_kwargs).toEqual({
+      invoked_subagents: ['analyst'],
+    });
+  });
+
   it('forwards dummy-session username as X-User-ID and run config user_id', async () => {
     const agentSSE =
       `event: messages/partial\ndata: [{"type":"ai","content":"Hello"}]\n\n`;

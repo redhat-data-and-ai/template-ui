@@ -18,6 +18,7 @@ import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI, MAX_RETRIES, queuedApprovalForInterrupt } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
+import { fetchMentionCatalog, matchingSubagentNames } from '../components/subagentSlash';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { ReconnectingBanner } from '../components/ReconnectingBanner';
 import { InterruptBanner } from '../components/InterruptBanner';
@@ -42,6 +43,22 @@ import {
 } from '../contexts/ChatActionsContext';
 import { formatMcpModelContext } from '../types/mcp-apps';
 
+async function humanMessage(content: string): Promise<Message> {
+  let invoked: string[] = [];
+  try {
+    const options = await fetchMentionCatalog();
+    invoked = matchingSubagentNames(content, options.map((option) => option.name));
+  } catch {
+    invoked = [];
+  }
+  return {
+    id: `msg-${Date.now()}`,
+    type: 'human',
+    content,
+    additional_kwargs: { invoked_subagents: invoked },
+  };
+}
+
 export function ChatPage({ threadId }: { threadId: string }) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -62,7 +79,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const [hydrating, setHydrating] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const chatInputRef = useRef<HTMLDivElement>(null);
   const hasFinalizeEventOccurredRef = useRef(false);
 
   const thread = useStreamingAPI(threadId);
@@ -206,15 +223,12 @@ export function ChatPage({ threadId }: { threadId: string }) {
     initialPromptSent.current = true;
     navigate(location.pathname, { replace: true, state: {} });
 
-    const userMessage: Message = {
-      id: `msg-${Date.now()}`,
-      type: 'human',
-      content: prompt,
-    };
-    thread.submit({ messages: [userMessage] }).then(() => {
-      hasFinalizeEventOccurredRef.current = true;
-    }).catch((err) => {
-      console.error('Failed to auto-send initial prompt:', err);
+    void humanMessage(prompt).then((userMessage) => {
+      thread.submit({ messages: [userMessage] }).then(() => {
+        hasFinalizeEventOccurredRef.current = true;
+      }).catch((err) => {
+        console.error('Failed to auto-send initial prompt:', err);
+      });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, hydrating, thread.isLoading]);
@@ -294,11 +308,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
       const trimmed = inputValue.trim();
       if (!trimmed) return;
 
-      const userMessage: Message = {
-        id: `msg-${Date.now()}`,
-        type: 'human',
-        content: trimmed,
-      };
+      const userMessage = await humanMessage(trimmed);
 
       const currentThread = threadRef.current;
       const messages = [...currentThread.messages, userMessage];
@@ -341,11 +351,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
       if (trimmed === '') return;
 
       const truncated = thread.messages.slice(0, messageIndex);
-      const userMessage: Message = {
-        id: `msg-${Date.now()}`,
-        type: 'human',
-        content: trimmed,
-      };
+      const userMessage = await humanMessage(trimmed);
       const nextMessages = [...truncated, userMessage];
 
       try {
