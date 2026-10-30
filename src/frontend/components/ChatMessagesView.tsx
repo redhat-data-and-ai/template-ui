@@ -1,4 +1,4 @@
-import type React from "react";
+import React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User, ShieldCheck } from "lucide-react";
 import type { InterruptInfo } from "../types/deep-agent";
@@ -10,7 +10,6 @@ import {
   Dropdown,
   DropdownItem,
   DropdownList,
-  Label,
   MenuToggle,
   type MenuToggleElement,
 } from "@patternfly/react-core";
@@ -20,12 +19,19 @@ import {
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { markdownSanitizeSchema } from "../lib/markdown-sanitize";
 import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
 import { McpAppHostFromToolCall } from "./McpAppHost";
+import { NativeChartViewer, extractPlotlyFigure, extractChartMeta } from "./NativeChartViewer";
+import { BookOpen } from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { setChunks, selectChunk, selectPanelOpen, type ReferenceChunk } from '../redux/slices/references';
+import { ReferencesPanel } from './ReferencesPanel';
+import { useContentSegments, ChartCard, PlotlyCard } from './InlineChart';
 import { TodoStrip } from "./TodoStrip";
 import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButtons";
 import { CustomDataRenderer } from "./CustomDataRenderer";
@@ -36,6 +42,221 @@ function isRunningToolCall(toolCall: { content?: unknown }): boolean {
   if (toolCall.content == null) return true;
   if (typeof toolCall.content === 'string') return toolCall.content.trim().length === 0;
   return false;
+}
+
+/**
+ * Detect standalone title-case lines (preceded+followed by blank line, no ending
+ * period, short) and promote them to ## headings so they render as actual headings.
+ * The model often omits the `## ` prefix despite prompt instructions.
+ */
+function promoteHeadings(md: string): string {
+  return md.replace(
+    /(?:^|\n\n)([ \t]*(?:---[ \t]*\n\n)?)(([A-Z][A-Za-z0-9\s&:,/()\u2013\u2014-]{1,78}))\n\n/g,
+    (_match, prefix, _full, title) => {
+      const t = title.trim();
+      if (t.endsWith('.') || t.endsWith(',') || t.endsWith(';')) return _match;
+      if (t.startsWith('#') || t.startsWith('|') || t.startsWith('>') || t.startsWith(':::')) return _match;
+      const wordCount = t.split(/\s+/).length;
+      if (wordCount > 10) return _match;
+      return `\n\n${prefix}## ${t}\n\n`;
+    }
+  );
+}
+
+/**
+ * Convert a single "Doc Name, p.X" match into a markdown cite link.
+ */
+function makeCiteLink(doc: string, page: string, wrap?: string): string {
+  const d = doc.trim();
+  const encodedDoc = encodeURIComponent(d);
+  const label = wrap ? `${wrap}${d}, p.${page}${wrap === '(' ? ')' : ''}` : `${d}, p.${page}`;
+  return `[${label}](#cite~${encodedDoc}~${page})`;
+}
+
+/**
+ * Wrap citations in clickable markdown links.
+ * Handles: (Doc, p.X), (Doc1, p.X; Doc2, p.Y), and bare Doc, p.X in table cells.
+ */
+function linkifyCitations(md: string): string {
+  const CITE_SINGLE = /([^();]{3,60}?),\s*p\.?\s*(\d+)/;
+
+  return md
+    .replace(/\(([^()]+)\)/g, (paren, inner: string) => {
+      if (!CITE_SINGLE.test(inner)) return paren;
+      const parts = inner.split(';').map(s => s.trim());
+      const linked = parts.map(part => {
+        const m = part.match(/^(.+?),\s*p\.?\s*(\d+)$/);
+        if (!m) return part;
+        return makeCiteLink(m[1], m[2]);
+      });
+      return `(${linked.join('; ')})`;
+    })
+    .replace(
+      /\|\s*([^|]{3,70}?)\s*\|\s*(p\.?\s*\d+(?:\s*,\s*p\.?\s*\d+)*)\s*\|/g,
+      (_match, doc, pagesRaw) => {
+        const d = doc.trim();
+        if (!d || /^[\d$#\-*]+$/.test(d) || d.startsWith('[')) return _match;
+        const firstPage = pagesRaw.match(/\d+/)?.[0] ?? '1';
+        const link = makeCiteLink(d, firstPage);
+        return `| ${link} | ${pagesRaw.trim()} |`;
+      }
+    )
+    .replace(
+      /(?<=\|\s*)([^|\[\]]{5,70}?,\s*p\.?\s*(\d+))(?=\s*\|)/g,
+      (_match, full, page) => {
+        if (full.startsWith('[')) return _match;
+        const docPart = full.replace(/,\s*p\.?\s*\d+$/, '').trim();
+        if (!docPart || /^[\d$#\-*%]+$/.test(docPart)) return _match;
+        return makeCiteLink(docPart, page);
+      }
+    );
+}
+
+/**
+ * Find a matching reference chunk for a citation doc title and page.
+ * Uses progressively looser matching: exact title+page, partial title+page,
+ * then title-only, then keyword overlap.
+ */
+function findChunkForCitation(doc: string, page: number, chunks: ReferenceChunk[]): ReferenceChunk | undefined {
+  if (chunks.length === 0) return undefined;
+  const docLower = doc.toLowerCase().replace(/\.pdf$/i, '').trim();
+  const docWords = docLower.split(/[\s_\-]+/).filter(w => w.length > 2);
+
+  // 1. Exact substring match + page
+  const exactPage = chunks.find(c => {
+    const t = c.doc_title.toLowerCase();
+    return (t.includes(docLower) || docLower.includes(t)) && c.page === page;
+  });
+  if (exactPage) return exactPage;
+
+  // 2. Exact substring match, any page
+  const exactAnyPage = chunks.find(c => {
+    const t = c.doc_title.toLowerCase();
+    return t.includes(docLower) || docLower.includes(t);
+  });
+  if (exactAnyPage) return exactAnyPage;
+
+  // 3. Keyword overlap (at least 60% of doc words match)
+  const threshold = Math.max(2, Math.ceil(docWords.length * 0.6));
+  let bestMatch: ReferenceChunk | undefined;
+  let bestScore = 0;
+  for (const c of chunks) {
+    const t = c.doc_title.toLowerCase();
+    const matches = docWords.filter(w => t.includes(w)).length;
+    const pageBonus = c.page === page ? 1 : 0;
+    const score = matches + pageBonus;
+    if (matches >= threshold && score > bestScore) {
+      bestScore = score;
+      bestMatch = c;
+    }
+  }
+  return bestMatch;
+}
+
+function SegmentedMarkdown({ markdown, mdComponents, chunks, validationResult }: {
+  markdown: string;
+  mdComponents: Record<string, React.ComponentType<any>>;
+  chunks: ReferenceChunk[];
+  validationResult?: ValidationResult | null;
+}) {
+  const dispatch = useAppDispatch();
+  const processed = useMemo(() => linkifyCitations(promoteHeadings(markdown)), [markdown]);
+  const segments = useContentSegments(processed);
+
+  // Build a lookup of validated/invalid citations
+  const citeStatusMap = useMemo(() => {
+    const map = new Map<string, 'valid' | 'invalid'>();
+    if (!validationResult?.details) return map;
+    for (const d of validationResult.details) {
+      const key = d.citation.toLowerCase().trim();
+      map.set(key, d.status === 'PASS' ? 'valid' : 'invalid');
+    }
+    return map;
+  }, [validationResult]);
+
+  const handleCiteClick = useCallback((doc: string, page: number) => {
+    if (chunks.length === 0) {
+      return;
+    }
+    dispatch(setChunks(chunks));
+    const match = findChunkForCitation(doc, page, chunks);
+    if (match) {
+      dispatch(selectChunk(match.chunk_id));
+    }
+  }, [chunks, dispatch]);
+
+  const citeAwareComponents = useMemo(() => ({
+    ...mdComponents,
+    a: ({ children, href, ...props }: MdComponentProps) => {
+      if (typeof href === 'string' && href.includes('#cite~')) {
+        const fragment = href.split('#cite~')[1] ?? '';
+        const parts = fragment.split('~');
+        const doc = decodeURIComponent(parts[0] ?? '');
+        const page = parseInt(parts[1] ?? '0', 10);
+
+        // Determine validation status for this citation
+        let statusClass = '';
+        if (citeStatusMap.size > 0) {
+          const citeKey = `${doc.toLowerCase().trim()}, p.${page}`;
+          const status = citeStatusMap.get(citeKey);
+          if (status === 'invalid') {
+            statusClass = ' cite-invalid';
+          } else if (status === 'valid') {
+            statusClass = ' cite-valid';
+          }
+          // If invalid, don't make it clickable
+          if (status === 'invalid') {
+            return (
+              <span
+                className={`cite-link cite-invalid`}
+                title="Citation could not be verified"
+                {...props}
+              >
+                {children}
+              </span>
+            );
+          }
+        }
+
+        return (
+          <a
+            href="#"
+            className={`cite-link${statusClass}`}
+            onClick={(e) => {
+              e.preventDefault();
+              handleCiteClick(doc, page);
+            }}
+            {...props}
+          >
+            {children}
+          </a>
+        );
+      }
+      return (
+        <a href={href as string} target="_blank" rel="noopener noreferrer" {...props}>
+          {children}
+        </a>
+      );
+    },
+  }), [mdComponents, handleCiteClick, citeStatusMap]);
+
+  return (
+    <div className="ai-response-body">
+      {segments.map((seg, i) =>
+        seg.kind === 'plotly' ? (
+          <PlotlyCard key={i} spec={seg.spec} />
+        ) : seg.kind === 'chart' ? (
+          <ChartCard key={i} spec={seg.spec} />
+        ) : (
+          <div key={i} className="max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema]]} components={citeAwareComponents}>
+              {seg.text}
+            </ReactMarkdown>
+          </div>
+        )
+      )}
+    </div>
+  );
 }
 
 function embedQuestion(node: ReactNode): ReactNode {
@@ -56,9 +277,11 @@ function answeredAskUser(toolCall: { name?: string; args?: unknown; content?: un
 }
 
 function extractMessageText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
+  let text = '';
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    text = content
       .map((b: unknown) => {
         if (typeof b === 'string') return b;
         if (b && typeof b === 'object' && 'type' in b && 'text' in b) {
@@ -69,7 +292,12 @@ function extractMessageText(content: unknown): string {
       })
       .join('');
   }
-  return '';
+  return stripClassificationBlock(text);
+}
+
+/** Remove the <classification>...</classification> block injected by the BFF. */
+function stripClassificationBlock(text: string): string {
+  return text.replace(/<classification>[\s\S]*?<\/classification>\s*/g, '').trimStart();
 }
 
 function stripThinkingFromPlainText(text: string): { thinking: string; display: string } {
@@ -265,119 +493,17 @@ function MessageActionsRow({
 }
 
 const mdComponents = {
-  h1: ({ className, children, ...props }: MdComponentProps) => (
-    <h1 className={cn("text-2xl font-bold mt-4 mb-2 text-foreground", className)} {...props}>
+  a: ({ children, href, ...props }: MdComponentProps) => (
+    <a href={href as string} target="_blank" rel="noopener noreferrer" {...props}>
       {children}
-    </h1>
+    </a>
   ),
-  h2: ({ className, children, ...props }: MdComponentProps) => (
-    <h2 className={cn("text-xl font-semibold mt-3 mb-2 text-foreground", className)} {...props}>
-      {children}
-    </h2>
-  ),
-  h3: ({ className, children, ...props }: MdComponentProps) => (
-    <h3 className={cn("text-lg font-semibold mt-3 mb-1 text-foreground", className)} {...props}>
-      {children}
-    </h3>
-  ),
-  p: ({ className, children, node: _node, ...props }: MdComponentProps) => (
-    <p className={cn("mb-3 leading-7 text-inherit", className)} {...props}>
-      {children}
-    </p>
-  ),
-  a: ({ className, children, href, ...props }: MdComponentProps) => (
-    <Label isCompact className="mx-0.5">
-      <a
-        className={cn("text-primary hover:text-primary/80 text-xs", className)}
-        href={href as string}
-        target="_blank"
-        rel="noopener noreferrer"
-        {...props}
-      >
-        {children}
-        <span className="sr-only"> (opens in new tab)</span>
-      </a>
-    </Label>
-  ),
-  ul: ({ className, children, ...props }: MdComponentProps) => (
-    <ul className={cn("list-disc pl-6 mb-3 space-y-1", className)} {...props}>
-      {children}
-    </ul>
-  ),
-  ol: ({ className, children, ...props }: MdComponentProps) => (
-    <ol className={cn("list-decimal pl-6 mb-3 space-y-1", className)} {...props}>
-      {children}
-    </ol>
-  ),
-  li: ({ className, children, node: _node, ...props }: MdComponentProps) => (
-    <li className={cn("mb-1 text-inherit", className)} {...props}>
-      {children}
-    </li>
-  ),
-  blockquote: ({ className, children, ...props }: MdComponentProps) => (
-    <blockquote
-      className={cn(
-        "border-l-3 border-primary/40 pl-4 italic my-3 text-sm text-muted-foreground",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </blockquote>
-  ),
-  code: ({ className, children, ...props }: MdComponentProps) => (
-    <code
-      className={cn(
-        "bg-muted rounded-md px-1.5 py-0.5 font-mono text-[13px] text-foreground",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </code>
-  ),
-  pre: MarkdownPre,
-  hr: ({ className, ...props }: MdComponentProps) => (
-    <hr className={cn("border-border my-4", className)} {...props} />
-  ),
-  table: ({ className, children, ...props }: MdComponentProps) => (
-    <div className="my-3 overflow-x-auto rounded-lg border border-border">
-      <table className={cn("border-collapse w-full", className)} {...props}>
-        {children}
-      </table>
+  table: ({ children, ...props }: MdComponentProps) => (
+    <div className="table-wrap">
+      <table {...props}>{children}</table>
     </div>
   ),
-  thead: ({ className, children, ...props }: MdComponentProps) => (
-    <thead className={cn("bg-muted/70", className)} {...props}>
-      {children}
-    </thead>
-  ),
-  tbody: ({ className, children, ...props }: MdComponentProps) => (
-    <tbody className={cn("", className)} {...props}>
-      {children}
-    </tbody>
-  ),
-  tr: ({ className, children, ...props }: MdComponentProps) => (
-    <tr className={cn("border-b border-border", className)} {...props}>
-      {children}
-    </tr>
-  ),
-  th: ({ className, children, ...props }: MdComponentProps) => (
-    <th
-      className={cn(
-        "px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </th>
-  ),
-  td: ({ className, children, ...props }: MdComponentProps) => (
-    <td className={cn("px-4 py-2.5 text-sm", className)} {...props}>
-      {children}
-    </td>
-  ),
+  pre: MarkdownPre,
   img: () => null,
 };
 
@@ -456,7 +582,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
             </div>
           ) : (
             <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
                 {plain}
               </ReactMarkdown>
             </div>
@@ -513,8 +639,6 @@ function waitingAfterFinishedTool(messages: Message[]): boolean {
 
 function isThinkingLive(message: Message, isLoading: boolean, isLastAi: boolean): boolean {
   if (!isLoading || !isLastAi) return false;
-  const tools = (message as { tool_calls?: unknown }).tool_calls;
-  if (Array.isArray(tools) && tools.length > 0) return false;
   const stored = (message as { thinking?: unknown }).thinking;
   const parts = splitMessageParts(message);
   const thinking = typeof stored === 'string' && stored.trim().length > 0 ? stored : parts.thinking;
@@ -525,20 +649,41 @@ function isThinkingLive(message: Message, isLoading: boolean, isLastAi: boolean)
 interface AiMessageBubbleProps {
   message: Message;
   thinkingLive?: boolean;
+  referenceChunks?: ReferenceChunk[];
+  turnSummary?: TurnSummary;
+  validationResult?: ValidationResult | null;
 }
 
-const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message, thinkingLive = false }) => {
+const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message, thinkingLive = false, referenceChunks = [], turnSummary, validationResult }) => {
   const storedThinking = (message as { thinking?: unknown }).thinking;
   const hasStoredThinking = typeof storedThinking === 'string' && storedThinking.length > 0;
   const parts = splitMessageParts(message);
-  const thinkingText = hasStoredThinking ? storedThinking : parts.thinking;
+  const localThinking = hasStoredThinking ? storedThinking : parts.thinking;
   const answer = parts.answer;
   const userToggledThinking = useRef(false);
-  const [thinkingExpanded, setThinkingExpanded] = useState(thinkingLive);
+  const [thinkingExpanded, setThinkingExpanded] = useState(false);
+  const [expandedToolIdx, setExpandedToolIdx] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (userToggledThinking.current) return;
-    setThinkingExpanded(thinkingLive);
+    if (thinkingLive) setThinkingExpanded(true);
+    else setThinkingExpanded(false);
   }, [thinkingLive]);
+
+  const turnSteps = turnSummary?.steps ?? [];
+  const totalToolCalls = turnSummary?.totalToolCalls ?? 0;
+  const hasLocalThinking = localThinking.length > 0;
+  const hasTurnData = turnSteps.length > 0;
+  const hasThinkingOrTools = hasTurnData || hasLocalThinking;
+
+  const toggleToolDetail = (key: string) => {
+    setExpandedToolIdx(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const customRaw = (message as Record<string, unknown>).custom_data;
   const customData =
     customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
@@ -547,21 +692,23 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message, thinkingLive
   const bodyMd =
     answer.length > 0
       ? answer
-      : thinkingText.length > 0 || typeof message.content === 'string'
+      : (hasLocalThinking || hasTurnData) || typeof message.content === 'string'
         ? ''
         : extractMessageText(message.content);
+
+  let globalToolIdx = 0;
 
   return (
     <div className="flex items-start gap-3">
       <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
         <Bot className="w-4 h-4 text-white" />
       </div>
-      <div className="flex-1 min-w-0 max-w-[85%] sm:max-w-[80%] space-y-2">
-        {thinkingText.length > 0 && (
-          <div className="border border-border rounded-xl bg-muted/30">
+      <div className="flex-1 min-w-0 space-y-2">
+        {hasThinkingOrTools && (
+          <div>
             <button
               type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground"
+              className="flex items-center gap-1.5 px-1 py-1 text-left text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
               aria-expanded={thinkingExpanded}
               onClick={() => {
                 userToggledThinking.current = true;
@@ -569,23 +716,107 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message, thinkingLive
               }}
             >
               {thinkingExpanded
-                ? <ChevronDown className="w-4 h-4 shrink-0" aria-hidden="true" />
-                : <ChevronRight className="w-4 h-4 shrink-0" aria-hidden="true" />}
-              {thinkingLive ? <span className="animate-pulse">Thinking...</span> : 'Thought'}
+                ? <ChevronDown className="w-3 h-3 shrink-0" aria-hidden="true" />
+                : <ChevronRight className="w-3 h-3 shrink-0" aria-hidden="true" />}
+              {thinkingLive ? (
+                <span className="animate-pulse text-xs">Thinking...</span>
+              ) : (
+                <span className="text-xs italic">
+                  Thought process
+                  {totalToolCalls > 0 && (
+                    <span className="text-muted-foreground/40 ml-1">
+                      &middot; {totalToolCalls} tool call{totalToolCalls > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </span>
+              )}
             </button>
             {thinkingExpanded && (
-              <div className="mx-3 mb-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
-                {thinkingText}
+              <div className="ml-1 pl-3 border-l-2 border-muted-foreground/15 space-y-2">
+                {hasTurnData ? turnSteps.map((step, stepIdx) => {
+                  if (step.type === 'thinking' && step.thinking) {
+                    return (
+                      <div key={`think-${stepIdx}`} className="text-[13px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{step.thinking}</ReactMarkdown>
+                      </div>
+                    );
+                  }
+                  if (step.type === 'tools' && step.toolCalls) {
+                    const calls = step.toolCalls;
+                    return (
+                      <div key={`tools-${stepIdx}`} className="space-y-1 my-1">
+                        {calls.map((tc, i) => {
+                          const toolKey = `${stepIdx}-${i}`;
+                          const isOpen = expandedToolIdx.has(toolKey);
+                          const hasError = (tc as Record<string, unknown>).status === 'error';
+                          globalToolIdx++;
+                          return (
+                            <div key={toolKey} className="border border-border/40 rounded-lg overflow-hidden bg-card/50">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleToolDetail(toolKey); }}
+                                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 transition-colors"
+                              >
+                                <div className="flex items-center gap-2 text-xs">
+                                  {hasError ? (
+                                    <AlertCircle className="w-3 h-3 text-red-500 shrink-0" />
+                                  ) : (tc as Record<string, unknown>).content != null ? (
+                                    <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" />
+                                  ) : (
+                                    <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" />
+                                  )}
+                                  <code className="font-mono text-[11px] bg-muted/50 px-1 py-0.5 rounded">{tc.name}</code>
+                                  <span className="text-muted-foreground/50 text-[11px]">
+                                    {formatToolActivity(tc as { name: string; args?: Record<string, unknown> })}
+                                  </span>
+                                </div>
+                                {isOpen
+                                  ? <ChevronDown className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+                                  : <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" />}
+                              </button>
+                              {isOpen && (
+                                <div className="border-t border-border/30 px-3 pb-2 max-h-60 overflow-y-auto">
+                                  <div className="text-[10px] font-medium text-muted-foreground/50 mb-1 mt-2 uppercase tracking-wider">Arguments</div>
+                                  <pre className="text-[11px] text-foreground/70 bg-muted/40 border border-border/30 p-2 rounded overflow-auto font-mono">
+                                    {JSON.stringify(tc.args, null, 2)}
+                                  </pre>
+                                  {tc.content != null && (
+                                    <>
+                                      <div className={cn(
+                                        "text-[10px] font-medium mb-1 mt-2 uppercase tracking-wider",
+                                        hasError ? "text-red-500/70" : "text-muted-foreground/50",
+                                      )}>
+                                        {hasError ? 'Error' : 'Result'}
+                                      </div>
+                                      <pre className="text-[11px] text-foreground/70 bg-muted/40 border border-border/30 p-2 rounded overflow-auto font-mono max-h-40">
+                                        {typeof tc.content === 'string'
+                                          ? tc.content.slice(0, 2000)
+                                          : JSON.stringify(tc.content, null, 2).slice(0, 2000)}
+                                      </pre>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  return null;
+                }) : hasLocalThinking && (
+                  <div className="text-[13px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{localThinking}</ReactMarkdown>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
         {(bodyMd.length > 0 || customData) && (
-          <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
+          <div className="ai-response-body">
             {bodyMd.length > 0 && (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
-              </div>
+              <SegmentedMarkdown markdown={bodyMd} mdComponents={mdComponents} chunks={referenceChunks} validationResult={validationResult} />
             )}
             {customData && <CustomDataRenderer data={customData} />}
           </div>
@@ -606,10 +837,14 @@ interface AIMessageRendererProps {
   allDecisionsMade?: boolean;
   onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
   thinkingLive?: boolean;
+  isStreamingLastAi?: boolean;
   questionContent?: ReactNode;
+  referenceChunks?: ReferenceChunk[];
+  turnSummary?: TurnSummary;
+  validationResult?: ValidationResult | null;
 }
 
-export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false, questionContent }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false, isStreamingLastAi = false, questionContent, referenceChunks = [], turnSummary, validationResult }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
 
@@ -639,12 +874,17 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
       visibleCalls.forEach((tc: any, idx: number) => {
         const itemId = `${message.id}-${idx}`;
         const needsApproval = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !tc.content;
+        const isRunning = tc.content == null;
         const isFinished = tc.content != null;
+        const hasMcpAppResult = Boolean(parseMcpApp(tc.mcpApp));
 
         if (needsApproval && !next.has(itemId) && !userCollapsedRef.current.has(itemId)) {
           next.add(itemId);
           changed = true;
-        } else if (isFinished && next.has(itemId) && !userExpandedRef.current.has(itemId)) {
+        } else if (hasMcpAppResult && isFinished && !next.has(itemId) && !userCollapsedRef.current.has(itemId)) {
+          next.add(itemId);
+          changed = true;
+        } else if (isFinished && !hasMcpAppResult && next.has(itemId) && !userExpandedRef.current.has(itemId)) {
           next.delete(itemId);
           changed = true;
         }
@@ -713,8 +953,8 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
 
       return (
         <div className="space-y-2 w-full" aria-live="off">
-          {(narration || thinkingText) ? (
-            <AiMessageBubble message={message} thinkingLive={thinkingLive} />
+          {(narration || thinkingText || isStreamingLastAi) ? (
+            <AiMessageBubble message={message} thinkingLive={thinkingLive || isStreamingLastAi} referenceChunks={referenceChunks} turnSummary={turnSummary} validationResult={validationResult} />
           ) : null}
           {subAgentCalls.map((toolCall, idx) => {
             const tcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
@@ -762,7 +1002,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
             );
           })}
 
-          {otherCalls.length > 0 && (
+          {otherCalls.length > 0 && !isStreamingLastAi && (
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
                 <Settings className="w-4 h-4 text-muted-foreground" />
@@ -832,64 +1072,76 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                       {keepToolBodyMounted && (
                         <div
                           id={`tool-body-${itemId}`}
-                          className={cn("border-t border-border", !isExpanded && "hidden")}
+                          className={cn("border-t border-border", !isExpanded && !hasMcpApp && "hidden")}
                         >
-                          <div className="px-4 pb-3 max-h-72 overflow-y-auto">
-                            {isExpanded && (
-                              <>
-                                <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
-                                <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                                  {JSON.stringify(toolCall.args, null, 2)}
-                                </pre>
-                              </>
-                            )}
-                            {!needsApproval && hasMcpApp && (
-                              <>
-                                {isExpanded && (
-                                  <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
-                                    Interactive UI
-                                  </div>
-                                )}
+                          {isExpanded && (
+                            <div className="px-4 pb-3 max-h-72 overflow-y-auto">
+                              <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
+                              <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                                {JSON.stringify(toolCall.args, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                          {!needsApproval && hasMcpApp && (() => {
+                            const tcRecord = toolCall as Record<string, unknown>;
+                            const plotlyFigure = toolCall.name === 'create_chart_app'
+                              ? extractPlotlyFigure(tcRecord)
+                              : null;
+                            if (plotlyFigure) {
+                              const meta = extractChartMeta(tcRecord);
+                              return (
+                                <div className="px-4 pb-3">
+                                  <NativeChartViewer
+                                    figure={plotlyFigure}
+                                    title={meta.title}
+                                    chartType={meta.chartType}
+                                    className="mb-2"
+                                  />
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="px-4 pb-3">
                                 <McpAppHostFromToolCall
-                                  mcpAppRaw={(toolCall as Record<string, unknown>).mcpApp}
+                                  mcpAppRaw={tcRecord.mcpApp}
                                   toolName={toolCall.name}
                                   toolCancelled={
-                                    (toolCall as Record<string, unknown>).content != null &&
+                                    tcRecord.content != null &&
                                     !mcpAppDesc?.result
                                   }
                                   className="mb-2"
                                 />
-                              </>
-                            )}
-                            {isExpanded && !needsApproval && (
-                              <>
-                                <div className={cn(
-                                  "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",
-                                  (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
-                                )}>
-                                  {(toolCall as Record<string, unknown>).status === 'error'
-                                    ? 'Error'
-                                    : (toolCall as Record<string, unknown>).content != null
-                                      ? 'Result'
-                                      : 'Running...'}
-                                </div>
-                                {(() => {
-                                  const raw = (toolCall as Record<string, unknown>).content;
-                                  if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
-                                  const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
-                                  const kind = detectArtifactKind(text);
-                                  if (kind !== 'text' && text.length > 100) {
-                                    return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
-                                  }
-                                  return (
-                                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                                      {text}
-                                    </pre>
-                                  );
-                                })()}
-                              </>
-                            )}
-                          </div>
+                              </div>
+                            );
+                          })()}
+                          {isExpanded && !needsApproval && (
+                            <div className="px-4 pb-3 max-h-72 overflow-y-auto">
+                              <div className={cn(
+                                "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",
+                                (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
+                              )}>
+                                {(toolCall as Record<string, unknown>).status === 'error'
+                                  ? 'Error'
+                                  : (toolCall as Record<string, unknown>).content != null
+                                    ? 'Result'
+                                    : 'Running...'}
+                              </div>
+                              {(() => {
+                                const raw = (toolCall as Record<string, unknown>).content;
+                                if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
+                                const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+                                const kind = detectArtifactKind(text);
+                                if (kind !== 'text' && text.length > 100) {
+                                  return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
+                                }
+                                return (
+                                  <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                                    {text}
+                                  </pre>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -961,7 +1213,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     }
 
     if (isNormalMessage) {
-      return <AiMessageBubble message={message} thinkingLive={thinkingLive} />;
+      return <AiMessageBubble message={message} thinkingLive={thinkingLive} referenceChunks={referenceChunks} turnSummary={turnSummary} validationResult={validationResult} />;
     }
 
     return null;
@@ -971,6 +1223,523 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
   return (
     <div className="space-y-2 w-full">
       {renderMessage}
+    </div>
+  );
+}
+
+const PATHFINDER_TOOLS = new Set([
+  'pathfinder_search',
+  'pathfinder_search_semantic',
+  'pathfinder_search_keyword',
+  'pathfinder_get_chunk',
+  'pathfinder_get_page',
+  'search',
+  'search_semantic',
+  'search_keyword',
+  'search_dataversehelp',
+]);
+
+const VALIDATION_TOOL = 'pathfinder_validate_citations';
+
+interface ValidationResult {
+  total_citations: number;
+  valid: number;
+  invalid: number;
+  score: number;
+  grade: string;
+  details: Array<{ citation: string; status: string; reason?: string; doc_id?: string }>;
+}
+
+function parseValidationPayload(content: unknown): ValidationResult | null {
+  if (content == null) return null;
+  try {
+    let obj: unknown = content;
+    if (typeof obj === 'string') obj = JSON.parse(obj);
+    if (Array.isArray(obj)) {
+      const first = obj[0];
+      if (first && typeof first === 'object' && 'type' in first && (first as Record<string, unknown>).type === 'text') {
+        const text = (first as Record<string, unknown>).text;
+        if (typeof text === 'string') obj = JSON.parse(text);
+      }
+    }
+    if (obj && typeof obj === 'object' && 'total_citations' in obj) {
+      return obj as ValidationResult;
+    }
+  } catch { /* skip */ }
+  return null;
+}
+
+function extractValidationResult(messages: Message[], answerIndex: number): ValidationResult | null {
+  for (let i = answerIndex - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.type === 'human') break;
+    if (m.type === 'tool') {
+      const toolMsg = m as Record<string, unknown>;
+      if (toolMsg.name === VALIDATION_TOOL) {
+        const result = parseValidationPayload(toolMsg.content);
+        if (result) return result;
+      }
+    }
+    if (m.type === 'ai') {
+      const tcs = (m as Record<string, unknown>).tool_calls as Array<{ name: string; content?: unknown }> | undefined;
+      if (Array.isArray(tcs)) {
+        for (const tc of tcs) {
+          if (tc.name === VALIDATION_TOOL) {
+            const result = parseValidationPayload(tc.content);
+            if (result) return result;
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function extractCitationsFromMarkdown(text: string): Array<{ doc_title: string; page: number }> {
+  const citePattern = /\(([^()]+?),\s*p\.?\s*(\d+)\)/g;
+  const seen = new Set<string>();
+  const citations: Array<{ doc_title: string; page: number }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = citePattern.exec(text)) !== null) {
+    const rawTitle = match[1].trim().replace(/\.pdf$/i, '');
+    const page = parseInt(match[2], 10);
+    const key = `${rawTitle.toLowerCase()}|${page}`;
+    if (!seen.has(key) && page > 0) {
+      seen.add(key);
+      citations.push({ doc_title: rawTitle, page });
+    }
+  }
+  return citations;
+}
+
+function useAutoValidation(messageText: string, isComplete: boolean): ValidationResult | null {
+  const [result, setResult] = useState<ValidationResult | null>(null);
+  const requestedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isComplete || requestedRef.current || !messageText) return;
+    const citations = extractCitationsFromMarkdown(messageText);
+    if (citations.length === 0) return;
+    requestedRef.current = true;
+
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const resp = await fetch('/api/validate-citations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ citations }),
+          signal: controller.signal,
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          setResult(data);
+        }
+      } catch { /* network error or aborted */ }
+    })();
+    return () => controller.abort();
+  }, [messageText, isComplete]);
+
+  return result;
+}
+
+function ValidationBadge({ result }: { result: ValidationResult }) {
+  const gradeColors: Record<string, string> = {
+    A: 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950/50 dark:border-emerald-800',
+    B: 'text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950/50 dark:border-blue-800',
+    C: 'text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950/50 dark:border-amber-800',
+    F: 'text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-950/50 dark:border-red-800',
+  };
+  const gradeIcons: Record<string, React.ReactNode> = {
+    A: <ShieldCheck className="w-3.5 h-3.5" />,
+    B: <CheckCircle className="w-3.5 h-3.5" />,
+    C: <AlertCircle className="w-3.5 h-3.5" />,
+    F: <AlertCircle className="w-3.5 h-3.5" />,
+  };
+  const colorClass = gradeColors[result.grade] ?? gradeColors.C;
+  const icon = gradeIcons[result.grade] ?? gradeIcons.C;
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="pl-11 mt-2">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className={cn(
+          'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+          colorClass,
+        )}
+      >
+        {icon}
+        <span>Verified</span>
+        <span className="font-bold">{result.valid}/{result.total_citations}</span>
+        <span className="opacity-70">citations</span>
+        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold opacity-90">
+          Grade {result.grade}
+        </span>
+        {result.invalid > 0 && (
+          <span className="text-red-500 dark:text-red-400 text-[10px]">
+            ({result.invalid} failed)
+          </span>
+        )}
+        <ChevronDown className={cn('w-3 h-3 transition-transform', expanded && 'rotate-180')} />
+      </button>
+      {expanded && (
+        <div className="mt-2 ml-1 rounded-lg border border-border/40 bg-card/50 p-3 text-xs max-w-lg">
+          <div className="font-semibold mb-2 text-foreground/80">Citation Validation Details</div>
+          <div className="space-y-1">
+            {result.details.map((d, i) => (
+              <div key={i} className="flex items-start gap-2">
+                {d.status === 'PASS' ? (
+                  <Check className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3 h-3 text-red-500 mt-0.5 flex-shrink-0" />
+                )}
+                <span className={d.status === 'PASS' ? 'text-foreground/70' : 'text-red-600 dark:text-red-400'}>
+                  {d.citation}
+                  {d.reason && <span className="opacity-60 ml-1">- {d.reason}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function useMessageValidation(message: Message, messages: Message[], messageIndex: number, isComplete: boolean): ValidationResult | null {
+  const { markdownForDisplay } = partitionMessageContent(message.content);
+  const messageText = markdownForDisplay || extractMessageText(message.content);
+
+  const agentResult = extractValidationResult(messages, messageIndex);
+  const autoResult = useAutoValidation(messageText, isComplete);
+  return agentResult ?? autoResult;
+}
+
+function AutoValidationBadge({ validationResult }: {
+  validationResult: ValidationResult | null;
+}) {
+  if (!validationResult) return null;
+  return <ValidationBadge result={validationResult} />;
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  pathfinder_search: 'Searching documents',
+  pathfinder_search_semantic: 'Semantic search',
+  pathfinder_search_keyword: 'Keyword search',
+  pathfinder_list_documents: 'Listing documents',
+  pathfinder_get_chunk: 'Reading chunk',
+  pathfinder_get_page: 'Reading page',
+  pathfinder_get_document_outline: 'Reading outline',
+  pathfinder_validate_citations: 'Validating citations',
+  search: 'Searching documents',
+  search_semantic: 'Semantic search',
+  search_keyword: 'Keyword search',
+  search_dataversehelp: 'Searching Dataverse Help',
+  get_chunk: 'Reading chunk',
+};
+
+function formatToolActivity(tc: { name: string; args?: Record<string, unknown> }): string {
+  const label = TOOL_LABELS[tc.name] ?? tc.name;
+  const query = tc.args?.query;
+  const docId = tc.args?.doc_id;
+  if (typeof query === 'string' && query.length > 0) {
+    const short = query.length > 50 ? query.slice(0, 47) + '...' : query;
+    return `${label}: "${short}"`;
+  }
+  if (docId) return `${label} (doc: ${String(docId).slice(0, 8)}...)`;
+  return label;
+}
+
+function StreamingActivityPanel({ messages }: { messages: Message[] }) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  const steps = useMemo(() => {
+    const items: Array<{ key: string; label: string; status: 'done' | 'running'; count?: number }> = [];
+    let lastAiToolCalls: Array<{ name: string; args?: Record<string, unknown>; content?: unknown }> = [];
+
+    for (const m of messages) {
+      if (m.type === 'ai') {
+        const tcs = (m as Record<string, unknown>).tool_calls as Array<{ name: string; args?: Record<string, unknown>; content?: unknown }> | undefined;
+        if (Array.isArray(tcs) && tcs.length > 0) {
+          lastAiToolCalls = tcs;
+          const allDone = tcs.every(tc => tc.content != null);
+          const toolNames = tcs.map(tc => tc.name);
+          const uniqueTools = [...new Set(toolNames)];
+
+          if (tcs.length > 1) {
+            const label = uniqueTools.length === 1
+              ? `${TOOL_LABELS[uniqueTools[0]] ?? uniqueTools[0]} (${tcs.length} parallel)`
+              : `${tcs.length} parallel searches`;
+            items.push({ key: `${m.id}-batch`, label, status: allDone ? 'done' : 'running', count: tcs.length });
+          } else {
+            items.push({ key: `${m.id}-0`, label: formatToolActivity(tcs[0]), status: allDone ? 'done' : 'running' });
+          }
+        }
+      }
+    }
+
+    const hasRunning = items.some(i => i.status === 'running');
+    if (!hasRunning && lastAiToolCalls.length > 0) {
+      items.push({ key: 'synthesizing', label: 'Synthesizing answer...', status: 'running' });
+    }
+
+    return items;
+  }, [messages]);
+
+  if (steps.length === 0) {
+    return (
+      <div className="flex items-start gap-3 animate-fadeIn" role="status" aria-live="polite">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+          <Bot className="w-3.5 h-3.5 text-white" />
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          Thinking...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-3 animate-fadeIn" role="status" aria-live="polite">
+      <div className="flex-shrink-0 w-7 h-7 mt-0.5 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+        <Bot className="w-3.5 h-3.5 text-white" />
+      </div>
+      <div className="flex-1 min-w-0 py-1">
+        <div className="space-y-1.5">
+          {steps.map((step) => (
+            <div key={step.key} className="flex items-center gap-2 text-xs">
+              {step.status === 'done' ? (
+                <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+              ) : (
+                <Loader2 className="w-3.5 h-3.5 text-primary animate-spin flex-shrink-0" />
+              )}
+              <span className={step.status === 'done' ? 'text-muted-foreground/60' : 'text-foreground/80 font-medium'}>
+                {step.label}
+              </span>
+              {step.count && step.count > 1 && step.status === 'done' && (
+                <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-medium">
+                  done
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
+function extractChunksFromToolCalls(
+  toolCalls: Array<{ name: string; args?: Record<string, unknown>; content?: unknown }>,
+): ReferenceChunk[] {
+  const chunks: ReferenceChunk[] = [];
+  const seenIds = new Set<string>();
+
+  function extractResults(raw: unknown): Record<string, unknown>[] {
+    if (raw == null) return [];
+    if (typeof raw === 'string') {
+      try { return extractResults(JSON.parse(raw)); } catch { return []; }
+    }
+    if (Array.isArray(raw)) {
+      if (raw.length > 0 && raw[0] && typeof raw[0] === 'object') {
+        const first = raw[0] as Record<string, unknown>;
+        if ('type' in first && first.type === 'text' && typeof first.text === 'string') {
+          return extractResults(first.text);
+        }
+        if ('chunk_id' in first || 'doc_title' in first || 'body' in first) {
+          return raw as Record<string, unknown>[];
+        }
+      }
+      return [];
+    }
+    if (typeof raw === 'object') {
+      const obj = raw as Record<string, unknown>;
+      if ('results' in obj && Array.isArray(obj.results)) return extractResults(obj.results);
+      if ('chunk_id' in obj || 'doc_title' in obj) return [obj];
+    }
+    return [];
+  }
+
+  for (const tc of toolCalls) {
+    if (!PATHFINDER_TOOLS.has(tc.name)) continue;
+    const query = typeof tc.args?.query === 'string' ? tc.args.query : undefined;
+    const results = extractResults(tc.content);
+
+    for (const item of results) {
+      const chunkId = String(item.chunk_id ?? item.id ?? `chunk-${chunks.length}`);
+      if (seenIds.has(chunkId)) continue;
+      seenIds.add(chunkId);
+
+      const channels = item.channels as Record<string, number> | undefined;
+      const denseScore = channels?.dense ?? 0;
+      const rawScore = Number(item.score ?? 0);
+      const rank = Number(item.rank ?? chunks.length + 1);
+      const displayScore = denseScore > 0
+        ? denseScore
+        : rank <= 3 ? 0.9 - (rank - 1) * 0.1
+        : rank <= 6 ? 0.7 - (rank - 4) * 0.05
+        : Math.max(0.4, 0.6 - (rank - 7) * 0.03);
+      const rawTitle = String(item.doc_title ?? item.document ?? 'Unknown');
+      const cleanTitle = rawTitle.replace(/__[A-Za-z0-9_-]+$/, '').replace(/\.pdf$/i, '').trim() || rawTitle;
+      const rawBbox = item.bbox as number[] | undefined;
+      const bbox: [number, number, number, number] | undefined =
+        Array.isArray(rawBbox) && rawBbox.length === 4
+          ? [rawBbox[0], rawBbox[1], rawBbox[2], rawBbox[3]]
+          : undefined;
+
+      chunks.push({
+        chunk_id: chunkId,
+        doc_title: cleanTitle,
+        raw_doc_title: rawTitle,
+        page: Number(item.page_number ?? item.page ?? 0),
+        text: String(item.body ?? item.text ?? ''),
+        score: displayScore,
+        crop_path: item.crop_path ? String(item.crop_path) : undefined,
+        section: item.section_header ? String(item.section_header) : (item.section ? String(item.section) : undefined),
+        doc_id: item.doc_id ? String(item.doc_id) : undefined,
+        search_query: query,
+        bbox,
+      });
+    }
+  }
+  return chunks;
+}
+
+function collectToolCallsForAnswer(messages: Message[], answerIndex: number): Array<{ name: string; args?: Record<string, unknown>; content?: unknown }> {
+  const all: Array<{ name: string; args?: Record<string, unknown>; content?: unknown }> = [];
+  const seenIds = new Set<string>();
+
+  // Build a map of tool_call_id -> tool message content for fallback
+  // (when messages are loaded from server, tool_calls on AI messages
+  // don't have content populated, it lives in separate tool messages)
+  const toolResultMap = new Map<string, unknown>();
+  for (let i = answerIndex - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.type === 'human') break;
+    if (m.type === 'tool') {
+      const rec = m as Record<string, unknown>;
+      const tcId = rec.tool_call_id as string | undefined;
+      if (tcId && rec.content != null) {
+        toolResultMap.set(tcId, rec.content);
+      }
+    }
+  }
+
+  for (let i = answerIndex - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.type === 'human') break;
+    if (m.type === 'ai') {
+      const tcs = (m as Record<string, unknown>).tool_calls as Array<{ id?: string; name: string; args?: Record<string, unknown>; content?: unknown }> | undefined;
+      if (!Array.isArray(tcs)) continue;
+      for (const tc of tcs) {
+        if (!PATHFINDER_TOOLS.has(tc.name)) continue;
+        const tcId = tc.id ?? '';
+        if (seenIds.has(tcId)) continue;
+        seenIds.add(tcId);
+
+        // Use content from redux merge first, then fall back to tool message
+        const content = tc.content ?? toolResultMap.get(tcId);
+        if (content != null) {
+          all.push({ name: tc.name, args: tc.args, content });
+        }
+      }
+    }
+  }
+  return all;
+}
+
+interface TurnStep {
+  type: 'thinking' | 'tools';
+  thinking?: string;
+  toolCalls?: Array<{ name: string; args?: Record<string, unknown>; content?: unknown }>;
+}
+
+interface TurnSummary {
+  steps: TurnStep[];
+  totalToolCalls: number;
+}
+
+function collectTurnSummary(messages: Message[], answerIndex: number): TurnSummary {
+  const steps: TurnStep[] = [];
+  let totalToolCalls = 0;
+
+  const startIndex = (() => {
+    for (let i = answerIndex; i >= 0; i--) {
+      if (messages[i].type === 'human') return i + 1;
+    }
+    return 0;
+  })();
+
+  for (let i = startIndex; i <= answerIndex; i++) {
+    const m = messages[i];
+    if (m.type !== 'ai') continue;
+
+    const storedThinking = (m as { thinking?: unknown }).thinking;
+    const parts = splitMessageParts(m);
+    const thinking = typeof storedThinking === 'string' && storedThinking.length > 0
+      ? storedThinking
+      : parts.thinking;
+    if (thinking) steps.push({ type: 'thinking', thinking });
+
+    const tcs = (m as Record<string, unknown>).tool_calls as Array<{ name: string; args?: Record<string, unknown>; content?: unknown }> | undefined;
+    if (Array.isArray(tcs)) {
+      const filtered = tcs.filter(tc => tc.name !== 'write_todos');
+      if (filtered.length > 0) {
+        steps.push({ type: 'tools', toolCalls: filtered });
+        totalToolCalls += filtered.length;
+      }
+    }
+  }
+
+  return { steps, totalToolCalls };
+}
+
+function isIntermediateAiMessage(messages: Message[], index: number): boolean {
+  const m = messages[index];
+  if (m.type !== 'ai') return false;
+  const tcs = (m as Record<string, unknown>).tool_calls as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(tcs) || tcs.length === 0) return false;
+  const hasMcpAppToolCall = tcs.some(
+    (tc) => tc.mcpApp || (tc.artifact && typeof tc.artifact === 'object' && (tc.artifact as Record<string, unknown>).mcp_app),
+  );
+  if (hasMcpAppToolCall) return false;
+  for (let i = index + 1; i < messages.length; i++) {
+    if (messages[i].type === 'human') return false;
+    if (messages[i].type === 'ai') return true;
+  }
+  return false;
+}
+
+function ReferencesButton({ chunks }: { chunks: ReferenceChunk[] }) {
+  const dispatch = useAppDispatch();
+  const panelOpen = useAppSelector(selectPanelOpen);
+
+  return (
+    <div className="pl-11 mt-1.5">
+      <button
+        type="button"
+        onClick={() => dispatch(setChunks(chunks))}
+        className={cn(
+          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border',
+          panelOpen
+            ? 'bg-primary/10 text-primary border-primary/30'
+            : 'bg-card hover:bg-muted text-muted-foreground hover:text-foreground border-border',
+        )}
+      >
+        <BookOpen className="w-3.5 h-3.5" />
+        References
+        <span className="bg-primary/15 text-primary px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+          {chunks.length}
+        </span>
+      </button>
     </div>
   );
 }
@@ -1005,6 +1774,95 @@ interface ChatMessagesViewProps {
   chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onExportMarkdown?: () => void;
   onExportJson?: () => void;
+}
+
+/**
+ * Wrapper component for AI messages that handles validation hook
+ * and shares the result between AIMessageRenderer and ValidationBadge.
+ */
+function AiMessageBlock({
+  message, messages, messageIndex,
+  pendingInterrupt, onInterruptResume, onAlwaysAllow,
+  globalApprovalIndex, approvalSlotOffset, totalActionRequests,
+  allDecisionsMade, onSingleDecision,
+  thinkingLive, isStreamingLastAi, questionContent, turnSummary,
+  isLoading, isLastAiInTurn, interruptContent,
+  copyText, chatId, traceId, userId, existingFeedback,
+}: {
+  message: Message;
+  messages: Message[];
+  messageIndex: number;
+  pendingInterrupt?: InterruptInfo | null;
+  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  onAlwaysAllow?: (toolNames: string[]) => void;
+  globalApprovalIndex: number;
+  approvalSlotOffset: number;
+  totalActionRequests: number;
+  allDecisionsMade: boolean;
+  onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
+  thinkingLive: boolean;
+  isStreamingLastAi: boolean;
+  questionContent?: ReactNode;
+  turnSummary?: TurnSummary;
+  isLoading: boolean;
+  isLastAiInTurn: boolean;
+  interruptContent?: ReactNode;
+  copyText: string;
+  chatId: string;
+  traceId?: string | null;
+  userId?: string;
+  existingFeedback: 'up' | 'down' | null;
+}) {
+  const refChunks = useMemo(
+    () => extractChunksFromToolCalls(collectToolCallsForAnswer(messages, messageIndex)),
+    [messages, messageIndex],
+  );
+
+  const isNormal = message.type === 'ai' && (
+    !Array.isArray((message as Record<string, unknown>).tool_calls) ||
+    ((message as Record<string, unknown>).tool_calls as unknown[]).length === 0
+  );
+
+  const validationResult = useMessageValidation(message, messages, messageIndex, !isLoading);
+
+  return (
+    <>
+      <AIMessageRenderer
+        message={message}
+        pendingInterrupt={pendingInterrupt}
+        onInterruptResume={onInterruptResume}
+        onAlwaysAllow={onAlwaysAllow}
+        globalApprovalIndex={globalApprovalIndex}
+        approvalSlotOffset={approvalSlotOffset}
+        totalActionRequests={totalActionRequests}
+        allDecisionsMade={allDecisionsMade}
+        onSingleDecision={onSingleDecision}
+        thinkingLive={thinkingLive}
+        isStreamingLastAi={isStreamingLastAi}
+        questionContent={questionContent}
+        referenceChunks={refChunks}
+        turnSummary={turnSummary}
+        validationResult={validationResult}
+      />
+      {interruptContent ? interruptContent : (
+        <MessageActionsRow
+          isLastAiInTurn={isLastAiInTurn}
+          copyText={copyText}
+          messageId={message.id ?? `msg-${messageIndex}`}
+          chatId={chatId}
+          traceId={traceId}
+          userId={userId}
+          existingFeedback={existingFeedback}
+        />
+      )}
+      {isNormal && refChunks.length > 0 && (
+        <ReferencesButton chunks={refChunks} />
+      )}
+      {isNormal && isLastAiInTurn && (
+        <AutoValidationBadge validationResult={validationResult} />
+      )}
+    </>
+  );
 }
 
 export function ChatMessagesView({
@@ -1155,13 +2013,26 @@ export function ChatMessagesView({
   }, [rawNoResponse]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, interruptContent]);
+    const container = scrollAreaRef.current;
+    if (!container) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom < 150) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, interruptContent, scrollAreaRef]);
 
   const showExport = Boolean(onExportMarkdown && onExportJson && messages.length > 0);
 
+  const dvaClassification = useAppSelector(
+    (state) => state.chats.streamingStates[chatId]?.dvaClassification ?? null
+  );
+
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="flex h-full min-h-0 overflow-hidden">
+    <div className="flex flex-col flex-1 min-w-0">
       <div
         aria-live="polite"
         aria-atomic="true"
@@ -1208,6 +2079,9 @@ export function ChatMessagesView({
             if (message.type === 'tool') {
               return <Fragment key={message.id ?? `m-${messageIndex}`} />;
             }
+            if (isIntermediateAiMessage(messages, messageIndex)) {
+              return <Fragment key={message.id ?? `m-${messageIndex}`} />;
+            }
             const copyText = getCopyableAiMessageText(message.content);
             const showResponseTiming =
               message.type === 'ai' &&
@@ -1224,6 +2098,10 @@ export function ChatMessagesView({
                 }
                 return true;
               })();
+
+            const msgTurnSummary = message.type === 'ai'
+              ? collectTurnSummary(messages, messageIndex)
+              : undefined;
 
             return (
             <div
@@ -1243,8 +2121,28 @@ export function ChatMessagesView({
                 />
               ) : (
                 <div className="w-full space-y-0">
-                  <AIMessageRenderer
+                  {dvaClassification && messageIndex === lastAiMessageIndex && isLoading && (
+                    <div className="flex items-center gap-1.5 mb-1 ml-11">
+                      {dvaClassification.intents.map((intent, i) => (
+                        <span
+                          key={intent.intent_class}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border"
+                        >
+                          {intent.intent_class}
+                          <span className="opacity-50">{Math.round(intent.confidence * 100)}%</span>
+                        </span>
+                      ))}
+                      {dvaClassification.routing?.selected_product && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary border border-primary/20">
+                          {dvaClassification.routing.selected_product}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <AiMessageBlock
                     message={message}
+                    messages={messages}
+                    messageIndex={messageIndex}
                     pendingInterrupt={pendingInterrupt}
                     onInterruptResume={onInterruptResume}
                     onAlwaysAllow={onAlwaysAllow}
@@ -1254,21 +2152,18 @@ export function ChatMessagesView({
                     allDecisionsMade={globalAllDecisionsMade}
                     onSingleDecision={handleGlobalSingleDecision}
                     thinkingLive={isThinkingLive(message, isLoading, messageIndex === lastAiMessageIndex)}
+                    isStreamingLastAi={isLoading && messageIndex === lastAiMessageIndex}
                     questionContent={messageIndex === questionNestMessageIndex ? interruptContent : undefined}
+                    turnSummary={msgTurnSummary}
+                    isLoading={isLoading}
+                    isLastAiInTurn={isLastAiInTurn}
+                    interruptContent={messageIndex === lastAiMessageIndex && interruptContent && questionNestMessageIndex < 0 ? interruptContent : undefined}
+                    copyText={copyText}
+                    chatId={chatId}
+                    traceId={traceId}
+                    userId={userId}
+                    existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
                   />
-                  {messageIndex === lastAiMessageIndex && interruptContent && questionNestMessageIndex < 0 ? (
-                    interruptContent
-                  ) : (
-                    <MessageActionsRow
-                      isLastAiInTurn={isLastAiInTurn}
-                      copyText={copyText}
-                      messageId={message.id ?? `msg-${messageIndex}`}
-                      chatId={chatId}
-                      traceId={traceId}
-                      userId={userId}
-                      existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
-                    />
-                  )}
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
                       <div className="text-[11px] text-muted-foreground">
@@ -1287,28 +2182,7 @@ export function ChatMessagesView({
           );
           })}
 
-          {isLoading && (messages.at(-1)?.type === 'human' || waitingAfterFinishedTool(messages)) && (
-            <div
-              className="flex items-start gap-3 animate-fadeIn"
-              role="status"
-              aria-live="polite"
-              aria-label="Agent is thinking"
-            >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="flex gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-200" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-400" />
-                  </span>
-                  Thinking...
-                </div>
-              </div>
-            </div>
-          )}
+          {isLoading && <StreamingActivityPanel messages={messages} />}
 
           {showNoResponse && (
             <div className="flex items-start gap-3 animate-fadeIn">
@@ -1378,6 +2252,8 @@ export function ChatMessagesView({
           />
         </div>
       </div>
+    </div>
+    <ReferencesPanel />
     </div>
   );
 }

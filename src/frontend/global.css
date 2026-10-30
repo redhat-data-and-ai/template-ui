@@ -442,6 +442,47 @@ input[type="url"]:focus {
   text-decoration-color: color-mix(in srgb, var(--primary) 60%, transparent);
 }
 
+.ai-response-body a.cite-link {
+  color: #2563eb;
+  text-decoration: none;
+  border-bottom: 1px dashed #2563eb;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, opacity 0.2s ease;
+  font-size: 0.88em;
+}
+.ai-response-body a.cite-link:hover {
+  color: #1d4ed8;
+  border-bottom-style: solid;
+}
+.dark .ai-response-body a.cite-link {
+  color: #60a5fa;
+}
+.dark .ai-response-body a.cite-link:hover {
+  color: #93bbfd;
+  border-bottom-color: #60a5fa;
+}
+/* Validated citations */
+.ai-response-body a.cite-link.cite-valid {
+  color: #059669;
+  border-bottom-color: #059669;
+}
+.dark .ai-response-body a.cite-link.cite-valid {
+  color: #34d399;
+  border-bottom-color: #34d399;
+}
+/* Invalid citations: struck through and dimmed */
+.ai-response-body a.cite-link.cite-invalid {
+  color: #dc2626;
+  border-bottom-color: #dc2626;
+  text-decoration: line-through;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dark .ai-response-body a.cite-link.cite-invalid {
+  color: #f87171;
+  border-bottom-color: #f87171;
+}
+
 /* ── Lists ────────────────────────────────────────────── */
 .ai-response-body ul {
   list-style-type: disc;
@@ -537,66 +578,52 @@ input[type="url"]:focus {
 
 .ai-response-body .table-wrap {
   margin: 1.5em 0;
-  border: none;
-  box-shadow: none;
-  overflow: visible;
+  overflow-x: auto;
+  border-radius: 0.5em;
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 .ai-response-body table {
   width: 100%;
-  display: block;
   margin: 0;
-  border: none;
+  border-collapse: collapse;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
 .ai-response-body thead {
-  display: none;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
 }
 
-.ai-response-body tbody {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75em;
-}
-
-.ai-response-body tbody tr {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35em;
-  padding: 0.85em 1em;
-  border-radius: 0.65em;
-  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  background: color-mix(in srgb, var(--muted) 15%, transparent);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.ai-response-body tbody tr:hover {
-  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.06);
-}
-
-.ai-response-body td {
-  display: flex;
-  gap: 0.5em;
-  padding: 0;
-  line-height: 1.5;
-  color: color-mix(in srgb, var(--foreground) 85%, transparent);
-  border: none;
-}
-
-/* Inject column header as an inline label via data attribute */
-.ai-response-body td::before {
-  content: attr(data-label);
-  flex-shrink: 0;
-  min-width: 5em;
+.ai-response-body thead th {
+  padding: 0.6em 1em;
+  text-align: left;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted-foreground);
-  padding-top: 0.15em;
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-response-body tbody tr {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  transition: background 0.15s ease;
+}
+
+.ai-response-body tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
+}
+
+.ai-response-body tbody tr:hover {
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+
+.ai-response-body td {
+  padding: 0.55em 1em;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--foreground) 85%, transparent);
+  border: none;
 }
 
 /* ── Reduced Motion (WCAG 2.3.1 / user preference) ──────── */
