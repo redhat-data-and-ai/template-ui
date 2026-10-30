@@ -46,6 +46,7 @@ import { markChatAsClientCreated, isClientCreatedChat } from '../../services/new
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
 import { useProjects } from '../../hooks/useProjects';
+import { stripClassification } from '../../lib/text-utils';
 import type { RootState } from '../../redux/store';
 
 function toSafeDate(value: unknown): Date {
@@ -140,12 +141,21 @@ export function AppLayout({ children }: AppLayoutProps) {
   useEffect(() => {
     const loadedChats = chatStorage.loadChats();
     if (loadedChats.length > 0) {
-      const mapped: ChatItem[] = loadedChats.map((c) => ({
-        ...c,
-        timestamp: toSafeISOString(c.timestamp),
-        historicalActivities: c.historicalActivities ?? {},
-        feedback: c.feedback ?? {},
-      }));
+      const mapped: ChatItem[] = loadedChats.map((c) => {
+        const cleanTitle = c.title.startsWith('<classification>')
+          ? (stripClassification(c.title) ?? 'Chat')
+          : c.title;
+        return {
+          ...c,
+          title: cleanTitle,
+          preview: c.preview?.startsWith('<classification>')
+            ? (stripClassification(c.preview) ?? cleanTitle)
+            : c.preview,
+          timestamp: toSafeISOString(c.timestamp),
+          historicalActivities: c.historicalActivities ?? {},
+          feedback: c.feedback ?? {},
+        };
+      });
       dispatch(setChats(mapped));
     }
     dispatch(setLoadingThreads(false));
@@ -184,9 +194,16 @@ export function AppLayout({ children }: AppLayoutProps) {
           const backendTitle = backendTitleMap.get(c.id);
           const ts = backendTimestampMap.get(c.id);
           const updated = { ...c };
-          if (backendTitle && (c.title === 'Chat' || c.title === 'New Chat')) {
+          const titleIsStale =
+            c.title === 'Chat' ||
+            c.title === 'New Chat' ||
+            c.title.startsWith('<classification>');
+          if (backendTitle && titleIsStale) {
             updated.title = backendTitle;
             updated.preview = backendTitle;
+          } else if (c.title.startsWith('<classification>')) {
+            updated.title = stripClassification(c.title) ?? 'Chat';
+            updated.preview = updated.title;
           }
           if (ts) {
             updated.timestamp = ts;
@@ -235,7 +252,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                   messages: msgs,
                   title: (() => {
                     const first = msgs.find(m => m.type === 'human');
-                    const content = first ? String(first.content) : '';
+                    const raw = first ? String(first.content) : '';
+                    const content = stripClassification(raw) ?? '';
                     return content.length > 40 ? content.substring(0, 40) + '...' : content || topThread.title || 'Chat';
                   })(),
                 },
@@ -282,7 +300,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     () =>
       chats.map((chat) => ({
         id: chat.id,
-        title: chat.title,
+        title: (chat.title.startsWith('<classification>')
+          ? stripClassification(chat.title) ?? 'Chat'
+          : chat.title),
         timestamp: toSafeDate(chat.timestamp),
         preview:
           chat.messages.length > 0

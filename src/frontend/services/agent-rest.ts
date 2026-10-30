@@ -3,6 +3,7 @@ import { authenticatedFetch } from "./authenticated-fetch";
 import { buildAgentApiUrl } from "../lib/app-paths";
 import { withMcpAppArguments } from "../types/mcp-apps";
 import { splitMessageParts } from "../../server/message-parts";
+import { stripClassification } from "../lib/text-utils";
 
 export interface Thread {
   id: string;
@@ -185,7 +186,7 @@ export async function getAllThreadsByUserId(userId: string): Promise<Thread[]> {
     .filter((t: any) => t.thread_id)
     .map((t: any) => ({
       id: t.thread_id,
-      title: t.metadata?.thread_name,
+      title: stripClassification(t.metadata?.thread_name),
       messages: [],
       updatedAt: t.updated_at || t.created_at,
       project_id: t.metadata?.project_id ?? null,

@@ -1,11 +1,34 @@
 import { ChatItem } from '../types/chat';
 import { scopedStorageKey } from '../lib/app-paths';
+import { stripClassification } from '../lib/text-utils';
 
 function omitPrevProjectId(chats: ChatItem[]): ChatItem[] {
   return chats.map((chat) => {
     const copy = { ...chat } as ChatItem & { _prevProjectId?: unknown };
     delete copy._prevProjectId;
     return copy;
+  });
+}
+
+/**
+ * Strip large transient fields (artifacts, mcpApp, structured_content) from
+ * messages before persisting to localStorage.  These are reloaded from the
+ * Aegra thread state on next visit, so keeping them in the 5 MB localStorage
+ * budget is wasteful and causes QuotaExceededError for chart-heavy threads.
+ */
+function stripHeavyFields(messages: any[]): any[] {
+  return messages.map((msg) => {
+    if (!msg || typeof msg !== 'object') return msg;
+    const m = msg as Record<string, unknown>;
+
+    if (Array.isArray(m.tool_calls)) {
+      const lightCalls = (m.tool_calls as Record<string, unknown>[]).map((tc) => {
+        const { artifact, mcpApp, ...rest } = tc;
+        return rest;
+      });
+      return { ...m, tool_calls: lightCalls };
+    }
+    return m;
   });
 }
 
@@ -40,18 +63,22 @@ class ChatStorageService {
   }
 
   saveChatByThreadId(threadId: string, messages: any[]): boolean {
-    
+    const lightMessages = stripHeavyFields(messages);
     const chats = this.loadChats();
     const threadIdChat = chats.find((chat) => chat.id === threadId);
     if (threadIdChat) {
-      threadIdChat.messages = messages;
+      threadIdChat.messages = lightMessages;
     } else {
+      const rawContent = typeof messages[messages.length - 1]?.content === 'string'
+        ? messages[messages.length - 1].content as string
+        : '';
+      const cleanTitle = stripClassification(rawContent) ?? 'Chat';
       chats.push({
         id: threadId,
-        messages: messages,
-        title: messages[messages.length - 1]?.content,
+        messages: lightMessages,
+        title: cleanTitle,
         timestamp: new Date(),
-        preview: messages[messages.length - 1]?.content,
+        preview: cleanTitle,
         historicalActivities: {},
         feedback: {},
       });
