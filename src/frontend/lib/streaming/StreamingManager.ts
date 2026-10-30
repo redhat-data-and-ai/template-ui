@@ -15,6 +15,8 @@ export interface StreamRequest {
   apiUrl: string;
   token?: string;
   projectId?: string | null;
+  /** Subagent names that were real when this message was sent. */
+  invokedSubagents?: string[];
   resume?: boolean;
   resumeDecisions?: Array<{ type: 'approve' | 'reject' | 'edit'; message?: string }>;
 }
@@ -149,6 +151,9 @@ export class StreamingManager {
       };
       if (request.resume) body.resume = true;
       if (request.projectId) body.project_id = request.projectId;
+      if (!request.resume && request.invokedSubagents && request.invokedSubagents.length > 0) {
+        body.invoked_subagents = request.invokedSubagents;
+      }
 
       const response = await fetch(streamUrl, {
         method: 'POST',

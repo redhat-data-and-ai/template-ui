@@ -7,7 +7,7 @@ export class ChatPage {
 
   async waitForLoad(): Promise<void> {
     // The chat input becomes visible once the page has mounted
-    await this.page.waitForSelector('textarea', { state: 'visible', timeout: 10_000 });
+    await this.page.getByRole('textbox').waitFor({ state: 'visible', timeout: 10_000 });
   }
 
   /**
@@ -38,7 +38,7 @@ export class ChatPage {
 
   /** Fills the chat input on the chat page and clicks submit — mirrors HomePage.submitPrompt. */
   async sendMessage(text: string): Promise<void> {
-    await this.page.locator('textarea').fill(text);
+    await this.page.getByRole('textbox').fill(text);
     await this.page.locator('button[type="submit"]').click();
   }
 

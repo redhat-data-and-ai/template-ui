@@ -51,6 +51,7 @@ interface StreamRequestBody {
   stream_tokens?: boolean;
   resume?: boolean;
   project_id?: string | null;
+  invoked_subagents?: string[];
 }
 
 /**
@@ -389,7 +390,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, resume: isResume, project_id } = request.body;
+      const { message, thread_id, resume: isResume, project_id, invoked_subagents } = request.body;
 
       if (project_id != null && typeof project_id !== 'string') {
         return reply.status(400).send({ error: 'project_id must be a string when provided' });
@@ -456,7 +457,18 @@ async function proxyRoutes(fastify: FastifyInstance) {
         if (isResume) {
           runBody.command = { resume: message };
         } else {
-          runBody.input = { messages: [{ role: 'human', content: message, id: randomUUID() }] };
+          const human: Record<string, unknown> = {
+            role: 'human',
+            content: message,
+            id: randomUUID(),
+          };
+          const names = Array.isArray(invoked_subagents)
+            ? invoked_subagents.filter((name) => typeof name === 'string' && name.length > 0)
+            : [];
+          if (names.length > 0) {
+            human.additional_kwargs = { invoked_subagents: names };
+          }
+          runBody.input = { messages: [human] };
         }
 
         runBody.config = {

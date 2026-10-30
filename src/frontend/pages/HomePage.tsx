@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { Send } from 'lucide-react';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
+import { InputForm } from '../components/InputForm';
 
 function builtinQuickPrompts(): string[] {
   const agentName = window.APP_DATA?.agentName || 'Agent';
@@ -26,7 +26,6 @@ function quickPrompts(): string[] {
 export function HomePage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [inputValue, setInputValue] = useState('');
 
   const userData = useMemo(() => window.USER_DATA, []);
   const userDisplayName = userData?.displayName || userData?.given_name;
@@ -50,18 +49,7 @@ export function HomePage() {
     [dispatch, navigate],
   );
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!inputValue.trim()) return;
-    startChat(inputValue.trim());
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
+  const promptLabel = `Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -117,39 +105,13 @@ export function HomePage() {
       {/* Bottom input bar */}
       <div className="border-t border-border bg-background px-6 pb-4 pt-3">
         <div className="max-w-2xl mx-auto">
-          <form onSubmit={handleSubmit} aria-label="Start a new chat">
-            <div className="relative rounded-2xl border border-border bg-card shadow-card focus-within:border-primary/40 focus-within:shadow-elevated transition-all duration-200">
-              <label htmlFor="home-chat-input" className="sr-only">
-                Enter a prompt for {window.APP_DATA?.agentName || 'Agent'}
-              </label>
-              <textarea
-                id="home-chat-input"
-                autoFocus
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
-                className="w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
-                style={{ boxShadow: 'none' }}
-                rows={1}
-              />
-              <button
-                type="submit"
-                disabled={!inputValue.trim()}
-                aria-label="Send message"
-                className={`absolute right-2.5 bottom-2.5 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
-                  inputValue.trim()
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
-                    : 'bg-muted text-muted-foreground cursor-not-allowed'
-                }`}
-              >
-                <Send className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </div>
-          </form>
-          <p className="text-sm text-muted-foreground text-center mt-2">
-            You are interacting with an AI tool. Always review AI-generated content prior to use.
-          </p>
+          <InputForm
+            onSubmit={(value) => startChat(value.trim())}
+            onCancel={() => {}}
+            isLoading={false}
+            placeholder={promptLabel}
+            inputLabel={promptLabel}
+          />
         </div>
       </div>
     </div>

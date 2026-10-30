@@ -540,6 +540,12 @@ export function useStreamingAPI(threadId: string) {
         }),
       );
 
+      const lastMessage = clones[clones.length - 1];
+      const savedNames = lastMessage?.additional_kwargs?.invoked_subagents;
+      const invokedSubagents = Array.isArray(savedNames)
+        ? savedNames.filter((name): name is string => typeof name === 'string' && name.length > 0)
+        : [];
+
       const streamRequest = {
         message: messageText,
         threadId,
@@ -547,6 +553,7 @@ export function useStreamingAPI(threadId: string) {
         apiUrl,
         token,
         projectId: chatRef.current?.project_id,
+        invokedSubagents,
       };
       const wasClientCreated = isClientCreatedChat(threadId);
 

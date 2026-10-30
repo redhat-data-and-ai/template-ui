@@ -62,7 +62,7 @@ test.describe('Chaos: resilience', () => {
     await waitForAnnouncement(page, ['Response complete', 'Stream error']);
 
     // UI must remain interactive — no blank screen, no crash boundary.
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('Something went wrong');
   });
 
@@ -95,7 +95,7 @@ test.describe('Chaos: resilience', () => {
     await waitForAnnouncement(page, ['Stream error'], 90_000);
 
     // Input must still be accessible — no crash, no blank screen.
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('Something went wrong');
   });
 
@@ -140,7 +140,7 @@ test.describe('Chaos: resilience', () => {
     await waitForAnnouncement(page, ['Stream error'], 90_000);
 
     // Input must still be accessible — user can attempt another message.
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('Something went wrong');
   });
 
@@ -222,7 +222,7 @@ test.describe('Chaos: resilience', () => {
 
       // Input must still be interactive for all users.
       for (const p of [pageA, pageB]) {
-        await expect(p.locator('textarea')).toBeVisible();
+        await expect(p.getByRole('textbox')).toBeVisible();
         await expect(p.locator('body')).not.toContainText('Something went wrong');
       }
     } finally {
@@ -266,7 +266,7 @@ test.describe('Chaos: resilience', () => {
     // Empty body stream completes silently (200 OK, no error). Wait briefly
     // for the stream to settle, then verify the UI didn't crash.
     await page.waitForTimeout(5_000);
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('Something went wrong');
   });
 
@@ -304,7 +304,7 @@ test.describe('Chaos: resilience', () => {
     await waitForAnnouncement(page, ['Response complete', 'Stream error']);
 
     // App must be fully interactive — no unhandled error boundary.
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('Something went wrong');
   });
 
@@ -351,7 +351,7 @@ test.describe('Chaos: resilience', () => {
 
     // The recovered response content should be visible.
     await expect(page.locator('body')).toContainText('Recovered successfully!');
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('Something went wrong');
   });
 
@@ -388,7 +388,7 @@ test.describe('Chaos: resilience', () => {
     // [DONE] with zero tokens completes the stream silently. Wait briefly
     // for the stream to settle, then verify the UI didn't crash.
     await page.waitForTimeout(5_000);
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.getByRole('textbox')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('Something went wrong');
   });
 });

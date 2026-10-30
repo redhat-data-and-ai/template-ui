@@ -3,5 +3,5 @@ import type { Schema } from 'hast-util-sanitize';
 
 export const markdownSanitizeSchema: Schema = {
   ...defaultSchema,
-  tagNames: (defaultSchema.tagNames ?? []).filter(tag => tag !== 'img'),
+  tagNames: [...(defaultSchema.tagNames ?? []).filter((tag) => tag !== "img"), "u"],
 };
