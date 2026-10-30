@@ -110,18 +110,18 @@ async function authCheck(
         const dummyUser = {
           accessToken: "access-token",
           expiresAt: "2026-10-29T23:20:00.417Z",
-          cn: "John Wick",
-          displayName: "John",
-          email: "johnwick@redhat.com",
+          cn: "Imran Khan",
+          displayName: "Imran",
+          email: "imrankhan@redhat.com",
           email_verified: false,
-          family_name: "Wick",
-          givenName: "John",
-          given_name: "John",
-          mail: "johnwick@redhat.com",
-          name: "John Wick",
-          preferred_username: "johnwick",
+          family_name: "Khan",
+          givenName: "Imran",
+          given_name: "Imran",
+          mail: "imrankhan@redhat.com",
+          name: "Imran Khan",
+          preferred_username: "imrankhan",
           rhatUUID: "asdsadsad-e194-11ef-a0f1-safdsfds",
-          sn: "Wick",
+          sn: "Khan",
           sub: "1sdsd1ef7-7e0c-4c45-a250-dssdsd"
         };
         request.session.user = dummyUser;

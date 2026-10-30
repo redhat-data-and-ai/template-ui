@@ -536,6 +536,7 @@ export function useStreamingAPI(threadId: string) {
             error: null,
             pendingInterrupt: null,
             taskSteps: [],
+            streamingThinking: '',
           },
         }),
       );
@@ -614,6 +615,9 @@ export function useStreamingAPI(threadId: string) {
                 streamClockRef.current.firstTokenTime = Date.now();
               }
               dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
+            },
+            onThinkingDelta(content) {
+              dispatch(updateStreamingState({ chatId: threadId, state: { streamingThinking: content } }));
             },
             onDraftDiscard() {
               if (isStreamingTokensRef.current) {

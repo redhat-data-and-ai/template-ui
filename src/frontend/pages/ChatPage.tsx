@@ -21,12 +21,15 @@ import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { ReconnectingBanner } from '../components/ReconnectingBanner';
 import { InterruptBanner } from '../components/InterruptBanner';
+import { ClarifyPopup, isClarifyInterrupt } from '../components/ClarifyPopup';
 import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
+// References panel is now rendered inside ChatMessagesView
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
 import { isClientCreatedChat } from '../services/newChatTracker';
+import { clearReferences } from '../redux/slices/references';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAgentHealth } from '../hooks/useAgentHealth';
@@ -70,6 +73,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   const [streamAnnouncement, setStreamAnnouncement] = useState('');
   const prevIsLoadingForAnnounce = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    dispatch(clearReferences());
+  }, [threadId, dispatch]);
 
   useEffect(() => {
     if (chatsLoading || hydrating) return;
@@ -621,6 +628,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
               interruptContent={
                 thread.pendingInterrupt &&
                 !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
+                && !isClarifyInterrupt(thread.pendingInterrupt.value)
                   ? (
                     <InterruptBanner
                       interrupt={thread.pendingInterrupt}
@@ -669,6 +677,13 @@ export function ChatPage({ threadId }: { threadId: string }) {
             </div>
           )}
         </div>
+        {thread.pendingInterrupt && isClarifyInterrupt(thread.pendingInterrupt.value) && (
+          <ClarifyPopup
+            question={(thread.pendingInterrupt.value as { question: string }).question}
+            onRespond={handleMCPOAuthResume}
+            onDismiss={handleInterruptDismiss}
+          />
+        )}
       </ChatActionsProvider>
     </ChatErrorBoundary>
   );

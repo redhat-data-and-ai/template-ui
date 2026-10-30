@@ -16,6 +16,7 @@ export interface StreamingState {
   isReconnecting: boolean;
   reconnectAttempt: number;
   streamDroppedMidResponse: boolean;
+  streamingThinking: string;
 }
 
 export interface ChatItem {
@@ -51,6 +52,7 @@ const DEFAULT_STREAMING_STATE: StreamingState = {
   isReconnecting: false,
   reconnectAttempt: 0,
   streamDroppedMidResponse: false,
+  streamingThinking: '',
 };
 
 const initialState: ChatsState = {
@@ -229,7 +231,11 @@ const chatsSlice = createSlice({
     ) {
       const { chatId, state: nextPartial } = action.payload;
       const prev = state.streamingStates[chatId] ?? DEFAULT_STREAMING_STATE;
-      state.streamingStates[chatId] = { ...prev, ...nextPartial };
+      const merged = { ...prev, ...nextPartial };
+      if ('streamingThinking' in nextPartial && nextPartial.streamingThinking) {
+        merged.streamingThinking = prev.streamingThinking + nextPartial.streamingThinking;
+      }
+      state.streamingStates[chatId] = merged;
     },
     setError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;

@@ -202,6 +202,14 @@ input[type="url"]:focus {
   from { opacity: 0; transform: translateX(16px); }
   to { opacity: 1; transform: translateX(0); }
 }
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-highlight {
+  0%, 100% { border-color: rgba(250, 204, 21, 0.8); box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.3), 0 0 20px rgba(250, 204, 21, 0.2); }
+  50% { border-color: rgba(250, 204, 21, 0.4); box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.1), 0 0 10px rgba(250, 204, 21, 0.1); }
+}
 @keyframes pulse-glow {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.8; }
@@ -220,6 +228,7 @@ input[type="url"]:focus {
 .animate-fadeInUp { animation: fadeInUp 0.5s ease-out forwards; }
 .animate-fadeInUpSmooth { animation: fadeInUpSmooth 0.3s ease-out forwards; }
 .animate-slide-in-right { animation: slide-in-right 0.4s ease-out forwards; }
+.animate-slideInRight { animation: slideInRight 0.25s ease-out forwards; }
 .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
 .animate-float { animation: float 4s ease-in-out infinite; }
 .animate-shimmer {
@@ -346,6 +355,248 @@ input[type="url"]:focus {
     white-space: nowrap;
     border-width: 0;
   }
+}
+
+/* ── AI Response Body — full typography system ─────────── */
+/* Tailwind v4 reset strips ALL element defaults.
+   This restores them for AI-generated markdown content. */
+.ai-response-body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Headings ─────────────────────────────────────────── */
+.ai-response-body h1 {
+  font-size: 1.5em;
+  font-weight: 700;
+  margin-top: 2em;
+  margin-bottom: 0.75em;
+  padding-bottom: 0.5em;
+  border-bottom: 2px solid color-mix(in srgb, var(--border) 50%, transparent);
+  color: var(--foreground);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.ai-response-body h2 {
+  font-size: 1.25em;
+  font-weight: 700;
+  margin-top: 1.8em;
+  margin-bottom: 0.6em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.ai-response-body h3 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  color: var(--foreground);
+  line-height: 1.4;
+}
+.ai-response-body h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin-top: 1.3em;
+  margin-bottom: 0.4em;
+  color: var(--foreground);
+  opacity: 0.9;
+}
+.ai-response-body > *:first-child {
+  margin-top: 0 !important;
+}
+
+/* ── Paragraphs ───────────────────────────────────────── */
+.ai-response-body p {
+  margin-bottom: 1em;
+  line-height: 1.8;
+}
+
+/* ── Bold & Italic ────────────────────────────────────── */
+.ai-response-body strong,
+.ai-response-body b {
+  font-weight: 700 !important;
+  color: var(--foreground);
+}
+.ai-response-body em,
+.ai-response-body i {
+  font-style: italic;
+}
+
+/* ── Links ────────────────────────────────────────────── */
+.ai-response-body a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.ai-response-body a:hover {
+  color: color-mix(in srgb, var(--primary) 80%, var(--foreground));
+  text-decoration-color: color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
+/* ── Lists ────────────────────────────────────────────── */
+.ai-response-body ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin-bottom: 1.2em;
+}
+.ai-response-body ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin-bottom: 1.2em;
+}
+.ai-response-body li {
+  margin-bottom: 0.4em;
+  line-height: 1.75;
+  padding-left: 0.25em;
+}
+.ai-response-body li::marker {
+  color: var(--muted-foreground);
+}
+.ai-response-body ul ul,
+.ai-response-body ol ol,
+.ai-response-body ul ol,
+.ai-response-body ol ul {
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+}
+
+/* ── Blockquotes ──────────────────────────────────────── */
+.ai-response-body blockquote {
+  border-left: 3px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  padding: 0.75em 1.25em;
+  margin: 1.5em 0;
+  background: color-mix(in srgb, var(--primary) 3%, transparent);
+  border-radius: 0 0.5em 0.5em 0;
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+.ai-response-body blockquote p {
+  margin-bottom: 0.3em;
+}
+.ai-response-body blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Inline Code ──────────────────────────────────────── */
+.ai-response-body code:not(pre code) {
+  background: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: 0.375em;
+  padding: 0.15em 0.4em;
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+  font-size: 0.875em;
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+/* ── Code Blocks ──────────────────────────────────────── */
+.ai-response-body pre {
+  background: #1e1e2e;
+  color: #e6e8eb;
+  border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  border-radius: 0.75em;
+  padding: 1em 1.25em;
+  margin: 1.5em 0;
+  overflow-x: auto;
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.dark .ai-response-body pre {
+  background: #0d1117;
+}
+.ai-response-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* ── Horizontal Rules ─────────────────────────────────── */
+.ai-response-body hr {
+  border: none;
+  height: 1px;
+  margin: 2em 0;
+  background: linear-gradient(to right, transparent, var(--border), transparent);
+}
+
+/* ── Tables → Row Cards ────────────────────────────────── */
+/* Convert markdown tables into stacked row-cards for readability. */
+/* Each <tr> becomes a self-contained card; <th> labels appear inline. */
+
+.ai-response-body .table-wrap {
+  margin: 1.5em 0;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.ai-response-body table {
+  width: 100%;
+  display: block;
+  margin: 0;
+  border: none;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-response-body thead {
+  display: none;
+}
+
+.ai-response-body tbody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+}
+
+.ai-response-body tbody tr {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  padding: 0.85em 1em;
+  border-radius: 0.65em;
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-response-body tbody tr:hover {
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.06);
+}
+
+.ai-response-body td {
+  display: flex;
+  gap: 0.5em;
+  padding: 0;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--foreground) 85%, transparent);
+  border: none;
+}
+
+/* Inject column header as an inline label via data attribute */
+.ai-response-body td::before {
+  content: attr(data-label);
+  flex-shrink: 0;
+  min-width: 5em;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+  padding-top: 0.15em;
 }
 
 /* ── Reduced Motion (WCAG 2.3.1 / user preference) ──────── */
