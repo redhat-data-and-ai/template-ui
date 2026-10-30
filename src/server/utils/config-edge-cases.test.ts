@@ -87,7 +87,7 @@ describe("Missing YAML → throws when UI_CONFIG_PATH is explicit", () => {
     delete process.env.UI_CONFIG_PATH;
     const settings = getSettings();
 
-    expect(settings.branding.title).toBe("Deep Agent");
+    expect(settings.branding.title).toBe("Dataverse Agent");
     expect(settings.features.auth_enabled).toBe(true);
     expect(settings.agent.timeout_ms).toBe(30000);
     expect(settings.server.port).toBe(8080);
@@ -103,7 +103,7 @@ describe("Empty or comment-only YAML → graceful fallback", () => {
     process.env.UI_CONFIG_PATH = testConfigPath;
 
     const settings = getSettings();
-    expect(settings.branding.title).toBe("Deep Agent");
+    expect(settings.branding.title).toBe("Dataverse Agent");
     expect(settings.features.auth_enabled).toBe(true);
   });
 
@@ -112,7 +112,7 @@ describe("Empty or comment-only YAML → graceful fallback", () => {
     process.env.UI_CONFIG_PATH = testConfigPath;
 
     const settings = getSettings();
-    expect(settings.branding.title).toBe("Deep Agent");
+    expect(settings.branding.title).toBe("Dataverse Agent");
     expect(settings.agent.timeout_ms).toBe(30000);
   });
 });

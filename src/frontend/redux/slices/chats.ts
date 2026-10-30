@@ -4,6 +4,15 @@ import type { SubAgentInfo, InterruptInfo, TaskStep } from '../../types/deep-age
 import { withMcpAppArguments } from '../../types/mcp-apps';
 import { assignThreadToProjectThunk, deleteProjectThunk, unassignAllThreadsThunk } from './projects';
 
+export interface DvaClassification {
+  intents: Array<{ intent_class: string; confidence: number }>;
+  routing?: {
+    selected_product: string | null;
+    decision: string;
+  } | null;
+  reasoning: string;
+}
+
 export interface StreamingState {
   isLoading: boolean;
   isThinking: boolean;
@@ -17,6 +26,7 @@ export interface StreamingState {
   reconnectAttempt: number;
   streamDroppedMidResponse: boolean;
   streamingThinking: string;
+  dvaClassification: DvaClassification | null;
 }
 
 export interface ChatItem {
@@ -53,6 +63,7 @@ const DEFAULT_STREAMING_STATE: StreamingState = {
   reconnectAttempt: 0,
   streamDroppedMidResponse: false,
   streamingThinking: '',
+  dvaClassification: null,
 };
 
 const initialState: ChatsState = {
@@ -162,9 +173,7 @@ const chatsSlice = createSlice({
     ) {
       const { chatId, toolCallId, content, status, mcpApp, artifact } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
-      if (!chat) {
-        return;
-      }
+      if (!chat) return;
       for (const message of chat.messages) {
         const msg = message as Message & { tool_calls?: ToolCallRecord[] };
         const toolCalls = msg.tool_calls;
@@ -181,7 +190,6 @@ const chatsSlice = createSlice({
             match.artifact = artifact;
           }
           if (mcpApp) {
-            // Fill arguments from the AI tool_call so the host can push tool-input.
             match.mcpApp = withMcpAppArguments(
               mcpApp as Record<string, unknown>,
               match.args as Record<string, unknown> | undefined,

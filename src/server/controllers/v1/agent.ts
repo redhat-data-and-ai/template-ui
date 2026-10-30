@@ -6,11 +6,27 @@ function getAgentHost(): string {
   return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
 }
 
+function getRouterUrl(): string {
+  return process.env.DVA_ROUTER_URL || "http://localhost:8090";
+}
+
 interface StreamRequest {
   message: string;
   thread_id: string;
   session_id: string;
   user_id: string;
+}
+
+interface DvaClassification {
+  intents: Array<{ intent_class: string; confidence: number }>;
+  routing?: {
+    success: boolean;
+    decision: string;
+    selected_product: string | null;
+    data_products: Array<{ name: string; confidence: number }>;
+    reasoning: string;
+  } | null;
+  reasoning: string;
 }
 
 function headerValue(request: FastifyRequest, name: string): string | undefined {
@@ -45,6 +61,31 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
   });
 
   try {
+    // ── DVA 2.0: Pre-classify the query via dv-gemma-router ──
+    let dvaClassification: DvaClassification | undefined;
+    try {
+      const routerUrl = getRouterUrl();
+      const classifyRes = await fetch(`${routerUrl}/api/v1/classify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: message }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (classifyRes.ok) {
+        dvaClassification = (await classifyRes.json()) as DvaClassification;
+        fastify.log.info(
+          `DVA classification: intents=[${dvaClassification.intents.map(i => i.intent_class).join(", ")}] product=${dvaClassification.routing?.selected_product ?? "none"}`
+        );
+        reply.raw.write(
+          `data: ${JSON.stringify({ type: "dva_classification", content: dvaClassification })}\n\n`
+        );
+      } else {
+        fastify.log.warn(`DVA router responded with status ${classifyRes.status}`);
+      }
+    } catch (classifyErr) {
+      fastify.log.warn(`DVA classification unavailable, proceeding without: ${classifyErr}`);
+    }
+
     // Prepare headers for agent request
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -58,16 +99,26 @@ export async function handleStreamPost(fastify: FastifyInstance, request: Fastif
     const agentUrl = `${getAgentHost()}/v1/stream`;
     fastify.log.info(`Proxying to agent: ${agentUrl}`);
 
+    // Build agent request body with optional DVA classification metadata
+    const agentBody: Record<string, unknown> = {
+      message,
+      thread_id,
+      session_id,
+      user_id,
+      stream_tokens: true,
+    };
+    if (dvaClassification) {
+      agentBody.config = {
+        metadata: {
+          dva_classification: dvaClassification,
+        },
+      };
+    }
+
     const agentResponse = await fetch(agentUrl, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        message,
-        thread_id,
-        session_id,
-        user_id,
-        stream_tokens: true
-      })
+      body: JSON.stringify(agentBody),
     });
 
     if (!agentResponse.ok) {

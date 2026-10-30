@@ -28,6 +28,7 @@ import { getThreadState, getThreadStateAndInterrupt } from '@/services/agent-res
 import { buildAppPath } from '@/lib/app-paths';
 import { addToast } from '@/redux/slices/toasts';
 import { assignThreadToProjectThunk } from '@/redux/slices/projects';
+import { setChunks, type ReferenceChunk } from '@/redux/slices/references';
 import { isClientCreatedChat } from '@/services/newChatTracker';
 import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
@@ -85,6 +86,51 @@ function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
     }
   }
   return { ...interrupt, value: raw };
+}
+
+const PATHFINDER_SEARCH_TOOLS = new Set([
+  'pathfinder_search', 'pathfinder_search_semantic', 'pathfinder_search_keyword',
+  'search', 'search_semantic', 'search_keyword',
+]);
+
+function cleanDocTitle(raw: string): string {
+  return raw.replace(/__[A-Za-z0-9_-]+$/, '').replace(/\.pdf$/i, '');
+}
+
+function extractReferenceChunks(toolName: string, content: unknown): ReferenceChunk[] {
+  if (!PATHFINDER_SEARCH_TOOLS.has(toolName)) return [];
+  const text = typeof content === 'string' ? content : '';
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    const results = Array.isArray(parsed) ? parsed
+      : (parsed && typeof parsed === 'object' && Array.isArray((parsed as Record<string, unknown>).results))
+        ? (parsed as { results: unknown[] }).results
+        : [];
+    return results
+      .filter((r): r is Record<string, unknown> => r != null && typeof r === 'object')
+      .map((r) => {
+        const rawTitle = String(r.doc_title ?? r.title ?? r.document_title ?? 'Unknown');
+        const bodyText = String(r.body ?? r.text ?? r.content ?? '');
+        return {
+          chunk_id: String(r.chunk_id ?? r.id ?? ''),
+          doc_title: cleanDocTitle(rawTitle),
+          raw_doc_title: rawTitle,
+          page: Number(r.page_number ?? r.page ?? 0),
+          text: bodyText,
+          score: Number(r.score ?? r.relevance_score ?? 0),
+          crop_path: typeof r.crop_path === 'string' ? r.crop_path : undefined,
+          section: typeof r.section_header === 'string' ? r.section_header
+            : typeof r.section === 'string' ? r.section : undefined,
+          doc_id: typeof r.doc_id === 'string' ? r.doc_id : undefined,
+          search_query: typeof r.search_query === 'string' ? r.search_query : undefined,
+          bbox: Array.isArray(r.bbox) ? r.bbox as [number, number, number, number] : undefined,
+        };
+      })
+      .filter((c) => c.chunk_id && c.text);
+  } catch {
+    return [];
+  }
 }
 
 function cloneMessages(messages: Message[]): Message[] {
@@ -395,6 +441,7 @@ export function useStreamingAPI(threadId: string) {
   const recoveryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recoveryDeadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const accumulatedChunksRef = useRef<ReferenceChunk[]>([]);
   const clearReconnectTimers = useCallback(() => {
     for (const id of reconnectTimersRef.current) clearTimeout(id);
     reconnectTimersRef.current = [];
@@ -499,6 +546,7 @@ export function useStreamingAPI(threadId: string) {
       setMcpEvents([]);
       setTraceId(null);
       setLastStreamTiming(null);
+      accumulatedChunksRef.current = [];
       streamClockRef.current = {
         streamStartTime: null,
         firstTokenTime: null,
@@ -658,6 +706,7 @@ export function useStreamingAPI(threadId: string) {
               }
 
               if (m.type === 'tool') {
+                const toolName = (m as Record<string, unknown>).name as string ?? '';
                 dispatch(
                   mergeToolResult({
                     chatId: threadId,
@@ -668,6 +717,11 @@ export function useStreamingAPI(threadId: string) {
                     artifact: (m as { artifact?: unknown }).artifact,
                   }),
                 );
+                const newChunks = extractReferenceChunks(toolName, m.content);
+                if (newChunks.length > 0) {
+                  accumulatedChunksRef.current = [...accumulatedChunksRef.current, ...newChunks];
+                  dispatch(setChunks(accumulatedChunksRef.current));
+                }
                 dispatch(
                   updateStreamingState({
                     chatId: threadId,
@@ -995,6 +1049,12 @@ export function useStreamingAPI(threadId: string) {
             onMetadata(data) {
               setTraceId(data.trace_id);
             },
+            onDvaClassification(data) {
+              dispatch(updateStreamingState({
+                chatId: threadId,
+                state: { dvaClassification: data },
+              }));
+            },
           };
 
           manager.stream(
@@ -1216,6 +1276,7 @@ export function useStreamingAPI(threadId: string) {
             return;
           }
           if (m.type === 'tool') {
+            const toolName = (m as Record<string, unknown>).name as string ?? '';
             dispatch(
               mergeToolResult({
                 chatId: threadId,
@@ -1226,6 +1287,11 @@ export function useStreamingAPI(threadId: string) {
                 artifact: (m as { artifact?: unknown }).artifact,
               }),
             );
+            const newChunks = extractReferenceChunks(toolName, m.content);
+            if (newChunks.length > 0) {
+              accumulatedChunksRef.current = [...accumulatedChunksRef.current, ...newChunks];
+              dispatch(setChunks(accumulatedChunksRef.current));
+            }
             dispatch(updateStreamingState({ chatId: threadId, state: { activeSubAgent: null } }));
           }
         },
@@ -1273,6 +1339,12 @@ export function useStreamingAPI(threadId: string) {
         },
         onMetadata(data) {
           setTraceId(data.trace_id);
+        },
+        onDvaClassification(data) {
+          dispatch(updateStreamingState({
+            chatId: threadId,
+            state: { dvaClassification: data },
+          }));
         },
       };
 
@@ -1339,6 +1411,7 @@ export function useStreamingAPI(threadId: string) {
               resumeStreamSawProgress = true;
 
               if (m.type === 'tool') {
+                const toolName = (m as Record<string, unknown>).name as string ?? '';
                 dispatch(
                   mergeToolResult({
                     chatId: threadId,
@@ -1349,6 +1422,11 @@ export function useStreamingAPI(threadId: string) {
                     artifact: (m as { artifact?: unknown }).artifact,
                   }),
                 );
+                const newChunks = extractReferenceChunks(toolName, m.content);
+                if (newChunks.length > 0) {
+                  accumulatedChunksRef.current = [...accumulatedChunksRef.current, ...newChunks];
+                  dispatch(setChunks(accumulatedChunksRef.current));
+                }
                 dispatch(updateStreamingState({ chatId: threadId, state: { activeSubAgent: null } }));
                 return;
               }

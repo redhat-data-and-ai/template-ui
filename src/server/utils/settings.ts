@@ -143,7 +143,7 @@ export interface UISettings {
 const DEFAULTS: UISettings = {
   branding: {
     logo_url: "",
-    title: "Deep Agent",
+    title: "Dataverse Agent",
     version: "v1.0.0",
     favicon_url: "",
     colors: {
@@ -188,7 +188,7 @@ const DEFAULTS: UISettings = {
       enabled: true,
       csp: {
         default_src: ["'self'"],
-        script_src: ["'self'"],
+        script_src: ["'self'", "https://cdn.plot.ly"],
         style_src: ["'self'", "'unsafe-inline'"],
         img_src: ["'self'", "data:", "blob:", "https:"],
         connect_src: ["'self'"],

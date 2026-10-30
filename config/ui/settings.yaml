@@ -1,5 +1,5 @@
 branding:
-  title: "Deep Agent"
+  title: "Dataverse Agent"
   version: "v1.0.0"
   logo_url: "/dist/frontend/redhat-logo.svg"
   favicon_url: "/dist/frontend/redhat-logo.svg"
@@ -27,10 +27,10 @@ agent:
   streaming: true
 
 quick_prompts:
-  - What can Agent do for me?
-  - Help me analyze a dataset
-  - Write a query to find anomalies
-  - Summarize the key findings from this data
+  - What can Dataverse Agent do for me?
+  - Show me Q3 FY25 revenue by geography
+  - Who is my manager?
+  - What is Red Hat's AI governance policy?
 
 platform:
   opa:
@@ -46,7 +46,7 @@ platform:
 
 security:
   rate_limit:
-    enabled: true
+    enabled: false
     max: 100
     window: "1 minute"
     exclude_paths:
