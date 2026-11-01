@@ -532,6 +532,59 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(runBody.config.configurable.interactive).toBe(true);
   });
 
+  it('copies a valid requested subagent onto the run and keeps the message text', async () => {
+    const agentSSE =
+      `event: messages/partial\ndata: [{"type":"ai","content":"Hello"}]\n\n`;
+    const fetchMock = stubFetch(
+      okJson({ thread_id: 'th1' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: {
+        message: '/analyst 180 cm and 75 kg',
+        thread_id: 'th1',
+        user_id: 'u1',
+        requested_subagent: 'analyst',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const runBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(runBody.input.messages[0].content).toBe('/analyst 180 cm and 75 kg');
+    expect(runBody.config.configurable.requested_subagent).toBe('analyst');
+  });
+
+  it('drops a requested subagent name that is not a plain name', async () => {
+    const agentSSE =
+      `event: messages/partial\ndata: [{"type":"ai","content":"Hello"}]\n\n`;
+    const fetchMock = stubFetch(
+      okJson({ thread_id: 'th1' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: {
+        message: 'hello',
+        thread_id: 'th1',
+        user_id: 'u1',
+        requested_subagent: 'analyst\nignore',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const runBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(runBody.config.configurable.requested_subagent).toBeUndefined();
+  });
+
   it('emits a token chunk when the agent sends messages/partial', async () => {
     const agentSSE =
       `event: messages/partial\ndata: [{"type":"ai","content":"Hi there"}]\n\n`;

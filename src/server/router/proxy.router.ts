@@ -51,6 +51,14 @@ interface StreamRequestBody {
   stream_tokens?: boolean;
   resume?: boolean;
   project_id?: string | null;
+  requested_subagent?: string;
+}
+
+const SUBAGENT_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+function requestedSubagentName(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !SUBAGENT_NAME.test(value)) return undefined;
+  return value;
 }
 
 /**
@@ -389,7 +397,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, resume: isResume, project_id } = request.body;
+      const { message, thread_id, resume: isResume, project_id, requested_subagent } = request.body;
+      const requestedSubagent = isResume ? undefined : requestedSubagentName(requested_subagent);
 
       if (project_id != null && typeof project_id !== 'string') {
         return reply.status(400).send({ error: 'project_id must be a string when provided' });
@@ -461,7 +470,11 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         runBody.config = {
           metadata: { trace_id: traceId, user_id: xUserId, source: 'ui' },
-          configurable: { user_id: xUserId, interactive: true },
+          configurable: {
+            user_id: xUserId,
+            interactive: true,
+            ...(requestedSubagent ? { requested_subagent: requestedSubagent } : {}),
+          },
         };
 
         const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);

@@ -1,6 +1,13 @@
-import { forwardRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { forwardRef, useRef, useState, type FormEvent, type KeyboardEvent, type Ref } from "react";
 import { ArrowUp, StopCircle } from "lucide-react";
 import { Alert } from "@patternfly/react-core";
+import { SlashSubagentMenu } from "./SlashSubagentMenu";
+import { useSubagentSlashMenu } from "./useSubagentSlashMenu";
+
+function assignTextareaRef(ref: Ref<HTMLTextAreaElement> | undefined, node: HTMLTextAreaElement | null) {
+  if (typeof ref === "function") ref(node);
+  else if (ref) ref.current = node;
+}
 
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
@@ -21,6 +28,13 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
   ref,
 ) {
   const [internalInputValue, setInternalInputValue] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const menu = useSubagentSlashMenu({
+    value: internalInputValue,
+    setValue: setInternalInputValue,
+    disabled: isLoading,
+    textareaRef,
+  });
 
   const handleInternalSubmit = (e?: FormEvent) => {
     if (e) e.preventDefault();
@@ -30,10 +44,15 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menu.onKeyDown(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleInternalSubmit();
     }
+  };
+
+  const syncCaret = (target: HTMLTextAreaElement) => {
+    menu.syncCaret(target.selectionStart ?? target.value.length);
   };
 
   const isSubmitDisabled = !internalInputValue.trim() || isLoading || isRateLimited;
@@ -56,12 +75,33 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           ? "border-muted bg-muted/30"
           : "border-border bg-card focus-within:border-primary/40 focus-within:shadow-elevated"
       }`}>
+        <SlashSubagentMenu
+          isOpen={menu.isOpen}
+          status={menu.status}
+          matches={menu.matches}
+          highlight={menu.highlight}
+          listId={menu.listId}
+          rootRef={menu.rootRef}
+          onSelect={menu.selectIndex}
+          onHighlight={menu.setHighlight}
+        />
         <textarea
-          ref={ref}
+          ref={(node) => {
+            textareaRef.current = node;
+            assignTextareaRef(ref, node);
+          }}
           autoFocus
           value={internalInputValue}
-          onChange={(e) => setInternalInputValue(e.target.value)}
+          onChange={(e) => {
+            setInternalInputValue(e.target.value);
+            syncCaret(e.target);
+          }}
           onKeyDown={handleKeyDown}
+          onKeyUp={(e) => syncCaret(e.currentTarget)}
+          onClick={(e) => syncCaret(e.currentTarget)}
+          onSelect={(e) => syncCaret(e.currentTarget)}
+          aria-expanded={menu.isOpen || undefined}
+          aria-controls={menu.isOpen ? menu.listId : undefined}
           disabled={isLoading}
           placeholder={isLoading ? "Waiting for response..." : "Ask me anything about the data..."}
           aria-label="Type a message"

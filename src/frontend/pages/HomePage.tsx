@@ -1,7 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { Send } from 'lucide-react';
+import { SlashSubagentMenu } from '../components/SlashSubagentMenu';
+import { useSubagentSlashMenu } from '../components/useSubagentSlashMenu';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
 
@@ -27,6 +29,12 @@ export function HomePage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const menu = useSubagentSlashMenu({
+    value: inputValue,
+    setValue: setInputValue,
+    textareaRef,
+  });
 
   const userData = useMemo(() => window.USER_DATA, []);
   const userDisplayName = userData?.displayName || userData?.given_name;
@@ -56,7 +64,12 @@ export function HomePage() {
     startChat(inputValue.trim());
   };
 
+  const syncCaret = (target: HTMLTextAreaElement) => {
+    menu.syncCaret(target.selectionStart ?? target.value.length);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menu.onKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -122,12 +135,31 @@ export function HomePage() {
               <label htmlFor="home-chat-input" className="sr-only">
                 Enter a prompt for {window.APP_DATA?.agentName || 'Agent'}
               </label>
+              <SlashSubagentMenu
+                isOpen={menu.isOpen}
+                status={menu.status}
+                matches={menu.matches}
+                highlight={menu.highlight}
+                listId={menu.listId}
+                rootRef={menu.rootRef}
+                onSelect={menu.selectIndex}
+                onHighlight={menu.setHighlight}
+              />
               <textarea
                 id="home-chat-input"
+                ref={textareaRef}
                 autoFocus
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  syncCaret(e.target);
+                }}
                 onKeyDown={handleKeyDown}
+                onKeyUp={(e) => syncCaret(e.currentTarget)}
+                onClick={(e) => syncCaret(e.currentTarget)}
+                onSelect={(e) => syncCaret(e.currentTarget)}
+                aria-expanded={menu.isOpen || undefined}
+                aria-controls={menu.isOpen ? menu.listId : undefined}
                 placeholder={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
                 className="w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
                 style={{ boxShadow: 'none' }}

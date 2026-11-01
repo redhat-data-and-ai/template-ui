@@ -81,6 +81,29 @@ describe('StreamingManager', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
+  it('sends requested_subagent with the message and omits it when resuming', async () => {
+    const sseBody = makeTokenSSE('Hello', 0) + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockImplementation(() => Promise.resolve(makeStreamResponse(sseBody)));
+
+    const manager = new StreamingManager();
+    await manager.stream(
+      { ...BASE_REQUEST, message: '/analyst 180 cm', requestedSubagent: 'analyst' },
+      makeCallbacks(),
+    );
+
+    const sent = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+    expect(sent.message).toBe('/analyst 180 cm');
+    expect(sent.requested_subagent).toBe('analyst');
+
+    await manager.stream(
+      { ...BASE_REQUEST, resume: true, requestedSubagent: 'analyst' },
+      makeCallbacks(),
+    );
+    const resumed = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
+    expect(resumed.resume).toBe(true);
+    expect(resumed.requested_subagent).toBeUndefined();
+  });
+
   // ── Status transitions: connecting → streaming → idle ────────────────────
   it('emits connecting → streaming → idle status changes', async () => {
     const sseBody = makeTokenSSE('Hi', 0) + 'data: [DONE]\n\n';
