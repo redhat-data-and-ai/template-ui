@@ -6,7 +6,10 @@ export interface SubagentOption {
 }
 
 const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
-const COMPLETE_SLASH = /(?:^|\s)\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?=\s|$)/;
+
+function slashTokenPattern(): RegExp {
+  return /(?:^|\s)\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?=\s|$)/g;
+}
 
 /** The `/name` token the caret is inside, when `/` starts that word. */
 export function activeSlashQuery(
@@ -42,10 +45,17 @@ export function applySlashSelection(
   return { value, caret };
 }
 
-/** First finished `/name` in the message. A name still being typed does not count. */
-export function firstSlashToken(text: string): string | null {
-  const match = COMPLETE_SLASH.exec(text);
-  return match?.[1] ?? null;
+/** Every finished `/name` in the message, in order, without duplicates. */
+export function slashTokens(text: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const match of text.matchAll(slashTokenPattern())) {
+    const name = match[1];
+    if (seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
 }
 
 export function parseSubagentCatalog(payload: unknown): SubagentOption[] {
@@ -66,16 +76,35 @@ export function parseSubagentCatalog(payload: unknown): SubagentOption[] {
   return items;
 }
 
-/** The subagent named by the first `/name` in the user's text, when that name is on the live list. */
-export async function resolveRequestedSubagent(userText: string): Promise<string | undefined> {
-  const token = firstSlashToken(userText);
-  if (!token) return undefined;
+/** Attach the send-time subagent names to the latest human message. */
+export function messageWithSubagentMentions<T extends { type?: string; additional_kwargs?: Record<string, unknown> }>(
+  messages: T[],
+  names: string[],
+): T[] {
+  if (names.length === 0 || messages.length === 0) return messages;
+  const last = messages[messages.length - 1];
+  if (last.type !== "human") return messages;
+  const next = messages.slice();
+  next[next.length - 1] = {
+    ...last,
+    additional_kwargs: {
+      ...(last.additional_kwargs ?? {}),
+      subagent_mentions: names,
+    },
+  };
+  return next;
+}
+
+/** The subagents named in the user's text that are on the live list, in the order typed. */
+export async function resolveRequestedSubagents(userText: string): Promise<string[]> {
+  const tokens = slashTokens(userText);
+  if (tokens.length === 0) return [];
   try {
     const response = await fetch(buildAppPath("/api/config/subagents"), { cache: "no-store" });
-    if (!response.ok) return undefined;
-    const items = parseSubagentCatalog(await response.json());
-    return items.some((item) => item.name === token) ? token : undefined;
+    if (!response.ok) return [];
+    const known = new Set(parseSubagentCatalog(await response.json()).map((item) => item.name));
+    return tokens.filter((token) => known.has(token));
   } catch {
-    return undefined;
+    return [];
   }
 }

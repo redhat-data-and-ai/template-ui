@@ -51,14 +51,21 @@ interface StreamRequestBody {
   stream_tokens?: boolean;
   resume?: boolean;
   project_id?: string | null;
-  requested_subagent?: string;
+  requested_subagents?: string[];
 }
 
 const SUBAGENT_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
-function requestedSubagentName(value: unknown): string | undefined {
-  if (typeof value !== 'string' || !SUBAGENT_NAME.test(value)) return undefined;
-  return value;
+function requestedSubagentNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== 'string' || !SUBAGENT_NAME.test(item) || seen.has(item)) continue;
+    seen.add(item);
+    names.push(item);
+  }
+  return names;
 }
 
 /**
@@ -397,8 +404,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { message, thread_id, resume: isResume, project_id, requested_subagent } = request.body;
-      const requestedSubagent = isResume ? undefined : requestedSubagentName(requested_subagent);
+      const { message, thread_id, resume: isResume, project_id, requested_subagents } = request.body;
+      const requestedSubagents = isResume ? [] : requestedSubagentNames(requested_subagents);
 
       if (project_id != null && typeof project_id !== 'string') {
         return reply.status(400).send({ error: 'project_id must be a string when provided' });
@@ -465,7 +472,16 @@ async function proxyRoutes(fastify: FastifyInstance) {
         if (isResume) {
           runBody.command = { resume: message };
         } else {
-          runBody.input = { messages: [{ role: 'human', content: message, id: randomUUID() }] };
+          runBody.input = {
+            messages: [{
+              role: 'human',
+              content: message,
+              id: randomUUID(),
+              ...(requestedSubagents.length > 0
+                ? { additional_kwargs: { subagent_mentions: requestedSubagents } }
+                : {}),
+            }],
+          };
         }
 
         runBody.config = {
@@ -473,7 +489,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           configurable: {
             user_id: xUserId,
             interactive: true,
-            ...(requestedSubagent ? { requested_subagent: requestedSubagent } : {}),
+            ...(requestedSubagents.length > 0 ? { requested_subagents: requestedSubagents } : {}),
           },
         };
 

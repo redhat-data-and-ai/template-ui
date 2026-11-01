@@ -26,7 +26,7 @@ import {
 import { chatStorage } from '@/services/chatStorage';
 import { getThreadState, getThreadStateAndInterrupt } from '@/services/agent-rest';
 import { buildAppPath } from '@/lib/app-paths';
-import { resolveRequestedSubagent } from '@/components/slash-subagents';
+import { messageWithSubagentMentions, resolveRequestedSubagents } from '@/components/slash-subagents';
 import { addToast } from '@/redux/slices/toasts';
 import { assignThreadToProjectThunk } from '@/redux/slices/projects';
 import { isClientCreatedChat } from '@/services/newChatTracker';
@@ -519,7 +519,12 @@ export function useStreamingAPI(threadId: string) {
       const userText = serializeLastMessage(clones);
       const messageText = mergeMessageWithMcpModelContext(userText, mcpModelContext);
       if (messageText === '') return;
-      const requestedSubagent = await resolveRequestedSubagent(userText);
+      const requestedSubagents = await resolveRequestedSubagents(userText);
+      const messagesWithMentions = messageWithSubagentMentions(clones, requestedSubagents);
+      if (messagesWithMentions !== clones) {
+        dispatch(updateChat({ id: threadId, updates: { messages: messagesWithMentions } }));
+        chatStorage.saveChatByThreadId(threadId, messagesWithMentions);
+      }
 
       const token = typeof window.USER_DATA.accessToken === 'string' ? window.USER_DATA.accessToken : undefined;
       const userId =
@@ -547,7 +552,7 @@ export function useStreamingAPI(threadId: string) {
         apiUrl,
         token,
         projectId: chatRef.current?.project_id,
-        ...(requestedSubagent ? { requestedSubagent } : {}),
+        ...(requestedSubagents.length > 0 ? { requestedSubagents } : {}),
       };
       const wasClientCreated = isClientCreatedChat(threadId);
 

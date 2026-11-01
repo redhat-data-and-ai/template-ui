@@ -17,7 +17,7 @@ export interface StreamRequest {
   projectId?: string | null;
   resume?: boolean;
   resumeDecisions?: Array<{ type: 'approve' | 'reject' | 'edit'; message?: string }>;
-  requestedSubagent?: string;
+  requestedSubagents?: string[];
 }
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error' | 'cancelled';
@@ -149,8 +149,8 @@ export class StreamingManager {
         stream_tokens: true,
       };
       if (request.resume) body.resume = true;
-      if (!request.resume && request.requestedSubagent) {
-        body.requested_subagent = request.requestedSubagent;
+      if (!request.resume && request.requestedSubagents && request.requestedSubagents.length > 0) {
+        body.requested_subagents = request.requestedSubagents;
       }
       if (request.projectId) body.project_id = request.projectId;
 

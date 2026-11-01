@@ -8,9 +8,10 @@ import {
   activeSlashQuery,
   applySlashSelection,
   filterSubagents,
-  firstSlashToken,
   parseSubagentCatalog,
-  resolveRequestedSubagent,
+  resolveRequestedSubagents,
+  slashTokens,
+  messageWithSubagentMentions,
 } from "./slash-subagents";
 
 const catalog = {
@@ -65,34 +66,57 @@ describe("slash token helpers", () => {
     ]);
   });
 
-  it("reads the first finished slash name", () => {
-    expect(firstSlashToken("/analyst I am 180 cm")).toBe("analyst");
-    expect(firstSlashToken("please /publisher the report")).toBe("publisher");
-    expect(firstSlashToken("see /docs")).toBe("docs");
-    expect(firstSlashToken("hello")).toBeNull();
-    expect(firstSlashToken("5/2")).toBeNull();
+  it("reads every finished slash name in order", () => {
+    expect(slashTokens("/analyst I am 180 cm")).toEqual(["analyst"]);
+    expect(slashTokens("/analyst /publisher compare them")).toEqual(["analyst", "publisher"]);
+    expect(slashTokens("/analyst /analyst /publisher")).toEqual(["analyst", "publisher"]);
+    expect(slashTokens("please /publisher the report")).toEqual(["publisher"]);
+    expect(slashTokens("see /docs")).toEqual(["docs"]);
+    expect(slashTokens("hello")).toEqual([]);
+    expect(slashTokens("5/2")).toEqual([]);
   });
 });
 
-describe("resolveRequestedSubagent", () => {
-  it("returns the name only when the live list contains it", async () => {
+describe("resolveRequestedSubagents", () => {
+  it("returns every tagged name that is on the live list", async () => {
     const fetchMock = vi.fn().mockImplementation(
       () => Promise.resolve(new Response(JSON.stringify(catalog), { status: 200 })),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveRequestedSubagent("/analyst 180 cm and 75 kg")).resolves.toBe("analyst");
+    await expect(resolveRequestedSubagents("/analyst /publisher compare them")).resolves.toEqual([
+      "analyst",
+      "publisher",
+    ]);
     expect(fetchMock).toHaveBeenCalledWith("/api/config/subagents", { cache: "no-store" });
 
-    await expect(resolveRequestedSubagent("see /docs for details")).resolves.toBeUndefined();
-    await expect(resolveRequestedSubagent("no slash here")).resolves.toBeUndefined();
+    await expect(resolveRequestedSubagents("/analyst /docs for details")).resolves.toEqual(["analyst"]);
+    await expect(resolveRequestedSubagents("no slash here")).resolves.toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("sends the message without a subagent when the list cannot be loaded", async () => {
+  it("sends the message without subagents when the list cannot be loaded", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
 
-    await expect(resolveRequestedSubagent("/analyst hi")).resolves.toBeUndefined();
+    await expect(resolveRequestedSubagents("/analyst /publisher hi")).resolves.toEqual([]);
+  });
+});
+
+describe("messageWithSubagentMentions", () => {
+  it("stores the send-time names on the latest human message", () => {
+    const messages = [
+      { type: "ai", content: "hello" },
+      { type: "human", content: "/analyst /publisher compare", additional_kwargs: { keep: true } },
+    ];
+
+    const next = messageWithSubagentMentions(messages, ["analyst", "publisher"]);
+
+    expect(next[1].additional_kwargs).toEqual({
+      keep: true,
+      subagent_mentions: ["analyst", "publisher"],
+    });
+    expect(messages[1].additional_kwargs).toEqual({ keep: true });
+    expect(messageWithSubagentMentions(messages, [])).toBe(messages);
   });
 });
 
