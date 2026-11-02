@@ -17,16 +17,19 @@ import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from
 import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI, MAX_RETRIES, queuedApprovalForInterrupt } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
+import { stripClassification } from '../lib/text-utils';
 import { ChatMessagesView } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { ReconnectingBanner } from '../components/ReconnectingBanner';
 import { InterruptBanner } from '../components/InterruptBanner';
+import { ClarifyPopup, isClarifyInterrupt } from '../components/ClarifyPopup';
 import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
 import { isClientCreatedChat } from '../services/newChatTracker';
+import { clearReferences } from '../redux/slices/references';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAgentHealth } from '../hooks/useAgentHealth';
@@ -70,6 +73,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   const [streamAnnouncement, setStreamAnnouncement] = useState('');
   const prevIsLoadingForAnnounce = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    dispatch(clearReferences());
+  }, [threadId, dispatch]);
 
   useEffect(() => {
     if (chatsLoading || hydrating) return;
@@ -145,7 +152,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
               messages: msgs,
               title: (() => {
                 const first = msgs.find(m => m.type === 'human');
-                const content = first ? String(first.content) : '';
+                const raw = first ? String(first.content) : '';
+                const content = stripClassification(raw) ?? '';
                 return content.length > 40 ? content.substring(0, 40) + '...' : content || 'Chat';
               })(),
             },
@@ -237,12 +245,13 @@ export function ChatPage({ threadId }: { threadId: string }) {
   useEffect(() => {
     if (threadId && thread.messages.length > 0 && thread.messages.length !== previousMessagesLength.current) {
       if (currentChat?.title === 'New Chat' && thread.messages.length > 0) {
-        const content = thread.messages[0].content as string;
+        const rawContent = thread.messages[0].content as string;
+        const content = stripClassification(rawContent) ?? '';
         dispatch(updateChat({
           id: threadId,
           updates: {
             title: content.length > 40 ? content.substring(0, 40) + '...' : content || 'New Chat',
-            preview: content.substring(0, 60) + '...',
+            preview: content.length > 60 ? content.substring(0, 60) + '...' : content,
             timestamp: new Date().toISOString(),
           },
         }));
@@ -623,7 +632,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
                 !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
                   ? (
                     <InterruptBanner
-                      interrupt={thread.pendingInterrupt}
+                      interrupt={
+                        isClarifyInterrupt(thread.pendingInterrupt.value)
+                          ? {
+                              ...thread.pendingInterrupt,
+                              value: JSON.stringify({
+                                type: 'user_question',
+                                question: (thread.pendingInterrupt.value as { question: string }).question,
+                                options: (thread.pendingInterrupt.value as { options?: string[] }).options ?? [],
+                              }),
+                            }
+                          : thread.pendingInterrupt
+                      }
                       onResume={handleMCPOAuthResume}
                       onDismiss={handleInterruptDismiss}
                     />
@@ -669,6 +689,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
             </div>
           )}
         </div>
+        {/* Clarify interrupts now render inline in chat via InterruptBanner */}
       </ChatActionsProvider>
     </ChatErrorBoundary>
   );

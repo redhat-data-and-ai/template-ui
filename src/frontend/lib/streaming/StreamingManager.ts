@@ -38,8 +38,18 @@ export type StreamMetadataPayload = {
   thread_id: string;
 };
 
+export type DvaClassificationEvent = {
+  intents: Array<{ intent_class: string; confidence: number }>;
+  routing?: {
+    selected_product: string | null;
+    decision: string;
+  } | null;
+  reasoning: string;
+};
+
 export type StreamCallback = {
   onToken: (content: string, messageId?: string, part?: 'thinking' | 'text') => void;
+  onThinkingDelta?: (content: string) => void;
   onDraftDiscard?: () => void;
   onMessage: (message: Message) => void;
   onInterrupt: (interrupt: InterruptPayload) => void;
@@ -48,6 +58,7 @@ export type StreamCallback = {
   onDone: () => void;
   onMcpStatus?: (event: McpStreamStatusEvent) => void;
   onMetadata?: (data: StreamMetadataPayload) => void;
+  onDvaClassification?: (data: DvaClassificationEvent) => void;
 };
 
 export class StreamingManager {
@@ -84,6 +95,10 @@ export class StreamingManager {
         }
         case 'metadata': {
           callbacks.onMetadata?.(event.data);
+          break;
+        }
+        case 'dva_classification': {
+          callbacks.onDvaClassification?.(event.data);
           break;
         }
         case 'chunk': {

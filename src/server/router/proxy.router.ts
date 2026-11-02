@@ -215,10 +215,8 @@ function translateMessageEvent(
           const dedupKey = `tool-${toolCallId}`;
           if (!sentMsgIds.has(dedupKey)) {
             sentMsgIds.add(dedupKey);
-            chunks.push({
-              type: 'message',
-              content: buildToolMessageContent(msg),
-            });
+            const built = buildToolMessageContent(msg);
+            chunks.push({ type: 'message', content: built });
           }
         }
       }
@@ -270,12 +268,12 @@ function translateMessageEvent(
     if (msgType === 'tool' || msgType === 'toolmessage') {
       const toolCallId = raw.tool_call_id ?? '';
       const dedupKey = `tool-${toolCallId}`;
-      if (sentMsgIds.has(dedupKey)) return [[], prevPartial];
+      if (sentMsgIds.has(dedupKey)) {
+          return [[], prevPartial];
+      }
       sentMsgIds.add(dedupKey);
-      return [[{
-        type: 'message',
-        content: buildToolMessageContent(raw),
-      }], prevPartial];
+      const built = buildToolMessageContent(raw);
+      return [[{ type: 'message', content: built }], prevPartial];
     }
 
     if (msgType === 'ai' || msgType === 'aimessage') {
@@ -449,6 +447,52 @@ async function proxyRoutes(fastify: FastifyInstance) {
         const runUrl = `${getAgentHost()}/threads/${thread_id}/runs/stream`;
         fastify.log.info({ traceId, runUrl }, 'Starting streaming run');
 
+        // ── DVA 2.0: Pre-classify via dv-gemma-router ──
+        let dvaClassification: Record<string, unknown> | undefined;
+        interface SubQueryInfo {
+          query: string;
+          intents: Array<{ intent_class: string; confidence: number }>;
+          product?: string | null;
+          tables_list?: Array<Record<string, string>>;
+          entities?: string[];
+          reasoning?: string;
+        }
+        let subQueries: SubQueryInfo[] = [];
+        let isCompound = false;
+
+        if (!isResume) {
+          try {
+            const routerUrl = process.env.DVA_ROUTER_URL || 'http://localhost:8090';
+            const classifyRes = await fetch(`${routerUrl}/api/v1/classify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: message }),
+              signal: AbortSignal.timeout(15_000),
+            });
+            if (classifyRes.ok) {
+              dvaClassification = (await classifyRes.json()) as Record<string, unknown>;
+              subQueries = (dvaClassification.sub_queries as SubQueryInfo[]) || [];
+              isCompound = (dvaClassification.is_compound as boolean) || false;
+              const intents = (dvaClassification.intents as Array<{ intent_class: string }>) || [];
+              const routing = dvaClassification.routing as { selected_product?: string } | undefined;
+              fastify.log.info(
+                {
+                  traceId,
+                  intents: intents.map(i => i.intent_class),
+                  product: routing?.selected_product,
+                  compound: isCompound,
+                  subQueryCount: subQueries.length,
+                },
+                'DVA classification complete',
+              );
+            } else {
+              fastify.log.warn({ traceId, status: classifyRes.status }, 'DVA router classify failed');
+            }
+          } catch (classifyErr) {
+            fastify.log.warn({ traceId, err: classifyErr }, 'DVA classification unavailable');
+          }
+        }
+
         const runBody: Record<string, unknown> = {
           assistant_id: 'agent',
           stream_mode: ['messages', 'updates'],
@@ -456,11 +500,39 @@ async function proxyRoutes(fastify: FastifyInstance) {
         if (isResume) {
           runBody.command = { resume: message };
         } else {
-          runBody.input = { messages: [{ role: 'human', content: message, id: randomUUID() }] };
+          let humanContent = message;
+          if (dvaClassification && subQueries.length > 0) {
+            const classLines: string[] = ['<classification>'];
+            if (isCompound) {
+              classLines.push(`compound_query: true (${subQueries.length} parts)`);
+            }
+            for (let i = 0; i < subQueries.length; i++) {
+              const sq = subQueries[i];
+              const sqIntents = sq.intents?.map(it => it.intent_class).join(', ') || 'unknown';
+              classLines.push(`[Part ${i + 1}] "${sq.query}"`);
+              classLines.push(`  intent: ${sqIntents}`);
+              if (sq.product) classLines.push(`  product: ${sq.product}`);
+              if (sq.tables_list && sq.tables_list.length > 0) {
+                const tableStr = sq.tables_list.map(t => `${t.name} (${t.schema})`).join(', ');
+                classLines.push(`  tables: ${tableStr}`);
+              }
+              if (sq.entities && sq.entities.length > 0) {
+                classLines.push(`  entities: ${sq.entities.join(', ')}`);
+              }
+            }
+            classLines.push('</classification>');
+            humanContent = classLines.join('\n') + '\n\n' + message;
+          }
+          runBody.input = { messages: [{ role: 'human', content: humanContent, id: randomUUID() }] };
         }
 
         runBody.config = {
-          metadata: { trace_id: traceId, user_id: xUserId, source: 'ui' },
+          metadata: {
+            trace_id: traceId,
+            user_id: xUserId,
+            source: 'ui',
+            ...(dvaClassification ? { dva_classification: dvaClassification } : {}),
+          },
           configurable: { user_id: xUserId, interactive: true },
         };
 
@@ -691,7 +763,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
                 prevPartial = nextPartial;
                 for (const chunk of uiChunks) {
-                  reply.raw.write(`data: ${JSON.stringify({ ...chunk, chunk_id: chunkId })}\n\n`);
+                  const payload = { ...chunk, chunk_id: chunkId };
+                  reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
                   chunkId++;
                 }
               } catch {
