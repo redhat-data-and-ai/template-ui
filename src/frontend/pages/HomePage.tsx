@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { Send } from 'lucide-react';
 import { SlashSubagentMenu } from '../components/SlashSubagentMenu';
+import { SubagentComposer } from '../components/SubagentComposer';
 import { useSubagentSlashMenu } from '../components/useSubagentSlashMenu';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
@@ -29,11 +30,11 @@ export function HomePage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const menu = useSubagentSlashMenu({
     value: inputValue,
     setValue: setInputValue,
-    textareaRef,
+    editorRef,
   });
 
   const userData = useMemo(() => window.USER_DATA, []);
@@ -64,11 +65,7 @@ export function HomePage() {
     startChat(inputValue.trim());
   };
 
-  const syncCaret = (target: HTMLTextAreaElement) => {
-    menu.syncCaret(target.selectionStart ?? target.value.length);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (menu.onKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -145,31 +142,26 @@ export function HomePage() {
                 onSelect={menu.selectIndex}
                 onHighlight={menu.setHighlight}
               />
-              <textarea
+              <SubagentComposer
                 id="home-chat-input"
-                ref={textareaRef}
-                autoFocus
+                editorRef={editorRef}
                 value={inputValue}
-                onChange={(e) => {
-                  setInputValue(e.target.value);
-                  syncCaret(e.target);
-                }}
-                onKeyDown={handleKeyDown}
-                onKeyUp={(e) => syncCaret(e.currentTarget)}
-                onClick={(e) => syncCaret(e.currentTarget)}
-                onSelect={(e) => syncCaret(e.currentTarget)}
-                aria-expanded={menu.isOpen || undefined}
-                aria-controls={menu.isOpen ? menu.listId : undefined}
+                onChange={setInputValue}
+                names={menu.catalog.map((item) => item.name)}
+                autoFocus
                 placeholder={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
-                className="w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
-                style={{ boxShadow: 'none' }}
-                rows={1}
+                ariaLabel={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
+                onCaret={menu.syncCaret}
+                onKeyDown={handleKeyDown}
+                ariaExpanded={menu.isOpen || undefined}
+                ariaControls={menu.isOpen ? menu.listId : undefined}
+                className="w-full px-4 py-3 pr-12 text-sm leading-relaxed h-12 rounded-2xl"
               />
               <button
                 type="submit"
                 disabled={!inputValue.trim()}
                 aria-label="Send message"
-                className={`absolute right-2.5 bottom-2.5 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
+                className={`absolute right-2.5 bottom-2.5 z-20 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
                   inputValue.trim()
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
                     : 'bg-muted text-muted-foreground cursor-not-allowed'

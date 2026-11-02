@@ -58,6 +58,37 @@ export function slashTokens(text: string): string[] {
   return names;
 }
 
+export interface MentionPart {
+  text: string;
+  marked: boolean;
+}
+
+export function subagentMentionsOf(message: {
+  additional_kwargs?: Record<string, unknown>;
+}): string[] {
+  const raw = message.additional_kwargs?.subagent_mentions;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item): item is string => typeof item === "string" && item.length > 0);
+}
+
+/** Mark `/name` only when that name was saved on the message at send time. */
+export function highlightSubagentMentions(text: string, names: readonly string[]): MentionPart[] {
+  if (!names.length) return [{ text, marked: false }];
+  const known = new Set(names);
+  const parts: MentionPart[] = [];
+  let last = 0;
+  for (const match of text.matchAll(slashTokenPattern())) {
+    const name = match[1];
+    if (!known.has(name) || match.index == null) continue;
+    const slashAt = match.index + match[0].length - name.length - 1;
+    if (slashAt > last) parts.push({ text: text.slice(last, slashAt), marked: false });
+    parts.push({ text: `/${name}`, marked: true });
+    last = slashAt + name.length + 1;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last), marked: false });
+  return parts.length > 0 ? parts : [{ text, marked: false }];
+}
+
 export function parseSubagentCatalog(payload: unknown): SubagentOption[] {
   if (!payload || typeof payload !== "object") return [];
   const list = (payload as { subagents?: unknown }).subagents;

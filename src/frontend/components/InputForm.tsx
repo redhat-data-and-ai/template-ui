@@ -2,12 +2,8 @@ import { forwardRef, useRef, useState, type FormEvent, type KeyboardEvent, type 
 import { ArrowUp, StopCircle } from "lucide-react";
 import { Alert } from "@patternfly/react-core";
 import { SlashSubagentMenu } from "./SlashSubagentMenu";
+import { SubagentComposer } from "./SubagentComposer";
 import { useSubagentSlashMenu } from "./useSubagentSlashMenu";
-
-function assignTextareaRef(ref: Ref<HTMLTextAreaElement> | undefined, node: HTMLTextAreaElement | null) {
-  if (typeof ref === "function") ref(node);
-  else if (ref) ref.current = node;
-}
 
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
@@ -17,7 +13,7 @@ interface InputFormProps {
   rateLimitRemainingSeconds?: number;
 }
 
-export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(function InputForm(
+export const InputForm = forwardRef<HTMLDivElement, InputFormProps>(function InputForm(
   {
   onSubmit,
   onCancel,
@@ -28,12 +24,12 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
   ref,
 ) {
   const [internalInputValue, setInternalInputValue] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const menu = useSubagentSlashMenu({
     value: internalInputValue,
     setValue: setInternalInputValue,
     disabled: isLoading,
-    textareaRef,
+    editorRef,
   });
 
   const handleInternalSubmit = (e?: FormEvent) => {
@@ -43,16 +39,12 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
     setInternalInputValue("");
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (menu.onKeyDown(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleInternalSubmit();
     }
-  };
-
-  const syncCaret = (target: HTMLTextAreaElement) => {
-    menu.syncCaret(target.selectionStart ?? target.value.length);
   };
 
   const isSubmitDisabled = !internalInputValue.trim() || isLoading || isRateLimited;
@@ -85,31 +77,23 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           onSelect={menu.selectIndex}
           onHighlight={menu.setHighlight}
         />
-        <textarea
-          ref={(node) => {
-            textareaRef.current = node;
-            assignTextareaRef(ref, node);
-          }}
-          autoFocus
+        <SubagentComposer
+          editorRef={editorRef}
+          inputRef={ref as Ref<HTMLDivElement>}
           value={internalInputValue}
-          onChange={(e) => {
-            setInternalInputValue(e.target.value);
-            syncCaret(e.target);
-          }}
-          onKeyDown={handleKeyDown}
-          onKeyUp={(e) => syncCaret(e.currentTarget)}
-          onClick={(e) => syncCaret(e.currentTarget)}
-          onSelect={(e) => syncCaret(e.currentTarget)}
-          aria-expanded={menu.isOpen || undefined}
-          aria-controls={menu.isOpen ? menu.listId : undefined}
+          onChange={setInternalInputValue}
+          names={menu.catalog.map((item) => item.name)}
           disabled={isLoading}
+          autoFocus
           placeholder={isLoading ? "Waiting for response..." : "Ask me anything about the data..."}
-          aria-label="Type a message"
-          className={`w-full resize-none border-0 bg-transparent px-4 pt-3.5 pb-12 text-sm leading-relaxed min-h-[56px] max-h-[200px] rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
-          style={{ boxShadow: 'none' }}
-          rows={1}
+          ariaLabel="Type a message"
+          onCaret={menu.syncCaret}
+          onKeyDown={handleKeyDown}
+          ariaExpanded={menu.isOpen || undefined}
+          ariaControls={menu.isOpen ? menu.listId : undefined}
+          className="w-full px-4 pt-3.5 pb-12 text-sm leading-relaxed h-[86px] rounded-2xl"
         />
-        <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
+        <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1.5">
           {isLoading ? (
             <button
               type="button"

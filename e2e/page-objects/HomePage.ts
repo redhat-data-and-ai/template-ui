@@ -6,7 +6,7 @@ export class HomePage {
 
   async goto(): Promise<void> {
     await this.page.goto('/');
-    await this.page.waitForSelector('textarea', { state: 'visible' });
+    await this.page.waitForSelector('.subagent-composer', { state: 'visible' });
   }
 
   /** Returns the browser document title set from the branding config. */
@@ -16,7 +16,7 @@ export class HomePage {
 
   /** Fills the chat input and clicks the submit button. */
   async submitPrompt(text: string): Promise<void> {
-    await this.page.locator('textarea').fill(text);
+    await this.page.locator('.subagent-composer').fill(text);
     await this.page.locator('button[type="submit"]').click();
   }
 

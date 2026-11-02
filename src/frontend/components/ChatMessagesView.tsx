@@ -31,6 +31,7 @@ import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButt
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
 import { splitMessageParts } from "../../server/message-parts";
+import { highlightSubagentMentions, subagentMentionsOf } from "./slash-subagents";
 
 function isRunningToolCall(toolCall: { content?: unknown }): boolean {
   if (toolCall.content == null) return true;
@@ -53,6 +54,28 @@ function answeredAskUser(toolCall: { name?: string; args?: unknown; content?: un
   const answer = typeof toolCall.content === 'string' ? toolCall.content.trim() : '';
   if (!answer) return null;
   return { question, answer };
+}
+
+function HumanMessageText({ text, names }: { text: string; names: string[] }) {
+  const parts = highlightSubagentMentions(text, names);
+  if (!parts.some((part) => part.marked)) {
+    return (
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
+        {text}
+      </ReactMarkdown>
+    );
+  }
+  return (
+    <span className="whitespace-pre-wrap">
+      {parts.map((part, index) =>
+        part.marked ? (
+          <strong key={index} className="font-semibold underline">{part.text}</strong>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </span>
+  );
 }
 
 function extractMessageText(content: unknown): string {
@@ -456,9 +479,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
             </div>
           ) : (
             <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
-                {plain}
-              </ReactMarkdown>
+              <HumanMessageText text={plain} names={subagentMentionsOf(message)} />
             </div>
           )}
         </div>
@@ -1002,7 +1023,7 @@ interface ChatMessagesViewProps {
     timeToFirstTokenMs: number | null;
     totalDurationMs: number;
   } | null;
-  chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  chatInputRef?: React.RefObject<HTMLDivElement | null>;
   onExportMarkdown?: () => void;
   onExportJson?: () => void;
 }

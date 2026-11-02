@@ -246,3 +246,27 @@ describe('ChatMessagesView — standby thinking row', () => {
     expect(screen.queryByRole('status', { name: 'Agent is thinking' })).not.toBeInTheDocument();
   });
 });
+
+describe('ChatMessagesView — subagent mentions', () => {
+  it('bolds and underlines names saved on the sent message', () => {
+    const store = makeStore();
+    const tagged = {
+      type: 'human',
+      content: '/analyst /docs hello',
+      id: 'msg-human-tagged',
+      additional_kwargs: { subagent_mentions: ['analyst'] },
+    } as unknown as Message;
+
+    render(
+      <Provider store={store}>
+        <ChatMessagesView {...makeBaseProps({ messages: [tagged] })} />
+      </Provider>,
+    );
+
+    const marked = screen.getByText('/analyst');
+    expect(marked.tagName).toBe('STRONG');
+    expect(marked).toHaveClass('underline');
+    expect(screen.getByText(/\/docs hello/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument();
+  });
+});

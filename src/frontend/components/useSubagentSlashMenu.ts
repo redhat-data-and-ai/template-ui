@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { buildAppPath } from "../lib/app-paths";
+import { placeComposerCaret } from "./SubagentComposer";
 import {
   activeSlashQuery,
   applySlashSelection,
@@ -14,7 +15,7 @@ interface UseSubagentSlashMenuArgs {
   value: string;
   setValue: (next: string) => void;
   disabled?: boolean;
-  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  editorRef: RefObject<HTMLElement | null>;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -25,7 +26,7 @@ export function useSubagentSlashMenu({
   value,
   setValue,
   disabled = false,
-  textareaRef,
+  editorRef,
 }: UseSubagentSlashMenuArgs) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -87,20 +88,20 @@ export function useSubagentSlashMenu({
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
-      if (rootRef.current?.contains(target) || textareaRef.current?.contains(target)) return;
+      if (rootRef.current?.contains(target) || editorRef.current?.contains(target)) return;
       setDismissedStart(tokenStart);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [isOpen, tokenStart, textareaRef]);
+  }, [isOpen, tokenStart, editorRef]);
 
   useLayoutEffect(() => {
-    const el = textareaRef.current;
+    const el = editorRef.current;
     const next = pendingCaret.current;
     if (!el || next == null) return;
-    el.setSelectionRange(next, next);
+    placeComposerCaret(el, next);
     pendingCaret.current = null;
-  }, [value, textareaRef]);
+  });
 
   const syncCaret = (next: number) => setCaret(next);
 
@@ -112,7 +113,7 @@ export function useSubagentSlashMenu({
       setDismissedStart(token.start);
       pendingCaret.current = next.caret;
       setCaret(next.caret);
-      textareaRef.current?.setSelectionRange(next.caret, next.caret);
+      if (editorRef.current) placeComposerCaret(editorRef.current, next.caret);
       return;
     }
     pendingCaret.current = next.caret;
@@ -120,7 +121,7 @@ export function useSubagentSlashMenu({
     setValue(next.value);
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>): boolean => {
     if (!isOpen || !token) return false;
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -166,5 +167,6 @@ export function useSubagentSlashMenu({
     onKeyDown,
     selectIndex,
     setHighlight,
+    catalog: items,
   };
 }
