@@ -281,4 +281,117 @@ describe('StreamingManager', () => {
 
     expect(callbacks.onToken).toHaveBeenCalledWith('Hello', 'server-msg-uuid');
   });
+
+  // ── Error message extraction from non-2xx JSON body ───────────────────────
+  it('extracts "message" field from JSON body on non-2xx response', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Model configuration is invalid' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    const [err] = vi.mocked(callbacks.onError).mock.calls[0];
+    expect(err.message).toBe('Model configuration is invalid');
+  });
+
+  it('uses "error" field from JSON body when "message" is absent', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Upstream timeout' }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    const [err] = vi.mocked(callbacks.onError).mock.calls[0];
+    expect(err.message).toBe('Upstream timeout');
+  });
+
+  it('falls back to generic HTTP status message when body is not JSON', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('Bad Gateway', { status: 502 }),
+    );
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    const [err] = vi.mocked(callbacks.onError).mock.calls[0];
+    expect(err.message).toBe('HTTP error! status: 502');
+  });
+
+  it('attaches .status to thrown error for non-2xx response with JSON body', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Model configuration is invalid' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    const [err] = vi.mocked(callbacks.onError).mock.calls[0];
+    expect((err as any).status).toBe(500);
+    expect(err.message).toBe('Model configuration is invalid');
+  });
+
+  it('attaches .status to error for 503 with fallback message', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('Service Unavailable', { status: 503 }),
+    );
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    const [err] = vi.mocked(callbacks.onError).mock.calls[0];
+    expect((err as any).status).toBe(503);
+    expect(err.message).toBe('HTTP error! status: 503');
+  });
+
+  it('attaches .status to error for 429 rate-limited response', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('Too Many Requests', { status: 429 }),
+    );
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    const [err] = vi.mocked(callbacks.onError).mock.calls[0];
+    expect((err as any).status).toBe(429);
+  });
+
+  it('prefers "message" over "error" when both are present in JSON body', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Specific error', error: 'Generic error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledOnce();
+    const [err] = vi.mocked(callbacks.onError).mock.calls[0];
+    expect(err.message).toBe('Specific error');
+  });
 });

@@ -8,6 +8,7 @@ export interface BrandingThemeColors {
 export interface BrandingConfig {
   logo_url: string;
   title: string;
+  version: string;
   favicon_url?: string;
   colors: {
     light: BrandingThemeColors;

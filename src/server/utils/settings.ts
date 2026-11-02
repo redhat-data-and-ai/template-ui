@@ -94,6 +94,7 @@ interface BrandingThemeColors {
 interface BrandingConfig {
   logo_url?: string;
   title: string;
+  version: string;
   favicon_url?: string;
   colors: {
     light: BrandingThemeColors;
@@ -135,12 +136,15 @@ export interface UISettings {
   otel: OtelConfig;
   announcement: AnnouncementConfig;
   platform: PlatformConfig;
+  /** Home-page quick prompts. Empty means the UI uses its built-in prompts. */
+  quick_prompts: string[];
 }
 
 const DEFAULTS: UISettings = {
   branding: {
     logo_url: "",
     title: "Deep Agent",
+    version: "v1.0.0",
     favicon_url: "",
     colors: {
       light: {
@@ -223,6 +227,7 @@ const DEFAULTS: UISettings = {
       max_rate_limit: 0,
     },
   },
+  quick_prompts: [],
 };
 
 function deepMerge<T extends Record<string, unknown>>(
@@ -364,6 +369,17 @@ function validateConfig(config: UISettings): void {
   if (typeof config.server.port !== "number" || config.server.port <= 0 || config.server.port > 65535) {
     throw new Error("Config validation error: server.port must be between 1 and 65535");
   }
+
+  if (!Array.isArray(config.quick_prompts)) {
+    throw new Error("Config validation error: quick_prompts must be a list of strings");
+  }
+  config.quick_prompts = config.quick_prompts.map((prompt) => {
+    const text = typeof prompt === "string" ? prompt : String(prompt);
+    if (text.trim() === "") {
+      throw new Error("Config validation error: quick_prompts entries must be non-empty strings");
+    }
+    return text;
+  });
 }
 
 function applyEnvOverrides(config: UISettings): void {

@@ -7,7 +7,11 @@
 # Build: podman build -f Containerfile.base -t ai-template-ui:v1.0.0 .
 # Run:   podman run -v /path/to/config:/app/config/ui:ro -e UI_CONFIG_PATH=/app/config/ui/settings.yaml ai-template-ui:v1.0.0
 
-FROM registry.access.redhat.com/hi/nodejs:24.18.0-builder
+# Pin at minor level, not patch. Patch-level Hummingbird tags are frozen and do
+# not receive security rebuilds: 24.18.0-builder still ships
+# ca-certificates-2025.2.80_v9.0.304-9.hum1, which carries the eMudhra roots
+# removed by CVE-2026-114406. 24-builder has 2026.2.92_v9.0.319-2.hum1.
+FROM registry.access.redhat.com/hi/nodejs:24-builder
 
 USER root
 

@@ -1,5 +1,6 @@
 branding:
   title: "Deep Agent"
+  version: "v1.0.0"
   logo_url: "/dist/frontend/redhat-logo.svg"
   favicon_url: "/dist/frontend/redhat-logo.svg"
   colors:
@@ -24,6 +25,12 @@ agent:
   endpoint: ""
   timeout_ms: 30000
   streaming: true
+
+quick_prompts:
+  - What can Agent do for me?
+  - Help me analyze a dataset
+  - Write a query to find anomalies
+  - Summarize the key findings from this data
 
 platform:
   opa:

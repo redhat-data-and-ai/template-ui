@@ -611,6 +611,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
                   : undefined
               }
               onRetry={handleStreamRetry}
+              errorMessage={streamingState.error}
               scrollAreaRef={scrollAreaRef}
               onSubmit={handleSubmit}
               onEditMessage={handleEditMessage}

@@ -155,6 +155,7 @@ async function routes(fastify: FastifyInstance) {
       agentName,
       branding: cfg.branding,
       features: cfg.features,
+      quickPrompts: cfg.quick_prompts,
       userRole: (session as { role?: string | null }).role ?? null,
     };
 

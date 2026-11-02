@@ -159,7 +159,22 @@ export class StreamingManager {
           const retrySeconds = parseRetryAfterSeconds(response.headers.get('Retry-After'));
           triggerRateLimit(retrySeconds);
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const body = await response.json() as Record<string, unknown>;
+          if (typeof body?.message === 'string' && body.message.length > 0) {
+            errorMessage = body.message;
+          } else if (typeof body?.error === 'string' && body.error.length > 0) {
+            errorMessage = body.error;
+          } else if (typeof body?.detail === 'string' && body.detail.length > 0) {
+            errorMessage = body.detail;
+          }
+        } catch {
+          // Response body is not JSON or unreadable — keep generic message
+        }
+        const err: Error & { status?: number } = new Error(errorMessage);
+        err.status = response.status;
+        throw err;
       }
 
       unmarkChatAsClientCreated(request.threadId);

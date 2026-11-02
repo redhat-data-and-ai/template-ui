@@ -858,6 +858,7 @@ interface ChatMessagesViewProps {
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
   onSubmit: (inputValue: string) => void;
   onRetry?: () => void;
+  errorMessage?: string | null;
   onCancel: () => void;
   liveActivityEvents: ProcessedEvent[];
   historicalActivities: Record<string, ProcessedEvent[]>;
@@ -888,6 +889,7 @@ export function ChatMessagesView({
   scrollAreaRef,
   onSubmit,
   onRetry,
+  errorMessage,
   onCancel,
   isRateLimited = false,
   rateLimitRemainingSeconds = 0,
@@ -1158,9 +1160,38 @@ export function ChatMessagesView({
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center">
                 <AlertCircle className="w-4 h-4 text-destructive" />
               </div>
-              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-                <p className="text-sm text-muted-foreground mb-2">
-                  The agent didn&apos;t respond. This could be a temporary issue.
+              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card max-w-lg">
+                <p className="text-sm text-muted-foreground mb-1">
+                  {errorMessage
+                    ? 'The agent encountered an error:'
+                    : 'The agent didn\u0027t respond. This could be a temporary issue.'}
+                </p>
+                {errorMessage && (
+                  <p className="text-sm text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
+                    {errorMessage}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRetry?.()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  aria-label="Retry operation"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+          {!showNoResponse && errorMessage && !isLoading && (
+            <div className="flex items-start gap-3 animate-fadeIn">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center">
+                <AlertCircle className="w-4 h-4 text-destructive" />
+              </div>
+              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card max-w-lg">
+                <p className="text-sm text-muted-foreground mb-1">The agent encountered an error:</p>
+                <p className="text-sm text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
+                  {errorMessage}
                 </p>
                 <button
                   type="button"

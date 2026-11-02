@@ -26,6 +26,8 @@ export interface AppData {
   branding?: BrandingConfig;
   features?: FeaturesConfig;
   userRole?: 'owners' | 'admins' | 'builders' | 'users' | null;
+  /** From settings.yaml `quick_prompts`. Empty or absent uses the built-in prompts. */
+  quickPrompts?: string[];
 }
 
 // Extend the Window interface to include USER_DATA and APP_DATA

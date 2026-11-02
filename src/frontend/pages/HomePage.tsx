@@ -5,12 +5,23 @@ import { Send } from 'lucide-react';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
 
-const QUICK_PROMPTS = [
-  `What can ${window.APP_DATA?.agentName || 'Agent'} do for me?`,
-  'Help me analyze a dataset',
-  'Write a query to find anomalies',
-  'Summarize the key findings from this data',
-];
+function builtinQuickPrompts(): string[] {
+  const agentName = window.APP_DATA?.agentName || 'Agent';
+  return [
+    `What can ${agentName} do for me?`,
+    'Help me analyze a dataset',
+    'Write a query to find anomalies',
+    'Summarize the key findings from this data',
+  ];
+}
+
+function quickPrompts(): string[] {
+  const configured = (window.APP_DATA?.quickPrompts ?? [])
+    .map((prompt) => prompt.trim())
+    .filter((prompt) => prompt.length > 0)
+    .filter((prompt, index, all) => all.indexOf(prompt) === index);
+  return configured.length > 0 ? configured : builtinQuickPrompts();
+}
 
 export function HomePage() {
   const dispatch = useAppDispatch();
@@ -19,6 +30,7 @@ export function HomePage() {
 
   const userData = useMemo(() => window.USER_DATA, []);
   const userDisplayName = userData?.displayName || userData?.given_name;
+  const prompts = useMemo(() => quickPrompts(), []);
 
   const startChat = useCallback(
     (initialPrompt?: string) => {
@@ -76,18 +88,27 @@ export function HomePage() {
               Let&apos;s try some quick prompts <span aria-hidden="true">🚀</span>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="list" aria-label="Quick prompt suggestions">
-              {QUICK_PROMPTS.map((prompt) => (
-                <div key={prompt} role="listitem">
-                  <button
-                    type="button"
-                    onClick={() => startChat(prompt)}
-                    aria-label={`Start chat: ${prompt}`}
-                    className="w-full text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer"
+              {prompts.map((prompt, index) => {
+                const isLastOfOddCount = prompts.length % 2 === 1 && index === prompts.length - 1;
+                return (
+                  <div
+                    key={prompt}
+                    role="listitem"
+                    className={isLastOfOddCount ? 'sm:col-span-2 sm:flex sm:justify-center' : undefined}
                   >
-                    <p className="text-sm text-foreground/90">{prompt}</p>
-                  </button>
-                </div>
-              ))}
+                    <button
+                      type="button"
+                      onClick={() => startChat(prompt)}
+                      aria-label={`Start chat: ${prompt}`}
+                      className={`text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer w-full ${
+                        isLastOfOddCount ? 'sm:w-[calc(50%-0.3125rem)]' : ''
+                      }`}
+                    >
+                      <p className="text-sm text-foreground/90">{prompt}</p>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
