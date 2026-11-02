@@ -18,10 +18,23 @@ export type SSEMetadataPayload = {
   thread_id: string;
 };
 
+export type DvaClassificationData = {
+  intents: Array<{ intent_class: string; confidence: number }>;
+  routing?: {
+    success: boolean;
+    decision: string;
+    selected_product: string | null;
+    data_products: Array<{ name: string; confidence: number }>;
+    reasoning: string;
+  } | null;
+  reasoning: string;
+};
+
 export type SSEEvent =
   | { kind: 'chunk'; data: SSEChunk }
   | { kind: 'mcp_status'; data: McpStatusData }
   | { kind: 'metadata'; data: SSEMetadataPayload }
+  | { kind: 'dva_classification'; data: DvaClassificationData }
   | { kind: 'done' }
   | { kind: 'error'; message: string };
 
@@ -182,6 +195,14 @@ export class SSEProcessor {
       const metadata = parseMetadataPayload(parsed);
       if (metadata) {
         events.push({ kind: 'metadata', data: metadata });
+        continue;
+      }
+
+      if (isRecord(parsed) && parsed.type === 'dva_classification' && isRecord(parsed.content)) {
+        events.push({
+          kind: 'dva_classification',
+          data: parsed.content as DvaClassificationData,
+        });
         continue;
       }
 
