@@ -100,6 +100,12 @@ function buildToolMessageContent(msg: Record<string, any>): Record<string, unkno
     tool_call_id: msg.tool_call_id ?? '',
     name: msg.name ?? 'unknown',
   };
+  // Forward the ToolMessage status. Policy denials (OPA, capability manifest,
+  // guardrails, MCP auth) come back as status="error"; dropping the field here
+  // left the chat rendering a denied call with the success styling.
+  if (typeof msg.status === 'string') {
+    content.status = msg.status;
+  }
   if (msg.artifact != null) {
     content.artifact = msg.artifact;
   }
@@ -1072,3 +1078,6 @@ async function proxyRoutes(fastify: FastifyInstance) {
 }
 
 export { proxyRoutes };
+
+/** Internals exposed for unit tests only — not part of the router's API. */
+export const __testing = { translateMessageEvent, buildToolMessageContent };
