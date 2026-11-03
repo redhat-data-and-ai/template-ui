@@ -1,5 +1,12 @@
 # Template UI Configuration Reference
 
+Two files, two concerns:
+
+| File | Covers | Read by |
+|---|---|---|
+| `settings.yaml` | runtime behaviour — branding, copy, features, security, agent endpoint | the server, at startup |
+| `deployment/values.yaml` | how the pod is scheduled — replicas, resources, probes, route, build | `npm run render:deployment`, at build time |
+
 Drop a `settings.yaml` file in this directory to configure branding, features, security, and agent settings without code changes. The file is optional — if absent, built-in defaults are used.
 
 For worked examples and deployment patterns see [`docs/deployment-patterns.md`](../../docs/deployment-patterns.md).
@@ -59,6 +66,42 @@ branding:
 | `BRANDING_ACCENT_DARK` | `branding.colors.dark.accent` |
 | `BRANDING_BG_DARK` | `branding.colors.dark.background` |
 | `BRANDING_FG_DARK` | `branding.colors.dark.foreground` |
+
+---
+
+### `content`
+
+Every user-facing string on the landing and empty-thread screens. Changing the
+product's voice is a config edit, not a React edit.
+
+```yaml
+content:
+  greeting: "Hey {user}! 👋"           # used when a name is available
+  greeting_anonymous: "Hey there! 👋"  # used when it is not
+  subtitle: "{agent} is ready to help. What would you like to explore today?"
+  quick_prompts_heading: "Let's try some quick prompts 🚀"
+  quick_prompts:
+    - "What can {agent} do for me?"
+    - "Help me analyze a dataset"
+  input_placeholder: "Ask {agent} anything..."
+  welcome_heading: "Welcome to {agent}!"
+  welcome_subtitle: "How can I help you today?"
+```
+
+Two tokens are substituted at render time:
+
+| Token | Resolves to |
+|---|---|
+| `{agent}` | the agent's display name, falling back to `Agent` |
+| `{user}` | the signed-in user's display or given name, empty when anonymous |
+
+Two keys control visibility rather than wording:
+
+- `quick_prompts: []` removes the starter buttons entirely.
+- `quick_prompts_heading: ""` keeps the buttons but drops the heading above them.
+
+Served at `GET /api/config/content`. No environment-variable overrides —
+copy belongs in the file, where it can be reviewed.
 
 ---
 
@@ -159,6 +202,7 @@ security:
 |---|---|
 | `RATE_LIMIT_MAX` / `SECURITY_RATE_LIMIT_MAX` | `security.rate_limit.max` |
 | `SECURITY_RATE_LIMIT_WINDOW` | `security.rate_limit.window` |
+| `SECURITY_RATE_LIMIT_TRUST_PROXY` | `security.rate_limit.trust_proxy` (hops; `0` trusts none) |
 | `SESSION_SECURE_COOKIE` / `SECURITY_SESSION_SECURE_COOKIE` | `security.session.secure_cookie` |
 | `SESSION_HTTP_ONLY` | `security.session.http_only` |
 | `SESSION_SAME_SITE` | `security.session.same_site` |
@@ -255,6 +299,36 @@ The server watches the config file for changes. Not all settings can be applied 
 | `platform.opa.*` | No — restart required |
 
 Changes that require a restart are logged as warnings by the config watcher so you know what to expect.
+
+---
+
+## `deployment/values.yaml`
+
+Replica count, resource requests and limits, probe timings, service and
+route settings, and build resources. It mirrors the agent's
+`config/agent/deployment/values.yaml`.
+
+It is the source of truth for those values, not a reference copy of them:
+
+```bash
+make render-deployment        # regenerate deployment/overlays/*/generated.yaml
+make render-deployment-check  # fail if they have drifted (CI)
+```
+
+`generated.yaml` is written whole and must not be hand-edited — the check
+above exists to catch exactly that. Everything else in an overlay stays
+hand-written, because *which* manifests exist is a structural decision, not
+a value.
+
+A `targets:` block at the end holds per-overlay overrides, deep-merged over
+the shared values:
+
+```yaml
+targets:
+  kind:
+    app:
+      replicas: 1   # a laptop cluster does not need HA
+```
 
 ---
 

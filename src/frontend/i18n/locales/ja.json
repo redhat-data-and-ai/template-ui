@@ -1,0 +1,419 @@
+{
+  "common": {
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "save": "保存",
+    "close": "閉じる",
+    "loading": "読み込み中…",
+    "none": "—",
+    "error": "エラー",
+    "logIn": "ログイン",
+    "result": "結果",
+    "continue": "続行"
+  },
+  "sidebar": {
+    "newChat": "新しいチャット",
+    "startNewChat": "新しいチャットを開始",
+    "chats": "チャット",
+    "chatHistory": "チャット履歴",
+    "noChatsYet": "チャットはまだありません",
+    "noUnassignedChats": "未割り当てのチャットはありません",
+    "projects": "プロジェクト",
+    "noProjectsYet": "プロジェクトはまだありません",
+    "createProject": "プロジェクトを作成",
+    "editProject": "プロジェクトを編集",
+    "newProject": "新しいプロジェクト",
+    "searchThreads": "スレッドを検索",
+    "searchChatThreads": "チャットスレッドを検索",
+    "deleteChat": "チャットを削除",
+    "deleteProject": "プロジェクトを削除",
+    "unassignAll": "すべての会話の割り当てを解除",
+    "openSettings": "設定を開く",
+    "logOut": "ログアウト",
+    "noChats": "チャットがありません",
+    "deleteChatConfirm": "チャット削除の確認",
+    "deleteChatBody": "このチャットを削除しますか？この操作は取り消せません。",
+    "deleteProjectConfirm": "プロジェクト削除の確認",
+    "keepConversationsHint": "会話を残すには「割り当て解除して削除」を使ってください。会話はチャットに移動します。",
+    "unassign": "割り当て解除",
+    "unassignAndDelete": "割り当て解除して削除",
+    "unassignAllConfirm": "すべての会話の割り当て解除の確認",
+    "unassignAllBody": "このプロジェクトのすべての会話をチャットに戻しますか？",
+    "unassignChat": "チャットの割り当てを解除: {{title}}",
+    "unassignAllFrom": "{{name}} のすべてのチャットの割り当てを解除",
+    "deleteProjectBody": "このプロジェクトとそのすべての会話を削除しますか？この操作は取り消せません。",
+    "unassignAllShort": "すべて解除",
+    "agent": {
+      "healthy": "エージェント: 正常",
+      "degraded": "エージェント: 低下 — 応答していますが依存先が停止しています",
+      "unhealthy": "エージェント: オフライン",
+      "unknown": "エージェント: 状態不明"
+    },
+    "sectionNeedsInput": "入力待ち",
+    "sectionInProgress": "進行中",
+    "sectionCompleted": "完了",
+    "statusRunning": "実行中",
+    "statusNeedsInput": "あなたの応答待ち"
+  },
+  "input": {
+    "typeMessage": "メッセージを入力",
+    "askAnything": "データについて何でも聞いてください...",
+    "waiting": "応答を待っています...",
+    "sendMessage": "メッセージを送信",
+    "cancelStreaming": "応答を中止",
+    "attachFiles": "ファイルを添付",
+    "attachedFiles": "添付ファイル",
+    "notReadable": "(読み取り不可)",
+    "truncated": "(切り詰め)",
+    "basicParse": "(簡易解析)",
+    "uploadFailed": "アップロードに失敗しました",
+    "dropToAttach": "ファイルをドロップして添付",
+    "attaching": "添付しています…"
+  },
+  "tags": {
+    "label": "タグ",
+    "add": "タグを追加",
+    "placeholder": "タグ名",
+    "none": "タグはまだありません",
+    "tooMany": "1つの会話に設定できるタグは最大 {{max}} 件です",
+    "filteredBy": "タグ「{{tag}}」",
+    "clearFilter": "フィルターを解除"
+  },
+  "share": {
+    "share": "共有",
+    "shareConversation": "会話を共有",
+    "copyLink": "リンクをコピー",
+    "copied": "コピーしました",
+    "revoke": "共有を停止",
+    "notShared": "この会話は共有されていません。",
+    "scope": "開ける相手",
+    "scopeAuthenticated": "リンクを知っているサインイン済みの全員",
+    "scopePublic": "リンクを知っている全員",
+    "expiry": "リンクの有効期限",
+    "days": "{{count}} 日",
+    "expiresOn": "{{date}} に失効",
+    "viewCount_one": "1 回開かれました",
+    "viewCount_other": "{{count}} 回開かれました",
+    "neverOpened": "まだ開かれていません",
+    "snapshotNote": "共有は現時点のスナップショットです。以降のメッセージは含まれず、添付ファイルは名前のみで中身は送信されません。",
+    "attachmentsNamed": "この会話で言及された添付ファイル",
+    "linkRevoked": "このリンクは取り消されました",
+    "linkExpired": "このリンクは有効期限が切れています",
+    "linkInvalid": "このリンクは無効です",
+    "sharedOn": "共有された会話 ({{date}} 時点)"
+  },
+  "analytics": {
+    "title": "利用状況",
+    "subtitle": "集計値のみです。メッセージの内容はここには表示されません。",
+    "window": "期間",
+    "runs": "実行数",
+    "calls": "呼び出し",
+    "conversations": "会話数",
+    "people": "利用者数",
+    "succeeded": "成功率",
+    "tokensIn": "入力トークン",
+    "tokensOut": "出力トークン",
+    "cached": "キャッシュ済み",
+    "thumbsUp": "高評価",
+    "thumbsDown": "低評価",
+    "ratedGood": "良い評価の割合",
+    "inFlight": "実行中",
+    "interrupted": "中断",
+    "runsOverTime": "実行数の推移",
+    "byModel": "モデル別",
+    "model": "モデル",
+    "errors": "エラー",
+    "failures": "失敗",
+    "failuresNote": "種類ごとに集計しています。エラー本文は、原因となった入力を含むことが多いため表示しません。",
+    "kind": "種類",
+    "count": "件数",
+    "lastSeen": "最終発生",
+    "noRuns": "この期間に実行はありません。",
+    "noFailures": "この期間に失敗はありません。",
+    "loadFailed": "利用状況を読み込めませんでした",
+    "stale": "取り残し",
+    "threads": "スレッド（全体）",
+    "speed": "速度",
+    "tokens": "トークン",
+    "feedback": "フィードバック",
+    "rightNow": "現在",
+    "peak": "ピーク {{count}}/日"
+  },
+  "errorClass": {
+    "model_timeout": "モデルがタイムアウトしました",
+    "model_rate_limit": "プロバイダーによるレート制限",
+    "model_refused": "モデルが応答を拒否しました",
+    "model_config": "モデルの認証情報または名前が誤っています",
+    "context_too_long": "会話がコンテキスト長を超えました",
+    "retries_exhausted": "ワーカーの連続失敗により再試行を打ち切りました",
+    "storage": "データベースまたはキャッシュに接続できません",
+    "cancelled": "利用者が中止しました",
+    "agent_defect": "エージェントの不具合",
+    "tool_failure": "ツールが失敗しました",
+    "other": "未分類",
+    "unknown": "エラーメッセージが記録されていません"
+  },
+  "settings": {
+    "language": "言語",
+    "languageHint": "このブラウザーにのみ適用されます。",
+    "languageUnreviewed": "* 機械翻訳です。話者による確認はまだ行われていません。",
+    "tabs": {
+      "account": "アカウント",
+      "appearance": "外観",
+      "personalisation": "パーソナライズ",
+      "components": "コンポーネント",
+      "developers": "開発者"
+    }
+  },
+  "chat": {
+    "messages": "チャットメッセージ",
+    "aiGenerated": "AI 生成",
+    "aiGeneratedContent": "AI が生成した内容",
+    "thinking": "思考中...",
+    "agentThinking": "エージェントが思考中",
+    "waiting": "待機中...",
+    "retry": "再試行",
+    "retryOperation": "操作を再試行",
+    "editMessage": "メッセージを編集",
+    "saveEdit": "編集したメッセージを保存",
+    "cancelEdit": "編集をキャンセル",
+    "export": "会話をエクスポート",
+    "exportMarkdown": "Markdown でエクスポート",
+    "exportJson": "JSON でエクスポート",
+    "arguments": "引数",
+    "interactiveUi": "対話型 UI",
+    "approve": "承認",
+    "reject": "拒否",
+    "alwaysAllow": "常に許可",
+    "notFound": "チャットが見つかりません",
+    "notFoundBody": "お探しのチャットは見つかりませんでした。",
+    "goHome": "ホームへ戻る",
+    "loading": "チャットを読み込み中",
+    "aiGeneratedMarker": "AI 生成",
+    "loadingMessages": "メッセージを読み込み中…",
+    "loadingChat": "チャットを読み込み中…",
+    "noResponse": "エージェントから応答がありませんでした。一時的な問題の可能性があります。",
+    "agentError": "エージェントでエラーが発生しました:",
+    "jumpToLatest": "最新へ移動"
+  },
+  "skills": {
+    "title": "スキル",
+    "empty": "このエージェントにはスキルが設定されていません。",
+    "notAttached": "未適用",
+    "usedBy": "使用元",
+    "view": "{{name}} のソースを表示",
+    "files": "スキルファイル",
+    "readOnly": "読み取り専用",
+    "truncated": "表示のためファイルを切り詰めました。",
+    "noFiles": "このスキルに読み取り可能なファイルはありません。",
+    "source": "ソース",
+    "rendered": "表示"
+  },
+  "mcp": {
+    "readOnly": "読み取り専用",
+    "destructive": "破壊的"
+  },
+  "admin": {
+    "title": "デプロイ設定",
+    "subtitle": "すべての利用者に影響する切り替え。このブラウザだけでなくデプロイ全体に保存されます。",
+    "forbidden": "開発者アクセスが必要です。",
+    "flags": {
+      "skills_visible_to_all": {
+        "title": "スキルを全員に表示",
+        "detail": "オフにすると、開発者以外からスキルタブを隠します。"
+      },
+      "subagents_visible_to_all": {
+        "title": "サブエージェントを全員に表示",
+        "detail": "オフにすると、開発者以外からサブエージェントタブを隠します。"
+      },
+      "prompt_visible_to_all": {
+        "title": "プロンプトを全員に表示",
+        "detail": "オフにすると、開発者以外からオーケストレーターのプロンプトを隠します。"
+      },
+      "memory_enabled": {
+        "title": "メモリ",
+        "detail": "エージェントが会話をまたいでユーザーに関する情報を記憶できるようにします。"
+      },
+      "mcp_apps_enabled": {
+        "title": "MCP アプリ",
+        "detail": "MCP サーバーがチャット内に対話的な UI を表示できるようにします。"
+      },
+      "models_visible_to_all": {
+        "title": "モデルを全員に表示",
+        "detail": "オフにすると、開発者以外からモデルタブを隠します。"
+      },
+      "safeguards_visible_to_all": {
+        "title": "セーフガードを全員に表示",
+        "detail": "オフにすると、開発者以外からセーフガードタブを隠します。"
+      }
+    }
+  },
+  "subagents": {
+    "title": "サブエージェント",
+    "empty": "このエージェントにサブエージェントはありません。",
+    "view": "{{name}} の定義を表示",
+    "delegation": "委任",
+    "working": "処理中",
+    "complete": "完了",
+    "userRejected": "ユーザーがこの操作を拒否しました。",
+    "approveTool": "ツールを承認: {{name}}",
+    "approveAction": "サブエージェントの操作を承認: {{name}}",
+    "rejectTool": "ツールを拒否: {{name}}",
+    "rejectAction": "サブエージェントの操作を拒否: {{name}}",
+    "alwaysAllowTool": "このツールを常に許可: {{name}}",
+    "alwaysAllowAgent": "このサブエージェントを常に許可: {{name}}",
+    "approvalRequired": "承認が必要です",
+    "processing": "サブエージェントが処理中…",
+    "inNode": "{{node}} を実行中…",
+    "calling": "{{tool}} を呼び出し中…",
+    "writing": "作成中…",
+    "steps": "ステップ",
+    "stopped": "停止"
+  },
+  "prompt": {
+    "description": "オーケストレーターの役割、ルーティング表、ルール — 委譲する前の振る舞い。",
+    "view": "プロンプトを表示",
+    "title": "プロンプト"
+  },
+  "components": {
+    "title": "コンポーネント",
+    "mcpServers": "MCP サーバー",
+    "toolApprovals": "ツールの承認",
+    "skillsDescription": "このエージェントが従うワークフローです。それぞれに、何ができて何ができないかの独自のルールがあります。",
+    "subagentsDescription": "オーケストレーターが委任する専門エージェントと、それぞれがアクセスできる範囲です。",
+    "documentsDescription": "エージェントが回答時に読み取れるドキュメントです。書き込みはできません。アップロードと編集はここで行います。{{path}} に読み取り専用でマウントされ、これがエージェントから見えるパスです。"
+  },
+  "developers": {
+    "title": "開発者",
+    "tabs": {
+      "usage": "使用状況",
+      "flags": "機能フラグ",
+      "evaluations": "評価"
+    }
+  },
+  "documents": {
+    "title": "ドキュメント",
+    "upload": "ファイルをアップロード",
+    "empty": "ドキュメントはまだありません。",
+    "of": "/",
+    "usage": "ボリューム使用量",
+    "nearlyFull": "保存容量がほぼ満杯です。追加する前に削除してください。",
+    "view": "{{name}} を表示",
+    "remove": "{{name}} を削除",
+    "truncated": "このファイルは大きすぎるため、読み取り専用で表示しています。",
+    "content": "{{name}} の内容",
+    "confirmDelete": "Delete {{path}}? This removes it for everyone."
+  },
+  "layout": {
+    "skipToContent": "メインコンテンツへスキップ",
+    "toggleSidebar": "サイドバーの表示を切り替える",
+    "sidebarNavigation": "サイドバーナビゲーション"
+  },
+  "toast": {
+    "chatDeleted": "チャットを削除しました",
+    "chatDeletedLocally": "ローカルでは削除しましたが、サーバーでの削除に失敗しました",
+    "projectDeleted": "プロジェクトを削除しました",
+    "projectDeletedWithChats": "プロジェクトを削除しました。会話はチャットに移動しました。",
+    "conversationsMoved": "会話をチャットに移動しました",
+    "deleteProjectFailed": "プロジェクトを削除できませんでした",
+    "loadHistoryFailed": "チャット履歴を読み込めませんでした",
+    "unassignFailed": "会話の割り当てを解除できませんでした",
+    "sendFailed": "メッセージを送信できませんでした",
+    "editFailed": "編集したメッセージを送信できませんでした",
+    "retryFailed": "再試行できませんでした",
+    "resumeFailed": "再開できませんでした",
+    "allChatsDeleted": "すべてのチャットを削除しました",
+    "allChatsDeletedLocally": "ローカルでは削除しましたが、サーバーでの削除に失敗しました"
+  },
+  "session": {
+    "title": "セッションの期限切れ",
+    "expired": "セッションの期限切れ",
+    "body": "セッションの有効期限が切れました。続けるには再度ログインしてください。",
+    "workSaved": "作業内容は保存されています。"
+  },
+  "errors": {
+    "title": "問題が発生しました",
+    "maxRetries": "再試行の上限に達しました",
+    "startOver": "最初からやり直す",
+    "refreshPage": "ページを再読み込み",
+    "technicalDetails": "技術的な詳細",
+    "errorId": "エラー ID",
+    "message": "メッセージ",
+    "retrying": "再試行中",
+    "retryAttempt": "再試行（{{count}}/{{max}} 回目）",
+    "tryAgain": "もう一度お試しください。"
+  },
+  "interrupt": {
+    "title": "入力が必要です",
+    "response": "割り込みへの応答",
+    "placeholder": "応答を入力してください...",
+    "authenticate": "認証する",
+    "connectFailed": "接続に失敗しました",
+    "resumeNow": "再開"
+  },
+  "projects": {
+    "loading": "プロジェクトを読み込み中",
+    "loadingEllipsis": "プロジェクトを読み込み中…",
+    "notFound": "プロジェクトが見つかりません",
+    "conversations": "プロジェクトの会話",
+    "noConversations": "まだ会話がありません。上から始めてください。",
+    "newChatInProject": "プロジェクト内に新しいチャット"
+  },
+  "profile": {
+    "ssoAuthenticated": "SSO で認証済み",
+    "developerMode": "開発者モード",
+    "enableDeveloperMode": "開発者モードを有効にする",
+    "developerModeHint": "高度なツールとエージェント評価を含む「開発者」タブを表示します。",
+    "dangerZone": "危険な操作",
+    "deleteAll": "すべて削除",
+    "deleteAllChats": "すべてのチャットを削除",
+    "deleteAllChatsConfirm": "すべてのチャット削除の確認",
+    "deleteAllConversations": "すべての会話を削除",
+    "deleteAllBody": "{{count}} 件の会話をすべて完全に削除します。この操作は取り消せません。",
+    "authDisabled": "認証は無効です — この ID はローカル用の代替です"
+  },
+  "models": {
+    "title": "モデル",
+    "description": "どのモデルが応答し、各サブエージェントがどれを使うか。",
+    "empty": "モデルが設定されていません。",
+    "answering": "応答するモデル",
+    "perSubagent": "サブエージェント別",
+    "inherited": "継承",
+    "routing": "ルーティング",
+    "routingHint": "各ターンは内容に応じたティアに振り分けられます。",
+    "excluded": "このモデルでは利用不可:"
+  },
+  "provenance": {
+    "truncated": "途中で終了 — モデルの出力上限に達しました",
+    "empty": "モデルは何も返しませんでした",
+    "fallback": "{{from}} の失敗後、フォールバックが応答",
+    "routed": "{{tier}} にルーティング",
+    "routedBy": "{{how}} により {{tier}} にルーティング",
+    "cached": "キャッシュから"
+  },
+  "safeguards": {
+    "title": "セーフガード",
+    "description": "モデル以外にメッセージへ適用される処理。",
+    "on": "有効",
+    "off": "無効",
+    "pii": "個人情報のマスキング",
+    "piiDetail": "モデルが見る前に、メッセージ内の該当する値を置き換えます。",
+    "traceStrategy": "トレースでは、該当する値は {{strategy}} 方式で扱われます。",
+    "guardrail": "ガードレール",
+    "guardrailDetail": "応答が届く前に検査します。",
+    "tokenBudget": "トークン予算",
+    "tokenBudgetDetail": "割り当てを使い切った時点で実行を停止します。"
+  },
+  "mcpAuth": {
+    "connect": "接続",
+    "connecting": "接続中…",
+    "done": "接続済み",
+    "failed": "接続に失敗しました",
+    "connected": "{{name}} に接続しました",
+    "notConnected": "{{name}} は接続されていません。",
+    "expired": "{{name}} のセッションが期限切れです。"
+  },
+  "subagent": {
+    "working": "処理中…"
+  }
+}

@@ -1,13 +1,9 @@
 import oauthPlugin from "@fastify/oauth2";
 import { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
-import { getSettings } from "../utils/settings.js";
+import { getSettings, resolveAgentHost as getAgentHost } from "../utils/settings.js";
 import { resolveSessionIdentity, safePostLoginRedirect } from "../utils/session-identity.js";
 
-function getAgentHost(): string {
-  const cfg = getSettings();
-  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
-}
 
 /**
  * Check consent status from the agent's Postgres-backed API.

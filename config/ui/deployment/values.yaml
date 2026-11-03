@@ -1,0 +1,80 @@
+# Deployment configuration for the UI.
+#
+# This file is the source of truth. `make render-deployment` turns it
+# into the kustomize patches under deployment/overlays/*/generated.yaml, so
+# changing a replica count or a memory limit is a config edit, not a code
+# edit. `make render-deployment-check` fails if they have drifted.
+#
+# Runtime behaviour — branding, copy, features, security — lives in
+# settings.yaml. This file is only about how the pod is scheduled.
+#
+# Structural choices (which manifests exist, volumes, envFrom) stay
+# hand-written in the overlays. Only values come from here.
+
+app:
+  replicas: 2
+
+container:
+  port: 8080
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    # Node holds the Vite build output plus the Fastify server; 512Mi is
+    # tight once a few SSE streams are open.
+    memory: "1Gi"
+    cpu: "500m"
+
+# --- Health probes ---
+# The UI serves /api/health from the Fastify BFF, so a passing probe means
+# the server is up — not that the agent behind it is reachable.
+probes:
+  liveness:
+    path: /api/health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /api/health
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# --- Networking ---
+networking:
+  service:
+    type: ClusterIP
+    port: 8080
+  route:
+    enabled: true
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+
+# --- Build ---
+# The npm install plus Vite build is the memory-hungry step, not the
+# running pod.
+build:
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "2000m"
+    limits:
+      memory: "8Gi"
+      cpu: "8"
+
+# --- Per-target overrides ---
+# Deep-merged over everything above, keyed by overlay directory name.
+targets:
+  kind:
+    app:
+      # One replica locally: a laptop cluster does not need HA, and two
+      # UI pods just double the image pull.
+      replicas: 1
+    resources:
+      limits:
+        memory: "512Mi"

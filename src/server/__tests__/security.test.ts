@@ -280,6 +280,35 @@ describe('Security: Config Path Validation', () => {
     }
   });
 
+  it('rejects a traversal that lands on a file which exists', () => {
+    // The case the generic list hid. Every other payload throws
+    // because the file is absent, so `existsSync` alone looked
+    // sufficient. This one resolves to the repo's own .env — it
+    // exists, so it was accepted as config, parsed as the wrong
+    // shape, and silently fell back to defaults.
+    process.env.UI_CONFIG_PATH = 'config/ui/../../.env';
+    resetSettings();
+    expect(() => getSettings()).toThrow(/must not traverse upward/);
+  });
+
+  it('rejects a file that exists but is not YAML', () => {
+    // On a Linux container /etc/shadow exists, so existence is not
+    // the property worth checking.
+    process.env.UI_CONFIG_PATH = '/etc/shadow';
+    resetSettings();
+    expect(() => getSettings()).toThrow(/Expected a .yaml or .yml file/);
+  });
+
+  it('still accepts a legitimate mounted config path', () => {
+    // The guard has to leave every real deployment working: the
+    // Containerfile, compose.yml and the Kind overlay all point at an
+    // absolute settings.yaml under a mount.
+    process.env.UI_CONFIG_PATH = '/opt/app-root/src/config/ui/settings.yaml';
+    resetSettings();
+    // Absent here, so it fails on existence — not on the new guard.
+    expect(() => getSettings()).toThrow(/Config file not found/);
+  });
+
   it('should reject absolute paths to nonexistent files', () => {
     process.env.UI_CONFIG_PATH = '/app/config/ui/settings.yaml';
     resetSettings();
@@ -346,5 +375,20 @@ describe('Security: Integration Tests', () => {
 
     // Verify no information disclosure
     expect(response.headers['x-powered-by']).toBeUndefined();
+  });
+});
+
+describe('Security: CSP and off-origin branding', () => {
+  afterEach(() => {
+    delete process.env.UI_CONFIG_PATH;
+    resetSettings();
+  });
+
+  it('keeps the default img-src tight', () => {
+    resetSettings();
+    const csp = getSettings().security.helmet.csp;
+    // The derivation in server.ts widens this per configured URL; the
+    // configured baseline itself must not be permissive.
+    expect(csp.img_src).not.toContain('*');
   });
 });

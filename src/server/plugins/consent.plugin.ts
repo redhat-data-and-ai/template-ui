@@ -1,11 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
-import { getSettings } from "../utils/settings.js";
+import { resolveAgentHost as getAgentHost } from "../utils/settings.js";
 
-function getAgentHost(): string {
-  const cfg = getSettings();
-  return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
-}
 
 async function fetchAgentConsent(accessToken: string): Promise<{ has_consent: boolean; granted_at: string | null } | null> {
   try {

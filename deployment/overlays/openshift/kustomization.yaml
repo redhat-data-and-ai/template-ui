@@ -14,3 +14,6 @@ labels:
       app: template-ui
       component: ui
     includeSelectors: true
+
+patches:
+  - path: generated.yaml

@@ -1,6 +1,10 @@
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
-import { selectTheme, setTheme } from '../../redux/slices/userSettings';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import {
+  selectTheme,
+  setTheme,
+} from '../../redux/slices/userSettings';
+import { Sun, Moon } from 'lucide-react';
+import { LanguageSelect } from '../LanguageSelect';
 
 type ThemeOption = 'light' | 'dark';
 
@@ -52,16 +56,7 @@ export function AppearanceSettings() {
         </div>
       </div>
 
-      <div>
-        <h3 className="text-sm font-medium text-foreground mb-1">Interface Density</h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          Coming soon — adjust spacing and sizing to your preference.
-        </p>
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border">
-          <Monitor className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Default density</span>
-        </div>
-      </div>
+      <LanguageSelect />
     </div>
   );
 }

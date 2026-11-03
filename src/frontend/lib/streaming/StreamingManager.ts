@@ -5,7 +5,7 @@ import { unmarkChatAsClientCreated } from '@/services/newChatTracker';
 import { buildAgentApiUrl } from '../app-paths';
 import type { HITLInterruptValue } from '@/types/deep-agent';
 
-import type { SSEEvent } from './SSEProcessor';
+import type { AuthRequiredPayload, SSEEvent, SubagentProgressData } from './SSEProcessor';
 import { SSEProcessor } from './SSEProcessor';
 
 export interface StreamRequest {
@@ -47,7 +47,11 @@ export type StreamCallback = {
   onStatusChange: (status: StreamStatus) => void;
   onDone: () => void;
   onMcpStatus?: (event: McpStreamStatusEvent) => void;
+  /** Progress from a delegated subagent, so a long `task` is not a blank wait. */
+  onSubagentProgress?: (event: SubagentProgressData) => void;
   onMetadata?: (data: StreamMetadataPayload) => void;
+  /** Integrations the turn could not reach, for the inline Connect action. */
+  onAuthRequired?: (requests: AuthRequiredPayload) => void;
 };
 
 export class StreamingManager {
@@ -74,6 +78,10 @@ export class StreamingManager {
           this.streamError = new Error(event.message);
           void callbacks.onError(this.streamError);
           break;
+        case 'subagent_progress': {
+          callbacks.onSubagentProgress?.(event.data);
+          break;
+        }
         case 'mcp_status': {
           callbacks.onMcpStatus?.({
             tool: event.data.tool,
@@ -84,6 +92,10 @@ export class StreamingManager {
         }
         case 'metadata': {
           callbacks.onMetadata?.(event.data);
+          break;
+        }
+        case 'auth_required': {
+          callbacks.onAuthRequired?.(event.data);
           break;
         }
         case 'chunk': {
@@ -105,6 +117,111 @@ export class StreamingManager {
           break;
         }
       }
+    }
+  }
+
+  /**
+   * Attach to a run that is already executing on the agent.
+   *
+   * Same translated chunks as `stream`, so the callbacks are the
+   * same: the reader cannot tell whether this browser started the
+   * turn or walked back in on it.
+   */
+  async attach(
+    args: { threadId: string; runId: string; apiUrl?: string },
+    callbacks: StreamCallback,
+  ): Promise<void> {
+    // Never over the top of a live stream.
+    //
+    // Managers are per-thread singletons and `cancel()` is the first
+    // thing an attach used to do, so a rejoin triggered while this
+    // tab was already streaming killed the turn it was watching and
+    // replaced it with a replay — which the caller's own
+    // already-seen filter then discarded. The subagent box froze on
+    // "Working" and only a refresh put it right.
+    const status = this.getStatus();
+    if (status === 'streaming' || status === 'connecting') {
+      return;
+    }
+    this.cancel();
+    this.processor.reset();
+    this.processedChunkIds.clear();
+    this.streamError = null;
+
+    // Held locally as well as on `this`. A later `stream()` replaces
+    // `this.abortController`, and the AbortError this attach then
+    // raises used to land on the *new* stream: status went
+    // `cancelled` and `finally` nulled the controller out from under
+    // it, so Stop had nothing to abort and the `streaming` guards
+    // read as idle. Every write below is conditional on still owning
+    // the controller.
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
+    const owns = () => this.abortController === controller;
+
+    this.setStatus('connecting');
+    callbacks.onStatusChange('connecting');
+
+    const url = args.apiUrl
+      ? `${args.apiUrl}/v1/stream/attach`
+      : buildAgentApiUrl('/v1/stream/attach');
+
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ thread_id: args.threadId, run_id: args.runId }),
+        signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Attach failed: ${response.status}`);
+      }
+      reader = response.body?.getReader();
+      if (!reader) throw new Error('Failed to get reader from attach response');
+
+      if (!owns()) return;
+      this.setStatus('streaming');
+      callbacks.onStatusChange('streaming');
+
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (value !== undefined) {
+          this.handleEvents(this.processor.feed(decoder.decode(value, { stream: true })), callbacks);
+        }
+        if (done) break;
+      }
+
+      const flush = decoder.decode();
+      if (flush.length > 0) this.handleEvents(this.processor.feed(flush), callbacks);
+
+      if (!owns()) return;
+      if (this.streamError) {
+        this.setStatus('error');
+        callbacks.onStatusChange('error');
+      } else {
+        this.setStatus('idle');
+        callbacks.onStatusChange('idle');
+        callbacks.onDone();
+      }
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error('Unknown attach error');
+      if (!owns()) return;
+      if (err.name === 'AbortError') {
+        this.setStatus('cancelled');
+        callbacks.onStatusChange('cancelled');
+      } else {
+        this.setStatus('error');
+        callbacks.onStatusChange('error');
+        await callbacks.onError(err);
+      }
+    } finally {
+      reader?.releaseLock?.();
+      if (owns()) this.abortController = null;
     }
   }
 

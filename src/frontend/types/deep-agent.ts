@@ -12,6 +12,8 @@ export interface ToolCallWithContent {
   args: Record<string, unknown>;
   id: string;
   content?: unknown;
+  /** Terminal state stamped when a turn ends with this call unresolved. */
+  status?: string;
 }
 
 export interface HITLActionRequest {
@@ -34,6 +36,8 @@ export interface McpAuthPayload {
   mcp_name: string;
   connect_url: string;
   message: string;
+  /** `not_connected` or `expired` — different sentences, different fixes. */
+  reason?: string;
 }
 
 export interface InterruptInfo {

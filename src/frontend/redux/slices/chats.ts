@@ -2,6 +2,12 @@ import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
 import type { SubAgentInfo, InterruptInfo, TaskStep } from '../../types/deep-agent';
 import { withMcpAppArguments } from '../../types/mcp-apps';
+import {
+  applyProgress,
+  finishSteps,
+  type DelegationProgress,
+} from '../../lib/subagent-steps';
+import type { SubagentProgressData } from '../../lib/streaming/SSEProcessor';
 import { assignThreadToProjectThunk, deleteProjectThunk, unassignAllThreadsThunk } from './projects';
 
 export interface StreamingState {
@@ -36,6 +42,10 @@ export interface ChatsState {
   threadsListHydrated: boolean;
   isLoadingMessages: Record<string, boolean>;
   streamingStates: Record<string, StreamingState>;
+  /** Subagent progress per chat, per nested-graph namespace. */
+  subagentProgress: Record<string, Record<string, DelegationProgress>>;
+  /** Chats deleted in this session, so a later refresh cannot revive them. */
+  deletedThreadIds: string[];
   error: string | null;
 }
 
@@ -59,6 +69,8 @@ const initialState: ChatsState = {
   threadsListHydrated: false,
   isLoadingMessages: {},
   streamingStates: {},
+  subagentProgress: {},
+  deletedThreadIds: [],
   error: null,
 };
 
@@ -80,7 +92,14 @@ const chatsSlice = createSlice({
   initialState,
   reducers: {
     setChats(state, action: PayloadAction<ChatItem[]>) {
-      state.chats = deepClone(action.payload);
+      // Never resurrect something the user deleted.
+      //
+      // Deleting 354 conversations takes a while, and the layout
+      // reconciles the sidebar against the server's thread list
+      // while that is still running — so the ones not yet gone came
+      // straight back and looked like the delete had failed.
+      const gone = new Set(state.deletedThreadIds);
+      state.chats = action.payload.filter((c) => !gone.has(c.id));
     },
     addChat(state, action: PayloadAction<ChatItem>) {
       state.chats.unshift(action.payload);
@@ -95,6 +114,11 @@ const chatsSlice = createSlice({
     deleteChat(state, action: PayloadAction<string>) {
       const id = action.payload;
       state.chats = state.chats.filter((c) => c.id !== id);
+      // Tombstoned for the session: the next reconcile against the
+      // server must not hand it back while the delete is in flight.
+      if (!state.deletedThreadIds.includes(id)) {
+        state.deletedThreadIds.push(id);
+      }
     },
     clearAllChats(state) {
       state.chats = [];
@@ -132,6 +156,81 @@ const chatsSlice = createSlice({
       }
       (last as { content: string }).content = prev + content;
     },
+    /** Attach the turn's unreachable integrations to the last AI reply.
+
+     * The final answer streams in as tokens, and a token carries no
+     * metadata — so the assembled message had no `auth_required` and
+     * the inline Connect button never rendered, however correctly
+     * the agent had stamped it. */
+    setAuthRequiredOnLastMessage(
+      state,
+      action: PayloadAction<{
+        chatId: string;
+        requests: Array<{ mcp_name: string; reason: string }>;
+      }>,
+    ) {
+      const { chatId, requests } = action.payload;
+      if (requests.length === 0) return;
+      const chat = state.chats.find((c) => c.id === chatId);
+      if (!chat) return;
+      for (let i = chat.messages.length - 1; i >= 0; i--) {
+        const message = chat.messages[i] as Message & {
+          additional_kwargs?: Record<string, unknown>;
+        };
+        if (message.type !== 'ai') continue;
+        const toolCalls = (message as { tool_calls?: unknown[] }).tool_calls;
+        // The reply, not the delegation that preceded it.
+        if (Array.isArray(toolCalls) && toolCalls.length > 0) continue;
+        message.additional_kwargs = {
+          ...(message.additional_kwargs ?? {}),
+          auth_required: requests,
+        };
+        return;
+      }
+    },
+    /** Record one subagent progress event.
+     *
+     * In the hook's own state this was lost the moment the reader
+     * opened another chat: the component unmounted, and the stream
+     * — still running, because runs outlive the tab that started
+     * them — went on calling a setter nobody was listening to. Come
+     * back and the box had no steps and sat on "Working". Messages
+     * were in the store and survived; this did not, and the fix is
+     * for it to live in the same place.
+     */
+    applySubagentProgress(
+      state,
+      action: PayloadAction<{ chatId: string; event: SubagentProgressData; at: number }>,
+    ) {
+      const { chatId, event, at } = action.payload;
+      const forChat = (state.subagentProgress[chatId] ??= {});
+      forChat[event.ns] = applyProgress(forChat[event.ns], event, at);
+    },
+
+    /** Close every open step for a chat — the turn is over. */
+    closeSubagentSteps(state, action: PayloadAction<{ chatId: string; at: number }>) {
+      const forChat = state.subagentProgress[action.payload.chatId];
+      if (!forChat) return;
+      for (const ns of Object.keys(forChat)) {
+        forChat[ns] = {
+          ...forChat[ns],
+          steps: finishSteps(forChat[ns], action.payload.at),
+        };
+      }
+    },
+
+    /** Forget a chat's progress, when its turn is being restarted. */
+    clearSubagentProgress(state, action: PayloadAction<{ chatId: string }>) {
+      delete state.subagentProgress[action.payload.chatId];
+    },
+
+    /** Remember what was deleted, so no later refresh brings it back. */
+    markThreadsDeleted(state, action: PayloadAction<{ ids: string[] }>) {
+      const gone = new Set([...state.deletedThreadIds, ...action.payload.ids]);
+      state.deletedThreadIds = [...gone];
+      state.chats = state.chats.filter((c) => !gone.has(c.id));
+    },
+
     mergeToolResult(
       state,
       action: PayloadAction<{
@@ -284,6 +383,11 @@ export const {
   appendMessageToChat,
   removeLastMessageFromChat,
   updateLastMessageInChat,
+  applySubagentProgress,
+  closeSubagentSteps,
+  clearSubagentProgress,
+  setAuthRequiredOnLastMessage,
+  markThreadsDeleted,
   mergeToolResult,
   resolveAllPendingToolCalls,
   setMessageFeedback,
@@ -324,3 +428,13 @@ export const selectChatsByProject = createSelector(
 );
 
 export default chatsSlice.reducer;
+
+/** Subagent progress for one chat, keyed by nested-graph namespace. */
+export function selectSubagentProgress(
+  state: { chats: ChatsState },
+  chatId: string,
+): Record<string, DelegationProgress> {
+  return state.chats.subagentProgress[chatId] ?? EMPTY_PROGRESS;
+}
+
+const EMPTY_PROGRESS: Record<string, DelegationProgress> = {};

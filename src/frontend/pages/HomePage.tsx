@@ -1,40 +1,28 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { Send } from 'lucide-react';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
-
-function builtinQuickPrompts(): string[] {
-  const agentName = window.APP_DATA?.agentName || 'Agent';
-  return [
-    `What can ${agentName} do for me?`,
-    'Help me analyze a dataset',
-    'Write a query to find anomalies',
-    'Summarize the key findings from this data',
-  ];
-}
-
-function quickPrompts(): string[] {
-  const configured = (window.APP_DATA?.quickPrompts ?? [])
-    .map((prompt) => prompt.trim())
-    .filter((prompt) => prompt.length > 0)
-    .filter((prompt, index, all) => all.indexOf(prompt) === index);
-  return configured.length > 0 ? configured : builtinQuickPrompts();
-}
+import { useContent } from '../hooks/useContent';
+import { ConfigText } from '../components/ConfigText';
+import { InputForm } from '../components/InputForm';
+import { Card, CardBody } from '@patternfly/react-core';
 
 export function HomePage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [inputValue, setInputValue] = useState('');
 
-  const userData = useMemo(() => window.USER_DATA, []);
-  const userDisplayName = userData?.displayName || userData?.given_name;
-  const prompts = useMemo(() => quickPrompts(), []);
+  const content = useContent();
+
+  // Settled before the first keystroke rather than at submit time, so
+  // a file can be attached here and land on the thread the chat will
+  // actually become. The agent creates the thread on upload when it
+  // does not exist yet, which is exactly this case.
+  const [draftChatId] = useState(() => uuidv4());
 
   const startChat = useCallback(
     (initialPrompt?: string) => {
-      const newChatId = uuidv4();
+      const newChatId = draftChatId;
       const newChat: ChatItem = {
         id: newChatId,
         title: initialPrompt?.substring(0, 40) || 'New Chat',
@@ -47,109 +35,93 @@ export function HomePage() {
       dispatch(addChat(newChat));
       navigate(`/chat/${newChatId}`, { state: { initialPrompt: initialPrompt } });
     },
-    [dispatch, navigate],
+    [dispatch, navigate, draftChatId],
   );
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!inputValue.trim()) return;
-    startChat(inputValue.trim());
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      {/* Center content area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
+    // One centred column: greeting, prompts, composer. The composer
+    // used to live in its own bottom bar with a separate border and
+    // background, which read as a second container competing with the
+    // chat card and left a wide dead band between the two.
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10">
         <div className="max-w-2xl w-full text-center">
           {/* Greeting */}
           <div className="mb-8">
-            <h1 className="text-foreground font-bold mb-3" style={{ fontSize: 'clamp(2rem, 5vw, 3rem)' }}>
-              {userDisplayName ? (
-                <>Hey {userDisplayName}! <span aria-hidden="true">👋</span></>
-              ) : (
-                <>Hey there! <span aria-hidden="true">👋</span></>
-              )}
+            <h1 className="text-foreground font-bold mb-3" style={{ fontSize: 'clamp(1.75rem, 3.5vw, 2.25rem)' }}>
+              <ConfigText value={content.resolved_greeting} />
             </h1>
             <p className="text-muted-foreground text-base">
-              <span className="font-medium text-foreground">{window.APP_DATA?.agentName || 'Agent'}</span> is ready to help. What would you like to explore today?
+              <ConfigText value={content.subtitle} />
             </p>
           </div>
 
-          {/* Quick prompts */}
+          {/* Quick prompts — hidden entirely when config supplies none */}
+          {content.quick_prompts.length > 0 && (
           <div className="mb-6">
-            <h2 className="text-sm font-semibold text-muted-foreground mb-3">
-              Let&apos;s try some quick prompts <span aria-hidden="true">🚀</span>
-            </h2>
+            {content.quick_prompts_heading && (
+              <h2 className="text-sm font-semibold text-muted-foreground mb-3">
+                <ConfigText value={content.quick_prompts_heading} />
+              </h2>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="list" aria-label="Quick prompt suggestions">
-              {prompts.map((prompt, index) => {
-                const isLastOfOddCount = prompts.length % 2 === 1 && index === prompts.length - 1;
+              {content.quick_prompts.map((prompt, index) => {
+                // An odd count leaves a lone tile hugging the left of
+                // a two-column grid. Upstream's fix: span both and
+                // centre at half width.
+                const isLastOfOddCount =
+                  content.quick_prompts.length % 2 === 1 &&
+                  index === content.quick_prompts.length - 1;
                 return (
-                  <div
-                    key={prompt}
-                    role="listitem"
-                    className={isLastOfOddCount ? 'sm:col-span-2 sm:flex sm:justify-center' : undefined}
+                <div
+                  key={prompt}
+                  role="listitem"
+                  className={isLastOfOddCount ? 'sm:col-span-2 sm:flex sm:justify-center' : undefined}
+                >
+                  {/* PatternFly Card: its clickable variant brings a
+                      real hover and focus treatment. The hand-rolled
+                      version was bg-card on bg-background — two greys
+                      four points apart, which is not a boundary. */}
+                  <Card
+                    isClickable
+                    isCompact
+                    className={`h-full text-left prompt-tile ${
+                      isLastOfOddCount ? 'sm:w-[calc(50%-0.3125rem)]' : ''
+                    }`}
+                    component="div"
                   >
-                    <button
-                      type="button"
-                      onClick={() => startChat(prompt)}
-                      aria-label={`Start chat: ${prompt}`}
-                      className={`text-left p-3.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors cursor-pointer w-full ${
-                        isLastOfOddCount ? 'sm:w-[calc(50%-0.3125rem)]' : ''
-                      }`}
-                    >
-                      <p className="text-sm text-foreground/90">{prompt}</p>
-                    </button>
-                  </div>
+                    <CardBody>
+                      <button
+                        type="button"
+                        onClick={() => startChat(prompt)}
+                        aria-label={`Start chat: ${prompt}`}
+                        className="w-full text-left text-sm cursor-pointer bg-transparent border-0 p-0"
+                      >
+                        {prompt}
+                      </button>
+                    </CardBody>
+                  </Card>
+                </div>
                 );
               })}
             </div>
           </div>
-        </div>
-      </div>
+          )}
 
-      {/* Bottom input bar */}
-      <div className="border-t border-border bg-background px-6 pb-4 pt-3">
-        <div className="max-w-2xl mx-auto">
-          <form onSubmit={handleSubmit} aria-label="Start a new chat">
-            <div className="relative rounded-2xl border border-border bg-card shadow-card focus-within:border-primary/40 focus-within:shadow-elevated transition-all duration-200">
-              <label htmlFor="home-chat-input" className="sr-only">
-                Enter a prompt for {window.APP_DATA?.agentName || 'Agent'}
-              </label>
-              <textarea
-                id="home-chat-input"
-                autoFocus
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
-                className="w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
-                style={{ boxShadow: 'none' }}
-                rows={1}
-              />
-              <button
-                type="submit"
-                disabled={!inputValue.trim()}
-                aria-label="Send message"
-                className={`absolute right-2.5 bottom-2.5 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
-                  inputValue.trim()
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
-                    : 'bg-muted text-muted-foreground cursor-not-allowed'
-                }`}
-              >
-                <Send className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </div>
-          </form>
-          <p className="text-sm text-muted-foreground text-center mt-2">
-            You are interacting with an AI tool. Always review AI-generated content prior to use.
-          </p>
+          {/* The same composer as the conversation, not a second
+              implementation of it. The hand-rolled copy that used to
+              live here drifted through two rounds of changes to the
+              real one and, more to the point, had no attach button —
+              so the only way to give the agent a document was to send
+              a message first and attach afterwards. */}
+          <InputForm
+            onSubmit={(value) => startChat(value.trim())}
+            onCancel={() => {}}
+            isLoading={false}
+            threadId={draftChatId}
+            placeholder={content.input_placeholder}
+            ariaLabel={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
+          />
         </div>
       </div>
     </div>

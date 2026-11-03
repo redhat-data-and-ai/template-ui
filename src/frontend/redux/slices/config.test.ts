@@ -4,10 +4,11 @@ import configReducer, { setBranding, setFeatures, setError, loadConfig } from '.
 vi.mock('../../services/config.service', () => ({
   fetchBranding: vi.fn(),
   fetchFeatures: vi.fn(),
+  fetchContent: vi.fn(),
 }));
 
-import { fetchBranding, fetchFeatures } from '../../services/config.service';
-import type { BrandingConfig, FeaturesConfig } from '../../services/config.service';
+import { fetchBranding, fetchFeatures, fetchContent } from '../../services/config.service';
+import type { BrandingConfig, FeaturesConfig, ContentConfig } from '../../services/config.service';
 import { configureStore } from '@reduxjs/toolkit';
 
 const mockBranding: BrandingConfig = {
@@ -23,6 +24,17 @@ const mockFeatures: FeaturesConfig = {
   debug_mode_default: false,
   auth_enabled: true,
   memory_enabled: true,
+};
+
+const mockContent: ContentConfig = {
+  greeting: 'Hey {user}!',
+  greeting_anonymous: 'Hey there!',
+  subtitle: '{agent} is ready.',
+  quick_prompts_heading: 'Try one',
+  quick_prompts: ['What can {agent} do?'],
+  input_placeholder: 'Ask {agent}...',
+  welcome_heading: 'Welcome to {agent}!',
+  welcome_subtitle: 'How can I help?',
 };
 
 function initialState() {
@@ -67,7 +79,7 @@ describe('config slice', () => {
     it('populates branding and features on fulfilled', () => {
       const state = configReducer(initialState(), {
         type: loadConfig.fulfilled.type,
-        payload: { branding: mockBranding, features: mockFeatures },
+        payload: { branding: mockBranding, features: mockFeatures, content: mockContent },
       });
       expect(state.branding).toEqual(mockBranding);
       expect(state.features).toEqual(mockFeatures);
@@ -95,6 +107,7 @@ describe('config slice', () => {
     it('dispatches the thunk end-to-end', async () => {
       vi.mocked(fetchBranding).mockResolvedValue(mockBranding);
       vi.mocked(fetchFeatures).mockResolvedValue(mockFeatures);
+      vi.mocked(fetchContent).mockResolvedValue(mockContent);
 
       const store = configureStore({ reducer: { config: configReducer } });
       await store.dispatch(loadConfig());

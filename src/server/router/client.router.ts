@@ -3,7 +3,8 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import authCheckPlugin from "../plugins/auth-check.plugin.js";
-import { getAgentName, getSettings } from "../utils/settings.js";
+import { getAgentName, getSettings, resolveAgentHost } from "../utils/settings.js";
+import { readOverrides } from "../utils/feature-overrides.js";
 import { toClientUserData } from "../utils/session-identity.js";
 import {
   buildSandboxCspHeader,
@@ -85,9 +86,23 @@ async function routes(fastify: FastifyInstance) {
     reply.send("OK");
   });
 
+
+/**
+ * `mcp_apps_enabled` as it stands right now, override included.
+ *
+ * The flag is runtime-overridable, and the admin surface reads the
+ * override while these two routes read only the static config. Turn
+ * MCP Apps on at runtime and the UI believed it while the sandbox
+ * kept answering 404.
+ */
+async function mcpAppsEnabled(): Promise<boolean> {
+  const cfg = getSettings();
+  const overrides = await readOverrides();
+  return overrides.mcp_apps_enabled ?? cfg.features.mcp_apps_enabled;
+}
+
   fastify.get("/sandbox_proxy.html", async (request, reply) => {
-    const cfg = getSettings();
-    if (!cfg.features.mcp_apps_enabled) {
+    if (!(await mcpAppsEnabled())) {
       return reply.code(404).send("MCP Apps sandbox is disabled");
     }
     const cspParam = (request.query as { csp?: string }).csp;
@@ -102,8 +117,7 @@ async function routes(fastify: FastifyInstance) {
   });
 
   fastify.get("/sandbox_proxy.js", async (_request, reply) => {
-    const cfg = getSettings();
-    if (!cfg.features.mcp_apps_enabled) {
+    if (!(await mcpAppsEnabled())) {
       return reply.code(404).send("MCP Apps sandbox is disabled");
     }
     const js = await readSandboxAsset("sandbox_proxy.js");
@@ -124,8 +138,7 @@ async function routes(fastify: FastifyInstance) {
   })
   
   fastify.get("/mcp/oauth/callback", async (request: FastifyRequest, reply: FastifyReply) => {
-    const cfg = getSettings();
-    const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+    const agentHost = resolveAgentHost();
     const qs = request.url.split("?")[1] || "";
     const agentUrl = `${agentHost}/mcp/oauth/callback${qs ? `?${qs}` : ""}`;
     const resp = await fetch(agentUrl, {

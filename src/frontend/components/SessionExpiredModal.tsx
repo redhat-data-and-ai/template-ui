@@ -6,6 +6,7 @@ import {
   ModalHeader,
   ModalVariant,
 } from '@patternfly/react-core';
+import { useTranslation } from 'react-i18next';
 
 export interface SessionExpiredModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ function buildGatewayLoginUrl(): string {
 }
 
 export function SessionExpiredModal({ isOpen }: Readonly<SessionExpiredModalProps>) {
+  const { t } = useTranslation();
   const goToLogin = () => {
     globalThis.location.assign(buildGatewayLoginUrl());
   };
@@ -26,18 +28,16 @@ export function SessionExpiredModal({ isOpen }: Readonly<SessionExpiredModalProp
       variant={ModalVariant.small}
       isOpen={isOpen}
       onClose={goToLogin}
-      aria-label="Session expired"
+      aria-label={t('session.expired')}
     >
-      <ModalHeader title="Session Expired" />
+      <ModalHeader title={t('session.title')} />
       <ModalBody>
-        <p className="mb-3">
-          Your session has expired. Please log in again to continue.
-        </p>
-        <p className="text-muted-foreground text-sm">Your work has been saved.</p>
+        <p className="mb-3">{t('session.body')}</p>
+        <p className="text-muted-foreground text-sm">{t('session.workSaved')}</p>
       </ModalBody>
       <ModalFooter>
         <Button variant="primary" onClick={goToLogin}>
-          Log In
+          {t('common.logIn')}
         </Button>
       </ModalFooter>
     </Modal>

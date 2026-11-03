@@ -1,69 +1,180 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@patternfly/react-core';
-import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck, Shield, Code2, KeyRound } from 'lucide-react';
+import { ArrowLeft, User, Brain, Palette, Code2, Boxes } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ProfileSection } from '../components/settings/ProfileSection';
 import { MemoryList } from '../components/settings/MemoryList';
 import { RulesEditor } from '../components/settings/RulesEditor';
 import { AppearanceSettings } from '../components/settings/AppearanceSettings';
-import { AlwaysAllowedTools } from '../components/settings/AlwaysAllowedTools';
-import { DeveloperSettings } from '../components/settings/DeveloperSettings';
 import { AuthorizationSettings } from '../components/settings/AuthorizationSettings';
 import { useAppSelector } from '../redux/hooks';
 import { selectDeveloperMode } from '../redux/slices/userSettings';
-import { OAuthConnections } from '../components/settings/OAuthConnections';
+import {
+  ComponentsPanel,
+  useVisibleComponentSections,
+} from '../components/settings/ComponentsPanel';
+import { DeveloperPanel } from '../components/settings/DeveloperPanel';
 import { isPrivilegedUser } from '../lib/role-utils';
-import type { RootState } from '../redux/store';
 
-type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals' | 'authorization' | 'oauth' | 'developer';
+type TabId =
+  | 'account'
+  | 'appearance'
+  | 'personalisation'
+  | 'components'
+  | 'developers';
 
-const TABS: { id: TabId; label: string; panelTitle?: string; icon: typeof User }[] = [
-  { id: 'profile', label: 'Profile', icon: User },
-  { id: 'memories', label: 'Your Memories', icon: Brain },
-  { id: 'rules', label: 'Custom Rules', icon: ScrollText },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'tool-approvals', label: 'Tool Approvals', icon: ShieldCheck },
-  { id: 'authorization', label: 'Authorization', icon: Shield },
-  { id: 'oauth', label: 'MCP OAuth', icon: KeyRound },
-  { id: 'developer', label: 'Developer', icon: Code2 },
+/**
+ * Eight tabs became six.
+ *
+ * The old split was by *component* — one panel per thing somebody had
+ * built — rather than by the question a reader arrives with. Profile
+ * and Appearance are both "me"; Memories and Custom Rules are both
+ * "what it knows about me"; Tool Approvals, Authorization and MCP
+ * OAuth are all "what it is allowed to do". Three questions, three
+ * tabs, with sub-headings inside so the merged panels do not read as
+ * one undifferentiated form.
+ *
+ * Usage moved in from its own route; the old /analytics URL
+ * redirects.
+ *
+ * There is no Documents tab. Documents are attached to the
+ * conversation that needs them, which is where people already expect
+ * to hand a file over — a separate library meant uploading in one
+ * place and asking in another, and keeping the two in your head.
+ */
+const LEGACY_TAB_IDS: Record<string, TabId> = {
+  profile: 'account',
+  authorization: 'account',
+  memories: 'personalisation',
+  rules: 'personalisation',
+  'tool-approvals': 'components',
+  oauth: 'components',
+  permissions: 'components',
+  mcp: 'components',
+  skills: 'components',
+  subagents: 'components',
+  prompt: 'components',
+  models: 'components',
+  safeguards: 'components',
+  datasets: 'components',
+  documents: 'components',
+  analytics: 'developers',
+  evaluations: 'developers',
+  usage: 'developers',
+  flags: 'developers',
+  developer: 'developers',
+};
+
+const TABS: {
+  id: TabId;
+  /** Copy comes from `settings.tabs.<id>`; the id is the key. */
+  panelTitle?: string;
+  icon: typeof User;
+  /** Panels that bring their own headings and container. */
+  bare?: boolean;
+}[] = [
+  { id: 'account', icon: User },
+  { id: 'appearance', icon: Palette },
+  { id: 'personalisation', icon: Brain },
+  // MCP, Skills, Subagents and Prompt were four entries in a bar
+  // that had reached eleven. They answer one question at four
+  // levels — what the agent is connected to, what it knows how to
+  // do, who it delegates to, and the rules it follows — so they are
+  // one tab with sections inside.
+  { id: 'components', icon: Boxes, bare: true },
+  // Usage, Feature flags and Evaluations share one audience and
+  // one gate, so three tabs that appeared and disappeared together
+  // are one tab with sections inside.
+  { id: 'developers', icon: Code2, bare: true },
 ];
 
+/** A labelled group inside a merged panel. */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="border-t border-border pt-6 first:border-0 first:pt-0">
+      <h3 className="mb-4 text-sm font-semibold text-foreground">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+const AccountPanel = () => (
+  <div className="space-y-6">
+    <Group title="Profile">
+      <ProfileSection />
+    </Group>
+    {/* Authorization is about this account: what it has let the
+        agent do on its behalf. It read as a separate concern on its
+        own tab when it is really the second half of "who am I
+        here". */}
+    <Group title="Authorization">
+      <AuthorizationSettings />
+    </Group>
+  </div>
+);
+
+const PersonalisationPanel = () => (
+  <div className="space-y-6">
+    <Group title="Your memories">
+      <MemoryList />
+    </Group>
+    <Group title="Custom rules">
+      <RulesEditor />
+    </Group>
+  </div>
+);
+
 const TAB_CONTENT: Record<TabId, React.FC> = {
-  profile: ProfileSection,
-  memories: MemoryList,
-  rules: RulesEditor,
+  account: AccountPanel,
   appearance: AppearanceSettings,
-  'tool-approvals': AlwaysAllowedTools,
-  authorization: AuthorizationSettings,
-  oauth: OAuthConnections,
-  developer: DeveloperSettings,
+  personalisation: PersonalisationPanel,
+  components: ComponentsPanel,
+  developers: DeveloperPanel,
 };
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const developerMode = useAppSelector(selectDeveloperMode);
-  const features = useAppSelector((state: RootState) => state.config.features);
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const param = searchParams.get('tab');
-    if (param && VALID_TABS.has(param)) {
-      if (param === 'developer' && !developerMode) return 'profile';
-      return param as TabId;
+    // Old links keep working: `?tab=profile` lands on Account,
+    // `?tab=tool-approvals` on MCP, and so on.
+    const resolved = param && (LEGACY_TAB_IDS[param] ?? param);
+    if (resolved && VALID_TABS.has(resolved)) {
+      // `'developers'`, not `'developer'`: LEGACY_TAB_IDS maps the
+      // old id to the new one before this runs, so the old spelling
+      // never matched and `?tab=developers` opened for anyone. The
+      // visibleTabs effect corrected it a moment later, which made
+      // it a flash rather than a hole, but the gate here was dead.
+      if (resolved === 'developers' && !developerMode) return 'account';
+      return resolved as TabId;
     }
-    return 'profile';
+    return 'account';
   });
   const tabRefs = useRef<Map<TabId, HTMLButtonElement>>(new Map());
 
+  const componentSections = useVisibleComponentSections();
+
   const visibleTabs = useMemo(() => {
     return TABS.filter((tab) => {
-      if (tab.id === 'developer') return isPrivilegedUser() && developerMode;
-      if (tab.id === 'memories') return features?.memory_enabled !== false;
+      // Operator surfaces: a privileged LDAP role *and* developer
+      // mode. The agent already refuses `/analytics/*` and
+      // `/documents/*` without the role — this is the UI agreeing
+      // with it, plus the toggle, so they stay off the everyday bar.
+      if (tab.id === 'developers') return isPrivilegedUser() && developerMode;
+      // Each Components section carries its own gate, checked inside
+      // the panel. The group disappears only when every member is
+      // hidden, so turning them all off does not leave an empty tab.
+      if (tab.id === 'components') return componentSections.length > 0;
       return true;
     });
-  }, [features, developerMode]);
+  }, [developerMode, componentSections]);
 
   useEffect(() => {
     if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeTab)) {
@@ -97,7 +208,7 @@ export function SettingsPage() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div className="shrink-0 border-b border-border bg-card/60 backdrop-blur-sm px-6 py-3">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <Button
             variant="plain"
             size="sm"
@@ -112,10 +223,17 @@ export function SettingsPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-6">
+        {/* Full width. The cap here was 56rem, which left most of a
+            laptop screen empty beside tables and card lists that use
+            the room — the Models, Safeguards and Documents panels,
+            the usage charts and the eval tables. Reading width is
+            handled where it matters, on the prose inside a panel,
+            rather than by narrowing every panel to suit the widest
+            paragraph. */}
+        <div className="px-6 py-6">
           <div className="flex flex-col sm:flex-row gap-6">
             {/* Tab navigation */}
-            <nav className="sm:w-48 shrink-0" aria-label="Settings sections">
+            <nav className="sm:w-52 shrink-0" aria-label="Settings sections">
               <div
                 role="tablist"
                 aria-orientation="vertical"
@@ -146,7 +264,7 @@ export function SettingsPage() {
                       )}
                     >
                       <Icon className="w-4 h-4" aria-hidden="true" />
-                      {tab.label}
+                      {t(`settings.tabs.${tab.id}`)}
                     </button>
                   );
                 })}
@@ -167,8 +285,8 @@ export function SettingsPage() {
                     tabIndex={0}
                     className="bg-card border border-border rounded-xl p-6 focus:outline-none"
                   >
-                    {tab.id !== 'developer' && (
-                      <h2 className="text-base font-semibold text-foreground mb-4">{tab.panelTitle ?? tab.label}</h2>
+                    {!tab.bare && (
+                      <h2 className="text-base font-semibold text-foreground mb-6">{tab.panelTitle ?? t(`settings.tabs.${tab.id}`)}</h2>
                     )}
                     {activeTab === tab.id && <Content />}
                   </div>

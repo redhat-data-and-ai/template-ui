@@ -1,0 +1,419 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "save": "Save",
+    "close": "Close",
+    "loading": "Loading…",
+    "none": "—",
+    "error": "Error",
+    "logIn": "Log In",
+    "result": "Result",
+    "continue": "Continue"
+  },
+  "sidebar": {
+    "newChat": "New Chat",
+    "startNewChat": "Start new chat",
+    "chats": "Chats",
+    "chatHistory": "Chat history",
+    "noChatsYet": "No chats yet",
+    "noUnassignedChats": "No unassigned chats",
+    "projects": "Projects",
+    "noProjectsYet": "No projects yet",
+    "createProject": "Create project",
+    "editProject": "Edit Project",
+    "newProject": "New Project",
+    "searchThreads": "Search threads",
+    "searchChatThreads": "Search chat threads",
+    "deleteChat": "Delete chat",
+    "deleteProject": "Delete project",
+    "unassignAll": "Unassign all conversations",
+    "openSettings": "Open settings",
+    "logOut": "Log out",
+    "noChats": "No chats",
+    "deleteChatConfirm": "Delete chat confirmation",
+    "deleteChatBody": "Are you sure you want to delete this chat? This action cannot be undone.",
+    "deleteProjectConfirm": "Delete project confirmation",
+    "keepConversationsHint": "To keep the conversations, use Unassign and delete — they will move to Chats.",
+    "unassign": "Unassign",
+    "unassignAndDelete": "Unassign and delete",
+    "unassignAllConfirm": "Unassign all conversations confirmation",
+    "unassignAllBody": "Move every conversation in this project back to Chats?",
+    "unassignChat": "Unassign chat: {{title}}",
+    "unassignAllFrom": "Unassign all chats from {{name}}",
+    "deleteProjectBody": "Delete this project and all of its conversations? This cannot be undone.",
+    "unassignAllShort": "Unassign all",
+    "agent": {
+      "healthy": "Agent: healthy",
+      "degraded": "Agent: degraded — answering, but a dependency is down",
+      "unhealthy": "Agent: offline",
+      "unknown": "Agent: status unknown"
+    },
+    "sectionNeedsInput": "Needs input",
+    "sectionInProgress": "In progress",
+    "sectionCompleted": "Completed",
+    "statusRunning": "Running",
+    "statusNeedsInput": "Waiting for you"
+  },
+  "input": {
+    "typeMessage": "Type a message",
+    "askAnything": "Ask me anything about the data...",
+    "waiting": "Waiting for response...",
+    "sendMessage": "Send message",
+    "cancelStreaming": "Cancel streaming",
+    "attachFiles": "Attach files",
+    "attachedFiles": "Attached files",
+    "notReadable": "(not readable)",
+    "truncated": "(truncated)",
+    "basicParse": "(basic parse)",
+    "uploadFailed": "Upload failed",
+    "dropToAttach": "Drop files to attach them",
+    "attaching": "Attaching…"
+  },
+  "tags": {
+    "label": "Tags",
+    "add": "Add a tag",
+    "placeholder": "tag name",
+    "none": "No tags yet",
+    "tooMany": "A conversation may have at most {{max}} tags",
+    "filteredBy": "Tagged “{{tag}}”",
+    "clearFilter": "Clear filter"
+  },
+  "share": {
+    "share": "Share",
+    "shareConversation": "Share conversation",
+    "copyLink": "Copy link",
+    "copied": "Copied",
+    "revoke": "Stop sharing",
+    "notShared": "This conversation is not shared.",
+    "scope": "Who can open it",
+    "scopeAuthenticated": "Anyone signed in with the link",
+    "scopePublic": "Anyone with the link",
+    "expiry": "Link expires after",
+    "days": "{{count}} days",
+    "expiresOn": "Expires {{date}}",
+    "viewCount_one": "Opened once",
+    "viewCount_other": "Opened {{count}} times",
+    "neverOpened": "Not opened yet",
+    "snapshotNote": "A share is a snapshot taken now. Later messages are not included, and attached files are named but not sent.",
+    "attachmentsNamed": "Attachments named in this conversation",
+    "linkRevoked": "This link was revoked",
+    "linkExpired": "This link has expired",
+    "linkInvalid": "This link is not valid",
+    "sharedOn": "Shared conversation, captured {{date}}"
+  },
+  "analytics": {
+    "title": "Usage",
+    "subtitle": "Aggregate only. Message content is never reported here.",
+    "window": "Time window",
+    "runs": "Runs",
+    "calls": "Calls",
+    "conversations": "Conversations",
+    "people": "People",
+    "succeeded": "Succeeded",
+    "tokensIn": "Tokens in",
+    "tokensOut": "Tokens out",
+    "cached": "Cached",
+    "thumbsUp": "Thumbs up",
+    "thumbsDown": "Thumbs down",
+    "ratedGood": "Rated good",
+    "inFlight": "In flight",
+    "interrupted": "Interrupted",
+    "runsOverTime": "Runs over time",
+    "byModel": "By model",
+    "model": "Model",
+    "errors": "Errors",
+    "failures": "Failures",
+    "failuresNote": "Grouped by kind. Error text is not shown — it routinely contains the input that produced it.",
+    "kind": "Kind",
+    "count": "Count",
+    "lastSeen": "Last seen",
+    "noRuns": "No runs in this window.",
+    "noFailures": "Nothing failed in this window.",
+    "loadFailed": "Could not load analytics",
+    "stale": "Stranded",
+    "threads": "Threads (all)",
+    "speed": "Speed",
+    "tokens": "Tokens",
+    "feedback": "Feedback",
+    "rightNow": "Right now",
+    "peak": "peak {{count}}/day"
+  },
+  "errorClass": {
+    "model_timeout": "Model timed out",
+    "model_rate_limit": "Rate limited by the provider",
+    "model_refused": "Model refused to answer",
+    "model_config": "Model credentials or name wrong",
+    "context_too_long": "Conversation exceeded the context window",
+    "retries_exhausted": "Gave up after repeated worker failures",
+    "storage": "Database or cache unreachable",
+    "cancelled": "Cancelled by the user",
+    "agent_defect": "Bug in the agent",
+    "tool_failure": "A tool failed",
+    "other": "Unclassified",
+    "unknown": "No error message recorded"
+  },
+  "settings": {
+    "language": "Language",
+    "languageHint": "Applies to this browser only.",
+    "languageUnreviewed": "* Translated by a model, not yet checked by a speaker.",
+    "tabs": {
+      "account": "Account",
+      "appearance": "Appearance",
+      "personalisation": "Personalisation",
+      "components": "Components",
+      "developers": "Developers"
+    }
+  },
+  "chat": {
+    "messages": "Chat messages",
+    "aiGenerated": "AI-generated",
+    "aiGeneratedContent": "AI-generated content",
+    "thinking": "Thinking...",
+    "agentThinking": "Agent is thinking",
+    "waiting": "Waiting...",
+    "retry": "Retry",
+    "retryOperation": "Retry operation",
+    "editMessage": "Edit message",
+    "saveEdit": "Save edited message",
+    "cancelEdit": "Cancel editing message",
+    "export": "Export conversation",
+    "exportMarkdown": "Export as Markdown",
+    "exportJson": "Export as JSON",
+    "arguments": "Arguments",
+    "interactiveUi": "Interactive UI",
+    "approve": "Approve",
+    "reject": "Reject",
+    "alwaysAllow": "Always allow",
+    "notFound": "Chat Not Found",
+    "notFoundBody": "The requested chat could not be found.",
+    "goHome": "Go Home",
+    "loading": "Loading chat",
+    "aiGeneratedMarker": "AI-generated",
+    "loadingMessages": "Loading messages…",
+    "loadingChat": "Loading chat…",
+    "noResponse": "The agent didn't respond. This could be a temporary issue.",
+    "agentError": "The agent encountered an error:",
+    "jumpToLatest": "Jump to latest"
+  },
+  "skills": {
+    "title": "Skills",
+    "empty": "This agent has no skills configured.",
+    "notAttached": "not attached",
+    "usedBy": "Used by",
+    "view": "View {{name}} source",
+    "files": "Skill files",
+    "readOnly": "read-only",
+    "truncated": "File truncated for display.",
+    "noFiles": "This skill has no readable files.",
+    "source": "Source",
+    "rendered": "Rendered"
+  },
+  "mcp": {
+    "readOnly": "read only",
+    "destructive": "destructive"
+  },
+  "admin": {
+    "title": "Deployment flags",
+    "subtitle": "Switches that change what every user sees. Stored for the whole deployment, not just this browser.",
+    "forbidden": "Developer access required.",
+    "flags": {
+      "skills_visible_to_all": {
+        "title": "Skills visible to everyone",
+        "detail": "Off hides the Skills tab from everyone except developers."
+      },
+      "subagents_visible_to_all": {
+        "title": "Subagents visible to everyone",
+        "detail": "Off hides the Subagents tab from everyone except developers."
+      },
+      "prompt_visible_to_all": {
+        "title": "Prompt visible to everyone",
+        "detail": "Off hides the orchestrator's prompt from everyone except developers."
+      },
+      "memory_enabled": {
+        "title": "Memory",
+        "detail": "Lets the agent remember things about a user between conversations."
+      },
+      "mcp_apps_enabled": {
+        "title": "MCP Apps",
+        "detail": "Allows MCP servers to render interactive UIs inside a chat."
+      },
+      "models_visible_to_all": {
+        "title": "Models visible to everyone",
+        "detail": "Off hides the Models tab from everyone except developers."
+      },
+      "safeguards_visible_to_all": {
+        "title": "Safeguards visible to everyone",
+        "detail": "Off hides the Safeguards tab from everyone except developers."
+      }
+    }
+  },
+  "subagents": {
+    "title": "Subagents",
+    "empty": "This agent has no subagents.",
+    "view": "View {{name}} definition",
+    "delegation": "Delegation",
+    "working": "Working",
+    "complete": "Complete",
+    "userRejected": "User rejected this action.",
+    "approveTool": "Approve tool: {{name}}",
+    "approveAction": "Approve sub-agent action: {{name}}",
+    "rejectTool": "Reject tool: {{name}}",
+    "rejectAction": "Reject sub-agent action: {{name}}",
+    "alwaysAllowTool": "Always allow tool: {{name}}",
+    "alwaysAllowAgent": "Always allow sub-agent: {{name}}",
+    "approvalRequired": "Approval required",
+    "processing": "Sub-agent is processing…",
+    "inNode": "Running {{node}}…",
+    "calling": "Calling {{tool}}…",
+    "writing": "writing…",
+    "steps": "Steps",
+    "stopped": "Stopped"
+  },
+  "prompt": {
+    "description": "The orchestrator's identity, routing table and rules — what it does before it delegates.",
+    "view": "View prompt",
+    "title": "Prompt"
+  },
+  "components": {
+    "title": "Components",
+    "mcpServers": "MCP servers",
+    "toolApprovals": "Tool approvals",
+    "skillsDescription": "Workflows this agent follows, each with its own rules about what it may and may not do.",
+    "subagentsDescription": "Specialists the orchestrator delegates to, and what each one is allowed to reach.",
+    "documentsDescription": "Documents the agent can read while answering. It cannot write to them — uploads and edits happen here. They are mounted read-only at {{path}}, which is the path the agent sees."
+  },
+  "developers": {
+    "title": "Developers",
+    "tabs": {
+      "usage": "Usage",
+      "flags": "Feature flags",
+      "evaluations": "Evaluations"
+    }
+  },
+  "documents": {
+    "title": "Documents",
+    "upload": "Upload files",
+    "empty": "No documents yet.",
+    "of": "of",
+    "usage": "Volume usage",
+    "nearlyFull": "Storage is nearly full. Delete a document before uploading more.",
+    "view": "View {{name}}",
+    "remove": "Delete {{name}}",
+    "truncated": "This file is too large to edit here and is shown read-only.",
+    "content": "Contents of {{name}}",
+    "confirmDelete": "Delete {{path}}? This removes it for everyone."
+  },
+  "layout": {
+    "skipToContent": "Skip to main content",
+    "toggleSidebar": "Toggle sidebar",
+    "sidebarNavigation": "Sidebar navigation"
+  },
+  "toast": {
+    "chatDeleted": "Chat deleted",
+    "chatDeletedLocally": "Chat cleared locally but server delete failed",
+    "projectDeleted": "Project deleted",
+    "projectDeletedWithChats": "Project deleted. Conversations moved to Chats.",
+    "conversationsMoved": "Conversations moved to Chats",
+    "deleteProjectFailed": "Failed to delete project",
+    "loadHistoryFailed": "Failed to load chat history",
+    "unassignFailed": "Failed to unassign conversations",
+    "sendFailed": "Failed to send message",
+    "editFailed": "Failed to send edited message",
+    "retryFailed": "Failed to retry",
+    "resumeFailed": "Failed to resume",
+    "allChatsDeleted": "All chats deleted",
+    "allChatsDeletedLocally": "Chats cleared locally but server deletion failed"
+  },
+  "session": {
+    "title": "Session Expired",
+    "expired": "Session expired",
+    "body": "Your session has expired. Please log in again to continue.",
+    "workSaved": "Your work has been saved."
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "maxRetries": "Maximum retries reached",
+    "startOver": "Start Over",
+    "refreshPage": "Refresh Page",
+    "technicalDetails": "Technical details",
+    "errorId": "Error ID",
+    "message": "Message",
+    "retrying": "Retrying",
+    "retryAttempt": "Retry (attempt {{count}}/{{max}})",
+    "tryAgain": "Please try again."
+  },
+  "interrupt": {
+    "title": "Input Required",
+    "response": "Interrupt response",
+    "placeholder": "Type your response...",
+    "authenticate": "Authenticate",
+    "connectFailed": "Connect failed",
+    "resumeNow": "Resume now"
+  },
+  "projects": {
+    "loading": "Loading project",
+    "loadingEllipsis": "Loading project…",
+    "notFound": "Project not found",
+    "conversations": "Project conversations",
+    "noConversations": "No conversations yet. Start one above.",
+    "newChatInProject": "New Chat in Project"
+  },
+  "profile": {
+    "ssoAuthenticated": "Authenticated via SSO",
+    "developerMode": "Developer Mode",
+    "enableDeveloperMode": "Enable Developer Mode",
+    "developerModeHint": "Show the Developers tab with advanced tools and agent evaluation.",
+    "dangerZone": "Danger Zone",
+    "deleteAll": "Delete all",
+    "deleteAllChats": "Delete all chats",
+    "deleteAllChatsConfirm": "Delete all chats confirmation",
+    "deleteAllConversations": "Delete all conversations",
+    "deleteAllBody": "This will permanently delete all {{count}} conversations. This action cannot be undone.",
+    "authDisabled": "Authentication is off — this identity is a local stand-in"
+  },
+  "models": {
+    "title": "Models",
+    "description": "Which model answers, and which model each subagent uses.",
+    "empty": "No models configured.",
+    "answering": "Answering",
+    "perSubagent": "Per subagent",
+    "inherited": "inherited",
+    "routing": "Routing",
+    "routingHint": "Turns are sent to a tier based on what they ask for.",
+    "excluded": "not available with this model:"
+  },
+  "provenance": {
+    "truncated": "cut off — the model ran out of room",
+    "empty": "the model returned nothing",
+    "fallback": "answered by a fallback after {{from}} failed",
+    "routed": "routed to {{tier}}",
+    "routedBy": "routed to {{tier}} by {{how}}",
+    "cached": "from cache"
+  },
+  "safeguards": {
+    "title": "Safeguards",
+    "description": "What is applied to a message besides the model.",
+    "on": "on",
+    "off": "off",
+    "pii": "PII scrubbing",
+    "piiDetail": "Replaces matched values in your message before the model sees it.",
+    "traceStrategy": "In traces, matched values are {{strategy}}ed.",
+    "guardrail": "Guardrail",
+    "guardrailDetail": "Screens replies before they reach you.",
+    "tokenBudget": "Token budget",
+    "tokenBudgetDetail": "Stops a run once it has spent its allowance."
+  },
+  "mcpAuth": {
+    "connect": "Connect",
+    "connecting": "Connecting…",
+    "done": "Connected",
+    "failed": "Connect failed",
+    "connected": "Connected {{name}}",
+    "notConnected": "{{name}} is not connected.",
+    "expired": "Your {{name}} session expired."
+  },
+  "subagent": {
+    "working": "Working…"
+  }
+}

@@ -28,6 +28,20 @@ interface RateLimitConfig {
   max: number;
   window: string;
   exclude_paths: string[];
+  /**
+   * Number of reverse proxies in front of this server, or false to
+   * trust none.
+   *
+   * Without it every request's source address is the ingress pod's,
+   * so the whole deployment shares one bucket and the limit stops
+   * being per-user. With it, `request.ip` is read from the last
+   * `trust_proxy` hops of X-Forwarded-For.
+   *
+   * A number, not `true`: trusting the whole header lets a client
+   * prepend any address it likes and get a fresh bucket per request.
+   * One hop is right for an OpenShift Route or a single ingress.
+   */
+  trust_proxy: number | false;
 }
 
 interface SessionConfig {
@@ -108,12 +122,68 @@ interface FeaturesConfig {
   auth_enabled: boolean;
   mcp_dcr_enabled: boolean;
   mcp_apps_enabled: boolean;
+  /**
+   * Whether the Skills tab is visible to everyone.
+   *
+   * Config rather than a Developer-panel toggle: a toggle there is
+   * per-browser localStorage, so it would change what one operator
+   * sees and nobody else — which is the opposite of deciding what
+   * *everyone* gets. A deployment-wide question needs a
+   * deployment-wide answer.
+   *
+   * When false, Skills is gated like Usage and Documents: privileged
+   * role plus developer mode.
+   */
+  skills_visible_to_all: boolean;
+  /** Same contract as `skills_visible_to_all`, for the other two
+      read-only introspection surfaces. */
+  subagents_visible_to_all: boolean;
+  prompt_visible_to_all: boolean;
+  models_visible_to_all: boolean;
+  safeguards_visible_to_all: boolean;
 }
 
 interface AgentConfig {
   endpoint: string;
   timeout_ms: number;
+  /**
+   * How long one streaming turn may take.
+   *
+   * Separate from `timeout_ms`, which covers ordinary request/response
+   * calls. A delegated turn is not one of those: it can run a subagent
+   * through a dozen tool calls, and a 300s ceiling cut one off mid-
+   * answer after the work had been done. Floor, not a target — the
+   * fix for a slow turn is a faster turn.
+   */
+  stream_timeout_ms: number;
+  /**
+   * What happens to a run when the browser goes away.
+   *
+   * `"continue"`: a refresh, a closed laptop or a flaky network
+   * leaves the turn running and it is there when you come back.
+   * `"cancel"` is the agent's default and means a refresh silently
+   * throws away a two-minute delegation — and the tokens it spent.
+   *
+   * With `"continue"`, stopping has to be said explicitly rather
+   * than implied by disconnecting; the client calls the run's
+   * cancel endpoint.
+   */
+  on_disconnect: "continue" | "cancel";
   streaming: boolean;
+  /**
+   * Stream the inner workings of delegated subagents.
+   *
+   * A `task` call is opaque from outside: the orchestrator waits,
+   * the subagent works — over a hundred seconds on a three-part
+   * question — and the reader sees a spinner. With this on, the
+   * agent's nested graph events arrive namespaced and are rendered
+   * as a progress line, never as transcript content.
+   *
+   * Config rather than a constant because it is a real trade: more
+   * events on the wire, and a glimpse of machinery some deployments
+   * would rather not show.
+   */
+  stream_subgraphs: boolean;
 }
 
 interface AuthConfig {
@@ -124,8 +194,35 @@ interface AuthConfig {
   sso_callback_url: string;
 }
 
+/** Landing-page copy and starter prompts.
+ *
+ * Every string supports two tokens, substituted client-side:
+ * `{agent}` (the agent's display name) and `{user}` (the signed-in user's
+ * first name, empty when anonymous). Changing the product's voice should
+ * not mean editing React.
+ */
+interface ContentConfig {
+  /** Shown when a user has a name; `{user}` resolves to it. */
+  greeting: string;
+  /** Shown when no name is available. */
+  greeting_anonymous: string;
+  /** Sub-heading under the greeting. */
+  subtitle: string;
+  /** Heading above the starter buttons. Empty string hides it. */
+  quick_prompts_heading: string;
+  /** Starter buttons. Empty array hides the whole block. */
+  quick_prompts: string[];
+  /** Placeholder in the composer. */
+  input_placeholder: string;
+  /** Large heading on the empty-thread welcome screen. */
+  welcome_heading: string;
+  /** Line under that heading. */
+  welcome_subtitle: string;
+}
+
 export interface UISettings {
   branding: BrandingConfig;
+  content: ContentConfig;
   features: FeaturesConfig;
   agent: AgentConfig;
   auth: AuthConfig;
@@ -143,7 +240,14 @@ export interface UISettings {
 const DEFAULTS: UISettings = {
   branding: {
     logo_url: "",
-    title: "Deep Agent",
+    // Generic on purpose: the product name is config, not a
+    // constant. It comes from `branding.title` in
+    // config/ui/settings.yaml, and failing that from the agent's own
+    // `/info` name. A real name baked in here is one a fork has to
+    // hunt for in source. It cannot be empty — `validateConfig`
+    // rejects a blank title, so a missing config file would throw
+    // rather than fall back.
+    title: "Agent",
     version: "v1.0.0",
     favicon_url: "",
     colors: {
@@ -161,17 +265,43 @@ const DEFAULTS: UISettings = {
       },
     },
   },
+  content: {
+    greeting: "Hey {user}! 👋",
+    greeting_anonymous: "Hey there! 👋",
+    subtitle: "{agent} is ready to help. What would you like to explore today?",
+    quick_prompts_heading: "Let's try some quick prompts 🚀",
+    quick_prompts: [
+      "What can {agent} do for me?",
+      "Help me analyze a dataset",
+      "Write a query to find anomalies",
+      "Summarize the key findings from this data",
+    ],
+    input_placeholder: "Ask {agent} anything...",
+    welcome_heading: "Welcome to {agent}!",
+    welcome_subtitle: "How can I help you today?",
+  },
   features: {
     debug_mode_default: false,
     auth_enabled: true,
     mcp_dcr_enabled: true,
     mcp_apps_enabled: true,
+    // Visible by default: a capability list is the most useful thing
+    // a new user can read, and hiding it by default would make the
+    // agent's abilities discoverable only by asking it.
+    skills_visible_to_all: true,
+    subagents_visible_to_all: true,
+    prompt_visible_to_all: true,
+    models_visible_to_all: true,
+    safeguards_visible_to_all: true,
     memory_enabled: true,
   },
   agent: {
     endpoint: "",
     timeout_ms: 30000,
+    stream_timeout_ms: 900000,
+    on_disconnect: "continue",
     streaming: true,
+    stream_subgraphs: true,
   },
   auth: {
     enabled: true,
@@ -201,9 +331,14 @@ const DEFAULTS: UISettings = {
     },
     rate_limit: {
       enabled: true,
-      max: 100,
+      // A chat UI is chattier than a REST client: a single page load
+      // of /analytics is four calls, and streaming, thread-state
+      // polling and uploads stack on top. 100/min tripped during
+      // ordinary use, which trains people to ignore the error.
+      max: 600,
       window: "1 minute",
       exclude_paths: ["/api/health", "/_health", "/api/proxy/agent/evals/status", "/api/proxy/agent/evals/results", "/api/proxy/agent/evals/history", "/api/proxy/agent/evals/trends"],
+      trust_proxy: 1,
     },
     session: {
       secure_cookie: false, // false for dev; set to true in production
@@ -331,8 +466,21 @@ function validateConfig(config: UISettings): void {
       `Config validation error: agent.endpoint must be a valid URL (got '${config.agent.endpoint}')`,
     );
   }
+  if (
+    typeof config.agent.stream_timeout_ms !== "number" ||
+    config.agent.stream_timeout_ms <= 0
+  ) {
+    throw new Error(
+      "Config validation error: agent.stream_timeout_ms must be a positive number",
+    );
+  }
   if (typeof config.agent.timeout_ms !== "number" || config.agent.timeout_ms <= 0) {
     throw new Error("Config validation error: agent.timeout_ms must be a positive number");
+  }
+  if (typeof config.agent.stream_subgraphs !== "boolean") {
+    throw new Error(
+      "Config validation error: agent.stream_subgraphs must be boolean",
+    );
   }
   if (typeof config.agent.streaming !== "boolean") {
     throw new Error("Config validation error: agent.streaming must be boolean");
@@ -432,6 +580,12 @@ function applyEnvOverrides(config: UISettings): void {
       config.agent.timeout_ms = timeout;
     }
   }
+  if (process.env.AGENT_STREAM_TIMEOUT_MS) {
+    const streamTimeout = Number.parseInt(process.env.AGENT_STREAM_TIMEOUT_MS, 10);
+    if (!Number.isNaN(streamTimeout)) {
+      config.agent.stream_timeout_ms = streamTimeout;
+    }
+  }
 
   // Auth overrides - ALL SSO config comes from environment variables (never from YAML)
   // These are injected by agent-engine during deployment
@@ -506,6 +660,22 @@ function applyEnvOverrides(config: UISettings): void {
       config.security.rate_limit.max = max;
     }
   }
+  if (process.env.SECURITY_RATE_LIMIT_TRUST_PROXY) {
+    // Whole string or nothing. `parseInt` reads "1abc" as 1 and "2.5"
+    // as 2, so a typo silently changed how many proxy hops are
+    // trusted, and that count decides which address the rate limiter
+    // keys on.
+    const raw = process.env.SECURITY_RATE_LIMIT_TRUST_PROXY.trim();
+    const hops = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+    if (Number.isFinite(hops)) {
+      config.security.rate_limit.trust_proxy = hops === 0 ? false : hops;
+    } else {
+      console.warn(
+        `SECURITY_RATE_LIMIT_TRUST_PROXY is not a whole number: "${raw}"; ignoring it`,
+      );
+    }
+  }
+
   if (process.env.SECURITY_RATE_LIMIT_WINDOW) {
     config.security.rate_limit.window = process.env.SECURITY_RATE_LIMIT_WINDOW;
   }
@@ -524,6 +694,45 @@ function applyEnvOverrides(config: UISettings): void {
   }
 }
 
+/**
+ * Refuse a `UI_CONFIG_PATH` that is not plausibly a config file.
+ *
+ * The only check used to be `existsSync`, which accepts *any* file
+ * that happens to be there. `config/ui/../../.env` resolves to the
+ * repo's real `.env`: it exists, so it was read as settings, failed to
+ * parse as the expected shape, and silently fell back to defaults. No
+ * secret leaked — nothing echoes the parsed file back — but "it
+ * exists" is not the property worth checking, and a config loader that
+ * reads whatever you point it at is one bug away from being the
+ * property that matters.
+ *
+ * Two rules, both portable:
+ *
+ * - **No upward traversal.** A deployment points at a mounted file by
+ *   its own path; it never needs to climb out of a directory to find
+ *   it. Checked on the raw string, because a `..` that resolves to
+ *   somewhere legitimate is still a sign the value was built by
+ *   joining untrusted pieces.
+ * - **Must be YAML.** Every real value in this repo — Containerfile,
+ *   compose.yml, env.template, the Kind overlay — ends in
+ *   `settings.yaml`. `/etc/shadow` and `.env` do not, and on a Linux
+ *   container `/etc/shadow` exists, so the existence check alone would
+ *   wave it through.
+ */
+function assertUsableConfigPath(raw: string): void {
+  const segments = raw.split(/[\\/]+/);
+  if (segments.includes("..")) {
+    throw new Error(
+      `Invalid UI_CONFIG_PATH: ${raw}. The path must not traverse upward.`,
+    );
+  }
+  if (!/\.ya?ml$/i.test(raw)) {
+    throw new Error(
+      `Invalid UI_CONFIG_PATH: ${raw}. Expected a .yaml or .yml file.`,
+    );
+  }
+}
+
 let _settings: UISettings | undefined;
 let _agentName: string | null = null;
 
@@ -535,10 +744,13 @@ export function getSettings(): UISettings {
     explicitPath ||
     resolve(__dirname, "../../../config/ui/settings.yaml");
 
-  if (explicitPath && !existsSync(configPath)) {
-    throw new Error(
-      `Config file not found: ${configPath}. Mount config/ui at /opt/app-root/src/config`,
-    );
+  if (explicitPath) {
+    assertUsableConfigPath(explicitPath);
+    if (!existsSync(configPath)) {
+      throw new Error(
+        `Config file not found: ${configPath}. Mount config/ui at /opt/app-root/src/config`,
+      );
+    }
   }
 
   const fromFile = loadYaml(configPath);
@@ -573,6 +785,21 @@ export function getSettings(): UISettings {
 }
 
 // For testing only - clears the cached settings and agent name
+/**
+ * Where the agent lives, resolved once.
+ *
+ * The same `cfg.agent.endpoint || AGENT_HOST || "http://localhost:5002"`
+ * expression was copied into six files. A loopback default repeated
+ * six times is six places to miss when it is wrong, and a literal
+ * host in a router is a deployment detail in the wrong layer.
+ */
+const AGENT_HOST_FALLBACK = "http://localhost:5002";
+
+export function resolveAgentHost(): string {
+  const cfg = getSettings();
+  return cfg.agent.endpoint || process.env.AGENT_HOST || AGENT_HOST_FALLBACK;
+}
+
 export function resetSettings(): void {
   _settings = undefined;
   _agentName = null;
@@ -581,8 +808,7 @@ export function resetSettings(): void {
 export async function getAgentName(): Promise<string> {
   if (_agentName !== null) return _agentName;
 
-  const cfg = getSettings();
-  const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+  const agentHost = resolveAgentHost();
 
   try {
     const resp = await fetch(`${agentHost}/info`, { signal: AbortSignal.timeout(3000) });

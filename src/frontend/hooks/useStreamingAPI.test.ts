@@ -400,9 +400,16 @@ describe('isNonRecoverableHttpStatus', () => {
 
 // ── Recovery timeout independence ────────────────────────────────────────────
 
-vi.mock('@/services/agent-rest', () => ({
+// Spread the real module rather than listing exports. Naming only the
+// two this suite stubs meant anything else the hook reached for was
+// simply absent from the mock: adding `getInFlightRun` for rejoining a
+// live run turned every test in the file into an unhandled error,
+// while the assertions themselves still passed.
+vi.mock('@/services/agent-rest', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/agent-rest')>()),
   getThreadState: vi.fn(() => new Promise(() => {})),
   getThreadStateAndInterrupt: vi.fn(() => new Promise(() => {})),
+  getInFlightRun: vi.fn(async () => null),
 }));
 
 describe('_startRecoveryPolling — deadline fires independently of pending request', () => {
