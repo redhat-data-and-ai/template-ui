@@ -26,6 +26,7 @@ import {
 import { chatStorage } from '@/services/chatStorage';
 import { getThreadState, getThreadStateAndInterrupt } from '@/services/agent-rest';
 import { buildAppPath } from '@/lib/app-paths';
+import { messageWithSubagentMentions, resolveRequestedSubagents } from '@/components/slash-subagents';
 import { addToast } from '@/redux/slices/toasts';
 import { assignThreadToProjectThunk } from '@/redux/slices/projects';
 import { isClientCreatedChat } from '@/services/newChatTracker';
@@ -378,6 +379,7 @@ export function useStreamingAPI(threadId: string) {
   }>({ streamStartTime: null, firstTokenTime: null, streamEndTime: null });
   const isStreamingTokensRef = useRef<boolean>(false);
   const userCancelledRef = useRef(false);
+  const submitLockRef = useRef(false);
   const streamEndedWithInterruptRef = useRef(false);
   const pendingInterruptRef = useRef(streamingState.pendingInterrupt);
   const resumeInFlightRef = useRef(false);
@@ -478,8 +480,10 @@ export function useStreamingAPI(threadId: string) {
       mcpModelContext?: string | null;
     }) => {
       const manager = managerRef.current;
-      if (!manager || !threadId) return;
+      if (!manager || !threadId || submitLockRef.current) return;
+      submitLockRef.current = true;
 
+      try {
       userCancelledRef.current = false;
       setRetryCount(0);
       setWasInterrupted(false);
@@ -515,11 +519,19 @@ export function useStreamingAPI(threadId: string) {
       dispatch(updateChat({ id: threadId, updates: { messages: clones } }));
       chatStorage.saveChatByThreadId(threadId, clones);
 
-      const messageText = mergeMessageWithMcpModelContext(
-        serializeLastMessage(clones),
-        mcpModelContext,
-      );
+      const userText = serializeLastMessage(clones);
+      const messageText = mergeMessageWithMcpModelContext(userText, mcpModelContext);
       if (messageText === '') return;
+      dispatch(updateStreamingState({
+        chatId: threadId,
+        state: { isLoading: true, error: null },
+      }));
+      const requestedSubagents = await resolveRequestedSubagents(userText);
+      const messagesWithMentions = messageWithSubagentMentions(clones, requestedSubagents);
+      if (messagesWithMentions !== clones) {
+        dispatch(updateChat({ id: threadId, updates: { messages: messagesWithMentions } }));
+        chatStorage.saveChatByThreadId(threadId, messagesWithMentions);
+      }
 
       const token = typeof window.USER_DATA.accessToken === 'string' ? window.USER_DATA.accessToken : undefined;
       const userId =
@@ -547,6 +559,7 @@ export function useStreamingAPI(threadId: string) {
         apiUrl,
         token,
         projectId: chatRef.current?.project_id,
+        ...(requestedSubagents.length > 0 ? { requestedSubagents } : {}),
       };
       const wasClientCreated = isClientCreatedChat(threadId);
 
@@ -571,7 +584,7 @@ export function useStreamingAPI(threadId: string) {
 
           // Remove incomplete AI message if stream dropped mid-response
           if (isStreamingTokensRef.current) {
-            dispatch(updateChat({ id: threadId, updates: { messages: clones } }));
+            dispatch(updateChat({ id: threadId, updates: { messages: messagesWithMentions } }));
             isStreamingTokensRef.current = false;
           }
         }
@@ -581,7 +594,7 @@ export function useStreamingAPI(threadId: string) {
           try {
             const history = await getThreadState(threadId);
             if (history.length > 0) {
-              const pendingMsg = clones[clones.length - 1];
+              const pendingMsg = messagesWithMentions[messagesWithMentions.length - 1];
               const serverHasPending =
                 pendingMsg?.type === 'human' &&
                 history.some((m) => m.type === 'human' && m.content === pendingMsg.content);
@@ -1126,6 +1139,9 @@ export function useStreamingAPI(threadId: string) {
           }
           finally { polling = false; }
         }, RECOVERY_POLL_INTERVAL_MS);
+      }
+      } finally {
+        submitLockRef.current = false;
       }
     },
     [dispatch, threadId, handleStreamActivityStatus, clearReconnectTimers, setMessages, setWasInterrupted],

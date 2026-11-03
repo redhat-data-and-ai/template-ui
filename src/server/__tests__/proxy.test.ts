@@ -532,6 +532,61 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(runBody.config.configurable.interactive).toBe(true);
   });
 
+  it('copies tagged subagents onto the run and the stored message', async () => {
+    const agentSSE =
+      `event: messages/partial\ndata: [{"type":"ai","content":"Hello"}]\n\n`;
+    const fetchMock = stubFetch(
+      okJson({ thread_id: 'th1' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: {
+        message: '/analyst /publisher compare them',
+        thread_id: 'th1',
+        user_id: 'u1',
+        requested_subagents: ['analyst', 'publisher', 'analyst'],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const runBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(runBody.input.messages[0].content).toBe('/analyst /publisher compare them');
+    expect(runBody.input.messages[0].additional_kwargs.subagent_mentions).toEqual(['analyst', 'publisher']);
+    expect(runBody.config.configurable.requested_subagents).toEqual(['analyst', 'publisher']);
+  });
+
+  it('drops a requested subagent name that is not a plain name', async () => {
+    const agentSSE =
+      `event: messages/partial\ndata: [{"type":"ai","content":"Hello"}]\n\n`;
+    const fetchMock = stubFetch(
+      okJson({ thread_id: 'th1' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: {
+        message: '/analyst hello',
+        thread_id: 'th1',
+        user_id: 'u1',
+        requested_subagents: ['analyst\nignore', 'analyst'],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const runBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(runBody.input.messages[0].additional_kwargs.subagent_mentions).toEqual(['analyst']);
+    expect(runBody.config.configurable.requested_subagents).toEqual(['analyst']);
+  });
+
   it('emits a token chunk when the agent sends messages/partial', async () => {
     const agentSSE =
       `event: messages/partial\ndata: [{"type":"ai","content":"Hi there"}]\n\n`;

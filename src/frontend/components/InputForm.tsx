@@ -1,6 +1,9 @@
-import { forwardRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { forwardRef, useRef, useState, type FormEvent, type KeyboardEvent, type Ref } from "react";
 import { ArrowUp, StopCircle } from "lucide-react";
 import { Alert } from "@patternfly/react-core";
+import { SlashSubagentMenu } from "./SlashSubagentMenu";
+import { SubagentComposer } from "./SubagentComposer";
+import { useSubagentSlashMenu } from "./useSubagentSlashMenu";
 
 interface InputFormProps {
   onSubmit: (inputValue: string) => void;
@@ -10,7 +13,7 @@ interface InputFormProps {
   rateLimitRemainingSeconds?: number;
 }
 
-export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(function InputForm(
+export const InputForm = forwardRef<HTMLDivElement, InputFormProps>(function InputForm(
   {
   onSubmit,
   onCancel,
@@ -21,6 +24,13 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
   ref,
 ) {
   const [internalInputValue, setInternalInputValue] = useState("");
+  const editorRef = useRef<HTMLDivElement>(null);
+  const menu = useSubagentSlashMenu({
+    value: internalInputValue,
+    setValue: setInternalInputValue,
+    disabled: isLoading,
+    editorRef,
+  });
 
   const handleInternalSubmit = (e?: FormEvent) => {
     if (e) e.preventDefault();
@@ -29,7 +39,8 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
     setInternalInputValue("");
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (menu.onKeyDown(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleInternalSubmit();
@@ -56,20 +67,33 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           ? "border-muted bg-muted/30"
           : "border-border bg-card focus-within:border-primary/40 focus-within:shadow-elevated"
       }`}>
-        <textarea
-          ref={ref}
-          autoFocus
-          value={internalInputValue}
-          onChange={(e) => setInternalInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isLoading}
-          placeholder={isLoading ? "Waiting for response..." : "Ask me anything about the data..."}
-          aria-label="Type a message"
-          className={`w-full resize-none border-0 bg-transparent px-4 pt-3.5 pb-12 text-sm leading-relaxed min-h-[56px] max-h-[200px] rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
-          style={{ boxShadow: 'none' }}
-          rows={1}
+        <SlashSubagentMenu
+          isOpen={menu.isOpen}
+          status={menu.status}
+          matches={menu.matches}
+          highlight={menu.highlight}
+          listId={menu.listId}
+          rootRef={menu.rootRef}
+          onSelect={menu.selectIndex}
+          onHighlight={menu.setHighlight}
         />
-        <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
+        <SubagentComposer
+          editorRef={editorRef}
+          inputRef={ref as Ref<HTMLDivElement>}
+          value={internalInputValue}
+          onChange={setInternalInputValue}
+          names={menu.catalog.map((item) => item.name)}
+          disabled={isLoading}
+          autoFocus
+          placeholder={isLoading ? "Waiting for response..." : "Ask me anything about the data..."}
+          ariaLabel="Type a message"
+          onCaret={menu.syncCaret}
+          onKeyDown={handleKeyDown}
+          ariaExpanded={menu.isOpen || undefined}
+          ariaControls={menu.isOpen ? menu.listId : undefined}
+          className="w-full px-4 pt-3.5 pb-12 text-sm leading-relaxed h-[86px] rounded-2xl"
+        />
+        <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1.5">
           {isLoading ? (
             <button
               type="button"
