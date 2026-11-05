@@ -530,6 +530,7 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(runBody.config.metadata.source).toBe('ui');
     expect(runBody.config.configurable.user_id).toBe('johnwick');
     expect(runBody.config.configurable.interactive).toBe(true);
+    expect(runBody.on_disconnect).toBe('continue');
   });
 
   it('copies tagged subagents onto the run and the stored message', async () => {

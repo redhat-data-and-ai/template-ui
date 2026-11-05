@@ -468,6 +468,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
         const runBody: Record<string, unknown> = {
           assistant_id: 'agent',
           stream_mode: ['messages', 'updates'],
+          on_disconnect: 'continue',
         };
         if (isResume) {
           runBody.command = { resume: message };

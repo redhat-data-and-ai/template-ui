@@ -188,7 +188,7 @@ const DEFAULTS: UISettings = {
       enabled: true,
       csp: {
         default_src: ["'self'"],
-        script_src: ["'self'"],
+        script_src: ["'self'", "https://cdn.plot.ly"],
         style_src: ["'self'", "'unsafe-inline'"],
         img_src: ["'self'", "data:", "blob:", "https:"],
         connect_src: ["'self'"],

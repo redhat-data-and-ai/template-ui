@@ -1,6 +1,21 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const mcpMounts = vi.hoisted(() => ({ n: 0 }));
+
+vi.mock('./McpAppHost', async () => {
+  const React = await import('react');
+  return {
+    McpAppHostFromToolCall: () => {
+      React.useEffect(() => {
+        mcpMounts.n += 1;
+      }, []);
+      return React.createElement('div', { 'data-testid': 'mcp-app-host' });
+    },
+  };
+});
 import { render, screen, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
@@ -178,8 +193,8 @@ describe('ChatMessagesView — errorMessage prop', () => {
   });
 });
 
-describe('ChatMessagesView — standby thinking row', () => {
-  it('shows the row after a finished tool while the run is still busy', () => {
+describe('ChatMessagesView — current question status row', () => {
+  it('names the finished tool and says it is writing the answer', () => {
     const store = makeStore();
     const finished = {
       type: 'ai',
@@ -196,16 +211,19 @@ describe('ChatMessagesView — standby thinking row', () => {
       </Provider>,
     );
 
-    expect(screen.getByRole('status', { name: 'Agent is thinking' })).toBeInTheDocument();
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('task');
+    expect(status).toHaveTextContent('Synthesizing answer...');
+    expect(screen.queryByRole('status', { name: 'Agent is thinking' })).not.toBeInTheDocument();
   });
 
-  it('hides the row while a tool is still running', () => {
+  it('shows a running tool by its own name', () => {
     const store = makeStore();
     const running = {
       type: 'ai',
       content: 'I will ask the analyst.',
       id: 'msg-ai-1',
-      tool_calls: [{ id: 'tc-1', name: 'task', args: {} }],
+      tool_calls: [{ id: 'tc-1', name: 'execute_sql', args: {} }],
     } as unknown as Message;
 
     render(
@@ -216,10 +234,12 @@ describe('ChatMessagesView — standby thinking row', () => {
       </Provider>,
     );
 
-    expect(screen.queryByRole('status', { name: 'Agent is thinking' })).not.toBeInTheDocument();
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('execute_sql');
+    expect(status).not.toHaveTextContent('Synthesizing answer...');
   });
 
-  it('hides the row once a later assistant reply starts', () => {
+  it('keeps the finished tool on the status row after a later reply starts', () => {
     const store = makeStore();
     const finished = {
       type: 'ai',
@@ -243,7 +263,91 @@ describe('ChatMessagesView — standby thinking row', () => {
       </Provider>,
     );
 
-    expect(screen.queryByRole('status', { name: 'Agent is thinking' })).not.toBeInTheDocument();
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('task');
+    expect(status).toHaveTextContent('Synthesizing answer...');
+  });
+
+  it('does not reprint an earlier question when a follow-up is starting', () => {
+    const store = makeStore();
+    const earlier = {
+      type: 'ai',
+      content: 'Done.',
+      id: 'msg-ai-1',
+      tool_calls: [
+        { id: 'tc-1', name: 'read_config_data', args: {}, content: 'ok' },
+        { id: 'tc-2', name: 'get_sql', args: {}, content: 'select 1' },
+      ],
+    } as unknown as Message;
+    const followUp = {
+      type: 'human',
+      content: 'What about the next one?',
+      id: 'msg-human-2',
+    } as unknown as Message;
+
+    render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({ messages: [HUMAN_MESSAGE, earlier, followUp], isLoading: true })}
+        />
+      </Provider>,
+    );
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Thinking...');
+    expect(status).not.toHaveTextContent('read_config_data');
+    expect(status).not.toHaveTextContent('get_sql');
+    expect(status).not.toHaveTextContent('Synthesizing answer...');
+  });
+});
+
+describe('ChatMessagesView — MCP app stays mounted', () => {
+  it('opens an MCP app on click and does not remount it when another tool arrives', async () => {
+    mcpMounts.n = 0;
+    const store = makeStore();
+    const first = {
+      type: 'ai',
+      content: '',
+      id: 'ai-1',
+      tool_calls: [{
+        id: 'tc-chart',
+        name: 'show_chart',
+        args: {},
+        content: 'ok',
+        mcpApp: { server: 'charts', resourceUri: 'ui://charts/app.html' },
+      }],
+    } as unknown as Message;
+    const second = {
+      type: 'ai',
+      content: '',
+      id: 'ai-2',
+      tool_calls: [{ id: 'tc-next', name: 'search', args: {} }],
+    } as unknown as Message;
+
+    const { rerender } = render(
+      <Provider store={store}>
+        <ChatMessagesView {...makeBaseProps({ messages: [HUMAN_MESSAGE, first], isLoading: true })} />
+      </Provider>,
+    );
+
+    expect(screen.getByText('Click to open UI')).toBeInTheDocument();
+    expect(screen.queryByTestId('mcp-app-host')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /expand tool call: show_chart/i }));
+    expect(screen.queryByText('Click to open UI')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('mcp-app-host')).toHaveLength(1);
+    const mountsAfterFirst = mcpMounts.n;
+
+    rerender(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({ messages: [HUMAN_MESSAGE, first, second], isLoading: true })}
+        />
+      </Provider>,
+    );
+
+    expect(screen.getAllByTestId('mcp-app-host')).toHaveLength(1);
+    expect(mcpMounts.n).toBe(mountsAfterFirst);
+    expect(screen.getByRole('status')).toHaveTextContent('search');
   });
 });
 

@@ -15,9 +15,9 @@ import {
 } from '../redux/slices/chats';
 import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
-import { useStreamingAPI, MAX_RETRIES, queuedApprovalForInterrupt } from '../hooks/useStreamingAPI';
+import { useStreamingAPI, MAX_RETRIES, queuedApprovalForInterrupt, RECOVERY_POLL_TIMEOUT_MS } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
-import { ChatMessagesView } from '../components/ChatMessagesView';
+import { ChatMessagesView, turnEndsInThought } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { ReconnectingBanner } from '../components/ReconnectingBanner';
 import { InterruptBanner } from '../components/InterruptBanner';
@@ -26,6 +26,7 @@ import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
+import { serverKeepsLocalMessages } from '../services/reload-watch';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -56,6 +57,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const hasBeenHealthyRef = useRef(false);
   const streamingLoadingRef = useRef(streamingState.isLoading);
   streamingLoadingRef.current = streamingState.isLoading;
+  const streamingConnectedRef = useRef(streamingState.isConnected);
+  streamingConnectedRef.current = streamingState.isConnected;
+  const watchOwnsLoadingRef = useRef(false);
+  const messagesRef = useRef(currentChat?.messages ?? []);
+  messagesRef.current = currentChat?.messages ?? [];
 
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({});
@@ -183,6 +189,91 @@ export function ChatPage({ threadId }: { threadId: string }) {
     return () => { cancelled = true; setHydrating(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, feedbackUserId, needsServerRefresh]);
+
+  // After saved messages are on screen, keep polling a turn that still ends on a thought.
+  const reloadWatch = Boolean(
+    chatId
+    && !hydrating
+    && !isClientCreatedChat(chatId)
+    && !streamingState.pendingInterrupt
+    && !streamingState.isConnected
+    && (currentChat?.messages.length ?? 0) > 0
+    && turnEndsInThought(currentChat?.messages ?? []),
+  );
+  useEffect(() => {
+    if (!reloadWatch || !chatId) return;
+    if (streamingLoadingRef.current && !watchOwnsLoadingRef.current) return;
+
+    let cancelled = false;
+    let pollId: ReturnType<typeof setInterval> | null = null;
+    const started = Date.now();
+    watchOwnsLoadingRef.current = true;
+    dispatch(updateStreamingState({
+      chatId,
+      state: { isLoading: true, error: null, isConnected: false },
+    }));
+
+    const release = (clearLoading: boolean) => {
+      if (pollId) clearInterval(pollId);
+      pollId = null;
+      const owned = watchOwnsLoadingRef.current;
+      watchOwnsLoadingRef.current = false;
+      if (!cancelled && clearLoading && owned) {
+        dispatch(updateStreamingState({ chatId, state: { isLoading: false } }));
+      }
+    };
+
+    const tick = async () => {
+      if (cancelled) return;
+      if (streamingConnectedRef.current || (streamingLoadingRef.current && !watchOwnsLoadingRef.current)) {
+        release(false);
+        return;
+      }
+      if (Date.now() - started > RECOVERY_POLL_TIMEOUT_MS) {
+        release(true);
+        return;
+      }
+      try {
+        const next = await getThreadStateAndInterrupt(chatId);
+        if (cancelled || streamingConnectedRef.current) return;
+        const local = messagesRef.current;
+        if (serverKeepsLocalMessages(local, next.messages)) {
+          thread.setMessages(next.messages);
+        }
+        if (next.interrupt) {
+          dispatch(updateStreamingState({
+            chatId,
+            state: {
+              isLoading: false,
+              pendingInterrupt: {
+                value: next.interrupt.value as any,
+                resumable: next.interrupt.resumable,
+              },
+            },
+          }));
+          release(false);
+          return;
+        }
+        if (next.messages.length > 0 && !turnEndsInThought(next.messages)) release(true);
+      } catch {
+        // A missed poll leaves the screen and the loading flag as they are.
+      }
+    };
+
+    void tick();
+    pollId = setInterval(() => { void tick(); }, 1000);
+    return () => {
+      cancelled = true;
+      if (pollId) clearInterval(pollId);
+      if (watchOwnsLoadingRef.current) {
+        watchOwnsLoadingRef.current = false;
+        if (!streamingConnectedRef.current) {
+          dispatch(updateStreamingState({ chatId, state: { isLoading: false } }));
+        }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, reloadWatch]);
 
   useEffect(() => {
     if (!chatId || isClientCreatedChat(chatId)) return;
