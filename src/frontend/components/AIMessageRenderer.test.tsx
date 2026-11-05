@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Message } from '@langchain/langgraph-sdk';
-import { AIMessageRenderer } from './ChatMessagesView';
+import { AIMessageRenderer, buildTurnSegments } from './ChatMessagesView';
 import type { InterruptInfo } from '../types/deep-agent';
 
 vi.mock('./McpAppHost', () => ({
@@ -206,6 +206,85 @@ const innerToolInterrupt: InterruptInfo = {
   resumable: true,
 };
 
+describe('buildTurnSegments', () => {
+  it('keeps each sentence and puts later tools and thoughts after it', () => {
+    const segments = buildTurnSegments([
+      makeMsg({
+        id: 'm1',
+        thinking: 'plan the lookup',
+        content: "I'll look up orders",
+        tool_calls: [{ id: 'tc', name: 'search', args: { query: 'orders' } }],
+      }),
+      makeMsg({
+        id: 'm2',
+        thinking: 'read the rows',
+        content: 'Here are the orders',
+        tool_calls: [],
+      }),
+    ]);
+
+    expect(segments.map((segment) => segment.type)).toEqual(['thought', 'stream', 'thought', 'stream']);
+    expect(segments[0]).toMatchObject({ items: [{ kind: 'thinking', text: 'plan the lookup' }] });
+    expect(segments[1]).toMatchObject({ text: "I'll look up orders" });
+    expect(segments[2]).toMatchObject({
+      items: [
+        { kind: 'tools', tools: [expect.objectContaining({ name: 'search' })] },
+        { kind: 'thinking', text: 'read the rows' },
+      ],
+    });
+    expect(segments[3]).toMatchObject({ text: 'Here are the orders' });
+  });
+
+  it('keeps one row when the same tool id arrives twice', () => {
+    const segments = buildTurnSegments([
+      makeMsg({
+        id: 'm1',
+        content: '',
+        tool_calls: [{ id: 'tc-1', name: 'search', args: {} }],
+      }),
+      makeMsg({
+        id: 'm2',
+        content: '',
+        tool_calls: [{ id: 'tc-1', name: 'search', args: { query: 'later' } }],
+      }),
+    ]);
+    const tools = segments.flatMap((segment) => (
+      segment.type === 'thought'
+        ? segment.items.flatMap((item) => (item.kind === 'tools' ? item.tools : []))
+        : []
+    ));
+    expect(tools).toHaveLength(1);
+    expect(tools[0].id).toBe('tc-1');
+    expect(tools[0].args).toEqual({ query: 'later' });
+  });
+
+  it('shows the sentence, then the tool, then the later thought', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({ id: 'm2' })}
+        turnMessages={[
+          makeMsg({
+            id: 'm1',
+            thinking: 'plan the lookup',
+            content: "I'll look up orders",
+            tool_calls: [{ id: 'tc', name: 'search', args: {} }],
+          }),
+          makeMsg({
+            id: 'm2',
+            thinking: 'read the rows',
+            content: '',
+          }),
+        ]}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text.indexOf("I'll look up orders")).toBeLessThan(text.indexOf('search'));
+    expect(text.indexOf('search')).toBeLessThan(text.indexOf('read the rows'));
+    expect(text).not.toContain('plan the lookup');
+  });
+});
+
 describe('AIMessageRenderer — narration before a task card', () => {
   it('shows the spoken sentence above the task card', () => {
     render(
@@ -235,8 +314,7 @@ describe('AIMessageRenderer — narration before a task card', () => {
     );
 
     expect(screen.getByText('This looks like a data query.')).toBeInTheDocument();
-    expect(screen.getByText('Thought')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Thought' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Thought process' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('researcher')).toBeInTheDocument();
   });
 
@@ -526,5 +604,36 @@ describe('AIMessageRenderer — auto-collapse on tool completion', () => {
         'false',
       );
     });
+  });
+});
+
+describe('AIMessageRenderer — answer charts', () => {
+  it('draws a chart fence in the answer and leaves the fence marker out', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          content: 'Here is the trend.\n\n:::chart\n{"type":"bar","title":"Quarterly sales","data":[{"x":"Q1","y":3}]}\n:::\n',
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Here is the trend.')).toBeInTheDocument();
+    expect(screen.getByText('Quarterly sales')).toBeInTheDocument();
+    expect(screen.queryByText(/:::chart/)).not.toBeInTheDocument();
+  });
+
+  it('leaves a chart fence inside a thought as text', () => {
+    render(
+      <AIMessageRenderer
+        thinkingLive
+        message={makeMsg({
+          content: '',
+          thinking: ':::chart\n{"type":"bar","title":"Hidden chart","data":[{"x":"Q1","y":1}]}\n:::',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/:::chart/)).toBeInTheDocument();
+    expect(screen.queryByText('Hidden chart')).not.toBeInTheDocument();
   });
 });

@@ -1,10 +1,10 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User, ShieldCheck } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Bot, User, ShieldCheck } from "lucide-react";
 import type { InterruptInfo } from "../types/deep-agent";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment, cloneElement, isValidElement } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, cloneElement, isValidElement } from "react";
 import { cn } from "../lib/utils";
 import {
   Dropdown,
@@ -20,12 +20,14 @@ import {
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { markdownSanitizeSchema } from "../lib/markdown-sanitize";
 import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ArtifactViewer } from "./ArtifactViewer";
 import { McpAppHostFromToolCall } from "./McpAppHost";
+import { ChartCard, PlotlyCard, useContentSegments } from "./InlineChart";
 import { TodoStrip } from "./TodoStrip";
 import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButtons";
 import { CustomDataRenderer } from "./CustomDataRenderer";
@@ -60,7 +62,7 @@ function HumanMessageText({ text, names }: { text: string; names: string[] }) {
   const parts = highlightSubagentMentions(text, names);
   if (!parts.some((part) => part.marked)) {
     return (
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
         {text}
       </ReactMarkdown>
     );
@@ -505,31 +507,84 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
   );
 };
 
-function toolStillRunning(messages: Message[]): boolean {
-  return messages.some((message) => {
-    if (message.type !== 'ai') return false;
-    const calls = (message as { tool_calls?: Array<{ name?: string; content?: unknown }> }).tool_calls;
-    if (!Array.isArray(calls)) return false;
-    return calls.some((tc) => tc.name !== 'write_todos' && tc.content == null);
-  });
-}
-
-function waitingAfterFinishedTool(messages: Message[]): boolean {
-  if (toolStillRunning(messages)) return false;
-  let lastAi: Message | undefined;
+function currentTurnMessages(messages: Message[]): Message[] {
+  let start = 0;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].type === 'ai') {
-      lastAi = messages[i];
+    if (messages[i].type === 'human') {
+      start = i + 1;
       break;
     }
   }
-  if (!lastAi) return false;
-  const calls = (lastAi as { tool_calls?: Array<{ name?: string }> }).tool_calls;
-  if (!Array.isArray(calls)) return false;
-  const visible = calls.filter((tc) => tc.name !== 'write_todos');
-  if (visible.length === 0) return false;
-  const last = messages.at(-1);
-  return last?.type !== 'ai' || last === lastAi;
+  return messages.slice(start);
+}
+
+function visibleToolCalls(message: Message): Array<{ id?: string; name: string; content?: unknown; status?: string }> {
+  const calls = (message as { tool_calls?: Array<{ id?: string; name?: string; content?: unknown; status?: string }> }).tool_calls;
+  if (!Array.isArray(calls)) return [];
+  return calls.filter((tc): tc is { id?: string; name: string; content?: unknown; status?: string } =>
+    typeof tc?.name === 'string' && tc.name.length > 0 && tc.name !== 'write_todos');
+}
+
+/** Status under the transcript for the question being answered now. */
+function CurrentTurnStatus({ messages }: { messages: Message[] }) {
+  const turn = currentTurnMessages(messages);
+  const steps: Array<{ key: string; label: string; status: 'done' | 'running' | 'error' }> = [];
+  let anyRunning = false;
+  for (const message of turn) {
+    if (message.type !== 'ai') continue;
+    visibleToolCalls(message).forEach((toolCall, index) => {
+      const running = toolCall.content == null;
+      if (running) anyRunning = true;
+      steps.push({
+        key: toolCall.id ?? `${message.id ?? 'tool'}-${index}`,
+        label: toolCall.name,
+        status: toolCall.status === 'error' ? 'error' : running ? 'running' : 'done',
+      });
+    });
+  }
+  if (steps.length > 0 && !anyRunning) {
+    steps.push({ key: 'synthesizing', label: 'Synthesizing answer...', status: 'running' });
+  }
+
+  if (steps.length === 0) {
+    return (
+      <div className="flex items-start gap-3 animate-fadeIn" role="status" aria-live="polite">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+          <Bot className="w-3.5 h-3.5 text-white" />
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" aria-hidden="true" />
+          Thinking...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-3 animate-fadeIn" role="status" aria-live="polite">
+      <div className="flex-shrink-0 w-7 h-7 mt-0.5 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+        <Bot className="w-3.5 h-3.5 text-white" />
+      </div>
+      <div className="flex-1 min-w-0 py-1">
+        <div className="space-y-1.5">
+          {steps.map((step) => (
+            <div key={step.key} className="flex items-center gap-2 text-xs">
+              {step.status === 'error' ? (
+                <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" aria-hidden="true" />
+              ) : step.status === 'done' ? (
+                <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" aria-hidden="true" />
+              ) : (
+                <Loader2 className="w-3.5 h-3.5 text-primary animate-spin flex-shrink-0" aria-hidden="true" />
+              )}
+              <span className={step.status === 'done' ? 'text-muted-foreground/60' : 'text-foreground/80 font-medium'}>
+                {step.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function isThinkingLive(message: Message, isLoading: boolean, isLastAi: boolean): boolean {
@@ -543,78 +598,148 @@ function isThinkingLive(message: Message, isLoading: boolean, isLastAi: boolean)
   return parts.answer.trim().length === 0;
 }
 
-interface AiMessageBubbleProps {
-  message: Message;
-  thinkingLive?: boolean;
+export interface TurnToolCall {
+  id?: string;
+  name: string;
+  args?: Record<string, unknown>;
+  content?: unknown;
+  status?: string;
+  mcpApp?: unknown;
 }
 
-const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message, thinkingLive = false }) => {
-  const storedThinking = (message as { thinking?: unknown }).thinking;
-  const hasStoredThinking = typeof storedThinking === 'string' && storedThinking.length > 0;
-  const parts = splitMessageParts(message);
-  const thinkingText = hasStoredThinking ? storedThinking : parts.thinking;
-  const answer = parts.answer;
-  const userToggledThinking = useRef(false);
-  const [thinkingExpanded, setThinkingExpanded] = useState(thinkingLive);
-  useEffect(() => {
-    if (userToggledThinking.current) return;
-    setThinkingExpanded(thinkingLive);
-  }, [thinkingLive]);
-  const customRaw = (message as Record<string, unknown>).custom_data;
-  const customData =
-    customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
-      ? (customRaw as Record<string, unknown>)
-      : null;
-  const bodyMd =
-    answer.length > 0
-      ? answer
-      : thinkingText.length > 0 || typeof message.content === 'string'
-        ? ''
-        : extractMessageText(message.content);
+export type TurnThoughtItem =
+  | { kind: 'thinking'; text: string }
+  | { kind: 'tools'; tools: TurnToolCall[] };
 
-  return (
-    <div className="flex items-start gap-3">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
-        <Bot className="w-4 h-4 text-white" />
-      </div>
-      <div className="flex-1 min-w-0 max-w-[85%] sm:max-w-[80%] space-y-2">
-        {thinkingText.length > 0 && (
-          <div className="border border-border rounded-xl bg-muted/30">
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground"
-              aria-expanded={thinkingExpanded}
-              onClick={() => {
-                userToggledThinking.current = true;
-                setThinkingExpanded((open) => !open);
-              }}
-            >
-              {thinkingExpanded
-                ? <ChevronDown className="w-4 h-4 shrink-0" aria-hidden="true" />
-                : <ChevronRight className="w-4 h-4 shrink-0" aria-hidden="true" />}
-              {thinkingLive ? <span className="animate-pulse">Thinking...</span> : 'Thought'}
-            </button>
-            {thinkingExpanded && (
-              <div className="mx-3 mb-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
-                {thinkingText}
-              </div>
-            )}
-          </div>
-        )}
-        {(bodyMd.length > 0 || customData) && (
-          <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-            {bodyMd.length > 0 && (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
-              </div>
-            )}
-            {customData && <CustomDataRenderer data={customData} />}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+export type TurnSegment =
+  | { type: 'thought'; items: TurnThoughtItem[] }
+  | { type: 'stream'; text: string };
+
+function messagePieces(message: Message): Array<
+  | { kind: 'thinking'; text: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'tools'; tools: TurnToolCall[] }
+> {
+  const stored = (message as { thinking?: unknown }).thinking;
+  const parts = splitMessageParts(message);
+  const thinking = typeof stored === 'string' && stored.length > 0 ? stored : parts.thinking;
+  const pieces: Array<
+    | { kind: 'thinking'; text: string }
+    | { kind: 'text'; text: string }
+    | { kind: 'tools'; tools: TurnToolCall[] }
+  > = [];
+  if (thinking.trim()) pieces.push({ kind: 'thinking', text: thinking });
+  if (parts.answer.trim()) pieces.push({ kind: 'text', text: parts.answer });
+  const calls = (message as { tool_calls?: TurnToolCall[] }).tool_calls;
+  const tools = Array.isArray(calls)
+    ? calls.filter((tc) => tc && tc.name !== 'write_todos' && !(tc.name === 'ask_user' && !answeredAskUser(tc)))
+    : [];
+  if (tools.length > 0) pieces.push({ kind: 'tools', tools });
+  return pieces;
+}
+
+/** Sentence stays outside. Later thoughts and tool calls stay in one block, in arrival order. */
+export function buildTurnSegments(messages: Message[]): TurnSegment[] {
+  const pieces: Array<
+    | { kind: 'thinking'; text: string }
+    | { kind: 'text'; text: string }
+    | { kind: 'tools'; tools: TurnToolCall[] }
+  > = [];
+  const toolListById = new Map<string, TurnToolCall[]>();
+  const toolIndexById = new Map<string, number>();
+  for (const message of messages) {
+    if (message.type !== 'ai') continue;
+    for (const piece of messagePieces(message)) {
+      if (piece.kind !== 'tools') {
+        pieces.push(piece);
+        continue;
+      }
+      const tools: TurnToolCall[] = [];
+      for (const tool of piece.tools) {
+        if (!tool.id) {
+          tools.push(tool);
+          continue;
+        }
+        const previous = toolListById.get(tool.id);
+        if (previous) {
+          previous[toolIndexById.get(tool.id) ?? 0] = tool;
+          continue;
+        }
+        toolListById.set(tool.id, tools);
+        toolIndexById.set(tool.id, tools.length);
+        tools.push(tool);
+      }
+      if (tools.length > 0) pieces.push({ kind: 'tools', tools });
+    }
+  }
+  const segments: TurnSegment[] = [];
+  let pending: TurnThoughtItem[] | null = null;
+  const flush = () => {
+    if (pending && pending.length > 0) segments.push({ type: 'thought', items: pending });
+    pending = null;
+  };
+  for (const piece of pieces) {
+    if (piece.kind === 'text') {
+      flush();
+      segments.push({ type: 'stream', text: piece.text });
+      continue;
+    }
+    if (!pending) pending = [];
+    if (piece.kind === 'thinking') pending.push({ kind: 'thinking', text: piece.text });
+    else pending.push({ kind: 'tools', tools: piece.tools });
+  }
+  flush();
+  return segments;
+}
+
+export function turnEndsInThought(messages: Message[]): boolean {
+  return buildTurnSegments(messages).at(-1)?.type === 'thought';
+}
+
+function regularToolsInTurn(messages: Message[]): TurnToolCall[] {
+  const tools: TurnToolCall[] = [];
+  for (const segment of buildTurnSegments(messages)) {
+    if (segment.type !== 'thought') continue;
+    for (const item of segment.items) {
+      if (item.kind !== 'tools') continue;
+      for (const tool of item.tools) {
+        if (isSubAgentToolCall(tool)) continue;
+        if (answeredAskUser(tool)) continue;
+        tools.push(tool);
+      }
+    }
+  }
+  return tools;
+}
+
+function regularToolId(tool: TurnToolCall, index: number): string {
+  return `${tool.id ?? tool.name}-${index}`;
+}
+
+function isEarlierAiInTurn(messages: Message[], index: number): boolean {
+  if (messages[index]?.type !== 'ai') return false;
+  for (let i = index + 1; i < messages.length; i++) {
+    if (messages[i].type === 'human') return false;
+    if (messages[i].type === 'ai') return true;
+  }
+  return false;
+}
+
+function turnStartIndex(messages: Message[], index: number): number {
+  for (let i = index; i >= 0; i--) {
+    if (messages[i].type === 'human') return i + 1;
+  }
+  return 0;
+}
+
+function turnArticleKey(messages: Message[], index: number): string {
+  if (messages[index]?.type !== 'ai') return messages[index]?.id || `msg-${index}`;
+  const start = turnStartIndex(messages, index);
+  for (let i = start; i <= index; i++) {
+    if (messages[i].type === 'ai' && messages[i].id) return `turn-${messages[i].id}`;
+  }
+  return messages[index]?.id || `turn-${index}`;
+}
 
 interface AIMessageRendererProps {
   message: Message;
@@ -628,11 +753,39 @@ interface AIMessageRendererProps {
   onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
   thinkingLive?: boolean;
   questionContent?: ReactNode;
+  interruptContent?: ReactNode;
+  turnMessages?: Message[];
 }
 
-export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false, questionContent }: AIMessageRendererProps) {
+function AnswerStream({ text }: { text: string }) {
+  const parts = useContentSegments(text);
+  return (
+    <div className="ai-response-body">
+      {parts.map((part, index) => {
+        if (part.kind === 'plotly') return <PlotlyCard key={index} spec={part.spec} />;
+        if (part.kind === 'chart') return <ChartCard key={index} spec={part.spec} />;
+        return (
+          <div key={index} className="max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{part.text}</ReactMarkdown>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function toolQueryHint(tool: TurnToolCall): string | null {
+  const query = tool.args?.query;
+  if (typeof query !== 'string' || query.trim().length === 0) return null;
+  const trimmed = query.trim();
+  return trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
+}
+
+export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false, questionContent, interruptContent, turnMessages }: AIMessageRendererProps) {
+  const source = turnMessages && turnMessages.length > 0 ? turnMessages : [message];
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const messageKey = JSON.stringify(message);
+  const [thoughtChoice, setThoughtChoice] = useState<Record<number, boolean>>({});
+  const messageKey = JSON.stringify(source);
 
   const userExpandedRef = useRef<Set<string>>(new Set());
   const userCollapsedRef = useRef<Set<string>>(new Set());
@@ -646,22 +799,17 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     [pendingInterrupt],
   );
 
-  useEffect(() => {
-    const allToolCalls = (message as { tool_calls?: unknown[] }).tool_calls;
-    if (!Array.isArray(allToolCalls)) return;
-    const visibleCalls = allToolCalls.filter(
-      (tc) => tc && typeof tc === 'object' && !isSubAgentToolCall(tc as never) && (tc as { name?: string }).name !== 'write_todos',
-    );
+  const segments = useMemo(() => buildTurnSegments(source), [messageKey]);
+  const regularTools = useMemo(() => regularToolsInTurn(source), [messageKey]);
 
+  useEffect(() => {
     setExpandedItems((prev) => {
       const next = new Set(prev);
       let changed = false;
-
-      visibleCalls.forEach((tc: any, idx: number) => {
-        const itemId = `${message.id}-${idx}`;
-        const needsApproval = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !tc.content;
+      regularTools.forEach((tc, idx) => {
+        const itemId = regularToolId(tc, idx);
+        const needsApproval = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && tc.content == null;
         const isFinished = tc.content != null;
-
         if (needsApproval && !next.has(itemId) && !userCollapsedRef.current.has(itemId)) {
           next.add(itemId);
           changed = true;
@@ -670,11 +818,9 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
           changed = true;
         }
       });
-
       return changed ? next : prev;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingToolNames, message.id, messageKey]);
+  }, [pendingToolNames, messageKey, regularTools]);
 
   const toggleExpand = (itemId: string) => {
     setExpandedItems(prev => {
@@ -693,301 +839,341 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
   };
 
   const approvalSlotByToolCallId = useMemo(() => {
-    const allToolCalls = (message as any).tool_calls ?? [];
     const map = new Map<string, number>();
     let localSlot = 0;
-    for (const tc of allToolCalls) {
-      if (tc.name === 'write_todos') continue;
-      const isApprovable = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !(tc as Record<string, unknown>).content;
-      if (isApprovable) {
-        const key = tc.id ?? `${tc.name}-${localSlot}`;
-        map.set(key, approvalSlotOffset + localSlot);
-        localSlot++;
+    for (const turnMessage of source) {
+      const calls = (turnMessage as { tool_calls?: TurnToolCall[] }).tool_calls ?? [];
+      for (const tc of calls) {
+        if (tc.name === 'write_todos') continue;
+        const isApprovable = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && tc.content == null;
+        if (isApprovable) {
+          const key = tc.id ?? `${tc.name}-${localSlot}`;
+          map.set(key, approvalSlotOffset + localSlot);
+          localSlot++;
+        }
       }
     }
     return map;
-  }, [message, pendingToolNames, approvalSlotOffset]);
+  }, [messageKey, pendingToolNames, approvalSlotOffset]);
 
   const renderMessage = useMemo(() => {
-    const isToolCallStart = message.type === 'ai' && Array.isArray(message?.tool_calls) && message?.tool_calls?.length > 0;
-    const isNormalMessage = message.type === 'ai' && (!Array.isArray(message?.tool_calls) || message?.tool_calls?.length === 0);
-
     const customRaw = (message as Record<string, unknown>).custom_data;
     const customData =
       customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
         ? (customRaw as Record<string, unknown>)
         : null;
+    if (segments.length === 0 && !customData) return null;
 
-    if (isToolCallStart) {
-      const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
-      const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
-      const questionCalls = regularCalls.filter((tc) => tc.name === 'ask_user');
-      const otherCalls = regularCalls.filter((tc) => tc.name !== 'ask_user');
-      const parts = splitMessageParts(message);
-      const storedThinking = (message as { thinking?: unknown }).thinking;
-      const thinkingText = typeof storedThinking === 'string' && storedThinking.length > 0
-        ? storedThinking
-        : parts.thinking;
-      const narration = (typeof storedThinking === 'string' && typeof message.content === 'string'
-        ? message.content
-        : parts.answer).trim();
+    const lastSegmentIndex = segments.length - 1;
+    const attention = interruptContent ?? null;
+    const regularIndexByPath = new Map<string, number>();
+    let runningSubagentKey: string | null = null;
+    let regularCount = 0;
+    segments.forEach((segment, segmentIndex) => {
+      if (segment.type !== 'thought') return;
+      segment.items.forEach((item, itemIndex) => {
+        if (item.kind !== 'tools') return;
+        item.tools.forEach((tool, toolIndex) => {
+          const path = `${segmentIndex}-${itemIndex}-${toolIndex}`;
+          if (isSubAgentToolCall(tool)) {
+            if (isRunningToolCall(tool)) runningSubagentKey = path;
+            return;
+          }
+          if (answeredAskUser(tool)) return;
+          regularIndexByPath.set(path, regularCount);
+          regularCount += 1;
+        });
+      });
+    });
+
+    const renderRegularTool = (toolCall: TurnToolCall, idx: number) => {
+      const itemId = regularToolId(toolCall, idx);
+      const isExpanded = expandedItems.has(itemId);
+      const needsApproval = (pendingToolNames.has(toolCall.name) || pendingToolNames.has('task')) && toolCall.content == null;
+      const regTcId = toolCall.id ?? `${toolCall.name}-${idx}`;
+      const regSlot = approvalSlotByToolCallId.get(regTcId);
+      const isThisCurrentApproval = regSlot !== undefined && regSlot === globalApprovalIndex && !allDecisionsMade;
+      const showButtons = totalActionRequests <= 1 ? needsApproval : (needsApproval && isThisCurrentApproval);
+      const mcpAppDesc = parseMcpApp(toolCall.mcpApp);
+      const hasMcpApp = Boolean(mcpAppDesc);
+      const failed = toolCall.status === 'error';
+      const queryHint = toolQueryHint(toolCall);
 
       return (
-        <div className="space-y-2 w-full" aria-live="off">
-          {(narration || thinkingText) ? (
-            <AiMessageBubble message={message} thinkingLive={thinkingLive} />
-          ) : null}
-          {subAgentCalls.map((toolCall, idx) => {
-            const tcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
-            const slot = approvalSlotByToolCallId.get(tcId);
-            const isThisCurrent = slot !== undefined && slot === globalApprovalIndex && !allDecisionsMade;
-            let runningSubagentIdx = -1;
-            subAgentCalls.forEach((call, callIdx) => {
-              if (isRunningToolCall(call as { content?: unknown })) runningSubagentIdx = callIdx;
-            });
-            return (
-              <SubAgentIndicator
-                key={`${message.id}-sa-${idx}`}
-                toolCall={toolCall as any}
-                messageId={message.id ?? ''}
-                index={idx}
-                pendingInterrupt={pendingInterrupt}
-                onInterruptResume={onInterruptResume}
-                onSingleDecision={totalActionRequests > 1 ? onSingleDecision : undefined}
-                isCurrentApproval={totalActionRequests > 1 ? isThisCurrent : undefined}
-                onAlwaysAllow={onAlwaysAllow}
-                question={questionContent && idx === runningSubagentIdx ? embedQuestion(questionContent) : undefined}
-              />
-            );
-          })}
+        <div
+          key={itemId}
+          className={cn(
+            "border rounded-lg overflow-hidden bg-card/50",
+            needsApproval ? "border-yellow-500/60" : "border-border/40",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => toggleExpand(itemId)}
+            aria-expanded={isExpanded}
+            aria-controls={`tool-body-${itemId}`}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} tool call: ${toolCall.name}`}
+            className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-xs min-w-0">
+              {failed ? (
+                <AlertCircle className="w-3 h-3 text-red-500 shrink-0" aria-hidden="true" />
+              ) : toolCall.content != null ? (
+                <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" aria-hidden="true" />
+              ) : (
+                <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" aria-hidden="true" />
+              )}
+              <code className="font-mono text-[11px] bg-muted/50 px-1 py-0.5 rounded">{toolCall.name}</code>
+              {queryHint && (
+                <span className="text-muted-foreground/50 text-[11px] truncate">&quot;{queryHint}&quot;</span>
+              )}
+            </div>
+            <span className="flex items-center gap-2 shrink-0 ml-2">
+              {hasMcpApp && !isExpanded && (
+                <span className="text-[11px] text-muted-foreground/70">Click to open UI</span>
+              )}
+              {isExpanded ? (
+                <ChevronDown className="w-3 h-3 text-muted-foreground/40 shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" aria-hidden="true" />
+              )}
+            </span>
+          </button>
 
-          {questionCalls.map((toolCall, idx) => {
-            const exchange = answeredAskUser(toolCall);
-            if (!exchange) return null;
+          {isExpanded && (
+            <div id={`tool-body-${itemId}`} className="border-t border-border/30">
+              <div className="px-3 pb-2 max-h-72 overflow-y-auto">
+                <div className="text-[10px] font-medium text-muted-foreground/50 mb-1 mt-2 uppercase tracking-wider">Arguments</div>
+                <pre className="text-[11px] text-foreground/70 bg-muted/40 border border-border/30 p-2 rounded overflow-auto font-mono">
+                  {JSON.stringify(toolCall.args, null, 2)}
+                </pre>
+                {!needsApproval && hasMcpApp && (
+                  <div className="mt-2">
+                    <McpAppHostFromToolCall
+                      mcpAppRaw={toolCall.mcpApp}
+                      toolName={toolCall.name}
+                      toolCancelled={toolCall.content != null && !mcpAppDesc?.result}
+                      className="mb-2"
+                    />
+                  </div>
+                )}
+                {!needsApproval && (
+                  <>
+                    <div className={cn(
+                      "text-[10px] font-medium mb-1 mt-2 uppercase tracking-wider",
+                      failed ? "text-red-500/70" : "text-muted-foreground/50",
+                    )}>
+                      {failed ? 'Error' : toolCall.content != null ? 'Result' : 'Running...'}
+                    </div>
+                    {(() => {
+                      const raw = toolCall.content;
+                      if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
+                      const text = typeof raw === 'string' ? raw.slice(0, 2000) : JSON.stringify(raw, null, 2).slice(0, 2000);
+                      const kind = detectArtifactKind(text);
+                      if (kind !== 'text' && text.length > 100) {
+                        return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
+                      }
+                      return (
+                        <pre className="text-[11px] text-foreground/70 bg-muted/40 border border-border/30 p-2 rounded overflow-auto font-mono max-h-40">
+                          {text}
+                        </pre>
+                      );
+                    })()}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {showButtons && onInterruptResume && (
+            <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-3 py-2 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  if (totalActionRequests > 1 && onSingleDecision) {
+                    onSingleDecision({ type: 'approve' });
+                  } else {
+                    onInterruptResume?.([{ type: 'approve' }]);
+                  }
+                }}
+                aria-label={`Approve tool call: ${toolCall.name}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
+              >
+                <Check className="w-3 h-3" aria-hidden="true" />
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (totalActionRequests > 1 && onSingleDecision) {
+                    onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
+                  } else {
+                    onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
+                  }
+                }}
+                aria-label={`Reject tool call: ${toolCall.name}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
+                style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onAlwaysAllow?.([toolCall.name]);
+                  if (totalActionRequests > 1 && onSingleDecision) {
+                    onSingleDecision({ type: 'approve' });
+                  } else {
+                    onInterruptResume?.([{ type: 'approve' }]);
+                  }
+                }}
+                aria-label={`Always allow tool: ${toolCall.name}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
+              >
+                <ShieldCheck className="w-3 h-3" aria-hidden="true" />
+                Always allow
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const gutter = (segmentIndex: number) => (
+      <div className="w-8 shrink-0">
+        {segmentIndex === 0 && (
+          <div className="w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+            <Bot className="w-4 h-4 text-white" />
+          </div>
+        )}
+      </div>
+    );
+
+    return (
+      <div className="space-y-2 w-full">
+          {segments.map((segment, segmentIndex) => {
+            if (segment.type === 'stream') {
+              return (
+                <div key={`stream-${segmentIndex}`} className="flex items-start gap-3">
+                  {gutter(segmentIndex)}
+                  <div className="flex-1 min-w-0">
+                    <AnswerStream text={segment.text} />
+                  </div>
+                </div>
+              );
+            }
+
+            const toolCount = segment.items.reduce((count, item) => {
+              if (item.kind !== 'tools') return count;
+              return count + item.tools.filter((tool) => !answeredAskUser(tool)).length;
+            }, 0);
+            const needsAttention = segment.items.some((item) =>
+              item.kind === 'tools' && item.tools.some((tool) =>
+                (pendingToolNames.has(tool.name) || pendingToolNames.has('task')) && tool.content == null,
+              ),
+            );
+            const holdsAttention = segmentIndex === lastSegmentIndex && Boolean(attention || questionContent);
+            const forcedOpen = needsAttention || holdsAttention;
+            const open = forcedOpen || (thoughtChoice[segmentIndex] ?? segmentIndex === lastSegmentIndex);
+            const liveLabel = thinkingLive && segmentIndex === lastSegmentIndex && open;
+
             return (
-              <div key={`${message.id}-ask-${idx}`} className="flex items-start gap-3">
-                <div className="w-8 shrink-0" aria-hidden="true" />
-                <div
-                  className="min-w-0 flex-1 max-w-[85%] sm:max-w-[80%] bg-card border border-border rounded-xl px-4 py-3 text-sm"
-                  role="group"
-                  aria-label="Answered question"
+              <div key={`thought-${segmentIndex}`} className="flex items-start gap-3">
+                {gutter(segmentIndex)}
+                <div className="flex-1 min-w-0">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 px-1 py-1 text-left text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                  aria-expanded={open}
+                  onClick={() => {
+                    if (forcedOpen) return;
+                    setThoughtChoice((prev) => ({ ...prev, [segmentIndex]: !open }));
+                  }}
                 >
-                  {exchange.question && (
-                    <p className="font-medium text-foreground">{exchange.question}</p>
-                  )}
-                  <p className={exchange.question ? 'mt-1 text-muted-foreground' : 'text-muted-foreground'}>
-                    {exchange.answer}
-                  </p>
+                  {open
+                    ? <ChevronDown className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    : <ChevronRight className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                  <span className={cn('text-xs', liveLabel ? 'animate-pulse' : 'italic')}>
+                    {liveLabel ? 'Thinking...' : 'Thought process'}
+                    {!liveLabel && toolCount > 0 && (
+                      <span className="text-muted-foreground/40 ml-1">
+                        · {toolCount} tool call{toolCount === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </span>
+                </button>
+                {open && (
+                  <div className="ml-1 pl-3 border-l-2 border-muted-foreground/15 space-y-2">
+                    {segment.items.map((item, itemIndex) => {
+                      if (item.kind === 'thinking') {
+                        return (
+                          <div key={`think-${itemIndex}`} className="text-[13px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={`tools-${itemIndex}`} className="space-y-2">
+                          {item.tools.map((toolCall, toolIndex) => {
+                            if (isSubAgentToolCall(toolCall)) {
+                              const key = `${segmentIndex}-${itemIndex}-${toolIndex}`;
+                              const tcId = toolCall.id ?? `${toolCall.name}-${toolIndex}`;
+                              const slot = approvalSlotByToolCallId.get(tcId);
+                              const isThisCurrent = slot !== undefined && slot === globalApprovalIndex && !allDecisionsMade;
+                              return (
+                                <SubAgentIndicator
+                                  key={key}
+                                  toolCall={{
+                                    name: toolCall.name,
+                                    args: toolCall.args ?? {},
+                                    id: toolCall.id ?? `${toolCall.name}-${toolIndex}`,
+                                    content: toolCall.content,
+                                  }}
+                                  messageId={message.id ?? ''}
+                                  index={toolIndex}
+                                  pendingInterrupt={pendingInterrupt}
+                                  onInterruptResume={onInterruptResume}
+                                  onSingleDecision={totalActionRequests > 1 ? onSingleDecision : undefined}
+                                  isCurrentApproval={totalActionRequests > 1 ? isThisCurrent : undefined}
+                                  onAlwaysAllow={onAlwaysAllow}
+                                  question={questionContent && key === runningSubagentKey ? embedQuestion(questionContent) : undefined}
+                                />
+                              );
+                            }
+                            const exchange = answeredAskUser(toolCall);
+                            if (exchange) {
+                              return (
+                                <div key={`${segmentIndex}-ask-${toolIndex}`} className="bg-card border border-border rounded-xl px-4 py-3 text-sm" role="group" aria-label="Answered question">
+                                  {exchange.question && <p className="font-medium text-foreground">{exchange.question}</p>}
+                                  <p className={exchange.question ? 'mt-1 text-muted-foreground' : 'text-muted-foreground'}>{exchange.answer}</p>
+                                </div>
+                              );
+                            }
+                            return renderRegularTool(toolCall, regularIndexByPath.get(`${segmentIndex}-${itemIndex}-${toolIndex}`) ?? 0);
+                          })}
+                        </div>
+                      );
+                    })}
+                    {segmentIndex === lastSegmentIndex && attention}
+                  </div>
+                )}
                 </div>
               </div>
             );
           })}
-
-          {otherCalls.length > 0 && (
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
-                <Settings className="w-4 h-4 text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0 space-y-2">
-                {otherCalls.map((toolCall, idx) => {
-                  const itemId = `${message.id}-${idx}`;
-                  const isExpanded = expandedItems.has(itemId);
-                  const needsApproval = (pendingToolNames.has(toolCall.name) || pendingToolNames.has('task')) && !(toolCall as Record<string, unknown>).content;
-                  const regTcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
-                  const regSlot = approvalSlotByToolCallId.get(regTcId);
-                  const isThisCurrentApproval = regSlot !== undefined && regSlot === globalApprovalIndex && !allDecisionsMade;
-                  const showButtons = totalActionRequests <= 1 ? needsApproval : (needsApproval && isThisCurrentApproval);
-                  const mcpAppDesc = parseMcpApp((toolCall as Record<string, unknown>).mcpApp);
-                  const hasMcpApp = Boolean(mcpAppDesc);
-                  // Keep the tool body mounted when an MCP App is present so collapse hides
-                  // the iframe instead of destroying it (host teardown runs on real unmount).
-                  const keepToolBodyMounted = isExpanded || (!needsApproval && hasMcpApp);
-
-                  return (
-                    <div
-                      key={itemId}
-                      className={cn(
-                        "bg-card border rounded-xl overflow-hidden shadow-card transition-colors",
-                        needsApproval ? "border-yellow-500/60" : "border-border",
-                      )}
-                    >
-                      <button
-                        onClick={() => toggleExpand(itemId)}
-                        aria-expanded={isExpanded}
-                        aria-controls={`tool-body-${itemId}`}
-                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} tool call: ${toolCall.name}`}
-                        className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="text-left">
-                            <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                              <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
-                              {(toolCall as Record<string, unknown>).status === 'error' ? (
-                                <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400" aria-hidden="true" />
-                              ) : (toolCall as Record<string, unknown>).content != null ? (
-                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" aria-hidden="true" />
-                              ) : (
-                                <Loader2 className="w-4 h-4 text-primary animate-spin" aria-hidden="true" />
-                              )}
-                            </div>
-                            <div className={cn(
-                              "text-xs mt-0.5",
-                              (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
-                            )}>
-                              {(toolCall as Record<string, unknown>).status === 'error'
-                                ? (typeof (toolCall as Record<string, unknown>).content === 'string'
-                                  && String((toolCall as Record<string, unknown>).content).replace(/^\[TOOL_ERROR]\s*/i, '').trim()
-                                  ? String((toolCall as Record<string, unknown>).content).replace(/^\[TOOL_ERROR]\s*/i, '').trim().slice(0, 150)
-                                  : 'Tool execution failed')
-                                : 'Tool execution'}
-                            </div>
-                          </div>
-                        </div>
-                        {isExpanded ? (
-                          <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-                        )}
-                      </button>
-
-                      {keepToolBodyMounted && (
-                        <div
-                          id={`tool-body-${itemId}`}
-                          className={cn("border-t border-border", !isExpanded && "hidden")}
-                        >
-                          <div className="px-4 pb-3 max-h-72 overflow-y-auto">
-                            {isExpanded && (
-                              <>
-                                <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
-                                <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                                  {JSON.stringify(toolCall.args, null, 2)}
-                                </pre>
-                              </>
-                            )}
-                            {!needsApproval && hasMcpApp && (
-                              <>
-                                {isExpanded && (
-                                  <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
-                                    Interactive UI
-                                  </div>
-                                )}
-                                <McpAppHostFromToolCall
-                                  mcpAppRaw={(toolCall as Record<string, unknown>).mcpApp}
-                                  toolName={toolCall.name}
-                                  toolCancelled={
-                                    (toolCall as Record<string, unknown>).content != null &&
-                                    !mcpAppDesc?.result
-                                  }
-                                  className="mb-2"
-                                />
-                              </>
-                            )}
-                            {isExpanded && !needsApproval && (
-                              <>
-                                <div className={cn(
-                                  "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",
-                                  (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
-                                )}>
-                                  {(toolCall as Record<string, unknown>).status === 'error'
-                                    ? 'Error'
-                                    : (toolCall as Record<string, unknown>).content != null
-                                      ? 'Result'
-                                      : 'Running...'}
-                                </div>
-                                {(() => {
-                                  const raw = (toolCall as Record<string, unknown>).content;
-                                  if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
-                                  const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
-                                  const kind = detectArtifactKind(text);
-                                  if (kind !== 'text' && text.length > 100) {
-                                    return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
-                                  }
-                                  return (
-                                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                                      {text}
-                                    </pre>
-                                  );
-                                })()}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {showButtons && onInterruptResume && (
-                        <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
-                          <button
-                            type="button"
-                            autoFocus
-                            onClick={() => {
-                              if (totalActionRequests > 1 && onSingleDecision) {
-                                onSingleDecision({ type: 'approve' });
-                              } else {
-                                onInterruptResume?.([{ type: 'approve' }]);
-                              }
-                            }}
-                            aria-label={`Approve tool call: ${toolCall.name}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                            style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
-                          >
-                            <Check className="w-3 h-3" aria-hidden="true" />
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (totalActionRequests > 1 && onSingleDecision) {
-                                onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
-                              } else {
-                                onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
-                              }
-                            }}
-                            aria-label={`Reject tool call: ${toolCall.name}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
-                            style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
-                          >
-                            Reject
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onAlwaysAllow?.([toolCall.name]);
-                              if (totalActionRequests > 1 && onSingleDecision) {
-                                onSingleDecision({ type: 'approve' });
-                              } else {
-                                onInterruptResume?.([{ type: 'approve' }]);
-                              }
-                            }}
-                            aria-label={`Always allow tool: ${toolCall.name}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
-                          >
-                            <ShieldCheck className="w-3 h-3" aria-hidden="true" />
-                            Always allow
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {lastSegmentIndex >= 0 && segments[lastSegmentIndex]?.type !== 'thought' && attention}
           {customData && (
             <div className="w-full mt-2">
               <CustomDataRenderer data={customData} />
             </div>
           )}
-        </div>
-      );
-    }
-
-    if (isNormalMessage) {
-      return <AiMessageBubble message={message} thinkingLive={thinkingLive} />;
-    }
-
-    return null;
+      </div>
+    );
+  // The segment list is derived from messageKey, so the render follows that snapshot.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId, thinkingLive]);
+  }, [messageKey, expandedItems, thoughtChoice, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId, thinkingLive, questionContent, interruptContent, pendingToolNames]);
 
   return (
     <div className="space-y-2 w-full">
@@ -1226,10 +1412,19 @@ export function ChatMessagesView({
       <div className="flex-1 min-h-0 overflow-y-auto chat-scroll" ref={scrollAreaRef}>
         <div role="log" aria-label="Chat messages" aria-live="off" aria-busy={isLoading} className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
           {messages.map((message, messageIndex) => {
-            if (message.type === 'tool') {
-              return <Fragment key={message.id ?? `m-${messageIndex}`} />;
+            if (message.type === 'tool' || isEarlierAiInTurn(messages, messageIndex)) {
+              return null;
             }
-            const copyText = getCopyableAiMessageText(message.content);
+            const turnStart = turnStartIndex(messages, messageIndex);
+            const turnMessages = message.type === 'ai' ? messages.slice(turnStart, messageIndex + 1) : [message];
+            const copyText = message.type === 'ai'
+              ? buildTurnSegments(turnMessages).flatMap((segment) => segment.type === 'stream' ? [segment.text] : []).join('\n\n')
+                || getCopyableAiMessageText(message.content)
+              : getCopyableAiMessageText(message.content);
+            const ownsInterrupt = message.type === 'ai'
+              && messageIndex === lastAiMessageIndex
+              && Boolean(interruptContent)
+              && questionNestMessageIndex < 0;
             const showResponseTiming =
               message.type === 'ai' &&
               messageIndex === lastAiMessageIndex &&
@@ -1248,7 +1443,7 @@ export function ChatMessagesView({
 
             return (
             <div
-              key={message.id || `msg-${messageIndex}`}
+              key={turnArticleKey(messages, messageIndex)}
               role="article"
               aria-label={`Message from ${message.type === 'human' ? 'human' : 'assistant'}`}
               className="animate-fadeInUpSmooth group"
@@ -1270,16 +1465,16 @@ export function ChatMessagesView({
                     onInterruptResume={onInterruptResume}
                     onAlwaysAllow={onAlwaysAllow}
                     globalApprovalIndex={globalApprovalIndex}
-                    approvalSlotOffset={approvalSlotOffsets.get(messageIndex) ?? 0}
+                    approvalSlotOffset={approvalSlotOffsets.get(turnStart) ?? 0}
                     totalActionRequests={globalActionRequests.length}
                     allDecisionsMade={globalAllDecisionsMade}
                     onSingleDecision={handleGlobalSingleDecision}
                     thinkingLive={isThinkingLive(message, isLoading, messageIndex === lastAiMessageIndex)}
                     questionContent={messageIndex === questionNestMessageIndex ? interruptContent : undefined}
+                    interruptContent={ownsInterrupt ? interruptContent : undefined}
+                    turnMessages={message.type === 'ai' ? turnMessages : undefined}
                   />
-                  {messageIndex === lastAiMessageIndex && interruptContent && questionNestMessageIndex < 0 ? (
-                    interruptContent
-                  ) : (
+                  {ownsInterrupt ? null : (
                     <MessageActionsRow
                       isLastAiInTurn={isLastAiInTurn}
                       copyText={copyText}
@@ -1308,28 +1503,7 @@ export function ChatMessagesView({
           );
           })}
 
-          {isLoading && (messages.at(-1)?.type === 'human' || waitingAfterFinishedTool(messages)) && (
-            <div
-              className="flex items-start gap-3 animate-fadeIn"
-              role="status"
-              aria-live="polite"
-              aria-label="Agent is thinking"
-            >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="flex gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-200" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-400" />
-                  </span>
-                  Thinking...
-                </div>
-              </div>
-            </div>
-          )}
+          {isLoading && <CurrentTurnStatus messages={messages} />}
 
           {showNoResponse && (
             <div className="flex items-start gap-3 animate-fadeIn">
