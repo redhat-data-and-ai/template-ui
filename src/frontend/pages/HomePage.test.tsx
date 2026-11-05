@@ -1,8 +1,17 @@
 import React from 'react';
 import { describe, it, expect, afterEach } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useLocation } from 'react-router-dom';
 import { renderWithProviders } from '../test-utils/render';
 import { HomePage } from './HomePage';
+
+// Surfaces the router state that HomePage.startChat navigates with, so a test
+// can assert the prompt actually submitted rather than just the button label.
+function LocationStateProbe() {
+  const location = useLocation();
+  return <div data-testid="location-state">{JSON.stringify(location.state)}</div>;
+}
 
 afterEach(() => {
   window.APP_DATA = {
@@ -44,6 +53,31 @@ describe('HomePage quick prompts', () => {
     // message. A data agent reads an unfamiliar identifier as a row to look up
     // and answers "that user does not exist" instead of describing itself.
     expect(screen.queryByRole('button', { name: /test0511261/ })).not.toBeInTheDocument();
+  });
+
+  it('submits a built-in prompt that carries no agent name', async () => {
+    window.APP_DATA = {
+      agentName: 'test0511261',
+      basePath: '/',
+      apiUrl: '',
+      refreshableToken: '',
+      quickPrompts: [],
+    };
+
+    renderWithProviders(
+      <>
+        <HomePage />
+        <LocationStateProbe />
+      </>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start chat: What can you do for me?' }));
+
+    // The label being name-free is not enough: assert the prompt that is handed
+    // to the chat route, which is what actually reaches the model.
+    const state = JSON.parse(screen.getByTestId('location-state').textContent || '{}');
+    expect(state.initialPrompt).toBe('What can you do for me?');
+    expect(state.initialPrompt).not.toContain('test0511261');
   });
 
   it('shows settings.yaml prompts when quick prompts are set', () => {
