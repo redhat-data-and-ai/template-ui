@@ -6,9 +6,13 @@ import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
 
 function builtinQuickPrompts(): string[] {
-  const agentName = window.APP_DATA?.agentName || 'Agent';
   return [
-    `What can ${agentName} do for me?`,
+    // Deliberately second-person and free of the agent name. The name is
+    // operator-chosen (often an opaque id like "test0511261") and this string is
+    // sent verbatim to the model, which then treats the name as an entity to
+    // look up rather than as itself. Deployments that want a named prompt can
+    // set `quick_prompts` in settings.yaml.
+    'What can you do for me?',
     'Help me analyze a dataset',
     'Write a query to find anomalies',
     'Summarize the key findings from this data',

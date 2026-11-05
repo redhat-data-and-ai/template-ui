@@ -25,8 +25,25 @@ describe('HomePage quick prompts', () => {
 
     renderWithProviders(<HomePage />);
 
-    expect(screen.getByRole('button', { name: 'Start chat: What can TestAgent do for me?' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start chat: What can you do for me?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start chat: Help me analyze a dataset' })).toBeInTheDocument();
+  });
+
+  it('never interpolates the agent name into a built-in prompt', () => {
+    window.APP_DATA = {
+      agentName: 'test0511261',
+      basePath: '/',
+      apiUrl: '',
+      refreshableToken: '',
+      quickPrompts: [],
+    };
+
+    renderWithProviders(<HomePage />);
+
+    // The agent name is free-form and is sent verbatim to the model as a user
+    // message. A data agent reads an unfamiliar identifier as a row to look up
+    // and answers "that user does not exist" instead of describing itself.
+    expect(screen.queryByRole('button', { name: /test0511261/ })).not.toBeInTheDocument();
   });
 
   it('shows settings.yaml prompts when quick prompts are set', () => {
