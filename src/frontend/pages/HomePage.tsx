@@ -6,9 +6,9 @@ import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
 
 function builtinQuickPrompts(): string[] {
-  const agentName = window.APP_DATA?.agentName || 'Agent';
   return [
-    `What can ${agentName} do for me?`,
+    // No agent name: it is operator-chosen and the model reads it as an entity to look up.
+    'What can you do for me?',
     'Help me analyze a dataset',
     'Write a query to find anomalies',
     'Summarize the key findings from this data',
