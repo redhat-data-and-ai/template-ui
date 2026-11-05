@@ -2,7 +2,7 @@ import fastifyPlugin from "fastify-plugin";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { getSettings } from "../utils/settings.js";
 import { resolveRole, type UserRole } from "../utils/role-resolver.js";
-import { safePostLoginRedirect } from "../utils/session-identity.js";
+import { safePostLoginRedirect, decodeJwtPayload } from "../utils/session-identity.js";
 
 function getAgentHost(): string {
   const cfg = getSettings();
@@ -97,13 +97,21 @@ async function authCheck(
           delete request.session.role;
           delete request.session.roleResolvedAt;
         }
+        // Prefer preferred_username from the access token (handles service accounts
+        // whose email has a prefix, e.g. team+sa@redhat.com → wrong if email-split).
+        // Fall back to email local-part only when the token claim is absent.
+        const tokenClaims = gwToken ? decodeJwtPayload(gwToken) : null;
+        const preferredUsername =
+          (tokenClaims?.preferred_username as string | undefined) ||
+          gwEmail.split("@")[0];
+
         request.session.user = {
           email: gwEmail,
           email_verified: true,
           family_name: gwName?.split(" ").pop() || "",
           given_name: gwName?.split(" ")[0] || "",
           name: gwName || gwEmail,
-          preferred_username: gwEmail.split("@")[0],
+          preferred_username: preferredUsername,
           sub: gwSub || gwEmail,
         };
       } else {
