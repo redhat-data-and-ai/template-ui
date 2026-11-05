@@ -39,7 +39,7 @@ describe('AIMessageRenderer — answered question', () => {
     const msg = makeMsg({
       tool_calls: [{
         id: 'tc-ask',
-        name: 'ask_user',
+        name: 'clarify',
         args: { question: 'Units?', options: ['kg', 'lbs'] },
         content: 'kg',
       }],
@@ -50,18 +50,18 @@ describe('AIMessageRenderer — answered question', () => {
     expect(screen.getByRole('group', { name: 'Answered question' })).toBeInTheDocument();
     expect(screen.getByText('Units?')).toBeInTheDocument();
     expect(screen.getByText('kg')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /tool call: ask_user/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tool call: clarify/i })).not.toBeInTheDocument();
   });
 
   it('leaves an unanswered question out of the transcript', () => {
     const msg = makeMsg({
-      tool_calls: [{ id: 'tc-ask', name: 'ask_user', args: { question: 'Units?' } }],
+      tool_calls: [{ id: 'tc-ask', name: 'clarify', args: { question: 'Units?' } }],
     });
 
     render(<AIMessageRenderer message={msg} />);
 
     expect(screen.queryByText('Units?')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /tool call: ask_user/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tool call: clarify/i })).not.toBeInTheDocument();
   });
 });
 
