@@ -5,6 +5,7 @@ import {
   ZoomIn, ZoomOut, Move, Crosshair, MousePointer,
   BarChart3, LineChart, PieChart, ScatterChart, BarChartHorizontal,
 } from 'lucide-react';
+import { buildAppPath } from '../lib/app-paths';
 import { cn } from '../lib/utils';
 
 interface PlotlyFigure {
@@ -36,11 +37,9 @@ interface PlotlyAPI {
   ) => Promise<string>;
 }
 
-const PLOTLY_CDN = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
-
 let plotlyPromise: Promise<PlotlyAPI> | null = null;
 
-function loadPlotlyFromCDN(): Promise<PlotlyAPI> {
+function loadPlotly(): Promise<PlotlyAPI> {
   if (plotlyPromise) return plotlyPromise;
 
   const existing = (globalThis as unknown as { Plotly?: PlotlyAPI }).Plotly;
@@ -51,7 +50,7 @@ function loadPlotlyFromCDN(): Promise<PlotlyAPI> {
 
   plotlyPromise = new Promise<PlotlyAPI>((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = PLOTLY_CDN;
+    script.src = buildAppPath('/dist/frontend/plotly-2.35.2.min.js');
     script.async = true;
     script.onload = () => {
       const Plotly = (globalThis as unknown as { Plotly?: PlotlyAPI }).Plotly;
@@ -63,7 +62,7 @@ function loadPlotlyFromCDN(): Promise<PlotlyAPI> {
     };
     script.onerror = () => {
       plotlyPromise = null;
-      reject(new Error('Failed to load Plotly from CDN'));
+      reject(new Error('Failed to load Plotly'));
     };
     document.head.appendChild(script);
   });
@@ -397,7 +396,7 @@ export function NativeChartViewer({
     try {
       setLoading(true);
       setError(null);
-      const Plotly = await loadPlotlyFromCDN();
+      const Plotly = await loadPlotly();
       plotlyRef.current = Plotly;
       await Plotly.newPlot(
         chartRef.current,
