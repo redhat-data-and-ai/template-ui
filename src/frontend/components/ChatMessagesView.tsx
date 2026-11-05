@@ -46,8 +46,8 @@ function embedQuestion(node: ReactNode): ReactNode {
   return cloneElement(node as React.ReactElement<{ embedded?: boolean }>, { embedded: true });
 }
 
-function answeredAskUser(toolCall: { name?: string; args?: unknown; content?: unknown }): { question: string; answer: string } | null {
-  if (toolCall.name !== 'ask_user') return null;
+function answeredClarify(toolCall: { name?: string; args?: unknown; content?: unknown }): { question: string; answer: string } | null {
+  if (toolCall.name !== 'clarify') return null;
   const args = toolCall.args;
   const question = args && typeof args === 'object' && !Array.isArray(args)
     && typeof (args as { question?: unknown }).question === 'string'
@@ -632,7 +632,7 @@ function messagePieces(message: Message): Array<
   if (parts.answer.trim()) pieces.push({ kind: 'text', text: parts.answer });
   const calls = (message as { tool_calls?: TurnToolCall[] }).tool_calls;
   const tools = Array.isArray(calls)
-    ? calls.filter((tc) => tc && tc.name !== 'write_todos' && !(tc.name === 'ask_user' && !answeredAskUser(tc)))
+    ? calls.filter((tc) => tc && tc.name !== 'write_todos' && !(tc.name === 'clarify' && !answeredClarify(tc)))
     : [];
   if (tools.length > 0) pieces.push({ kind: 'tools', tools });
   return pieces;
@@ -704,7 +704,7 @@ function regularToolsInTurn(messages: Message[]): TurnToolCall[] {
       if (item.kind !== 'tools') continue;
       for (const tool of item.tools) {
         if (isSubAgentToolCall(tool)) continue;
-        if (answeredAskUser(tool)) continue;
+        if (answeredClarify(tool)) continue;
         tools.push(tool);
       }
     }
@@ -879,7 +879,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
             if (isRunningToolCall(tool)) runningSubagentKey = path;
             return;
           }
-          if (answeredAskUser(tool)) return;
+          if (answeredClarify(tool)) return;
           regularIndexByPath.set(path, regularCount);
           regularCount += 1;
         });
@@ -1067,7 +1067,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
 
             const toolCount = segment.items.reduce((count, item) => {
               if (item.kind !== 'tools') return count;
-              return count + item.tools.filter((tool) => !answeredAskUser(tool)).length;
+              return count + item.tools.filter((tool) => !answeredClarify(tool)).length;
             }, 0);
             const needsAttention = segment.items.some((item) =>
               item.kind === 'tools' && item.tools.some((tool) =>
@@ -1142,7 +1142,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                                 />
                               );
                             }
-                            const exchange = answeredAskUser(toolCall);
+                            const exchange = answeredClarify(toolCall);
                             if (exchange) {
                               return (
                                 <div key={`${segmentIndex}-ask-${toolIndex}`} className="bg-card border border-border rounded-xl px-4 py-3 text-sm" role="group" aria-label="Answered question">
@@ -1337,7 +1337,7 @@ export function ChatMessagesView({
       for (const toolCall of message.tool_calls) {
         const call = toolCall as { name?: string; args?: Record<string, unknown>; content?: unknown };
         if (!isRunningToolCall(call)) continue;
-        if (call.name === 'ask_user') parentAsking = true;
+        if (call.name === 'clarify') parentAsking = true;
         if (isSubAgentToolCall(call as { name: string; args?: Record<string, unknown> })) {
           runningCount += 1;
           onlyIndex = index;

@@ -101,11 +101,15 @@ describe('InterruptBanner — user question', () => {
     expect(screen.queryByRole('button', { name: /^approve$/i })).not.toBeInTheDocument();
   });
 
-  it('sends the chosen answer when a suggestion is clicked', async () => {
+  it('ticks a suggestion and does not send until Send is clicked', async () => {
     const onResume = vi.fn();
     render(<InterruptBanner interrupt={questionInterrupt} onResume={onResume} onDismiss={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: 'kg' }));
-    expect(onResume).toHaveBeenCalledWith('kg');
+    expect(onResume).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'lbs' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Your answer' }), 'stone');
+    await userEvent.click(screen.getByRole('button', { name: /send/i }));
+    expect(onResume).toHaveBeenCalledWith('kg, lbs; stone');
   });
 
   it('sends the typed answer when Send is clicked', async () => {

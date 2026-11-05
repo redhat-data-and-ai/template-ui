@@ -87,8 +87,17 @@ function parseMcpAuthPayload(interrupt: InterruptInfo): InterruptInfo['payload']
   return null;
 }
 
+function questionAnswer(selected: Set<string>, typed: string): string {
+  const parts: string[] = [];
+  if (selected.size > 0) parts.push(Array.from(selected).join(', '));
+  const text = typed.trim();
+  if (text) parts.push(text);
+  return parts.join('; ');
+}
+
 export function InterruptBanner({ interrupt, onResume, onDismiss, embedded = false }: InterruptBannerProps) {
   const [response, setResponse] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [oauthReady, setOauthReady] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -193,60 +202,86 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, embedded = fal
   }
 
   if (userQuestion) {
+    const answer = questionAnswer(selected, response);
+    const toggleOption = (option: string) => {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(option)) next.delete(option);
+        else next.add(option);
+        return next;
+      });
+    };
     const fields = (
       <>
           <p className="text-sm mb-3 whitespace-pre-wrap">{userQuestion.question}</p>
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-            {userQuestion.options.map((option, index) => (
-              <span key={`${index}-${option}`} className="pf-v6-c-form-control col-start-1 hover:brightness-110">
-                <button
-                  type="button"
-                  onClick={() => onResume(option)}
-                  className="col-span-full row-start-1 w-full cursor-pointer appearance-none border-0 bg-transparent text-left text-[var(--pf-v6-c-form-control--Color)]"
-                  style={{
-                    paddingBlockStart: 'var(--pf-v6-c-form-control__input--PaddingBlockStart)',
-                    paddingBlockEnd: 'var(--pf-v6-c-form-control__input--PaddingBlockEnd)',
-                    paddingInlineStart: 'var(--pf-v6-c-form-control__input--PaddingInlineStart)',
-                    paddingInlineEnd: 'var(--pf-v6-c-form-control__input--PaddingInlineEnd)',
-                    fontSize: 'var(--pf-v6-c-form-control--FontSize)',
-                    lineHeight: 'var(--pf-v6-c-form-control--LineHeight)',
-                  }}
-                >
-                  {option}
-                </button>
-              </span>
-            ))}
+          {userQuestion.options.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {userQuestion.options.map((option, index) => {
+                const isSelected = selected.has(option);
+                return (
+                  <button
+                    key={`${index}-${option}`}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => toggleOption(option)}
+                    className={[
+                      'px-3 py-1.5 rounded-lg text-sm border transition-all',
+                      isSelected
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-muted/50 text-foreground border-border hover:bg-muted hover:border-foreground/20',
+                    ].join(' ')}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        aria-hidden="true"
+                        className={[
+                          'inline-flex items-center justify-center w-4 h-4 rounded border text-[10px] font-bold transition-colors',
+                          isSelected
+                            ? 'bg-primary-foreground text-primary border-primary-foreground'
+                            : 'border-muted-foreground/40 text-transparent',
+                        ].join(' ')}
+                      >
+                        {isSelected ? '✓' : ''}
+                      </span>
+                      {option}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
             <TextInput
               value={response}
               onChange={(_e, val) => setResponse(val)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && response.trim()) onResume(response.trim());
+                if (e.key === 'Enter' && answer) onResume(answer);
               }}
               placeholder={userQuestion.options.length > 0 ? 'Or type your own answer...' : 'Type your answer...'}
               aria-label="Your answer"
-              className="col-start-1"
+              className="flex-1"
             />
-            <div
-              className="col-start-2 flex items-center gap-2"
-              style={{ gridRow: userQuestion.options.length + 1 }}
+            <Button
+              variant="primary"
+              size="sm"
+              isDisabled={!answer}
+              onClick={() => onResume(answer)}
             >
-              <Button
-                variant="primary"
-                size="sm"
-                isDisabled={!response.trim()}
-                onClick={() => onResume(response.trim())}
-              >
-                Send
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onResume('The user skipped this question.')}
-              >
-                Skip
-              </Button>
-            </div>
+              Send{selected.size > 0 ? ` (${selected.size})` : ''}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onResume('The user skipped this question.')}
+            >
+              Skip
+            </Button>
           </div>
+          {selected.size > 0 && (
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Selected: {Array.from(selected).join(', ')}
+            </p>
+          )}
       </>
     );
     if (embedded) {
