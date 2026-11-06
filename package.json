@@ -8,7 +8,7 @@
     "dev:client": "vite",
     "dev:server": "nodemon --watch src/server --ext ts --exec \"NODE_OPTIONS='--inspect' tsx --env-file=.env src/server/index.ts\"",
     "build": "npm run build:client && npm run build:server",
-    "build:client": "tsc -b && vite build",
+    "build:client": "tsc -b && vite build && cp public/plotly-2.35.2.min.js dist/frontend/plotly-2.35.2.min.js",
     "build:server": "tsc --project src/server/tsconfig.json && mkdir -p dist/server/static && cp -R src/server/static/. dist/server/static/",
     "start": "node --env-file=.env --inspect dist/server/index.js",
     "lint": "eslint .",
