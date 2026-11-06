@@ -178,7 +178,7 @@ async function authCheck(
           );
           request.session.roleResolvedAt = Date.now();
         } catch (err) {
-          console.error("[AuthCheck] Role resolution failed:", (err as Error).message);
+          request.log.error({ err }, "ldap_role_resolution_failed");
           request.session.role = "denied";
         }
       }
