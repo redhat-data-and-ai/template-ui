@@ -89,12 +89,19 @@ async function authCheck(
       const gwToken = headerValue(request, "x-auth-access-token") || headerValue(request, "x-token");
 
       if (gwEmail) {
-        // Prefer token claim over email local-part; only trust x-auth-access-token (gateway-set).
+        // Prefer token claim, then gateway-set uid header, then email local-part as last resort.
         const gwAuthToken = headerValue(request, "x-auth-access-token");
+        const gwPreferredUsername = headerValue(request, "x-auth-user-preferred-username");
         const tokenClaims = gwAuthToken ? decodeJwtPayload(gwAuthToken) : null;
+        // For team+uid@domain emails (Red Hat service accounts), the uid is after the '+'.
+        const emailLocalPart = gwEmail.split("@")[0] ?? "";
+        const uidFromEmail = emailLocalPart.includes("+")
+          ? emailLocalPart.split("+").pop()!
+          : emailLocalPart;
         const preferredUsername =
           (tokenClaims?.preferred_username as string | undefined) ||
-          gwEmail.split("@")[0];
+          gwPreferredUsername ||
+          uidFromEmail;
 
         // Reset session on identity change (email or username).
         if (
