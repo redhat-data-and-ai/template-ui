@@ -2,7 +2,7 @@ import fastifyPlugin from "fastify-plugin";
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { getSettings } from "../utils/settings.js";
 import { resolveRole, type UserRole } from "../utils/role-resolver.js";
-import { safePostLoginRedirect } from "../utils/session-identity.js";
+import { safePostLoginRedirect, decodeJwtPayload } from "../utils/session-identity.js";
 
 function getAgentHost(): string {
   const cfg = getSettings();
@@ -89,21 +89,43 @@ async function authCheck(
       const gwToken = headerValue(request, "x-auth-access-token") || headerValue(request, "x-token");
 
       if (gwEmail) {
-        // Reset all user-scoped session state when the gateway identity changes
-        if (request.session.user?.email && request.session.user.email !== gwEmail) {
+        // Prefer token claim, then proxy-set uid header, then email local-part as last resort.
+        const gwAuthToken = headerValue(request, "x-auth-access-token");
+        const gwPreferredUsername = headerValue(request, "x-auth-user-preferred-username");
+        const tokenClaims = gwAuthToken ? decodeJwtPayload(gwAuthToken) : null;
+        // For team<sep>uid@domain style emails, the uid is the segment after the last separator.
+        // Fall back to the prefix when the suffix is empty (e.g. alice+@domain).
+        // Configurable via EMAIL_UID_SEPARATOR (default: "+"). Set to "_" or "-" as needed.
+        const uidSep = process.env.EMAIL_UID_SEPARATOR || "+";
+        const emailLocalPart = gwEmail.split("@")[0] ?? "";
+        const uidFromEmail = emailLocalPart.includes(uidSep)
+          ? (emailLocalPart.split(uidSep).pop() || emailLocalPart.split(uidSep)[0])!
+          : emailLocalPart;
+        const preferredUsername =
+          (tokenClaims?.preferred_username as string | undefined) ||
+          gwPreferredUsername ||
+          uidFromEmail;
+
+        // Reset session on identity change (email or username).
+        if (
+          request.session.user &&
+          (request.session.user.email !== gwEmail ||
+            request.session.user.preferred_username !== preferredUsername)
+        ) {
           request.session.consentApproved = false;
           delete request.session.consentGrantedAt;
           delete request.session.token;
           delete request.session.role;
           delete request.session.roleResolvedAt;
         }
+
         request.session.user = {
           email: gwEmail,
           email_verified: true,
           family_name: gwName?.split(" ").pop() || "",
           given_name: gwName?.split(" ")[0] || "",
           name: gwName || gwEmail,
-          preferred_username: gwEmail.split("@")[0],
+          preferred_username: preferredUsername,
           sub: gwSub || gwEmail,
         };
       } else {

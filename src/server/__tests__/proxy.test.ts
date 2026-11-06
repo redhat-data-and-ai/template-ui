@@ -402,6 +402,153 @@ describe('GET /api/me', () => {
   });
 });
 
+// ── authCheck — preferred_username resolution via x-auth headers ──────────────
+//
+// These tests exercise the actual authCheck preHandler (not a local copy of the
+// logic) by injecting x-auth-* headers into the full server and asserting the
+// X-User-ID forwarded to the upstream agent on every stream request.
+//
+// Stub order per request (AUTH_ENABLED=false, gwEmail set, x-token provided):
+//   [0] consent check  → { has_consent: true }
+//   [1] POST /threads  → { thread_id }   ← X-User-ID asserted here
+//   [2] POST /runs/stream → SSE body
+//   [3] GET  /state    → { messages, tasks }
+
+describe('authCheck — preferred_username resolution via x-auth headers', () => {
+  const agentSSE = `event: messages/partial\ndata: [{"type":"ai","content":"ok"}]\n\n`;
+
+  function streamStubs() {
+    return [
+      okJson({ has_consent: true }),
+      okJson({ thread_id: 'th-uid' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    ];
+  }
+
+  it('uses JWT preferred_username when token claim is present', async () => {
+    const payload = { preferred_username: 'from-jwt', sub: 'sub-jwt' };
+    const fakeJwt = `eyJhbGciOiJub25lIn0.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.`;
+
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'team+from-email@example.com',
+        'x-auth-user-name': 'Test User',
+        'x-auth-user-preferred-username': 'from-header',
+        'x-auth-access-token': fakeJwt,
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // call[1] is POST /threads (call[0] is the consent check)
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('from-jwt');
+  });
+
+  it('falls back to x-auth-user-preferred-username header when no JWT claim', async () => {
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'svc-team+svc-account@example.com',
+        'x-auth-user-name': 'Svc Account',
+        'x-auth-user-preferred-username': 'svc-account',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('svc-account');
+  });
+
+  it('extracts uid after + from email local-part as last resort', async () => {
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'dataverse-agent-team+dataverse-agent-sa@example.com',
+        'x-auth-user-name': 'Agent SA',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('dataverse-agent-sa');
+  });
+
+  it('respects EMAIL_UID_SEPARATOR env var for underscore-separated emails', async () => {
+    process.env.EMAIL_UID_SEPARATOR = '_';
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'svc-team_svc-account@example.com',
+        'x-auth-user-name': 'Svc Account',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    delete process.env.EMAIL_UID_SEPARATOR;
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('svc-account');
+  });
+
+  it('uses email local-part for plain email (no + separator)', async () => {
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'alice@example.com',
+        'x-auth-user-name': 'Alice',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('alice');
+  });
+
+  it('uses prefix before + when suffix is empty (trailing + edge case)', async () => {
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'alice+@example.com',
+        'x-auth-user-name': 'Alice',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('alice');
+  });
+});
+
 // ── POST /api/v1/stream — auth guard ─────────────────────────────────────────
 
 describe('POST /api/v1/stream — auth guard', () => {
