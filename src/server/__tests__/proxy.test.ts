@@ -489,6 +489,27 @@ describe('authCheck — preferred_username resolution via x-auth headers', () =>
     expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('dataverse-agent-sa');
   });
 
+  it('respects EMAIL_UID_SEPARATOR env var for underscore-separated emails', async () => {
+    process.env.EMAIL_UID_SEPARATOR = '_';
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'svc-team_svc-account@example.com',
+        'x-auth-user-name': 'Svc Account',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    delete process.env.EMAIL_UID_SEPARATOR;
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('svc-account');
+  });
+
   it('uses email local-part for plain email (no + separator)', async () => {
     const fetchMock = stubFetch(...streamStubs());
     const server = await buildTestServer();
