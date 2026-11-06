@@ -400,31 +400,131 @@ describe('GET /api/me', () => {
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body).error).toBe('unauthenticated');
   });
+});
 
-  it('x-auth-user-preferred-username takes precedence over email local-part (code coverage)', () => {
-    // The HTTP preHandler path is integration-tested via the full server in security.test.ts.
-    // Here we confirm the string precedence logic directly:
-    // priority: JWT claim > x-auth-user-preferred-username header > email split (with + heuristic)
-    function resolvePreferredUsername(opts: {
-      jwtUsername?: string;
-      headerUsername?: string;
-      email: string;
-    }): string {
-      const emailLocalPart = opts.email.split("@")[0] ?? "";
-      const uidFromEmail = emailLocalPart.includes("+")
-        ? emailLocalPart.split("+").pop()!
-        : emailLocalPart;
-      return opts.jwtUsername || opts.headerUsername || uidFromEmail;
-    }
+// ── authCheck — preferred_username resolution via x-auth headers ──────────────
+//
+// These tests exercise the actual authCheck preHandler (not a local copy of the
+// logic) by injecting x-auth-* headers into the full server and asserting the
+// X-User-ID forwarded to the upstream agent on every stream request.
+//
+// Stub order per request (AUTH_ENABLED=false, gwEmail set, x-token provided):
+//   [0] consent check  → { has_consent: true }
+//   [1] POST /threads  → { thread_id }   ← X-User-ID asserted here
+//   [2] POST /runs/stream → SSE body
+//   [3] GET  /state    → { messages, tasks }
 
-    // JWT wins when present
-    expect(resolvePreferredUsername({ jwtUsername: "from-jwt", headerUsername: "from-header", email: "t+e@rh.com" })).toBe("from-jwt");
-    // Header wins when no JWT
-    expect(resolvePreferredUsername({ headerUsername: "svc-account", email: "svc-team+svc-account@redhat.com" })).toBe("svc-account");
-    // Email + heuristic is last resort
-    expect(resolvePreferredUsername({ email: "dataverse-agent-team+dataverse-agent-sa@redhat.com" })).toBe("dataverse-agent-sa");
-    // Plain email (no +) still works
-    expect(resolvePreferredUsername({ email: "alice@redhat.com" })).toBe("alice");
+describe('authCheck — preferred_username resolution via x-auth headers', () => {
+  const agentSSE = `event: messages/partial\ndata: [{"type":"ai","content":"ok"}]\n\n`;
+
+  function streamStubs() {
+    return [
+      okJson({ has_consent: true }),
+      okJson({ thread_id: 'th-uid' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    ];
+  }
+
+  it('uses JWT preferred_username when token claim is present', async () => {
+    const payload = { preferred_username: 'from-jwt', sub: 'sub-jwt' };
+    const fakeJwt = `eyJhbGciOiJub25lIn0.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.`;
+
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'team+from-email@example.com',
+        'x-auth-user-name': 'Test User',
+        'x-auth-user-preferred-username': 'from-header',
+        'x-auth-access-token': fakeJwt,
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // call[1] is POST /threads (call[0] is the consent check)
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('from-jwt');
+  });
+
+  it('falls back to x-auth-user-preferred-username header when no JWT claim', async () => {
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'svc-team+svc-account@example.com',
+        'x-auth-user-name': 'Svc Account',
+        'x-auth-user-preferred-username': 'svc-account',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('svc-account');
+  });
+
+  it('extracts uid after + from email local-part as last resort', async () => {
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'dataverse-agent-team+dataverse-agent-sa@example.com',
+        'x-auth-user-name': 'Agent SA',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('dataverse-agent-sa');
+  });
+
+  it('uses email local-part for plain email (no + separator)', async () => {
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'alice@example.com',
+        'x-auth-user-name': 'Alice',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('alice');
+  });
+
+  it('uses prefix before + when suffix is empty (trailing + edge case)', async () => {
+    const fetchMock = stubFetch(...streamStubs());
+    const server = await buildTestServer();
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      headers: {
+        'x-auth-user-email': 'alice+@example.com',
+        'x-auth-user-name': 'Alice',
+        'x-token': 'dummy-token',
+      },
+      payload: { message: 'hi', thread_id: 'th-uid', user_id: 'ignored' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers['X-User-ID']).toBe('alice');
   });
 });
 

@@ -94,9 +94,10 @@ async function authCheck(
         const gwPreferredUsername = headerValue(request, "x-auth-user-preferred-username");
         const tokenClaims = gwAuthToken ? decodeJwtPayload(gwAuthToken) : null;
         // For team+uid@domain style emails, the uid is the segment after the last '+'.
+        // Fall back to the prefix when the suffix is empty (e.g. alice+@domain).
         const emailLocalPart = gwEmail.split("@")[0] ?? "";
         const uidFromEmail = emailLocalPart.includes("+")
-          ? emailLocalPart.split("+").pop()!
+          ? (emailLocalPart.split("+").pop() || emailLocalPart.split("+")[0])!
           : emailLocalPart;
         const preferredUsername =
           (tokenClaims?.preferred_username as string | undefined) ||
