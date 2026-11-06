@@ -89,11 +89,11 @@ async function authCheck(
       const gwToken = headerValue(request, "x-auth-access-token") || headerValue(request, "x-token");
 
       if (gwEmail) {
-        // Prefer token claim, then gateway-set uid header, then email local-part as last resort.
+        // Prefer token claim, then proxy-set uid header, then email local-part as last resort.
         const gwAuthToken = headerValue(request, "x-auth-access-token");
         const gwPreferredUsername = headerValue(request, "x-auth-user-preferred-username");
         const tokenClaims = gwAuthToken ? decodeJwtPayload(gwAuthToken) : null;
-        // For team+uid@domain emails (Red Hat service accounts), the uid is after the '+'.
+        // For team+uid@domain style emails, the uid is the segment after the last '+'.
         const emailLocalPart = gwEmail.split("@")[0] ?? "";
         const uidFromEmail = emailLocalPart.includes("+")
           ? emailLocalPart.split("+").pop()!
