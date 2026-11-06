@@ -321,13 +321,13 @@ async function ensureFreshTokens(
 
     const refreshed = await sso.getNewAccessTokenUsingRefreshToken(token, {});
     session.token = refreshed.token;
-    fastify.log.info('Access token refreshed before agent call');
+    request.log.info('Access token refreshed before agent call');
     return {
       accessToken: refreshed.token.access_token,
       refreshToken: refreshed.token.refresh_token ?? null,
     };
   } catch (err) {
-    fastify.log.error({ err }, 'Token refresh failed');
+    request.log.error({ err }, 'Token refresh failed');
     return { accessToken: null, refreshToken: null, refreshFailed: true };
   }
 }
@@ -397,6 +397,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'X-Trace-ID': traceId,
+        'X-Request-ID': request.requestId,
       };
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
@@ -426,27 +427,27 @@ async function proxyRoutes(fastify: FastifyInstance) {
           });
         };
 
-        fastify.log.info({ traceId, thread_id }, 'Creating thread');
+        request.log.info({ traceId, thread_id }, 'Creating thread');
         let threadResp = await createThread();
 
         if (threadResp.status === 401) {
-          fastify.log.warn({ traceId }, 'Thread creation got 401, retrying once');
+          request.log.warn({ traceId }, 'Thread creation got 401, retrying once');
           threadResp = await createThread();
         }
 
         if (!threadResp.ok) {
           const body = await threadResp.text();
-          fastify.log.error(
+          request.log.error(
             { traceId, status: threadResp.status, body },
             'Thread creation failed',
           );
           return reply.status(threadResp.status).send({ error: 'Thread creation failed' });
         }
-        fastify.log.info({ traceId }, 'Thread ready');
+        request.log.info({ traceId }, 'Thread ready');
 
         // ── 2. Start a streaming run on that thread ──
         const runUrl = `${getAgentHost()}/threads/${thread_id}/runs/stream`;
-        fastify.log.info({ traceId, runUrl }, 'Starting streaming run');
+        request.log.info({ traceId, runUrl }, 'Starting streaming run');
 
         const runBody: Record<string, unknown> = {
           assistant_id: 'agent',
@@ -473,7 +474,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         if (!runResp.ok) {
           const body = await runResp.text();
-          fastify.log.error(
+          request.log.error(
             { traceId, status: runResp.status, body },
             'Agent run/stream failed',
           );
@@ -490,6 +491,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
           'X-Trace-ID': traceId,
+          'X-Request-ID': request.requestId,
           'X-Accel-Buffering': 'no',
         });
         reply.raw.flushHeaders();
@@ -527,7 +529,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
             try {
               ({ done, value } = await reader.read());
             } catch {
-              fastify.log.warn({ traceId }, 'Agent stream connection lost — agent may have been killed');
+              request.log.warn({ traceId }, 'Agent stream connection lost — agent may have been killed');
               break;
             }
             if (done) {
@@ -557,7 +559,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
               if (sseType === 'metadata') {
                 try {
                   const parsed = JSON.parse(sseData) as Record<string, unknown>;
-                  fastify.log.info({ traceId, sseType, parsedKeys: Object.keys(parsed) }, 'Raw metadata SSE from agent');
+                  request.log.info({ traceId, sseType, parsedKeys: Object.keys(parsed) }, 'Raw metadata SSE from agent');
 
                   if (
                     typeof parsed === 'object' &&
@@ -579,7 +581,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     chunkId++;
                   }
                 } catch {
-                  fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
+                  request.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
                 }
                 continue;
               }
@@ -598,7 +600,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                     reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
                     chunkId++;
                     interruptEmittedFromStream = true;
-                    fastify.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
+                    request.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
                   }
                 }
 
@@ -682,7 +684,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   chunkId++;
                 }
               } catch {
-                fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable SSE data');
+                request.log.debug({ traceId, sseType, sseData }, 'Unparseable SSE data');
               }
             }
           }
@@ -729,15 +731,15 @@ async function proxyRoutes(fastify: FastifyInstance) {
                 };
                 reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
                 chunkId++;
-                fastify.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
+                request.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
               }
             }
           } catch (err) {
-            fastify.log.warn({ traceId, err }, 'Failed to check thread state for interrupts');
+            request.log.warn({ traceId, err }, 'Failed to check thread state for interrupts');
           }
 
           if (!streamEndedNormally) {
-            fastify.log.warn({ traceId }, 'Agent stream ended abnormally — signalling error to frontend');
+            request.log.warn({ traceId }, 'Agent stream ended abnormally — signalling error to frontend');
             const errChunk = {
               type: 'error',
               message: 'Agent connection lost during streaming. Recovery in progress.',
@@ -747,20 +749,20 @@ async function proxyRoutes(fastify: FastifyInstance) {
             chunkId++;
           }
 
-          fastify.log.info({ traceId, chunkId, streamEndedNormally }, 'Stream complete');
+          request.log.info({ traceId, chunkId, streamEndedNormally }, 'Stream complete');
           invalidateThreadStateCache(thread_id);
           reply.raw.end('data: [DONE]\n\n');
         }
       } catch (error: unknown) {
         const errName = (error as Error).name;
         if (errName === 'AbortError') {
-          fastify.log.info({ traceId }, 'Client disconnected, stream aborted');
+          request.log.info({ traceId }, 'Client disconnected, stream aborted');
           return;
         }
         if (errName === 'TimeoutError') {
-          fastify.log.warn({ traceId }, 'Agent stream timed out');
+          request.log.warn({ traceId }, 'Agent stream timed out');
         } else {
-          fastify.log.error({ traceId, err: error }, 'Proxy stream error');
+          request.log.error({ traceId, err: error }, 'Proxy stream error');
         }
         if (reply.raw.headersSent) {
           reply.raw.end();
@@ -796,6 +798,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Trace-ID': traceId,
+      'X-Request-ID': request.requestId,
     };
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
@@ -807,7 +810,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
     const method = options?.method ?? request.method;
     const queryString = buildForwardedQueryString(request.query as Record<string, unknown>);
     const agentUrl = `${getAgentHost()}/${agentPath.replace(/^\//, '')}${queryString}`;
-    fastify.log.info({ traceId, method, agentUrl }, 'Proxying request to agent');
+    request.log.info({ traceId, method, agentUrl }, 'Proxying request to agent');
 
     try {
       const fetchOptions: RequestInit = {
@@ -831,7 +834,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
       }
       return reply.send(await agentResponse.text());
     } catch (error) {
-      fastify.log.error({ traceId, err: error }, 'Proxy error');
+      request.log.error({ traceId, err: error }, 'Proxy error');
       return reply.status(502).send({ error: 'Failed to connect to agent service' });
     }
   }
@@ -937,6 +940,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
       const headers: Record<string, string> = {
         'X-Trace-ID': traceId,
+        'X-Request-ID': request.requestId,
       };
       const hasBody = request.body !== undefined && request.body !== null;
       if (request.method !== 'GET' && (request.method !== 'DELETE' || hasBody)) {
@@ -955,14 +959,14 @@ async function proxyRoutes(fastify: FastifyInstance) {
       try {
         const queryString = buildForwardedQueryString(request.query as Record<string, unknown>);
         const agentUrl = `${getAgentHost()}/${path}${queryString}`;
-        fastify.log.info({ traceId, method: request.method, agentUrl }, 'Proxying request to agent');
+        request.log.info({ traceId, method: request.method, agentUrl }, 'Proxying request to agent');
 
         // Check BFF cache for GET /threads/{id}/state
         const threadStateMatch = request.method === 'GET' && path.match(/^threads\/([^/]+)\/state$/);
         if (threadStateMatch) {
           const cached = getCachedThreadState(threadStateMatch[1]);
           if (cached) {
-            fastify.log.info({ traceId }, 'Thread state cache HIT');
+            request.log.info({ traceId }, 'Thread state cache HIT');
             reply.header('X-Trace-ID', traceId);
             reply.header('Content-Type', 'application/json');
             reply.header('X-Cache', 'HIT');
@@ -1000,7 +1004,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         return reply.send(responseBody);
       } catch (error) {
-        fastify.log.error({ traceId, err: error }, 'Proxy error');
+        request.log.error({ traceId, err: error }, 'Proxy error');
         return reply.status(502).send({ error: 'Failed to connect to agent service' });
       }
     }
@@ -1018,6 +1022,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Trace-ID': traceId,
+      'X-Request-ID': request.requestId,
     };
 
     if (accessToken) {
@@ -1038,7 +1043,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const responseBody = await agentResponse.text();
       return reply.send(responseBody);
     } catch (error) {
-      fastify.log.error({ traceId, err: error }, 'Feedback proxy error');
+      request.log.error({ traceId, err: error }, 'Feedback proxy error');
       return reply.status(502).send({ error: 'Failed to send feedback' });
     }
   });
