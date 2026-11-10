@@ -28,7 +28,13 @@ const tracePlugin: FastifyPluginAsync = async function tracePlugin(fastify) {
     request.headers["x-trace-id"] = traceId;
 
     request.traceId = traceId;
-    request.requestId = randomUUID();
+    request.requestId =
+      (request.headers["x-request-id"] as string) || randomUUID();
+    const childBindings = {
+      request_id: request.requestId,
+      trace_id: request.traceId,
+    };
+    request.log = request.log.child(childBindings);
   });
 
   fastify.addHook("onSend", async (request, reply, payload) => {
