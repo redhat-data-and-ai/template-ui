@@ -12,6 +12,7 @@ import { HomePage } from '../../pages/HomePage';
 import { chatStorage } from '../../services/chatStorage';
 import { getAllThreadsByUserId } from '../../services/agent-rest';
 import { getProjects, getThreadsByProject } from '../../services/projects-api';
+import { unmarkChatAsClientCreated } from '../../services/newChatTracker';
 
 const mocks = vi.hoisted(() => ({
   deleteProject: vi.fn(),
@@ -68,13 +69,16 @@ vi.mock('../../lib/streaming/streamingManagerRegistry', () => ({
 
 vi.mock('../Sidebar', () => ({
   Sidebar: ({
+    onNewChat,
     onDeleteProject,
     onDeleteChat,
   }: {
+    onNewChat: () => void;
     onDeleteProject: (id: string, options?: { keepThreads?: boolean }) => Promise<boolean>;
     onDeleteChat: (id: string) => void;
   }) => (
     <>
+      <button type="button" onClick={() => onNewChat()}>new-chat</button>
       <button type="button" onClick={() => { void onDeleteProject('p1'); }}>
         delete-project
       </button>
@@ -137,7 +141,12 @@ describe('AppLayout — project delete and chat count', () => {
     mocks.getThreadsByProject.mockResolvedValue([]);
   });
 
-  it('preserves a quick-prompt chat when startup history finishes after the click', async () => {
+  it.each([
+    ['quick prompt', false],
+    ['quick prompt', true],
+    ['typed prompt', true],
+    ['sidebar', true],
+  ] as const)('preserves a %s chat through delayed startup history (stream connected: %s)', async (entry, streamConnected) => {
     let resolveHistory!: (history: []) => void;
     vi.mocked(getAllThreadsByUserId).mockReturnValueOnce(
       new Promise((resolve) => { resolveHistory = resolve; }),
@@ -151,15 +160,36 @@ describe('AppLayout — project delete and chat count', () => {
       </Provider>,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Start chat: What can you do for me?' }));
+    const user = userEvent.setup();
+    if (entry === 'sidebar') {
+      await user.click(screen.getByRole('button', { name: 'new-chat' }));
+    } else if (entry === 'typed prompt') {
+      await user.type(screen.getByRole('textbox'), 'Hello');
+      await user.click(screen.getByRole('button', { name: 'Send message' }));
+    } else {
+      await user.click(screen.getByRole('button', { name: 'Start chat: What can you do for me?' }));
+    }
     const chatId = store.getState().chats.chats[0].id;
 
+    // A successful stream response clears this marker before history settles.
+    if (streamConnected) unmarkChatAsClientCreated(chatId);
     resolveHistory([]);
 
     await waitFor(() => {
       expect(store.getState().chats.threadsListHydrated).toBe(true);
     });
     expect(store.getState().chats.chats.map((chat) => chat.id)).toContain(chatId);
+  });
+
+  it('still removes pre-existing local chats absent from startup history', async () => {
+    vi.mocked(getAllThreadsByUserId).mockResolvedValueOnce([]);
+    const store = seedStore();
+    renderLayout(store);
+
+    await waitFor(() => {
+      expect(store.getState().chats.threadsListHydrated).toBe(true);
+    });
+    expect(store.getState().chats.chats).toEqual([]);
   });
 
   it('does not wipe local chats when the project is already gone', async () => {
