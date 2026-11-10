@@ -12,7 +12,7 @@ import { HomePage } from '../../pages/HomePage';
 import { chatStorage } from '../../services/chatStorage';
 import { getAllThreadsByUserId } from '../../services/agent-rest';
 import { getProjects, getThreadsByProject } from '../../services/projects-api';
-import { unmarkChatAsClientCreated } from '../../services/newChatTracker';
+import { markChatAsClientCreated, unmarkChatAsClientCreated } from '../../services/newChatTracker';
 
 const mocks = vi.hoisted(() => ({
   deleteProject: vi.fn(),
@@ -179,6 +179,24 @@ describe('AppLayout — project delete and chat count', () => {
       expect(store.getState().chats.threadsListHydrated).toBe(true);
     });
     expect(store.getState().chats.chats.map((chat) => chat.id)).toContain(chatId);
+  });
+
+  it('preserves a chat already connecting at mount when its marker clears before history returns', async () => {
+    let resolveHistory!: (history: []) => void;
+    vi.mocked(getAllThreadsByUserId).mockReturnValueOnce(
+      new Promise((resolve) => { resolveHistory = resolve; }),
+    );
+    const store = seedStore();
+    markChatAsClientCreated('c1');
+    renderLayout(store);
+
+    unmarkChatAsClientCreated('c1');
+    resolveHistory([]);
+
+    await waitFor(() => {
+      expect(store.getState().chats.threadsListHydrated).toBe(true);
+    });
+    expect(store.getState().chats.chats.map((chat) => chat.id)).toContain('c1');
   });
 
   it('still removes pre-existing local chats absent from startup history', async () => {

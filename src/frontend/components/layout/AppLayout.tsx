@@ -154,6 +154,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   useEffect(() => {
     async function loadUserHistory() {
       const initialChatIds = new Set(store.getState().chats.chats.map((c) => c.id));
+      const initialClientCreatedIds = new Set([...initialChatIds].filter(isClientCreatedChat));
       try {
         dispatch(setLoadingThreads(true));
         const history = await withProjectThreads(
@@ -164,7 +165,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         const local = store.getState().chats.chats;
 
         const surviving = local.filter(
-          (c) => backendIds.has(c.id) || isClientCreatedChat(c.id) || !initialChatIds.has(c.id),
+          (c) => backendIds.has(c.id) || isClientCreatedChat(c.id) ||
+            initialClientCreatedIds.has(c.id) || !initialChatIds.has(c.id),
         );
 
         const backendTitleMap = new Map(
