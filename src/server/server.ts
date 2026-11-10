@@ -1,5 +1,5 @@
-import Fastify from "fastify";
-import type { FastifyInstance } from "fastify";
+import Fastify, { LogController } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { clientRoutes } from "./router/client.router.js";
 import { apiRoutes } from "./router/api.router.js";
 import { proxyRoutes } from "./router/proxy.router.js";
@@ -24,6 +24,65 @@ interface LoggerConfig {
   };
   production: { level: string };
   test: { level: string };
+}
+
+/**
+ * Paths hit by the kubelet probes (see deployment/base/deployment.yaml).
+ * Successful responses on these are not access-logged — otherwise they are
+ * 100% of the pod's log volume (~52k lines/day) and bury real events.
+ * Failures (>=400) are still logged, so a broken probe stays visible.
+ *
+ * `/api/health/agent` is deliberately excluded from this list: it is a
+ * user-facing status call, not a probe.
+ */
+const PROBE_PATHS = new Set(["/api/health", "/_health"]);
+
+/** Strip the query string before matching, as the rate limiter does. */
+function isProbe(request: FastifyRequest): boolean {
+  return PROBE_PATHS.has(request.url.split("?")[0]);
+}
+
+/**
+ * Suppresses request logging for health probes, which were 100% of this pod's
+ * log volume, while leaving every other line the base class emits untouched.
+ *
+ * Both overrides delegate to `super` rather than formatting their own payload,
+ * so the fastify serializers still supply `host`, `remoteAddress` and
+ * `remotePort` — this is the only place the pod logs a client address.
+ *
+ * `incomingRequest` is filtered rather than disabled outright. It is the only
+ * line emitted when a request never completes, and the hijacked chat stream
+ * deliberately skips `reply.raw.end()` when the client disconnects
+ * (`proxy.router.ts`, `if (!clientGone)`), so `finish` never fires and
+ * `requestCompleted` never runs. No-oping it would leave an abandoned chat —
+ * the app's primary endpoint — with no trace at all.
+ *
+ * Setting the `disableRequestLogging` option instead would also silence
+ * errors, stream errors, 404s, write-head and serializer failures.
+ *
+ * Exported so the skip logic is unit-testable: pino writes to fd 1 via
+ * sonic-boom, so asserting on captured stdout passes vacuously.
+ */
+export class ProbeAwareLogController extends LogController {
+  /** Probe paths never log on arrival; a failing one still logs on completion. */
+  incomingRequest(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    metadata?: Record<string, unknown>,
+  ): void {
+    if (isProbe(request)) return;
+    super.incomingRequest(request, reply, metadata);
+  }
+
+  requestCompleted(
+    error: Error | null | undefined,
+    request: FastifyRequest,
+    reply: FastifyReply,
+    metadata?: Record<string, unknown>,
+  ): void {
+    if (!error && reply.statusCode < 400 && isProbe(request)) return;
+    super.requestCompleted(error, request, reply, metadata);
+  }
 }
 
 export async function setupServer(): Promise<FastifyInstance> {
@@ -51,6 +110,9 @@ export async function setupServer(): Promise<FastifyInstance> {
   const fastify = Fastify({
     logger: envToLogger[environment] ?? true,
     bodyLimit: cfg.server.body_limit,
+    // One line per request instead of two, and none at all for successful
+    // kubelet probes — they were 100% of this pod's log volume.
+    logController: new ProbeAwareLogController(),
   });
 
   // Explicitly remove information disclosure headers
