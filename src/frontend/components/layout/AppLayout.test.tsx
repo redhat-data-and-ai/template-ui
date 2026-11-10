@@ -8,6 +8,7 @@ import { createTestStore } from '../../test-utils/createTestStore';
 import { addChat } from '../../redux/slices/chats';
 import { setProjects } from '../../redux/slices/projects';
 import { AppLayout } from './AppLayout';
+import { HomePage } from '../../pages/HomePage';
 import { chatStorage } from '../../services/chatStorage';
 import { getAllThreadsByUserId } from '../../services/agent-rest';
 import { getProjects, getThreadsByProject } from '../../services/projects-api';
@@ -134,6 +135,31 @@ describe('AppLayout — project delete and chat count', () => {
     mocks.getThreadsByProject.mockReset();
     mocks.getProjects.mockResolvedValue([]);
     mocks.getThreadsByProject.mockResolvedValue([]);
+  });
+
+  it('preserves a quick-prompt chat when startup history finishes after the click', async () => {
+    let resolveHistory!: (history: []) => void;
+    vi.mocked(getAllThreadsByUserId).mockReturnValueOnce(
+      new Promise((resolve) => { resolveHistory = resolve; }),
+    );
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <MemoryRouter>
+          <AppLayout><HomePage /></AppLayout>
+        </MemoryRouter>
+      </Provider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start chat: What can you do for me?' }));
+    const chatId = store.getState().chats.chats[0].id;
+
+    resolveHistory([]);
+
+    await waitFor(() => {
+      expect(store.getState().chats.threadsListHydrated).toBe(true);
+    });
+    expect(store.getState().chats.chats.map((chat) => chat.id)).toContain(chatId);
   });
 
   it('does not wipe local chats when the project is already gone', async () => {
