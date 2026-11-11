@@ -3,9 +3,12 @@ import type { Message } from '@langchain/langgraph-sdk';
 import chatsReducer, {
   addChat,
   appendMessageToChat,
+  appendSubagentTranscript,
+  attachSubagentTranscripts,
   clearAllChats,
   deleteChat,
   mergeToolResult,
+  mergeSubagentToolResult,
   resolveAllPendingToolCalls,
   selectChatsByProject,
   setChats,
@@ -19,7 +22,18 @@ import chatsReducer, {
 import { assignThreadToProjectThunk, deleteProjectThunk, unassignAllThreadsThunk } from './projects';
 
 /** Minimal fixture shape that matches the runtime duck-type expected by chats slice reducers. */
-type TestToolCall = { id: string; name: string; args: Record<string, unknown>; content?: string };
+type TestToolCall = {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  content?: string;
+  transcript?: Array<{
+    id: string;
+    thinking?: string;
+    content?: string;
+    tool_calls?: TestToolCall[];
+  }>;
+};
 type TestMessage = {
   type: 'ai' | 'human';
   content: string;
@@ -149,6 +163,201 @@ describe('chats slice — appendMessageToChat', () => {
     const stored = s.chats[0].messages[0] as TestMessage;
     expect(stored.thinking).toBe('Let me');
     expect(stored.content).toBe('The answer');
+  });
+});
+
+describe('chats slice — subagent transcript', () => {
+  function withSubagentCard() {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const card: TestMessage = {
+      type: 'ai',
+      content: 'Asking the analyst.',
+      id: 'orch-1',
+      tool_calls: [{ id: 'call-parent', name: 'analyst', args: { subagent_type: 'analyst' } }],
+    };
+    return chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(card) }));
+  }
+
+  function parentTool(s: ChatsState): TestToolCall {
+    return (s.chats[0].messages[0] as TestMessage).tool_calls![0];
+  }
+
+  it('adds a marked sentence to that card and leaves the orchestrator message alone', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1',
+      toolCallId: 'call-parent',
+      messageId: 'sub-1',
+      content: 'Hello',
+      part: 'text',
+    }));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1',
+      toolCallId: 'call-parent',
+      messageId: 'sub-1',
+      content: ' there',
+      part: 'text',
+    }));
+    expect(s.chats[0].messages).toHaveLength(1);
+    expect((s.chats[0].messages[0] as TestMessage).content).toBe('Asking the analyst.');
+    expect(parentTool(s).transcript).toEqual([{ id: 'sub-1', content: 'Hello there' }]);
+  });
+
+  it('keeps a thought separate from the answer on the same subagent message', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: 'Let me', part: 'thinking',
+    }));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: 'The answer', part: 'text',
+    }));
+    expect(parentTool(s).transcript?.[0]).toEqual({ id: 'sub-1', thinking: 'Let me', content: 'The answer' });
+  });
+
+  it('starts a new entry when the subagent message id changes', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: 'Hello', part: 'text',
+    }));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-2', content: 'Next', part: 'text',
+    }));
+    expect(parentTool(s).transcript?.map((entry) => entry.content)).toEqual(['Hello', 'Next']);
+  });
+
+  it('stores an inner tool call on the card instead of a new chat message', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1',
+      toolCallId: 'call-parent',
+      messageId: 'sub-1',
+      toolCalls: [{ id: 'inner-1', name: 'get_sql', args: { query: 'orders' } }],
+    }));
+    expect(s.chats[0].messages).toHaveLength(1);
+    expect(parentTool(s).content).toBeUndefined();
+    expect(parentTool(s).transcript?.[0].tool_calls).toEqual([
+      { id: 'inner-1', name: 'get_sql', args: { query: 'orders' } },
+    ]);
+  });
+
+  it('fills the inner tool row and leaves the card result empty', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1',
+      toolCallId: 'call-parent',
+      messageId: 'sub-1',
+      toolCalls: [{ id: 'inner-1', name: 'get_sql', args: {} }],
+    }));
+    s = chatsReducer(s, mergeSubagentToolResult({
+      chatId: 'c1',
+      parentToolCallId: 'call-parent',
+      toolCallId: 'inner-1',
+      content: 'rows',
+    }));
+    expect(parentTool(s).content).toBeUndefined();
+    expect(parentTool(s).transcript?.[0].tool_calls?.[0].content).toBe('rows');
+  });
+
+  it('replaces the saved preview once, then keeps later text', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const card: TestMessage = {
+      type: 'ai',
+      content: '',
+      id: 'orch-1',
+      tool_calls: [{ id: 'call-parent', name: 'analyst', args: { description: 'Look up orders' } }],
+    };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(card) }));
+    s = chatsReducer(s, attachSubagentTranscripts({
+      chatId: 'c1',
+      transcripts: [{ delegation: 'Look up orders', entries: [{ id: 'saved', content: 'Old preview' }] }],
+    }));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: 'Hello', part: 'text', replace: true,
+    }));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: ' there', part: 'text',
+    }));
+    const stored = (s.chats[0].messages[0] as TestMessage).tool_calls![0];
+    expect(stored.transcript).toEqual([
+      { id: 'saved', content: 'Old preview' },
+      { id: 'sub-1', content: 'Hello there' },
+    ]);
+  });
+
+  it('matches a saved transcript to the card with the same delegation', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const card: TestMessage = {
+      type: 'ai',
+      content: '',
+      id: 'orch-1',
+      tool_calls: [
+        { id: 'call-b', name: 'analyst', args: { subagent_type: 'analyst', description: 'Second question' } },
+        { id: 'call-a', name: 'analyst', args: { subagent_type: 'analyst', description: 'First question' } },
+      ],
+    };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(card) }));
+    s = chatsReducer(s, attachSubagentTranscripts({
+      chatId: 'c1',
+      transcripts: [
+        { delegation: 'First question', entries: [{ id: 'a', content: 'First answer' }] },
+        { delegation: 'Second question', entries: [{ id: 'b', content: 'Second answer' }] },
+      ],
+    }));
+    const tools = (s.chats[0].messages[0] as TestMessage).tool_calls!;
+    expect(tools[0].transcript?.[0].content).toBe('Second answer');
+    expect(tools[1].transcript?.[0].content).toBe('First answer');
+  });
+
+  it('gives identical delegations the next saved transcript in order', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const card: TestMessage = {
+      type: 'ai',
+      content: '',
+      id: 'orch-1',
+      tool_calls: [
+        { id: 'call-1', name: 'analyst', args: { description: 'Same question' } },
+        { id: 'call-2', name: 'analyst', args: { description: 'Same question' } },
+      ],
+    };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(card) }));
+    s = chatsReducer(s, attachSubagentTranscripts({
+      chatId: 'c1',
+      transcripts: [
+        { delegation: 'Same question', entries: [{ id: 'one', content: 'One' }] },
+        { delegation: 'Same question', entries: [{ id: 'two', content: 'Two' }] },
+      ],
+    }));
+    const tools = (s.chats[0].messages[0] as TestMessage).tool_calls!;
+    expect(tools[0].transcript?.[0].content).toBe('One');
+    expect(tools[1].transcript?.[0].content).toBe('Two');
+  });
+
+  it('keeps a longer transcript already on the card', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const card: TestMessage = {
+      type: 'ai',
+      content: '',
+      id: 'orch-1',
+      tool_calls: [{ id: 'call-parent', name: 'analyst', args: { description: 'Look up orders' } }],
+    };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(card) }));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: 'Hello there', part: 'text',
+    }));
+    s = chatsReducer(s, attachSubagentTranscripts({
+      chatId: 'c1',
+      transcripts: [{ delegation: 'Look up orders', entries: [{ id: 'saved', content: 'Hi' }] }],
+    }));
+    const stored = (s.chats[0].messages[0] as TestMessage).tool_calls![0];
+    expect(stored.transcript?.[0].content).toBe('Hello there');
+  });
+
+  it('does nothing when the card is missing', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'missing', messageId: 'sub-1', content: 'Hello', part: 'text',
+    }));
+    expect(s.chats[0].messages).toHaveLength(0);
   });
 });
 

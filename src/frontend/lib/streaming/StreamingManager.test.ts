@@ -317,6 +317,66 @@ describe('StreamingManager', () => {
     expect(callbacks.onToken).toHaveBeenCalledWith('Let me', 'msg-1', 'thinking');
   });
 
+  it('reattaches with a GET to the live run stream', async () => {
+    const payload = {
+      type: 'token',
+      content: 'Next',
+      chunk_id: 0,
+      message_id: 'msg-sub',
+      part: 'text',
+      subagent_tool_call_id: 'call-parent',
+    };
+    const sseBody = `data: ${JSON.stringify(payload)}\n\n` + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(sseBody));
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.attach('th-live', 'run-live', callbacks);
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toContain('/v1/stream/th-live/run-live');
+    expect(vi.mocked(fetch).mock.calls[0][1]).toMatchObject({ method: 'GET' });
+    expect(callbacks.onToken).toHaveBeenCalledWith('Next', 'msg-sub', 'text', 'call-parent');
+  });
+
+  it('forwards a task-tool id from token SSE to onToken', async () => {
+    const payload = {
+      type: 'token',
+      content: 'Hello',
+      chunk_id: 0,
+      message_id: 'msg-sub',
+      part: 'text',
+      subagent_tool_call_id: 'call-parent',
+    };
+    const sseBody = `data: ${JSON.stringify(payload)}\n\n` + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(sseBody));
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onToken).toHaveBeenCalledWith('Hello', 'msg-sub', 'text', 'call-parent');
+  });
+
+  it('forwards a task-tool id from a message SSE to onMessage', async () => {
+    const payload = {
+      type: 'message',
+      content: { type: 'tool', content: 'rows', tool_call_id: 'inner-1' },
+      chunk_id: 1,
+      subagent_tool_call_id: 'call-parent',
+    };
+    const sseBody = `data: ${JSON.stringify(payload)}\n\n` + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(sseBody));
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onMessage).toHaveBeenCalledWith(
+      { type: 'tool', content: 'rows', tool_call_id: 'inner-1' },
+      'call-parent',
+    );
+  });
+
   // ── Error message extraction from non-2xx JSON body ───────────────────────
   it('extracts "message" field from JSON body on non-2xx response', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(

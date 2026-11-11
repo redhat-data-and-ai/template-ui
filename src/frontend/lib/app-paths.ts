@@ -4,8 +4,6 @@ export function getAgentStorageScope(): string {
     const parts = basePath.replace(/^\/|\/$/g, '').split('/');
     if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
   }
-  const parts = globalThis.window?.location?.pathname?.split('/').filter(Boolean) ?? [];
-  if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
   return '';
 }
 

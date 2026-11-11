@@ -11,7 +11,7 @@ import personalizationReducer from '../redux/slices/personalization';
 import toastsReducer from '../redux/slices/toasts';
 import userSettingsReducer, { addAlwaysAllowedTool } from '../redux/slices/userSettings';
 import projectsReducer from '../redux/slices/projects';
-import { useStreamingAPI, RECOVERY_POLL_TIMEOUT_MS, _startRecoveryPolling, isNonRecoverableHttpStatus } from './useStreamingAPI';
+import { useStreamingAPI, RECOVERY_POLL_TIMEOUT_MS, _startRecoveryPolling, isNonRecoverableHttpStatus, resumeWasNotPaused } from './useStreamingAPI';
 import { getThreadStateAndInterrupt } from '@/services/agent-rest';
 import * as projectsApi from '../services/projects-api';
 import { markChatAsClientCreated, unmarkChatAsClientCreated } from '../services/newChatTracker';
@@ -438,6 +438,13 @@ describe('resumeInterrupt', () => {
 
 // ── isNonRecoverableHttpStatus ────────────────────────────────────────────────
 
+describe('resumeWasNotPaused', () => {
+  it('matches a resume refused because the thread is not paused', () => {
+    expect(resumeWasNotPaused(new Error('Cannot resume: thread is not in interrupted state'))).toBe(true);
+    expect(resumeWasNotPaused(new Error('Agent is unavailable'))).toBe(false);
+  });
+});
+
 describe('isNonRecoverableHttpStatus', () => {
   it('treats 400 (Bad Request) as non-recoverable', () => {
     expect(isNonRecoverableHttpStatus(400)).toBe(true);
@@ -485,6 +492,8 @@ describe('isNonRecoverableHttpStatus', () => {
 vi.mock('@/services/agent-rest', () => ({
   getThreadState: vi.fn(() => new Promise(() => {})),
   getThreadStateAndInterrupt: vi.fn(() => new Promise(() => {})),
+  getThreadStatus: vi.fn(async () => 'interrupted'),
+  getActiveRun: vi.fn(async () => null),
 }));
 
 describe('_startRecoveryPolling — deadline fires independently of pending request', () => {

@@ -2,7 +2,13 @@ import { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { authenticatedFetch } from "./authenticated-fetch";
 import { buildAgentApiUrl } from "../lib/app-paths";
 import { withMcpAppArguments } from "../types/mcp-apps";
+import type { SubagentTranscriptEntry } from "../types/deep-agent";
 import { splitMessageParts } from "../../server/message-parts";
+
+export interface SavedSubagentTranscript {
+  delegation: string;
+  entries: SubagentTranscriptEntry[];
+}
 
 export interface Thread {
   id: string;
@@ -214,11 +220,13 @@ export async function deleteThread(threadId: string): Promise<boolean> {
  * Fetch full state for a single thread (lazy, on-demand).
  * Called only when a user navigates into a specific chat.
  */
-async function fetchThreadStateRaw(threadId: string): Promise<Record<string, unknown> | null> {
+async function fetchThreadStateRaw(threadId: string, fresh = false): Promise<Record<string, unknown> | null> {
   const stateUrl = buildAgentApiUrl(`/threads/${threadId}/state`);
   try {
     const resp = await authenticatedFetch(stateUrl, {
-      headers: getAuthHeaders(),
+      headers: fresh
+        ? { ...getAuthHeaders(), 'Cache-Control': 'no-cache' }
+        : getAuthHeaders(),
     });
     if (!resp.ok) {
       let errorDetail = `Thread state request failed (status: ${resp.status})`;
@@ -249,6 +257,46 @@ async function fetchThreadStateRaw(threadId: string): Promise<Record<string, unk
   }
 }
 
+export async function getThreadStatus(threadId: string): Promise<string | null> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/threads/${threadId}`), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return null;
+    const body = await resp.json() as { status?: unknown };
+    return typeof body.status === 'string' ? body.status : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getActiveRun(threadId: string): Promise<{ run_id: string } | null> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/threads/${threadId}/runs?limit=10`), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return null;
+    const runs = await resp.json() as Array<{ run_id?: string; status?: string }>;
+    const active = runs.find((run) => run.status === 'pending' || run.status === 'running');
+    return active?.run_id ? { run_id: active.run_id } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getSubagentTranscripts(threadId: string): Promise<SavedSubagentTranscript[]> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/threads/${threadId}/subagent-transcripts`), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return [];
+    const body = await resp.json() as { transcripts?: SavedSubagentTranscript[] };
+    return Array.isArray(body.transcripts) ? body.transcripts : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getThreadState(threadId: string): Promise<Message[]> {
   const state = await fetchThreadStateRaw(threadId);
   if (!state) return [];
@@ -276,8 +324,9 @@ export async function getThreadPendingInterrupt(
 
 export async function getThreadStateAndInterrupt(
   threadId: string,
+  options?: { fresh?: boolean },
 ): Promise<{ messages: Message[]; interrupt: { value: unknown; resumable: boolean } | null }> {
-  const state = await fetchThreadStateRaw(threadId);
+  const state = await fetchThreadStateRaw(threadId, options?.fresh === true);
   if (!state) return { messages: [], interrupt: null };
 
   const msgs = state?.values ? (state.values as Record<string, unknown>)?.messages : undefined;

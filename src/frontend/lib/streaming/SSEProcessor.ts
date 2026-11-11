@@ -2,9 +2,9 @@ import type { Message } from '@langchain/langgraph-sdk';
 import type { HITLInterruptValue } from '@/types/deep-agent';
 
 export type SSEChunk =
-  | { type: 'token'; content: string; chunk_id: number; message_id?: string; part?: 'thinking' | 'text' }
+  | { type: 'token'; content: string; chunk_id: number; message_id?: string; part?: 'thinking' | 'text'; subagent_tool_call_id?: string }
   | { type: 'draft_discard'; chunk_id: number }
-  | { type: 'message'; content: Message; chunk_id: number }
+  | { type: 'message'; content: Message; chunk_id: number; subagent_tool_call_id?: string }
   | { type: 'interrupt'; content: { value: HITLInterruptValue | string; resumable: boolean }; chunk_id: number };
 
 export type McpStatusData = {
@@ -29,6 +29,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function subagentToolCallId(parsed: Record<string, unknown>): string | undefined {
+  return typeof parsed.subagent_tool_call_id === 'string' && parsed.subagent_tool_call_id
+    ? parsed.subagent_tool_call_id
+    : undefined;
+}
+
 /** Parse `data:` payload into an SSEChunk or null if invalid. */
 function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
   if (!isRecord(parsed)) return null;
@@ -51,7 +57,15 @@ function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
     if (typeof contentUnknown !== 'string') return null;
     const msgId = typeof parsed.message_id === 'string' ? parsed.message_id : undefined;
     const part = parsed.part === 'thinking' || parsed.part === 'text' ? parsed.part : undefined;
-    return { type: 'token', content: contentUnknown, chunk_id: chunkIdRaw, message_id: msgId, part };
+    const toolCallId = subagentToolCallId(parsed);
+    return {
+      type: 'token',
+      content: contentUnknown,
+      chunk_id: chunkIdRaw,
+      message_id: msgId,
+      part,
+      ...(toolCallId ? { subagent_tool_call_id: toolCallId } : {}),
+    };
   }
 
   if (type === 'interrupt') {
@@ -78,10 +92,12 @@ function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
     return null;
   }
 
+  const toolCallId = subagentToolCallId(parsed);
   return {
     type: 'message',
     content: contentUnknown as Message,
     chunk_id: chunkIdRaw,
+    ...(toolCallId ? { subagent_tool_call_id: toolCallId } : {}),
   };
 }
 

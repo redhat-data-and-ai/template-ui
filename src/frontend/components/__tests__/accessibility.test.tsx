@@ -373,7 +373,7 @@ describe('SubAgentIndicator — accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it('header has role="button" with aria-expanded=false by default', () => {
+  it('header is expanded while the subagent is working', () => {
     render(
       <SubAgentIndicator
         toolCall={baseToolCall}
@@ -382,7 +382,7 @@ describe('SubAgentIndicator — accessibility', () => {
       />,
     );
     const header = screen.getByRole('button', { name: /data.analyst/i });
-    expect(header).toHaveAttribute('aria-expanded', 'false');
+    expect(header).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('Enter key toggles expansion', async () => {
@@ -397,7 +397,7 @@ describe('SubAgentIndicator — accessibility', () => {
     const header = screen.getByRole('button', { name: /data.analyst/i });
     header.focus();
     await user.keyboard('{Enter}');
-    expect(header).toHaveAttribute('aria-expanded', 'true');
+    expect(header).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('Space key toggles expansion', async () => {
@@ -412,7 +412,7 @@ describe('SubAgentIndicator — accessibility', () => {
     const header = screen.getByRole('button', { name: /data.analyst/i });
     header.focus();
     await user.keyboard(' ');
-    expect(header).toHaveAttribute('aria-expanded', 'true');
+    expect(header).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('approval alert uses role="alert" when approval is needed', () => {
