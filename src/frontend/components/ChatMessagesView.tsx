@@ -4,13 +4,12 @@ import { AlertCircle, Check, ChevronDown, ChevronRight, Copy, Download, Loader2,
 import type { InterruptInfo } from "../types/deep-agent";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, cloneElement, isValidElement } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, useContext, cloneElement, isValidElement } from "react";
 import { cn } from "../lib/utils";
 import {
   Dropdown,
   DropdownItem,
   DropdownList,
-  Label,
   MenuToggle,
   type MenuToggleElement,
 } from "@patternfly/react-core";
@@ -26,6 +25,9 @@ import { markdownSanitizeSchema } from "../lib/markdown-sanitize";
 import { isSubAgentToolCall, type SubagentTranscriptEntry } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
 import { ToolCallRow } from "./ToolCallRow";
+import { DocumentOpenContext } from "./document-open-context";
+import { DocumentChrome } from "./DocumentReferences";
+import { fileIdFromCitationHref, isInAppHref, joinSplitCitationLinks } from "../lib/document-references";
 import { ChartCard, PlotlyCard, useContentSegments } from "./InlineChart";
 import { TodoStrip } from "./TodoStrip";
 import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButtons";
@@ -287,6 +289,37 @@ function MessageActionsRow({
   );
 }
 
+function CitationLink({ className, children, href }: MdComponentProps) {
+  const openDocument = useContext(DocumentOpenContext);
+  const link = typeof href === "string" ? href : "";
+  const fileId = fileIdFromCitationHref(link);
+  if (fileId) {
+    return (
+      <button
+        type="button"
+        className={cn("citation-link", className)}
+        onClick={() => openDocument?.(fileId, link)}
+      >
+        {children}
+      </button>
+    );
+  }
+  if (isInAppHref(link, globalThis.location?.origin ?? "")) {
+    return <span className={cn("text-primary", className)}>{children}</span>;
+  }
+  return (
+    <a
+      className={cn("text-primary underline hover:text-primary/80", className)}
+      href={link}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+      <span className="sr-only"> (opens in new tab)</span>
+    </a>
+  );
+}
+
 const mdComponents = {
   h1: ({ className, children, ...props }: MdComponentProps) => (
     <h1 className={cn("text-2xl font-bold mt-4 mb-2 text-foreground", className)} {...props}>
@@ -308,20 +341,7 @@ const mdComponents = {
       {children}
     </p>
   ),
-  a: ({ className, children, href, ...props }: MdComponentProps) => (
-    <Label isCompact className="mx-0.5">
-      <a
-        className={cn("text-primary hover:text-primary/80 text-xs", className)}
-        href={href as string}
-        target="_blank"
-        rel="noopener noreferrer"
-        {...props}
-      >
-        {children}
-        <span className="sr-only"> (opens in new tab)</span>
-      </a>
-    </Label>
-  ),
+  a: CitationLink,
   ul: ({ className, children, ...props }: MdComponentProps) => (
     <ul className={cn("list-disc pl-6 mb-3 space-y-1", className)} {...props}>
       {children}
@@ -760,7 +780,7 @@ interface AIMessageRendererProps {
 }
 
 function AnswerStream({ text }: { text: string }) {
-  const parts = useContentSegments(text);
+  const parts = useContentSegments(joinSplitCitationLinks(text));
   return (
     <div className="ai-response-body">
       {parts.map((part, index) => {
@@ -778,6 +798,20 @@ function AnswerStream({ text }: { text: string }) {
 
 export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false, questionContent, interruptContent, turnMessages }: AIMessageRendererProps) {
   const source = turnMessages && turnMessages.length > 0 ? turnMessages : [message];
+  const openDocument = useContext(DocumentOpenContext);
+  const keepDocumentInPage = useCallback((event: React.MouseEvent) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest("a");
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    const href = anchor.getAttribute("href") ?? "";
+    const fileId = fileIdFromCitationHref(href);
+    const staysInChat = fileId !== null || isInAppHref(href, globalThis.location?.origin ?? "");
+    if (!staysInChat) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (fileId) openDocument?.(fileId, href);
+  }, [openDocument]);
   const [thoughtChoice, setThoughtChoice] = useState<Record<number, boolean>>({});
   const messageKey = JSON.stringify(source);
 
@@ -932,7 +966,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                       if (item.kind === 'thinking') {
                         return (
                           <div key={`think-${itemIndex}`} className="text-[13px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: CitationLink }}>{joinSplitCitationLinks(item.text)}</ReactMarkdown>
                           </div>
                         );
                       }
@@ -999,7 +1033,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
   }, [messageKey, thoughtChoice, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId, thinkingLive, questionContent, interruptContent, pendingToolNames]);
 
   return (
-    <div className="space-y-2 w-full">
+    <div className="space-y-2 w-full" onClickCapture={keepDocumentInPage}>
       {renderMessage}
     </div>
   );
@@ -1193,6 +1227,7 @@ export function ChatMessagesView({
   const showExport = Boolean(onExportMarkdown && onExportJson && messages.length > 0);
 
   return (
+    <DocumentChrome messages={messages}>
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
       <div
         aria-live="polite"
@@ -1399,5 +1434,6 @@ export function ChatMessagesView({
         </div>
       </div>
     </div>
+    </DocumentChrome>
   );
 }

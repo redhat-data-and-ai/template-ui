@@ -432,16 +432,25 @@ input[type="url"]:focus {
   font-style: italic;
 }
 
-.ai-response-body a {
+.ai-response-body a,
+button.citation-link {
   color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 2px;
   text-decoration-color: color-mix(in srgb, var(--primary) 30%, transparent);
   transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
-.ai-response-body a:hover {
+.ai-response-body a:hover,
+button.citation-link:hover {
   color: color-mix(in srgb, var(--primary) 80%, var(--foreground));
   text-decoration-color: color-mix(in srgb, var(--primary) 60%, transparent);
+}
+button.citation-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
 }
 
 .ai-response-body ul {
