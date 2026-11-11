@@ -321,6 +321,27 @@ describe('GET /api/proxy/agent/threads/:id/state — LRU cache', () => {
     // fetch was only called once (not twice)
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
+
+  it('skips the cache when the caller asks for a fresh snapshot', async () => {
+    const mockFetch = stubFetch(
+      okJson({ messages: [], tasks: [] }),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    await server.inject({
+      method: 'GET',
+      url: '/api/proxy/agent/threads/cache-thread-fresh/state',
+    });
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/proxy/agent/threads/cache-thread-fresh/state',
+      headers: { 'cache-control': 'no-cache' },
+    });
+
+    expect(res.headers['x-cache']).toBe('MISS');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ── POST /api/proxy/agent/feedback ───────────────────────────────────────────
@@ -588,6 +609,199 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(runBody.config.configurable.requested_subagents).toEqual(['analyst']);
   });
 
+  function uiEvents(body: string): Array<Record<string, unknown>> {
+    return body.split('\n\n').flatMap((block) => {
+      const line = block.split('\n').find((item) => item.startsWith('data: '));
+      if (!line || line.includes('[DONE]')) return [];
+      return [JSON.parse(line.slice('data: '.length)) as Record<string, unknown>];
+    });
+  }
+
+  it('reattaches a live run through the translated stream', async () => {
+    const agentSSE = `event: messages/partial\ndata: [{"type":"ai","id":"msg-1","content":"Next"}]\n\n`;
+    const fetchMock = stubFetch(
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/proxy/agent/v1/stream/th-live/run-live',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://127.0.0.1:19999/threads/th-live/runs/run-live/stream');
+    expect(res.body).toContain('Next');
+  });
+
+  it('asks the run to include subgraph and task events', async () => {
+    const agentSSE =
+      `event: messages/partial\ndata: [{"type":"ai","content":"Hello"}]\n\n`;
+    const fetchMock = stubFetch(
+      okJson({ thread_id: 'th1' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th1', user_id: 'u1' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const runBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(runBody.stream_mode).toEqual(['messages', 'updates', 'tasks']);
+    expect(runBody.stream_subgraphs).toBe(true);
+  });
+
+  it('stamps a nested token with the task tool id and leaves an orchestrator token unmarked', async () => {
+    const task = {
+      id: 'task-1',
+      name: 'tools',
+      input: [{ name: 'task', id: 'call-parent', args: { subagent_type: 'analyst', description: 'q' } }],
+      triggers: [],
+    };
+    const agentSSE = [
+      `event: tasks\ndata: ${JSON.stringify(task)}\n\n`,
+      `event: messages/metadata\ndata: ${JSON.stringify({ 'msg-sub': { metadata: { langgraph_checkpoint_ns: 'tools:task-1|model:inner' } } })}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-sub', content: 'Hello' }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-parent', content: 'Done' }])}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-sub' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-sub', user_id: 'u1' },
+    });
+
+    const tokens = uiEvents(res.body).filter((event) => event.type === 'token');
+    const nested = tokens.find((event) => event.content === 'Hello');
+    const parent = tokens.find((event) => event.content === 'Done');
+    expect(nested?.subagent_tool_call_id).toBe('call-parent');
+    expect(nested?.message_id).toBe('msg-sub');
+    expect(parent?.subagent_tool_call_id).toBeUndefined();
+  });
+
+  it('stamps a nested tool result and leaves a parent tool result unmarked', async () => {
+    const task = {
+      id: 'task-1',
+      name: 'tools',
+      input: { tool_call: { id: 'call-parent', name: 'task' } },
+      triggers: [],
+    };
+    const nestedUpdate = {
+      tools: {
+        messages: [{ type: 'tool', id: 'tool-msg-1', name: 'get_sql', tool_call_id: 'inner-1', content: 'rows' }],
+      },
+    };
+    const parentUpdate = {
+      tools: {
+        messages: [{ type: 'tool', id: 'tool-msg-2', name: 'task', tool_call_id: 'call-parent', content: 'final' }],
+      },
+    };
+    const agentSSE = [
+      `event: tasks\ndata: ${JSON.stringify(task)}\n\n`,
+      `event: updates|tools:task-1|model:inner\ndata: ${JSON.stringify(nestedUpdate)}\n\n`,
+      `event: updates\ndata: ${JSON.stringify(parentUpdate)}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-tool' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-tool', user_id: 'u1' },
+    });
+
+    const messages = uiEvents(res.body).filter((event) => event.type === 'message');
+    const nested = messages.find((event) => (event.content as { tool_call_id?: string }).tool_call_id === 'inner-1');
+    const parent = messages.find((event) => (event.content as { tool_call_id?: string }).tool_call_id === 'call-parent');
+    expect(nested?.subagent_tool_call_id).toBe('call-parent');
+    expect(parent?.subagent_tool_call_id).toBeUndefined();
+  });
+
+  it('leaves the subagent task result unmarked when it arrives on the inner stream', async () => {
+    const task = {
+      id: 'task-1',
+      name: 'tools',
+      input: { tool_call: { id: 'call-parent', name: 'task' } },
+      triggers: [],
+    };
+    const taskResult = {
+      tools: {
+        messages: [{ type: 'tool', id: 'tool-final', name: 'task', tool_call_id: 'call-parent', content: 'scored' }],
+      },
+    };
+    const innerResult = {
+      tools: {
+        messages: [{ type: 'tool', id: 'tool-search', name: 'fluent_search', tool_call_id: 'search-1', content: 'rows' }],
+      },
+    };
+    const agentSSE = [
+      `event: tasks\ndata: ${JSON.stringify(task)}\n\n`,
+      `event: updates|tools:task-1\ndata: ${JSON.stringify(taskResult)}\n\n`,
+      `event: updates|tools:task-1|model:inner\ndata: ${JSON.stringify(innerResult)}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-final' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-final', user_id: 'u1' },
+    });
+
+    const messages = uiEvents(res.body).filter((event) => event.type === 'message');
+    const finalResult = messages.find((event) => (event.content as { tool_call_id?: string }).tool_call_id === 'call-parent');
+    const search = messages.find((event) => (event.content as { tool_call_id?: string }).tool_call_id === 'search-1');
+    expect(finalResult?.subagent_tool_call_id).toBeUndefined();
+    expect(search?.subagent_tool_call_id).toBe('call-parent');
+  });
+
+  it('keeps each message text-so-far separate when partials alternate', async () => {
+    const agentSSE = [
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-a', content: 'Hello' }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-b', content: 'Hi' }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-a', content: 'Hello there' }])}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-alt' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-alt', user_id: 'u1' },
+    });
+
+    const tokens = uiEvents(res.body).filter((event) => event.type === 'token').map((event) => event.content);
+    expect(tokens).toEqual(['Hello', 'Hi', ' there']);
+  });
+
   it('emits a token chunk when the agent sends messages/partial', async () => {
     const agentSSE =
       `event: messages/partial\ndata: [{"type":"ai","content":"Hi there"}]\n\n`;
@@ -723,6 +937,35 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(res.body).toContain('github_create_pr');
   });
 
+  it('sends one approval when the subagent and the main run both announce the pause', async () => {
+    const interruptValue = {
+      action_requests: [{ name: 'execute_sql', args: { sql: 'select 1' } }],
+      review_configs: [{ action_name: 'execute_sql', allowed_decisions: ['approve', 'reject'] }],
+    };
+    const payload = JSON.stringify({ __interrupt__: [{ value: interruptValue, resumable: true }] });
+    const agentSSE = [
+      `event: updates|tools:task-1\ndata: ${payload}\n\n`,
+      `event: updates\ndata: ${payload}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-once' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-once', user_id: 'u1' },
+    });
+
+    const interrupts = uiEvents(res.body).filter((event) => event.type === 'interrupt');
+    expect(interrupts).toHaveLength(1);
+    expect(JSON.stringify(interrupts[0])).toContain('execute_sql');
+  });
+
   it('emits an interrupt chunk from thread state when missing from the stream', async () => {
     const interruptValue = { action_requests: [], review_configs: [] };
     // No __interrupt__ in the stream itself
@@ -783,6 +1026,29 @@ describe('POST /api/proxy/agent/v1/stream', () => {
 
     // The proxy must propagate the upstream 503 — not silently return 200
     expect(res.statusCode).toBe(503);
+  });
+
+  it('returns the agent refusal when a resume is rejected', async () => {
+    stubFetch(
+      okJson({ thread_id: 'th-refused' }),
+      new Response(JSON.stringify({
+        error: 'bad_request',
+        message: 'Cannot resume: thread is not in interrupted state',
+      }), { status: 400, headers: { 'Content-Type': 'application/json' } }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-refused', user_id: 'u1' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Cannot resume: thread is not in interrupted state',
+      status: 400,
+    });
   });
 
   it('forwards project_id into thread metadata without run configurable', async () => {

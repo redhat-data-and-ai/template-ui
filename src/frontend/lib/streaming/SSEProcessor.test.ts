@@ -19,6 +19,40 @@ describe('SSEProcessor', () => {
     expect(events[0]).toMatchObject({ kind: 'chunk', data: { type: 'token', content: 'Hello', chunk_id: 0 } });
   });
 
+  it('keeps a task-tool id on a token chunk', () => {
+    const events = proc.feed(makeData({
+      type: 'token',
+      content: 'Hello',
+      chunk_id: 2,
+      message_id: 'msg-sub',
+      part: 'text',
+      subagent_tool_call_id: 'call-parent',
+    }));
+    expect(events[0]).toMatchObject({
+      kind: 'chunk',
+      data: {
+        type: 'token',
+        content: 'Hello',
+        message_id: 'msg-sub',
+        part: 'text',
+        subagent_tool_call_id: 'call-parent',
+      },
+    });
+  });
+
+  it('keeps a task-tool id on a message chunk', () => {
+    const events = proc.feed(makeData({
+      type: 'message',
+      content: { type: 'tool', content: 'rows', tool_call_id: 'inner-1' },
+      chunk_id: 3,
+      subagent_tool_call_id: 'call-parent',
+    }));
+    expect(events[0]).toMatchObject({
+      kind: 'chunk',
+      data: { type: 'message', subagent_tool_call_id: 'call-parent' },
+    });
+  });
+
   it('keeps a thinking part on a token chunk', () => {
     const events = proc.feed(makeData({ type: 'token', content: 'Let me', chunk_id: 1, part: 'thinking' }));
     expect(events[0]).toMatchObject({

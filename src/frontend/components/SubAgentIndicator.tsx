@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import {
   Card,
   CardBody,
@@ -7,8 +7,11 @@ import {
   Label,
 } from '@patternfly/react-core';
 import { Bot, Check, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
-import type { ToolCallWithContent, InterruptInfo } from '../types/deep-agent';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { SubagentTranscriptEntry, SubagentTranscriptTool, ToolCallWithContent, InterruptInfo } from '../types/deep-agent';
 import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
+import { ToolCallRow } from './ToolCallRow';
 
 interface SubAgentIndicatorProps {
   readonly toolCall: ToolCallWithContent;
@@ -16,7 +19,7 @@ interface SubAgentIndicatorProps {
   readonly index: number;
   readonly pendingInterrupt?: InterruptInfo | null;
   readonly onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
-  readonly onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
+  readonly onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }, requestIndex?: number) => void;
   readonly isCurrentApproval?: boolean;
   readonly onAlwaysAllow?: (toolNames: string[]) => void;
   readonly question?: ReactNode;
@@ -28,6 +31,22 @@ function hasContent(toolCall: ToolCallWithContent): boolean {
   if (toolCall.content == null) return false;
   if (typeof toolCall.content === 'string') return toolCall.content.trim().length > 0;
   return true;
+}
+
+function sameArgs(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((item, index) => sameArgs(item, right[index]));
+  }
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const keys = Object.keys(leftRecord);
+  return keys.length === Object.keys(rightRecord).length
+    && keys.every((key) => Object.prototype.hasOwnProperty.call(rightRecord, key) && sameArgs(leftRecord[key], rightRecord[key]));
 }
 
 function deriveStatus(toolCall: ToolCallWithContent): VisualStatus {
@@ -47,8 +66,41 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
+const streamMarkdown = {
+  table: ({ children }: { children?: ReactNode }) => (
+    <div className="overflow-x-auto my-2">
+      <table className="w-full border-collapse text-[12px]">{children}</table>
+    </div>
+  ),
+  th: ({ children }: { children?: ReactNode }) => (
+    <th className="border border-border px-2 py-1 text-left font-medium">{children}</th>
+  ),
+  td: ({ children }: { children?: ReactNode }) => (
+    <td className="border border-border px-2 py-1 align-top">{children}</td>
+  ),
+  p: ({ children }: { children?: ReactNode }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+};
+
+function SubagentThought({ text }: { text: string }) {
+  return (
+    <div className="text-[12px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
+function SubagentStream({ text }: { text: string }) {
+  return (
+    <div className="text-[13px] leading-relaxed text-muted-foreground [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={streamMarkdown}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
 export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow, question }: SubAgentIndicatorProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => !hasContent(toolCall));
+  const userChoice = useRef<boolean | null>(null);
+  const [streamChoice, setStreamChoice] = useState<boolean | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const name = extractSubAgentName(toolCall);
   const delegationText = extractDelegationText(toolCall);
@@ -63,19 +115,68 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
   const isLaunchApproval = requests.some((r) => r.name === 'task' || r.name === name);
   const isInnerToolApproval = requests.length > 0 && !isLaunchApproval;
   const needsApproval = (isLaunchApproval || isInnerToolApproval) && toolCall.content == null;
-  const alwaysAllowNames = isLaunchApproval ? [name] : requests.map((r) => r.name);
-  const innerToolLabel = requests.map((r) => r.name).join(', ') || name;
 
   useEffect(() => {
-    if (needsApproval) {
-      setIsApproving(false);
+    if (needsApproval) setIsApproving(false);
+    if (needsApproval || question) {
       setExpanded(true);
+      return;
     }
-  }, [needsApproval, pendingInterrupt]);
+    if (userChoice.current !== null) {
+      setExpanded(userChoice.current);
+      return;
+    }
+    setExpanded(!hasContent(toolCall));
+  }, [needsApproval, pendingInterrupt, question, toolCall.content]);
 
-  useEffect(() => {
-    if (question) setExpanded(true);
-  }, [question]);
+  const transcript = toolCall.transcript ?? [];
+  const pendingNames = new Set(requests.map((request) => request.name));
+  const waitingTools = transcript.flatMap((entry) =>
+    (entry.tool_calls ?? []).flatMap((tool, toolIndex) => (
+      tool.content == null
+        ? [{ key: tool.id ?? `${entry.id}-${toolIndex}`, name: tool.name, args: tool.args }]
+        : []
+    )),
+  );
+  const paired = new Map<string, number>();
+  if (isInnerToolApproval && needsApproval) {
+    const buckets: Array<{ name: string; args: unknown; requestIndexes: number[]; tools: typeof waitingTools }> = [];
+    const bucketFor = (name: string, args: unknown) => {
+      const found = buckets.find((bucket) => bucket.name === name && sameArgs(bucket.args, args));
+      if (found) return found;
+      const created = { name, args, requestIndexes: [] as number[], tools: [] as typeof waitingTools };
+      buckets.push(created);
+      return created;
+    };
+    requests.forEach((request, index) => {
+      bucketFor(request.name, request.args).requestIndexes.push(index);
+    });
+    for (const tool of waitingTools) {
+      const bucket = buckets.find((item) => item.name === tool.name && sameArgs(item.args, tool.args));
+      if (bucket) bucket.tools.push(tool);
+    }
+    for (const bucket of buckets) {
+      const newest = bucket.tools.slice(-bucket.requestIndexes.length);
+      newest.forEach((tool, position) => {
+        paired.set(tool.key, bucket.requestIndexes[position]);
+      });
+    }
+  }
+  const usedRequestIndexes = new Set(paired.values());
+  const pendingTools = isInnerToolApproval && needsApproval
+    ? requests.flatMap((request, index) => (
+      usedRequestIndexes.has(index)
+        ? []
+        : [{ id: `request-${index}`, name: request.name, args: request.args, requestIndex: index }]
+    ))
+    : [];
+  const hasStream = transcript.length > 0 || pendingTools.length > 0;
+  const streamOpen = needsApproval || (streamChoice ?? status === 'delegating');
+
+  const showToolButtons = (tool: SubagentTranscriptTool) => {
+    const waiting = tool.content == null && (pendingNames.has(tool.name) || pendingNames.has('task'));
+    return Boolean(waiting && needsApproval && isInnerToolApproval && !isApproving);
+  };
 
   return (
     <div className="flex items-start gap-3">
@@ -89,11 +190,19 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
         <Card isCompact className={`shadow-card ${needsApproval ? 'border-yellow-500/60' : ''}`}>
           <CardHeader
             className="cursor-pointer"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => {
+              setExpanded((open) => {
+                userChoice.current = !open;
+                return !open;
+              });
+            }}
             onKeyDown={(e: React.KeyboardEvent) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                setExpanded((v) => !v);
+                setExpanded((open) => {
+                  userChoice.current = !open;
+                  return !open;
+                });
               }
             }}
             {...({ tabIndex: 0, role: 'button', 'aria-expanded': expanded, 'aria-controls': `subagent-body-${messageId}-${index}` } as React.HTMLAttributes<HTMLDivElement>)}
@@ -141,6 +250,58 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                   </p>
                 </div>
               )}
+              {hasStream && (
+                <div>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 px-1 py-1 text-left text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                    aria-expanded={streamOpen}
+                    onClick={() => {
+                      if (needsApproval) return;
+                      setStreamChoice(!streamOpen);
+                    }}
+                  >
+                    {streamOpen
+                      ? <ChevronDown className="w-3 h-3 shrink-0" aria-hidden="true" />
+                      : <ChevronRight className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                    <span className={`text-xs ${streamOpen && status === 'delegating' ? 'animate-pulse' : 'italic'}`}>
+                      {streamOpen && status === 'delegating' ? 'Streaming...' : 'Stream'}
+                    </span>
+                  </button>
+                  {streamOpen && (
+                    <div className="ml-1 pl-3 border-l-2 border-muted-foreground/15 space-y-3">
+                      {transcript.map((entry) => (
+                        <TranscriptEntryView
+                          key={entry.id}
+                          entry={entry}
+                          messageId={messageId}
+                          pendingNames={pendingNames}
+                          paired={paired}
+                          showToolButtons={showToolButtons}
+                          totalActionRequests={requests.length}
+                          onInterruptResume={onInterruptResume}
+                          onSingleDecision={onSingleDecision}
+                          onAlwaysAllow={onAlwaysAllow}
+                        />
+                      ))}
+                      {pendingTools.map((tool) => (
+                        <ToolCallRow
+                          key={`pending-${tool.requestIndex}`}
+                          toolCall={tool}
+                          itemId={`${messageId}-pending-${tool.requestIndex}`}
+                          pendingToolNames={pendingNames}
+                          showButtons={showToolButtons(tool)}
+                          requestIndex={tool.requestIndex}
+                          totalActionRequests={requests.length}
+                          onInterruptResume={onInterruptResume}
+                          onSingleDecision={onSingleDecision}
+                          onAlwaysAllow={onAlwaysAllow}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {hasContent(toolCall) && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -155,47 +316,27 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
               )}
               {question ? (
                 <div className="pb-3">{question}</div>
-              ) : status === 'delegating' && !needsApproval && (
+              ) : status === 'delegating' && !needsApproval && transcript.length === 0 && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                   Sub-agent is processing&hellip;
                 </div>
               )}
 
-              {isInnerToolApproval && needsApproval && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Tool
-                  </p>
-                  {requests.map((r) => (
-                    <div key={r.name} className="space-y-1.5">
-                      <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{r.name}</code>
-                      {r.args && Object.keys(r.args).length > 0 && (
-                        <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
-                          {JSON.stringify(r.args, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {needsApproval && !isApproving && (isInnerToolApproval || isCurrentApproval !== false) && (onSingleDecision || onInterruptResume) && (
-                <div role="alert" aria-live="assertive" aria-label={isInnerToolApproval ? `Tool ${innerToolLabel} requires approval` : `Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
+              {needsApproval && !isApproving && isLaunchApproval && isCurrentApproval !== false && (onSingleDecision || onInterruptResume) && (
+                <div role="alert" aria-live="assertive" aria-label={`Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
                   <button
                     type="button"
                     autoFocus
                     onClick={() => {
                       setIsApproving(true);
-                      if (isInnerToolApproval) {
-                        onInterruptResume?.(requests.map(() => ({ type: 'approve' as const })));
-                      } else if (onSingleDecision) {
+                      if (onSingleDecision) {
                         onSingleDecision({ type: 'approve' });
                       } else {
                         onInterruptResume?.([{ type: 'approve' }]);
                       }
                     }}
-                    aria-label={isInnerToolApproval ? `Approve tool: ${innerToolLabel}` : `Approve sub-agent action: ${name}`}
+                    aria-label={`Approve sub-agent action: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                     style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
                   >
@@ -206,15 +347,13 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     type="button"
                     onClick={() => {
                       setIsApproving(true);
-                      if (isInnerToolApproval) {
-                        onInterruptResume?.(requests.map(() => ({ type: 'reject' as const, message: 'User rejected this action.' })));
-                      } else if (onSingleDecision) {
+                      if (onSingleDecision) {
                         onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
                       } else {
                         onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
                       }
                     }}
-                    aria-label={isInnerToolApproval ? `Reject tool: ${innerToolLabel}` : `Reject sub-agent action: ${name}`}
+                    aria-label={`Reject sub-agent action: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
                     style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
                   >
@@ -224,16 +363,14 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     type="button"
                     onClick={() => {
                       setIsApproving(true);
-                      onAlwaysAllow?.(alwaysAllowNames);
-                      if (isInnerToolApproval) {
-                        onInterruptResume?.(requests.map(() => ({ type: 'approve' as const })));
-                      } else if (onSingleDecision) {
+                      onAlwaysAllow?.([name]);
+                      if (onSingleDecision) {
                         onSingleDecision({ type: 'approve' });
                       } else {
                         onInterruptResume?.([{ type: 'approve' }]);
                       }
                     }}
-                    aria-label={isInnerToolApproval ? `Always allow tool: ${innerToolLabel}` : `Always allow sub-agent: ${name}`}
+                    aria-label={`Always allow sub-agent: ${name}`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
                   >
                     <ShieldCheck className="w-3 h-3" aria-hidden="true" />
@@ -245,6 +382,52 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+function TranscriptEntryView({
+  entry,
+  messageId,
+  pendingNames,
+  paired,
+  showToolButtons,
+  totalActionRequests,
+  onInterruptResume,
+  onSingleDecision,
+  onAlwaysAllow,
+}: {
+  entry: SubagentTranscriptEntry;
+  messageId: string;
+  pendingNames: Set<string>;
+  paired: Map<string, number>;
+  showToolButtons: (tool: SubagentTranscriptTool) => boolean;
+  totalActionRequests: number;
+  onInterruptResume?: SubAgentIndicatorProps['onInterruptResume'];
+  onSingleDecision?: SubAgentIndicatorProps['onSingleDecision'];
+  onAlwaysAllow?: SubAgentIndicatorProps['onAlwaysAllow'];
+}) {
+  return (
+    <div className="space-y-2">
+      {entry.thinking ? <SubagentThought text={entry.thinking} /> : null}
+      {entry.content ? <SubagentStream text={entry.content} /> : null}
+      {entry.tool_calls?.map((tool, toolIndex) => {
+        const requestIndex = paired.get(tool.id ?? `${entry.id}-${toolIndex}`);
+        return (
+          <ToolCallRow
+            key={tool.id ?? `${tool.name}-${toolIndex}`}
+            toolCall={tool}
+            itemId={`${messageId}-${entry.id}-${tool.id ?? toolIndex}`}
+            pendingToolNames={pendingNames}
+            showButtons={requestIndex !== undefined && showToolButtons(tool)}
+            requestIndex={requestIndex}
+            totalActionRequests={totalActionRequests}
+            onInterruptResume={onInterruptResume}
+            onSingleDecision={onSingleDecision}
+            onAlwaysAllow={onAlwaysAllow}
+          />
+        );
+      })}
     </div>
   );
 }

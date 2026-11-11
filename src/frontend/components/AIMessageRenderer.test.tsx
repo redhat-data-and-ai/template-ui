@@ -1,9 +1,17 @@
 import React, { StrictMode } from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
-import { AIMessageRenderer, buildTurnSegments } from './ChatMessagesView';
+import chatsReducer from '../redux/slices/chats';
+import configReducer from '../redux/slices/config';
+import personalizationReducer from '../redux/slices/personalization';
+import toastsReducer from '../redux/slices/toasts';
+import userSettingsReducer from '../redux/slices/userSettings';
+import projectsReducer from '../redux/slices/projects';
+import { AIMessageRenderer, ChatMessagesView, buildTurnSegments, turnStillRunning } from './ChatMessagesView';
 import type { InterruptInfo } from '../types/deep-agent';
 
 vi.mock('./McpAppHost', () => ({
@@ -206,6 +214,39 @@ const innerToolInterrupt: InterruptInfo = {
   resumable: true,
 };
 
+describe('turnStillRunning', () => {
+  it('stops once every subagent card has a result', () => {
+    const running = [
+      makeMsg({ type: 'human', content: 'go', id: 'h1' }),
+      makeMsg({
+        id: 'a1',
+        content: '',
+        tool_calls: [{ id: 'tc', name: 'task', args: { subagent_type: 'analyst', description: 'q' } }],
+      }),
+    ];
+    const finished = [
+      running[0],
+      makeMsg({
+        id: 'a1',
+        content: '',
+        tool_calls: [{ id: 'tc', name: 'task', args: { subagent_type: 'analyst', description: 'q' }, content: 'done' }],
+      }),
+    ];
+    expect(turnStillRunning(running)).toBe(true);
+    expect(turnStillRunning(finished)).toBe(false);
+  });
+
+  it('keeps watching a normal tool that has no result', () => {
+    expect(turnStillRunning([
+      makeMsg({
+        id: 'a1',
+        content: '',
+        tool_calls: [{ id: 'tc', name: 'search', args: {} }],
+      }),
+    ])).toBe(true);
+  });
+});
+
 describe('buildTurnSegments', () => {
   it('keeps each sentence and puts later tools and thoughts after it', () => {
     const segments = buildTurnSegments([
@@ -358,10 +399,275 @@ describe('AIMessageRenderer — nested subagent HITL', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /approve tool: lookup_records/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reject tool: lookup_records/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /approve tool call: lookup_records/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reject tool call: lookup_records/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /always allow tool: lookup_records/i })).toBeInTheDocument();
     expect(screen.getByText('lookup_records')).toBeInTheDocument();
+  });
+
+  it('sends one decision for each waiting inner tool', async () => {
+    const onInterruptResume = vi.fn();
+    const searches = [0, 1, 2].map((index) => ({
+      id: `search-${index}`,
+      name: 'fluent_search',
+      args: { query: `q${index}` },
+    }));
+    Element.prototype.scrollIntoView = vi.fn();
+    const scrollAreaRef = { current: document.createElement('div') };
+    const store = configureStore({
+      reducer: {
+        chats: chatsReducer,
+        config: configReducer,
+        personalization: personalizationReducer,
+        toasts: toastsReducer,
+        userSettings: userSettingsReducer,
+        projects: projectsReducer,
+      },
+    });
+    render(
+      <Provider store={store}>
+      <ChatMessagesView
+        messages={[
+          makeMsg({ type: 'human', id: 'h1', content: 'score them' }),
+          makeMsg({
+            id: 'a1',
+            tool_calls: [{
+              ...SUBAGENT_TASK,
+              transcript: [{ id: 'sub-1', tool_calls: searches }],
+            }],
+          }),
+        ]}
+        isLoading={false}
+        pendingInterrupt={{
+          value: {
+            action_requests: searches.map((search) => ({ name: search.name, args: search.args })),
+            review_configs: [{ action_name: 'fluent_search', allowed_decisions: ['approve', 'reject'] }],
+          },
+          resumable: true,
+        }}
+        onInterruptResume={onInterruptResume}
+        onAlwaysAllow={vi.fn()}
+        scrollAreaRef={scrollAreaRef}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+        liveActivityEvents={[]}
+        historicalActivities={{}}
+        chatId="chat-1"
+        traceId={null}
+      />
+      </Provider>,
+    );
+
+    const buttons = screen.getAllByRole('button', { name: /approve tool call: fluent_search/i });
+    expect(buttons).toHaveLength(3);
+    await userEvent.click(buttons[0]);
+    await userEvent.click(buttons[1]);
+    await userEvent.click(buttons[2]);
+    expect(onInterruptResume).toHaveBeenCalledTimes(1);
+    expect(onInterruptResume).toHaveBeenCalledWith([
+      { type: 'approve' },
+      { type: 'approve' },
+      { type: 'approve' },
+    ]);
+  });
+
+  it('keeps a reject on the inner tool that was clicked', async () => {
+    const onInterruptResume = vi.fn();
+    const searches = [0, 1, 2].map((index) => ({
+      id: `search-${index}`,
+      name: 'fluent_search',
+      args: { query: `q${index}` },
+    }));
+    Element.prototype.scrollIntoView = vi.fn();
+    const store = configureStore({
+      reducer: {
+        chats: chatsReducer,
+        config: configReducer,
+        personalization: personalizationReducer,
+        toasts: toastsReducer,
+        userSettings: userSettingsReducer,
+        projects: projectsReducer,
+      },
+    });
+    render(
+      <Provider store={store}>
+      <ChatMessagesView
+        messages={[
+          makeMsg({ type: 'human', id: 'h1', content: 'score them' }),
+          makeMsg({
+            id: 'a1',
+            tool_calls: [{
+              ...SUBAGENT_TASK,
+              transcript: [{ id: 'sub-1', tool_calls: searches }],
+            }],
+          }),
+        ]}
+        isLoading={false}
+        pendingInterrupt={{
+          value: {
+            action_requests: searches.map((search) => ({ name: search.name, args: search.args })),
+            review_configs: [{ action_name: 'fluent_search', allowed_decisions: ['approve', 'reject'] }],
+          },
+          resumable: true,
+        }}
+        onInterruptResume={onInterruptResume}
+        onAlwaysAllow={vi.fn()}
+        scrollAreaRef={{ current: document.createElement('div') }}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+        liveActivityEvents={[]}
+        historicalActivities={{}}
+        chatId="chat-1"
+        traceId={null}
+      />
+      </Provider>,
+    );
+
+    const rejects = screen.getAllByRole('button', { name: /reject tool call: fluent_search/i });
+    const approves = screen.getAllByRole('button', { name: /approve tool call: fluent_search/i });
+    await userEvent.click(rejects[1]);
+    await userEvent.click(approves[0]);
+    await userEvent.click(approves[2]);
+    expect(onInterruptResume).toHaveBeenCalledWith([
+      { type: 'approve' },
+      { type: 'reject', message: 'User rejected this action.' },
+      { type: 'approve' },
+    ]);
+  });
+
+  it('puts approval on the later tool call with the same arguments', async () => {
+    const onInterruptResume = vi.fn();
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          tool_calls: [{
+            ...SUBAGENT_TASK,
+            transcript: [{
+              id: 'sub-1',
+              tool_calls: [
+                { id: 'old-sql', name: 'execute_sql', args: { query: 'select old' } },
+                { id: 'new-sql', name: 'execute_sql', args: { query: 'select new' } },
+              ],
+            }],
+          }],
+        })}
+        pendingInterrupt={{
+          value: {
+            action_requests: [{ name: 'execute_sql', args: { query: 'select new' } }],
+            review_configs: [{ action_name: 'execute_sql', allowed_decisions: ['approve', 'reject'] }],
+          },
+          resumable: true,
+        }}
+        onInterruptResume={onInterruptResume}
+        onAlwaysAllow={vi.fn()}
+      />,
+    );
+
+    const oldRow = screen.getByText('"select old"').closest('.rounded-lg');
+    const newRow = screen.getByText('"select new"').closest('.rounded-lg');
+    expect(oldRow).toBeTruthy();
+    expect(newRow).toBeTruthy();
+    expect(within(oldRow as HTMLElement).queryByRole('button', { name: /approve tool call: execute_sql/i })).not.toBeInTheDocument();
+    await userEvent.click(within(newRow as HTMLElement).getByRole('button', { name: /approve tool call: execute_sql/i }));
+    expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }]);
+  });
+
+  it('uses the latest waiting call when two have the same arguments', () => {
+    render(
+      <AIMessageRenderer
+        message={makeMsg({
+          tool_calls: [{
+            ...SUBAGENT_TASK,
+            transcript: [{
+              id: 'sub-1',
+              tool_calls: [
+                { id: 'first-sql', name: 'execute_sql', args: { query: 'select same' } },
+                { id: 'latest-sql', name: 'execute_sql', args: { query: 'select same' } },
+              ],
+            }],
+          }],
+        })}
+        pendingInterrupt={{
+          value: {
+            action_requests: [{ name: 'execute_sql', args: { query: 'select same' } }],
+            review_configs: [{ action_name: 'execute_sql', allowed_decisions: ['approve', 'reject'] }],
+          },
+          resumable: true,
+        }}
+        onInterruptResume={vi.fn()}
+        onAlwaysAllow={vi.fn()}
+      />,
+    );
+
+    const hints = screen.getAllByText('"select same"');
+    expect(hints).toHaveLength(2);
+    const firstRow = hints[0].closest('.rounded-lg');
+    const latestRow = hints[1].closest('.rounded-lg');
+    expect(within(firstRow as HTMLElement).queryByRole('button', { name: /approve tool call: execute_sql/i })).not.toBeInTheDocument();
+    expect(within(latestRow as HTMLElement).getByRole('button', { name: /approve tool call: execute_sql/i })).toBeInTheDocument();
+  });
+
+  it('keeps the first of two identical calls as the first decision', async () => {
+    const onInterruptResume = vi.fn();
+    const calls = [0, 1].map((index) => ({
+      id: `sql-${index}`,
+      name: 'execute_sql',
+      args: { query: 'select same' },
+    }));
+    Element.prototype.scrollIntoView = vi.fn();
+    const store = configureStore({
+      reducer: {
+        chats: chatsReducer,
+        config: configReducer,
+        personalization: personalizationReducer,
+        toasts: toastsReducer,
+        userSettings: userSettingsReducer,
+        projects: projectsReducer,
+      },
+    });
+    render(
+      <Provider store={store}>
+      <ChatMessagesView
+        messages={[
+          makeMsg({ type: 'human', id: 'h1', content: 'score them' }),
+          makeMsg({
+            id: 'a1',
+            tool_calls: [{
+              ...SUBAGENT_TASK,
+              transcript: [{ id: 'sub-1', tool_calls: calls }],
+            }],
+          }),
+        ]}
+        isLoading={false}
+        pendingInterrupt={{
+          value: {
+            action_requests: calls.map((call) => ({ name: call.name, args: call.args })),
+            review_configs: [{ action_name: 'execute_sql', allowed_decisions: ['approve', 'reject'] }],
+          },
+          resumable: true,
+        }}
+        onInterruptResume={onInterruptResume}
+        onAlwaysAllow={vi.fn()}
+        scrollAreaRef={{ current: document.createElement('div') }}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+        liveActivityEvents={[]}
+        historicalActivities={{}}
+        chatId="chat-1"
+        traceId={null}
+      />
+      </Provider>,
+    );
+
+    const rejects = screen.getAllByRole('button', { name: /reject tool call: execute_sql/i });
+    const approves = screen.getAllByRole('button', { name: /approve tool call: execute_sql/i });
+    expect(rejects).toHaveLength(2);
+    await userEvent.click(rejects[0]);
+    await userEvent.click(approves[1]);
+    expect(onInterruptResume).toHaveBeenCalledWith([
+      { type: 'reject', message: 'User rejected this action.' },
+      { type: 'approve' },
+    ]);
   });
 
   it('resumes with approve when the inner-tool Approve is clicked', async () => {
@@ -375,7 +681,7 @@ describe('AIMessageRenderer — nested subagent HITL', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /approve tool: lookup_records/i }));
+    await userEvent.click(screen.getByRole('button', { name: /approve tool call: lookup_records/i }));
     expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }]);
   });
 
@@ -394,6 +700,41 @@ describe('AIMessageRenderer — nested subagent HITL', () => {
     await userEvent.click(screen.getByRole('button', { name: /always allow tool: lookup_records/i }));
     expect(onAlwaysAllow).toHaveBeenCalledWith(['lookup_records']);
     expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }]);
+    expect(screen.queryByRole('button', { name: /approve tool call: lookup_records/i })).not.toBeInTheDocument();
+    expect(onInterruptResume).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the inner buttons again when the approval returns', async () => {
+    const view = render(
+      <AIMessageRenderer
+        message={makeMsg({ tool_calls: [SUBAGENT_TASK] })}
+        pendingInterrupt={innerToolInterrupt}
+        onInterruptResume={vi.fn()}
+        onAlwaysAllow={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /approve tool call: lookup_records/i }));
+    expect(screen.queryByRole('button', { name: /approve tool call: lookup_records/i })).not.toBeInTheDocument();
+
+    view.rerender(
+      <AIMessageRenderer
+        message={makeMsg({ tool_calls: [SUBAGENT_TASK] })}
+        pendingInterrupt={null}
+        onInterruptResume={vi.fn()}
+        onAlwaysAllow={vi.fn()}
+      />,
+    );
+    view.rerender(
+      <AIMessageRenderer
+        message={makeMsg({ tool_calls: [SUBAGENT_TASK] })}
+        pendingInterrupt={innerToolInterrupt}
+        onInterruptResume={vi.fn()}
+        onAlwaysAllow={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /approve tool call: lookup_records/i })).toBeInTheDocument();
   });
 
   it('does not show inner-tool approval on a completed subagent', () => {
@@ -408,7 +749,7 @@ describe('AIMessageRenderer — nested subagent HITL', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: /approve tool: lookup_records/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /approve tool call: lookup_records/i })).not.toBeInTheDocument();
   });
 });
 

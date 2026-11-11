@@ -186,6 +186,69 @@ function extractToolCalls(raw: Record<string, any>): { name: string; args: any; 
   return [];
 }
 
+/** `updates|tools:task|model:step` → base `updates` and namespace `tools:task|model:step`. */
+function splitStreamEvent(sseType: string): { base: string; namespace: string } {
+  const bar = sseType.indexOf('|');
+  if (bar === -1) return { base: sseType, namespace: '' };
+  return { base: sseType.slice(0, bar), namespace: sseType.slice(bar + 1) };
+}
+
+/** First tool-call id inside a tasks-stream input. A model-node state has none. */
+function toolCallIdFromTaskInput(input: unknown): string | undefined {
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      const found = toolCallIdFromTaskInput(item);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (!input || typeof input !== 'object') return undefined;
+  const record = input as Record<string, unknown>;
+  const nested = record.tool_call;
+  if (nested && typeof nested === 'object') {
+    const nestedId = (nested as Record<string, unknown>).id;
+    if (typeof nestedId === 'string' && nestedId) return nestedId;
+  }
+  if (typeof record.id === 'string' && record.id && typeof record.name === 'string' && record.name) {
+    return record.id;
+  }
+  return undefined;
+}
+
+function rememberTaskToolCalls(payload: unknown, taskToolCalls: Map<string, string>): void {
+  const records = Array.isArray(payload) ? payload : [payload];
+  for (const record of records) {
+    if (!record || typeof record !== 'object') continue;
+    const task = record as Record<string, unknown>;
+    if (typeof task.id !== 'string' || !task.id || !('input' in task)) continue;
+    const toolCallId = toolCallIdFromTaskInput(task.input);
+    if (toolCallId) taskToolCalls.set(task.id, toolCallId);
+  }
+}
+
+/** Outermost `node:taskId` segment whose task id dispatched a tool call. */
+function toolCallIdFromNamespace(namespace: string, taskToolCalls: Map<string, string>): string | undefined {
+  if (!namespace) return undefined;
+  for (const segment of namespace.split('|')) {
+    const colon = segment.lastIndexOf(':');
+    if (colon === -1) continue;
+    const toolCallId = taskToolCalls.get(segment.slice(colon + 1));
+    if (toolCallId) return toolCallId;
+  }
+  return undefined;
+}
+
+function rememberMessageNamespaces(payload: unknown, messageNamespaces: Map<string, string>): void {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return;
+  for (const [messageId, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object') continue;
+    const metadata = (value as Record<string, unknown>).metadata;
+    if (!metadata || typeof metadata !== 'object') continue;
+    const namespace = (metadata as Record<string, unknown>).langgraph_checkpoint_ns;
+    if (typeof namespace === 'string' && namespace) messageNamespaces.set(messageId, namespace);
+  }
+}
+
 function translateMessageEvent(
   sseType: string,
   payload: unknown,
@@ -372,6 +435,335 @@ function buildForwardedQueryString(query: Record<string, unknown>): string {
   return s ? `?${s}` : '';
 }
 
+async function pipeTranslatedAgentStream(
+  fastify: FastifyInstance,
+  reply: FastifyReply,
+  runResp: Response,
+  threadId: string,
+  headers: Record<string, string>,
+  traceId: string,
+  timeoutMs: number,
+): Promise<void> {
+  try {
+// ── 3. Translate Aegra SSE → UI chunk format ──
+await reply.hijack();
+reply.raw.writeHead(200, {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+  'Connection': 'keep-alive',
+  'X-Trace-ID': traceId,
+  'X-Accel-Buffering': 'no',
+});
+reply.raw.flushHeaders();
+
+const reader = (runResp.body as ReadableStream<Uint8Array>).getReader();
+const decoder = new TextDecoder();
+let buffer = '';
+let chunkId = 0;
+let clientGone = false;
+let lastPartial = '';
+const partialByMessageId = new Map<string, string>();
+const thinkingByMessageId = new Map<string, string>();
+const taskToolCalls = new Map<string, string>();
+const messageNamespaces = new Map<string, string>();
+const sentMsgIds = new Set<string>();
+const completedTexts: string[] = [];
+
+reply.raw.on('close', () => {
+  clientGone = true;
+  reader.cancel().catch(() => {});
+});
+reply.raw.on('error', () => {
+  clientGone = true;
+  reader.cancel().catch(() => {});
+});
+
+let hasEmittedTextTokens = false;
+let interruptEmittedFromStream = false;
+let streamEndedNormally = false;
+
+try {
+  while (!clientGone) {
+    let done: boolean;
+    let value: Uint8Array | undefined;
+    try {
+      ({ done, value } = await reader.read());
+    } catch {
+      fastify.log.warn({ traceId }, 'Agent stream connection lost — agent may have been killed');
+      break;
+    }
+    if (done) {
+      streamEndedNormally = true;
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+
+    const segments = buffer.split('\n\n');
+    buffer = segments.pop() ?? '';
+
+    for (const segment of segments) {
+      if (clientGone) break;
+      const trimmed = segment.trim();
+      if (!trimmed) continue;
+
+      let sseType = '';
+      let sseData = '';
+      for (const line of trimmed.split('\n')) {
+        if (line.startsWith('event:')) sseType = line.slice(6).trim();
+        else if (line.startsWith('data:')) sseData += line.slice(5).trim();
+      }
+
+      if (!sseData || sseType === 'end') continue;
+
+      if (sseType === 'metadata') {
+        try {
+          const parsed = JSON.parse(sseData) as Record<string, unknown>;
+          fastify.log.info({ traceId, sseType, parsedKeys: Object.keys(parsed) }, 'Raw metadata SSE from agent');
+
+          if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            !Array.isArray(parsed)
+          ) {
+            // LangGraph Platform metadata has { run_id } at top level
+            // Emit in the format the frontend expects: { type: 'metadata', content: { run_id, trace_id, thread_id } }
+            const runId = (parsed.run_id as string) || '';
+            const metaPayload = {
+              type: 'metadata',
+              content: {
+                run_id: runId,
+                trace_id: runId,
+                thread_id: threadId,
+              },
+            };
+            reply.raw.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
+            chunkId++;
+          }
+        } catch {
+          fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
+        }
+        continue;
+      }
+
+      try {
+        const parsed = JSON.parse(sseData) as unknown;
+        const { base: eventBase, namespace: eventNamespace } = splitStreamEvent(sseType);
+
+        if (eventBase === 'tasks') {
+          rememberTaskToolCalls(parsed, taskToolCalls);
+          continue;
+        }
+
+        if (eventBase === 'messages/metadata') {
+          rememberMessageNamespaces(parsed, messageNamespaces);
+          continue;
+        }
+
+        if (eventBase === 'updates' && eventNamespace === '') {
+          const interrupt = extractInterruptFromUpdates(parsed);
+          if (interrupt) {
+            const interruptChunk = {
+              type: 'interrupt',
+              content: { value: interrupt.value, resumable: interrupt.resumable },
+              chunk_id: chunkId,
+            };
+            reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
+            chunkId++;
+            interruptEmittedFromStream = true;
+            fastify.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
+          }
+        }
+
+        const isMcpStatus =
+          sseType === 'mcp_status' ||
+          (typeof parsed === 'object' &&
+            parsed !== null &&
+            !Array.isArray(parsed) &&
+            (parsed as Record<string, unknown>).type === 'mcp_status');
+        if (isMcpStatus) {
+          reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
+          chunkId++;
+          continue;
+        }
+
+        const isMessageText = eventBase === 'messages/partial' || eventBase === 'messages/complete';
+        const partialMsg = isMessageText && Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : undefined;
+        const activeMessageId = partialMsg && typeof partialMsg === 'object' && typeof (partialMsg as { id?: unknown }).id === 'string'
+          ? (partialMsg as { id: string }).id
+          : '';
+        const prevPartial = isMessageText ? (partialByMessageId.get(activeMessageId) ?? '') : '';
+        const prevThinking = isMessageText ? (thinkingByMessageId.get(activeMessageId) ?? '') : '';
+        const messageNamespace = activeMessageId ? messageNamespaces.get(activeMessageId) : undefined;
+        const subagentToolCallId = toolCallIdFromNamespace(eventNamespace, taskToolCalls)
+          ?? (messageNamespace ? toolCallIdFromNamespace(messageNamespace, taskToolCalls) : undefined);
+
+        const [uiChunks, nextPartial] = translateMessageEvent(
+          eventBase,
+          parsed,
+          chunkId,
+          prevPartial,
+          sentMsgIds,
+        );
+
+        let nextThinking = prevThinking;
+        const partialContent = partialMsg && typeof partialMsg === 'object'
+          ? (partialMsg as Record<string, unknown>).content
+          : undefined;
+        if (
+          isMessageText
+          && partialMsg
+          && typeof partialMsg === 'object'
+          && typeof partialContent !== 'string'
+        ) {
+          nextThinking = splitMessageParts(partialMsg).thinking;
+        }
+        if (nextThinking.startsWith(prevThinking) && nextThinking.length > prevThinking.length) {
+          const thinkingDelta = nextThinking.slice(prevThinking.length);
+          const thinkingPayload: Record<string, unknown> = {
+            type: 'token',
+            content: thinkingDelta,
+            chunk_id: chunkId,
+            part: 'thinking',
+          };
+          if (activeMessageId) thinkingPayload.message_id = activeMessageId;
+          if (subagentToolCallId) thinkingPayload.subagent_tool_call_id = subagentToolCallId;
+          reply.raw.write(`data: ${JSON.stringify(thinkingPayload)}\n\n`);
+          chunkId++;
+        }
+        if (isMessageText && nextThinking.startsWith(prevThinking)) {
+          thinkingByMessageId.set(activeMessageId, nextThinking);
+        }
+
+        if (nextPartial.length > prevPartial.length && uiChunks.length === 0) {
+          const isEchoOfPrior = completedTexts.some(
+            (ct) => nextPartial.length <= ct.length && ct.startsWith(nextPartial),
+          );
+          if (!isEchoOfPrior) {
+            const delta = nextPartial.slice(prevPartial.length);
+            const tokenPayload: Record<string, unknown> = {
+              type: 'token',
+              content: delta,
+              chunk_id: chunkId,
+              part: 'text',
+            };
+            if (activeMessageId) tokenPayload.message_id = activeMessageId;
+            if (subagentToolCallId) tokenPayload.subagent_tool_call_id = subagentToolCallId;
+            reply.raw.write(`data: ${JSON.stringify(tokenPayload)}\n\n`);
+            chunkId++;
+            hasEmittedTextTokens = true;
+          }
+        }
+
+        if (eventBase === 'messages/complete' && uiChunks.length === 0 && nextPartial.length > 0) {
+          completedTexts.push(nextPartial);
+        }
+
+        if (isMessageText) {
+          partialByMessageId.set(activeMessageId, nextPartial);
+          lastPartial = nextPartial;
+        }
+        for (const chunk of uiChunks) {
+          const content = chunk.content as { tool_call_id?: unknown } | undefined;
+          const resultId = chunk.type === 'message' && content && typeof content.tool_call_id === 'string'
+            ? content.tool_call_id
+            : undefined;
+          const stamp = Boolean(subagentToolCallId) && resultId !== subagentToolCallId;
+          const stamped = stamp
+            ? { ...chunk, subagent_tool_call_id: subagentToolCallId, chunk_id: chunkId }
+            : { ...chunk, chunk_id: chunkId };
+          reply.raw.write(`data: ${JSON.stringify(stamped)}\n\n`);
+          chunkId++;
+        }
+      } catch {
+        fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable SSE data');
+      }
+    }
+  }
+} finally {
+  reader.releaseLock();
+}
+
+if (!clientGone) {
+  if (lastPartial.length > 0 && !hasEmittedTextTokens) {
+    const isEcho = completedTexts.some(
+      (ct) => lastPartial.length <= ct.length && ct.startsWith(lastPartial),
+    );
+    if (!isEcho) {
+      const flush = { type: 'token', content: lastPartial, chunk_id: chunkId };
+      reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
+      chunkId++;
+    }
+  }
+
+  try {
+    const stateResp = await fetch(
+      `${getAgentHost()}/threads/${threadId}/state`,
+      {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+    );
+    if (stateResp.ok) {
+      const threadState = await stateResp.json() as Record<string, unknown>;
+      const tasks = Array.isArray(threadState.tasks) ? threadState.tasks : [];
+      const interrupted = tasks.find(
+        (t: any) => Array.isArray(t?.interrupts) && t.interrupts.length > 0,
+      );
+      if (interrupted && !interruptEmittedFromStream) {
+        const firstInterrupt = (interrupted as any).interrupts[0];
+        const interruptChunk = {
+          type: 'interrupt',
+          content: {
+            value: firstInterrupt?.value ?? null,
+            resumable: true,
+          },
+          chunk_id: chunkId,
+        };
+        reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
+        chunkId++;
+        fastify.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
+      }
+    }
+  } catch (err) {
+    fastify.log.warn({ traceId, err }, 'Failed to check thread state for interrupts');
+  }
+
+  if (!streamEndedNormally) {
+    fastify.log.warn({ traceId }, 'Agent stream ended abnormally — signalling error to frontend');
+    const errChunk = {
+      type: 'error',
+      message: 'Agent connection lost during streaming. Recovery in progress.',
+      chunk_id: chunkId,
+    };
+    reply.raw.write(`data: ${JSON.stringify(errChunk)}\n\n`);
+    chunkId++;
+  }
+
+  fastify.log.info({ traceId, chunkId, streamEndedNormally }, 'Stream complete');
+  invalidateThreadStateCache(threadId);
+  reply.raw.end('data: [DONE]\n\n');
+    }
+  } catch (error: unknown) {
+    const errName = (error as Error).name;
+    if (errName === 'AbortError') {
+      fastify.log.info({ traceId }, 'Client disconnected, stream aborted');
+      return;
+    }
+    if (errName === 'TimeoutError') {
+      fastify.log.warn({ traceId }, 'Agent stream timed out');
+    } else {
+      fastify.log.error({ traceId, err: error }, 'Proxy stream error');
+    }
+    if (reply.raw.headersSent) {
+      reply.raw.end();
+    } else {
+      reply.status(502).send({ error: 'Failed to connect to agent service' });
+    }
+  }
+}
+
 async function proxyRoutes(fastify: FastifyInstance) {
   await fastify.register(authCheckPlugin);
 
@@ -467,7 +859,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         const runBody: Record<string, unknown> = {
           assistant_id: 'agent',
-          stream_mode: ['messages', 'updates'],
+          stream_mode: ['messages', 'updates', 'tasks'],
+          stream_subgraphs: true,
           on_disconnect: 'continue',
         };
         if (isResume) {
@@ -508,292 +901,26 @@ async function proxyRoutes(fastify: FastifyInstance) {
             { traceId, status: runResp.status, body },
             'Agent run/stream failed',
           );
+          let message = 'Agent request failed';
+          try {
+            const parsed = JSON.parse(body) as { message?: unknown };
+            if (typeof parsed.message === 'string' && parsed.message.length > 0) message = parsed.message;
+          } catch { /* the body was not JSON */ }
           return reply.status(runResp.status).send({
-            error: 'Agent request failed',
+            error: message,
             status: runResp.status,
           });
         }
 
-        // ── 3. Translate Aegra SSE → UI chunk format ──
-        await reply.hijack();
-        reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'X-Trace-ID': traceId,
-          'X-Accel-Buffering': 'no',
-        });
-        reply.raw.flushHeaders();
-
-        const reader = (runResp.body as ReadableStream<Uint8Array>).getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let chunkId = 0;
-        let clientGone = false;
-        let prevPartial = '';
-        let prevThinking = '';
-        const sentMsgIds = new Set<string>();
-        const completedTexts: string[] = [];
-
-        reply.raw.on('close', () => {
-          clientGone = true;
-          reader.cancel().catch(() => {});
-        });
-        reply.raw.on('error', () => {
-          clientGone = true;
-          reader.cancel().catch(() => {});
-        });
-
-        let hasEmittedTextTokens = false;
-        let interruptEmittedFromStream = false;
-        let streamEndedNormally = false;
-        let currentStreamingMsgId = '';
-
-        try {
-          while (!clientGone) {
-            let done: boolean;
-            let value: Uint8Array | undefined;
-            try {
-              ({ done, value } = await reader.read());
-            } catch {
-              fastify.log.warn({ traceId }, 'Agent stream connection lost — agent may have been killed');
-              break;
-            }
-            if (done) {
-              streamEndedNormally = true;
-              break;
-            }
-
-            buffer += decoder.decode(value, { stream: true });
-
-            const segments = buffer.split('\n\n');
-            buffer = segments.pop() ?? '';
-
-            for (const segment of segments) {
-              if (clientGone) break;
-              const trimmed = segment.trim();
-              if (!trimmed) continue;
-
-              let sseType = '';
-              let sseData = '';
-              for (const line of trimmed.split('\n')) {
-                if (line.startsWith('event:')) sseType = line.slice(6).trim();
-                else if (line.startsWith('data:')) sseData += line.slice(5).trim();
-              }
-
-              if (!sseData || sseType === 'end') continue;
-
-              if (sseType === 'metadata') {
-                try {
-                  const parsed = JSON.parse(sseData) as Record<string, unknown>;
-                  fastify.log.info({ traceId, sseType, parsedKeys: Object.keys(parsed) }, 'Raw metadata SSE from agent');
-
-                  if (
-                    typeof parsed === 'object' &&
-                    parsed !== null &&
-                    !Array.isArray(parsed)
-                  ) {
-                    // LangGraph Platform metadata has { run_id } at top level
-                    // Emit in the format the frontend expects: { type: 'metadata', content: { run_id, trace_id, thread_id } }
-                    const runId = (parsed.run_id as string) || '';
-                    const metaPayload = {
-                      type: 'metadata',
-                      content: {
-                        run_id: runId,
-                        trace_id: runId,
-                        thread_id: thread_id,
-                      },
-                    };
-                    reply.raw.write(`data: ${JSON.stringify(metaPayload)}\n\n`);
-                    chunkId++;
-                  }
-                } catch {
-                  fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable metadata SSE');
-                }
-                continue;
-              }
-
-              try {
-                const parsed = JSON.parse(sseData) as unknown;
-
-                if (sseType === 'updates') {
-                  const interrupt = extractInterruptFromUpdates(parsed);
-                  if (interrupt) {
-                    const interruptChunk = {
-                      type: 'interrupt',
-                      content: { value: interrupt.value, resumable: interrupt.resumable },
-                      chunk_id: chunkId,
-                    };
-                    reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
-                    chunkId++;
-                    interruptEmittedFromStream = true;
-                    fastify.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
-                  }
-                }
-
-                const isMcpStatus =
-                  sseType === 'mcp_status' ||
-                  (typeof parsed === 'object' &&
-                    parsed !== null &&
-                    !Array.isArray(parsed) &&
-                    (parsed as Record<string, unknown>).type === 'mcp_status');
-                if (isMcpStatus) {
-                  reply.raw.write(`event: mcp_status\ndata: ${JSON.stringify(parsed)}\n\n`);
-                  chunkId++;
-                  continue;
-                }
-
-                // Reset per-message state before translation
-                if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
-                  const peekId = (parsed[0] as Record<string, any>)?.id ?? '';
-                  if (peekId && peekId !== currentStreamingMsgId) {
-                    currentStreamingMsgId = peekId;
-                    prevPartial = '';
-                    prevThinking = '';
-                  } else if (!peekId) {
-                    currentStreamingMsgId = '';
-                  }
-                }
-
-                const [uiChunks, nextPartial] = translateMessageEvent(
-                  sseType,
-                  parsed,
-                  chunkId,
-                  prevPartial,
-                  sentMsgIds,
-                );
-
-                let nextThinking = prevThinking;
-                const partialMsg = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : undefined;
-                const partialContent = partialMsg && typeof partialMsg === 'object'
-                  ? (partialMsg as Record<string, unknown>).content
-                  : undefined;
-                if (
-                  (sseType === 'messages/partial' || sseType === 'messages/complete')
-                  && partialMsg
-                  && typeof partialMsg === 'object'
-                  && typeof partialContent !== 'string'
-                ) {
-                  nextThinking = splitMessageParts(partialMsg).thinking;
-                }
-                if (nextThinking.startsWith(prevThinking) && nextThinking.length > prevThinking.length) {
-                  const thinkingDelta = nextThinking.slice(prevThinking.length);
-                  const thinkingPayload: Record<string, unknown> = {
-                    type: 'token',
-                    content: thinkingDelta,
-                    chunk_id: chunkId,
-                    part: 'thinking',
-                  };
-                  if (currentStreamingMsgId) {
-                    thinkingPayload.message_id = currentStreamingMsgId;
-                  }
-                  reply.raw.write(`data: ${JSON.stringify(thinkingPayload)}\n\n`);
-                  chunkId++;
-                }
-                if (nextThinking.startsWith(prevThinking)) {
-                  prevThinking = nextThinking;
-                }
-
-                if (nextPartial.length > prevPartial.length && uiChunks.length === 0) {
-                  const isEchoOfPrior = completedTexts.some(
-                    (ct) => nextPartial.length <= ct.length && ct.startsWith(nextPartial),
-                  );
-                  if (!isEchoOfPrior) {
-                    const delta = nextPartial.slice(prevPartial.length);
-                    const tokenPayload: Record<string, unknown> = {
-                      type: 'token',
-                      content: delta,
-                      chunk_id: chunkId,
-                      part: 'text',
-                    };
-                    if (currentStreamingMsgId) {
-                      tokenPayload.message_id = currentStreamingMsgId;
-                    }
-                    reply.raw.write(`data: ${JSON.stringify(tokenPayload)}\n\n`);
-                    chunkId++;
-                    hasEmittedTextTokens = true;
-                  }
-                }
-
-                if (sseType === 'messages/complete' && uiChunks.length === 0 && nextPartial.length > 0) {
-                  completedTexts.push(nextPartial);
-                }
-
-                prevPartial = nextPartial;
-                for (const chunk of uiChunks) {
-                  reply.raw.write(`data: ${JSON.stringify({ ...chunk, chunk_id: chunkId })}\n\n`);
-                  chunkId++;
-                }
-              } catch {
-                fastify.log.debug({ traceId, sseType, sseData }, 'Unparseable SSE data');
-              }
-            }
-          }
-        } finally {
-          reader.releaseLock();
-        }
-
-        if (!clientGone) {
-          if (prevPartial.length > 0 && !hasEmittedTextTokens) {
-            const isEcho = completedTexts.some(
-              (ct) => prevPartial.length <= ct.length && ct.startsWith(prevPartial),
-            );
-            if (!isEcho) {
-              const flush = { type: 'token', content: prevPartial, chunk_id: chunkId };
-              reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
-              chunkId++;
-            }
-          }
-
-          try {
-            const stateResp = await fetch(
-              `${getAgentHost()}/threads/${thread_id}/state`,
-              {
-                method: 'GET',
-                headers,
-                signal: AbortSignal.timeout(cfg.agent.timeout_ms),
-              },
-            );
-            if (stateResp.ok) {
-              const threadState = await stateResp.json() as Record<string, unknown>;
-              const tasks = Array.isArray(threadState.tasks) ? threadState.tasks : [];
-              const interrupted = tasks.find(
-                (t: any) => Array.isArray(t?.interrupts) && t.interrupts.length > 0,
-              );
-              if (interrupted && !interruptEmittedFromStream) {
-                const firstInterrupt = (interrupted as any).interrupts[0];
-                const interruptChunk = {
-                  type: 'interrupt',
-                  content: {
-                    value: firstInterrupt?.value ?? null,
-                    resumable: true,
-                  },
-                  chunk_id: chunkId,
-                };
-                reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
-                chunkId++;
-                fastify.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
-              }
-            }
-          } catch (err) {
-            fastify.log.warn({ traceId, err }, 'Failed to check thread state for interrupts');
-          }
-
-          if (!streamEndedNormally) {
-            fastify.log.warn({ traceId }, 'Agent stream ended abnormally — signalling error to frontend');
-            const errChunk = {
-              type: 'error',
-              message: 'Agent connection lost during streaming. Recovery in progress.',
-              chunk_id: chunkId,
-            };
-            reply.raw.write(`data: ${JSON.stringify(errChunk)}\n\n`);
-            chunkId++;
-          }
-
-          fastify.log.info({ traceId, chunkId, streamEndedNormally }, 'Stream complete');
-          invalidateThreadStateCache(thread_id);
-          reply.raw.end('data: [DONE]\n\n');
-        }
+        await pipeTranslatedAgentStream(
+          fastify,
+          reply,
+          runResp,
+          thread_id,
+          headers,
+          traceId,
+          cfg.agent.timeout_ms,
+        );
       } catch (error: unknown) {
         const errName = (error as Error).name;
         if (errName === 'AbortError') {
@@ -811,6 +938,51 @@ async function proxyRoutes(fastify: FastifyInstance) {
           reply.status(502).send({ error: 'Failed to connect to agent service' });
         }
       }
+    },
+  );
+
+  /**
+   * Reattach to a run that is still going. The browser reloads, then this
+   * opens the same agent stream and translates it like a new message.
+   */
+  fastify.get<{ Params: { threadId: string; runId: string } }>(
+    '/proxy/agent/v1/stream/:threadId/:runId',
+    async (request, reply) => {
+      const cfg = getSettings();
+      const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
+      const { threadId, runId } = request.params;
+      if (!/^[\w-]+$/.test(threadId) || !/^[\w-]+$/.test(runId)) {
+        return reply.status(400).send({ error: 'Invalid run' });
+      }
+      const { accessToken, refreshToken, refreshFailed } = await ensureFreshTokens(fastify, request);
+      if (refreshFailed) return sessionExpiredReply(reply);
+      if (!accessToken && process.env.AUTH_ENABLED === 'true') {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+      const headers: Record<string, string> = { 'X-Trace-ID': traceId };
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      if (refreshToken) headers['X-Refresh-Token'] = refreshToken;
+      headers['X-User-ID'] = resolveXUserId(request);
+
+      const runResp = await fetch(`${getAgentHost()}/threads/${threadId}/runs/${runId}/stream`, {
+        method: 'GET',
+        headers: { ...headers, Accept: 'text/event-stream' },
+        signal: AbortSignal.timeout(Math.max(cfg.agent.timeout_ms, 300_000)),
+      });
+      if (!runResp.ok) {
+        const body = await runResp.text();
+        fastify.log.error({ traceId, status: runResp.status, body }, 'Agent run attach failed');
+        return reply.status(runResp.status).send({ error: 'Agent request failed', status: runResp.status });
+      }
+      await pipeTranslatedAgentStream(
+        fastify,
+        reply,
+        runResp,
+        threadId,
+        headers,
+        traceId,
+        cfg.agent.timeout_ms,
+      );
     },
   );
 
@@ -1003,7 +1175,8 @@ async function proxyRoutes(fastify: FastifyInstance) {
         // Check BFF cache for GET /threads/{id}/state
         const threadStateMatch = request.method === 'GET' && path.match(/^threads\/([^/]+)\/state$/);
         if (threadStateMatch) {
-          const cached = getCachedThreadState(threadStateMatch[1]);
+          const fresh = request.headers['cache-control'] === 'no-cache';
+          const cached = fresh ? null : getCachedThreadState(threadStateMatch[1]);
           if (cached) {
             fastify.log.info({ traceId }, 'Thread state cache HIT');
             reply.header('X-Trace-ID', traceId);

@@ -1,6 +1,6 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Bot, User, ShieldCheck } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Bot, User } from "lucide-react";
 import type { InterruptInfo } from "../types/deep-agent";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
@@ -23,15 +23,13 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { markdownSanitizeSchema } from "../lib/markdown-sanitize";
-import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
+import { isSubAgentToolCall, type SubagentTranscriptEntry } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
-import { ArtifactViewer } from "./ArtifactViewer";
-import { McpAppHostFromToolCall } from "./McpAppHost";
+import { ToolCallRow } from "./ToolCallRow";
 import { ChartCard, PlotlyCard, useContentSegments } from "./InlineChart";
 import { TodoStrip } from "./TodoStrip";
 import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButtons";
 import { CustomDataRenderer } from "./CustomDataRenderer";
-import { parseMcpApp } from "../types/mcp-apps";
 import { splitMessageParts } from "../../server/message-parts";
 import { highlightSubagentMentions, subagentMentionsOf } from "./slash-subagents";
 
@@ -696,20 +694,24 @@ export function turnEndsInThought(messages: Message[]): boolean {
   return buildTurnSegments(messages).at(-1)?.type === 'thought';
 }
 
-function regularToolsInTurn(messages: Message[]): TurnToolCall[] {
-  const tools: TurnToolCall[] = [];
-  for (const segment of buildTurnSegments(messages)) {
-    if (segment.type !== 'thought') continue;
-    for (const item of segment.items) {
-      if (item.kind !== 'tools') continue;
-      for (const tool of item.tools) {
-        if (isSubAgentToolCall(tool)) continue;
-        if (answeredClarify(tool)) continue;
-        tools.push(tool);
+/** A thought is still open work when a tool has no result yet. A finished subagent card is not. */
+export function turnStillRunning(messages: Message[]): boolean {
+  if (!turnEndsInThought(messages)) return false;
+  const last = buildTurnSegments(messages).at(-1);
+  if (!last || last.type !== 'thought') return false;
+  let sawSubagent = false;
+  for (const item of last.items) {
+    if (item.kind !== 'tools') continue;
+    for (const tool of item.tools) {
+      if (!isSubAgentToolCall(tool)) {
+        if (tool.content == null) return true;
+        continue;
       }
+      sawSubagent = true;
+      if (tool.content == null) return true;
     }
   }
-  return tools;
+  return !sawSubagent;
 }
 
 function regularToolId(tool: TurnToolCall, index: number): string {
@@ -750,7 +752,7 @@ interface AIMessageRendererProps {
   approvalSlotOffset?: number;
   totalActionRequests?: number;
   allDecisionsMade?: boolean;
-  onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
+  onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }, requestIndex?: number) => void;
   thinkingLive?: boolean;
   questionContent?: ReactNode;
   interruptContent?: ReactNode;
@@ -774,21 +776,10 @@ function AnswerStream({ text }: { text: string }) {
   );
 }
 
-function toolQueryHint(tool: TurnToolCall): string | null {
-  const query = tool.args?.query;
-  if (typeof query !== 'string' || query.trim().length === 0) return null;
-  const trimmed = query.trim();
-  return trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
-}
-
 export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision, thinkingLive = false, questionContent, interruptContent, turnMessages }: AIMessageRendererProps) {
   const source = turnMessages && turnMessages.length > 0 ? turnMessages : [message];
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [thoughtChoice, setThoughtChoice] = useState<Record<number, boolean>>({});
   const messageKey = JSON.stringify(source);
-
-  const userExpandedRef = useRef<Set<string>>(new Set());
-  const userCollapsedRef = useRef<Set<string>>(new Set());
 
   const pendingToolNames = useMemo(
     () => {
@@ -800,43 +791,6 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
   );
 
   const segments = useMemo(() => buildTurnSegments(source), [messageKey]);
-  const regularTools = useMemo(() => regularToolsInTurn(source), [messageKey]);
-
-  useEffect(() => {
-    setExpandedItems((prev) => {
-      const next = new Set(prev);
-      let changed = false;
-      regularTools.forEach((tc, idx) => {
-        const itemId = regularToolId(tc, idx);
-        const needsApproval = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && tc.content == null;
-        const isFinished = tc.content != null;
-        if (needsApproval && !next.has(itemId) && !userCollapsedRef.current.has(itemId)) {
-          next.add(itemId);
-          changed = true;
-        } else if (isFinished && next.has(itemId) && !userExpandedRef.current.has(itemId)) {
-          next.delete(itemId);
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [pendingToolNames, messageKey, regularTools]);
-
-  const toggleExpand = (itemId: string) => {
-    setExpandedItems(prev => {
-      const next = new Set(prev);
-      if (prev.has(itemId)) {
-        next.delete(itemId);
-        userExpandedRef.current.delete(itemId);
-        userCollapsedRef.current.add(itemId);
-      } else {
-        next.add(itemId);
-        userCollapsedRef.current.delete(itemId);
-        userExpandedRef.current.add(itemId);
-      }
-      return next;
-    });
-  };
 
   const approvalSlotByToolCallId = useMemo(() => {
     const map = new Map<string, number>();
@@ -888,158 +842,26 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
 
     const renderRegularTool = (toolCall: TurnToolCall, idx: number) => {
       const itemId = regularToolId(toolCall, idx);
-      const isExpanded = expandedItems.has(itemId);
       const needsApproval = (pendingToolNames.has(toolCall.name) || pendingToolNames.has('task')) && toolCall.content == null;
       const regTcId = toolCall.id ?? `${toolCall.name}-${idx}`;
       const regSlot = approvalSlotByToolCallId.get(regTcId);
       const isThisCurrentApproval = regSlot !== undefined && regSlot === globalApprovalIndex && !allDecisionsMade;
       const showButtons = totalActionRequests <= 1 ? needsApproval : (needsApproval && isThisCurrentApproval);
-      const mcpAppDesc = parseMcpApp(toolCall.mcpApp);
-      const hasMcpApp = Boolean(mcpAppDesc);
-      const failed = toolCall.status === 'error';
-      const queryHint = toolQueryHint(toolCall);
-
       return (
-        <div
+        <ToolCallRow
           key={itemId}
-          className={cn(
-            "border rounded-lg overflow-hidden bg-card/50",
-            needsApproval ? "border-yellow-500/60" : "border-border/40",
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => toggleExpand(itemId)}
-            aria-expanded={isExpanded}
-            aria-controls={`tool-body-${itemId}`}
-            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} tool call: ${toolCall.name}`}
-            className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 transition-colors"
-          >
-            <div className="flex items-center gap-2 text-xs min-w-0">
-              {failed ? (
-                <AlertCircle className="w-3 h-3 text-red-500 shrink-0" aria-hidden="true" />
-              ) : toolCall.content != null ? (
-                <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" aria-hidden="true" />
-              ) : (
-                <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" aria-hidden="true" />
-              )}
-              <code className="font-mono text-[11px] bg-muted/50 px-1 py-0.5 rounded">{toolCall.name}</code>
-              {queryHint && (
-                <span className="text-muted-foreground/50 text-[11px] truncate">&quot;{queryHint}&quot;</span>
-              )}
-            </div>
-            <span className="flex items-center gap-2 shrink-0 ml-2">
-              {hasMcpApp && !isExpanded && (
-                <span className="text-[11px] text-muted-foreground/70">Click to open UI</span>
-              )}
-              {isExpanded ? (
-                <ChevronDown className="w-3 h-3 text-muted-foreground/40 shrink-0" aria-hidden="true" />
-              ) : (
-                <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" aria-hidden="true" />
-              )}
-            </span>
-          </button>
-
-          {isExpanded && (
-            <div id={`tool-body-${itemId}`} className="border-t border-border/30">
-              <div className="px-3 pb-2 max-h-72 overflow-y-auto">
-                <div className="text-[10px] font-medium text-muted-foreground/50 mb-1 mt-2 uppercase tracking-wider">Arguments</div>
-                <pre className="text-[11px] text-foreground/70 bg-muted/40 border border-border/30 p-2 rounded overflow-auto font-mono">
-                  {JSON.stringify(toolCall.args, null, 2)}
-                </pre>
-                {!needsApproval && hasMcpApp && (
-                  <div className="mt-2">
-                    <McpAppHostFromToolCall
-                      mcpAppRaw={toolCall.mcpApp}
-                      toolName={toolCall.name}
-                      toolCancelled={toolCall.content != null && !mcpAppDesc?.result}
-                      className="mb-2"
-                    />
-                  </div>
-                )}
-                {!needsApproval && (
-                  <>
-                    <div className={cn(
-                      "text-[10px] font-medium mb-1 mt-2 uppercase tracking-wider",
-                      failed ? "text-red-500/70" : "text-muted-foreground/50",
-                    )}>
-                      {failed ? 'Error' : toolCall.content != null ? 'Result' : 'Running...'}
-                    </div>
-                    {(() => {
-                      const raw = toolCall.content;
-                      if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
-                      const text = typeof raw === 'string' ? raw.slice(0, 2000) : JSON.stringify(raw, null, 2).slice(0, 2000);
-                      const kind = detectArtifactKind(text);
-                      if (kind !== 'text' && text.length > 100) {
-                        return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
-                      }
-                      return (
-                        <pre className="text-[11px] text-foreground/70 bg-muted/40 border border-border/30 p-2 rounded overflow-auto font-mono max-h-40">
-                          {text}
-                        </pre>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {showButtons && onInterruptResume && (
-            <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-3 py-2 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
-              <button
-                type="button"
-                autoFocus
-                onClick={() => {
-                  if (totalActionRequests > 1 && onSingleDecision) {
-                    onSingleDecision({ type: 'approve' });
-                  } else {
-                    onInterruptResume?.([{ type: 'approve' }]);
-                  }
-                }}
-                aria-label={`Approve tool call: ${toolCall.name}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
-              >
-                <Check className="w-3 h-3" aria-hidden="true" />
-                Approve
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (totalActionRequests > 1 && onSingleDecision) {
-                    onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
-                  } else {
-                    onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
-                  }
-                }}
-                aria-label={`Reject tool call: ${toolCall.name}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
-                style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onAlwaysAllow?.([toolCall.name]);
-                  if (totalActionRequests > 1 && onSingleDecision) {
-                    onSingleDecision({ type: 'approve' });
-                  } else {
-                    onInterruptResume?.([{ type: 'approve' }]);
-                  }
-                }}
-                aria-label={`Always allow tool: ${toolCall.name}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
-              >
-                <ShieldCheck className="w-3 h-3" aria-hidden="true" />
-                Always allow
-              </button>
-            </div>
-          )}
-        </div>
+          toolCall={toolCall}
+          itemId={itemId}
+          pendingToolNames={pendingToolNames}
+          showButtons={showButtons}
+          totalActionRequests={totalActionRequests}
+          onInterruptResume={onInterruptResume}
+          onSingleDecision={onSingleDecision}
+          onAlwaysAllow={onAlwaysAllow}
+        />
       );
     };
+
 
     const gutter = (segmentIndex: number) => (
       <div className="w-8 shrink-0">
@@ -1130,6 +952,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                                     args: toolCall.args ?? {},
                                     id: toolCall.id ?? `${toolCall.name}-${toolIndex}`,
                                     content: toolCall.content,
+                                    transcript: (toolCall as { transcript?: SubagentTranscriptEntry[] }).transcript,
                                   }}
                                   messageId={message.id ?? ''}
                                   index={toolIndex}
@@ -1173,7 +996,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
     );
   // The segment list is derived from messageKey, so the render follows that snapshot.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems, thoughtChoice, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId, thinkingLive, questionContent, interruptContent, pendingToolNames]);
+  }, [messageKey, thoughtChoice, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId, thinkingLive, questionContent, interruptContent, pendingToolNames]);
 
   return (
     <div className="space-y-2 w-full">
@@ -1262,16 +1085,18 @@ export function ChatMessagesView({
 
   const globalAllDecisionsMade = globalActionRequests.length > 0 && globalDecisions.every(d => d !== null);
 
-  const handleGlobalSingleDecision = useCallback((decision: { type: 'approve' | 'reject'; message?: string }) => {
+  const handleGlobalSingleDecision = useCallback((decision: { type: 'approve' | 'reject'; message?: string }, requestIndex?: number) => {
+    const index = requestIndex ?? globalApprovalIndex;
     const newDecisions = [...globalDecisions];
-    newDecisions[globalApprovalIndex] = decision;
+    newDecisions[index] = decision;
     setGlobalDecisions(newDecisions);
 
-    const nextIndex = globalApprovalIndex + 1;
-    if (nextIndex >= globalActionRequests.length) {
-      onInterruptResume?.(newDecisions.filter(Boolean) as Array<{ type: 'approve' | 'reject'; message?: string }>);
-    } else {
-      setGlobalApprovalIndex(nextIndex);
+    const ready = newDecisions.length === globalActionRequests.length
+      && newDecisions.every((entry) => entry !== null);
+    if (ready) {
+      onInterruptResume?.(newDecisions as Array<{ type: 'approve' | 'reject'; message?: string }>);
+    } else if (requestIndex == null) {
+      setGlobalApprovalIndex(index + 1);
     }
   }, [globalDecisions, globalApprovalIndex, globalActionRequests.length, onInterruptResume]);
 

@@ -10,6 +10,7 @@ import {
   selectChatsError,
   selectStreamingState,
   setMessageFeedback,
+  attachSubagentTranscripts,
   updateChat,
   updateStreamingState,
 } from '../redux/slices/chats';
@@ -17,7 +18,7 @@ import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from
 import { addToast } from '../redux/slices/toasts';
 import { useStreamingAPI, MAX_RETRIES, queuedApprovalForInterrupt, RECOVERY_POLL_TIMEOUT_MS } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
-import { ChatMessagesView, turnEndsInThought } from '../components/ChatMessagesView';
+import { ChatMessagesView, turnStillRunning } from '../components/ChatMessagesView';
 import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { ReconnectingBanner } from '../components/ReconnectingBanner';
 import { InterruptBanner } from '../components/InterruptBanner';
@@ -25,8 +26,8 @@ import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
-import { getThreadStateAndInterrupt } from '../services/agent-rest';
-import { serverKeepsLocalMessages } from '../services/reload-watch';
+import { getSubagentTranscripts, getThreadStateAndInterrupt, getThreadStatus } from '../services/agent-rest';
+import { savedInterruptIfPaused, serverKeepsLocalMessages, waitUntilPaused } from '../services/reload-watch';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -111,22 +112,33 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const needsServerRefresh = hasMessages && hasStreamError && isNotStreaming;
 
   useEffect(() => {
+    if (!chatId || hydrating || isClientCreatedChat(chatId)) return;
+    void thread.attachLiveRun();
+  }, [chatId, hydrating, thread.attachLiveRun]);
+
+  useEffect(() => {
     if (!chatId || hydrating) return;
     if (hasMessages && !needsServerRefresh) {
       if (isClientCreatedChat(chatId)) return;
       let cancelled = false;
-      getThreadStateAndInterrupt(chatId).then(({ interrupt: serverInterrupt }) => {
+      getThreadStateAndInterrupt(chatId).then(async ({ interrupt: serverInterrupt }) => {
         // A late or empty miss must not wipe a card the stream already showed.
         if (cancelled || streamingLoadingRef.current || !serverInterrupt) return;
+        const approval = savedInterruptIfPaused(await getThreadStatus(chatId), serverInterrupt);
+        if (cancelled || streamingLoadingRef.current || !approval) return;
         dispatch(updateStreamingState({
           chatId,
           state: {
             pendingInterrupt: {
-              value: serverInterrupt.value as any,
-              resumable: serverInterrupt.resumable,
+              value: approval.value as any,
+              resumable: approval.resumable,
             },
           },
         }));
+      }).catch(() => {});
+      getSubagentTranscripts(chatId).then((saved) => {
+        if (cancelled || saved.length === 0) return;
+        dispatch(attachSubagentTranscripts({ chatId, transcripts: saved }));
       }).catch(() => {});
       return () => { cancelled = true; };
     }
@@ -142,7 +154,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     const feedbackPromise = getThreadFeedback(chatId, feedbackUserId);
 
     Promise.all([threadPromise, feedbackPromise])
-      .then(([{ messages: msgs, interrupt: pendingInterrupt }, feedbackMap]) => {
+      .then(async ([{ messages: msgs, interrupt: pendingInterrupt }, feedbackMap]) => {
         if (cancelled) return;
         if (msgs.length > 0) {
           dispatch(updateChat({
@@ -157,6 +169,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
             },
           }));
           thread.setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
+          const saved = await getSubagentTranscripts(chatId);
+          if (!cancelled && saved.length > 0) {
+            dispatch(attachSubagentTranscripts({ chatId, transcripts: saved }));
+          }
           if (needsServerRefresh) {
             dispatch(updateStreamingState({
               chatId,
@@ -169,13 +185,16 @@ export function ChatPage({ threadId }: { threadId: string }) {
             dispatch(setMessageFeedback({ chatId, messageId: msgId, feedback: fb }));
           }
         }
-        if (pendingInterrupt) {
+        const approval = !cancelled && pendingInterrupt
+          ? savedInterruptIfPaused(await getThreadStatus(chatId), pendingInterrupt)
+          : null;
+        if (approval && !cancelled) {
           dispatch(updateStreamingState({
             chatId,
             state: {
               pendingInterrupt: {
-                value: pendingInterrupt.value as any,
-                resumable: pendingInterrupt.resumable,
+                value: approval.value as any,
+                resumable: approval.resumable,
               },
             },
           }));
@@ -198,7 +217,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     && !streamingState.pendingInterrupt
     && !streamingState.isConnected
     && (currentChat?.messages.length ?? 0) > 0
-    && turnEndsInThought(currentChat?.messages ?? []),
+    && turnStillRunning(currentChat?.messages ?? []),
   );
   useEffect(() => {
     if (!reloadWatch || !chatId) return;
@@ -234,27 +253,31 @@ export function ChatPage({ threadId }: { threadId: string }) {
         return;
       }
       try {
-        const next = await getThreadStateAndInterrupt(chatId);
+        const next = await getThreadStateAndInterrupt(chatId, { fresh: true });
         if (cancelled || streamingConnectedRef.current) return;
         const local = messagesRef.current;
         if (serverKeepsLocalMessages(local, next.messages)) {
           thread.setMessages(next.messages);
         }
-        if (next.interrupt) {
+        const status = await getThreadStatus(chatId);
+        if (cancelled || streamingConnectedRef.current) return;
+        const approval = savedInterruptIfPaused(status, next.interrupt);
+        if (approval) {
           dispatch(updateStreamingState({
             chatId,
             state: {
               isLoading: false,
               pendingInterrupt: {
-                value: next.interrupt.value as any,
-                resumable: next.interrupt.resumable,
+                value: approval.value as any,
+                resumable: approval.resumable,
               },
             },
           }));
           release(false);
           return;
         }
-        if (next.messages.length > 0 && !turnEndsInThought(next.messages)) release(true);
+        if (status === 'busy' || status === null) return;
+        release(true);
       } catch {
         // A missed poll leaves the screen and the loading flag as they are.
       }
@@ -529,21 +552,28 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
   useEffect(() => {
     const interrupt = thread.pendingInterrupt;
+    if (!chatId) return;
+    if (interrupt && interrupt === thread.refusedInterrupt) return;
     if (typeof interrupt?.value !== 'object' || !interrupt.value.action_requests?.length) return;
-
-    if (autoApproveAllTools) {
-      const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
-      thread.resumeWithDecisions(allApproved).catch((err) => {
-        console.error('Auto-approve-all resume failed:', err);
+    const approval = interrupt.value;
+    let cancelled = false;
+    void (async () => {
+      const paused = await waitUntilPaused(() => getThreadStatus(chatId), () => cancelled);
+      if (!paused || cancelled) return;
+      if (autoApproveAllTools) {
+        const allApproved = approval.action_requests.map(() => ({ type: 'approve' as const }));
+        thread.resumeWithDecisions(allApproved).catch((err) => {
+          console.error('Auto-approve-all resume failed:', err);
+        });
+        return;
+      }
+      const { allAutoApproved, decisions } = thread.checkAndAutoApprove(approval);
+      if (!allAutoApproved || cancelled) return;
+      thread.resumeWithDecisions(decisions).catch((err) => {
+        console.error('Auto-approve resume failed:', err);
       });
-      return;
-    }
-
-    const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
-    if (!allAutoApproved) return;
-    thread.resumeWithDecisions(decisions).catch((err) => {
-      console.error('Auto-approve resume failed:', err);
-    });
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.pendingInterrupt, autoApproveAllTools]);
 
