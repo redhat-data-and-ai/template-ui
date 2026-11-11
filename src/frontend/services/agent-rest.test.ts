@@ -198,7 +198,7 @@ describe('agent-rest', () => {
       expect(msgs).toEqual([]);
     });
 
-    it('combines tool call results with AI messages', async () => {
+    it.each(['error', 'success', undefined] as const)('preserves tool result content and status %s when loading history', async (status) => {
       vi.mocked(authenticatedFetch).mockResolvedValue(
         new Response(
           JSON.stringify({
@@ -209,7 +209,7 @@ describe('agent-rest', () => {
                   content: '',
                   tool_calls: [{ id: 'tc1', name: 'search', args: { q: 'test' } }],
                 },
-                { type: 'tool', content: 'result data', tool_call_id: 'tc1' },
+                { type: 'tool', content: 'result data', tool_call_id: 'tc1', status },
               ],
             },
           }),
@@ -220,6 +220,7 @@ describe('agent-rest', () => {
       const msgs = await getThreadState('t1');
       expect(msgs).toHaveLength(1);
       expect((msgs[0] as any).tool_calls[0].content).toBe('result data');
+      expect((msgs[0] as any).tool_calls[0].status).toBe(status);
     });
 
     it('normalizes object content to JSON string', async () => {
