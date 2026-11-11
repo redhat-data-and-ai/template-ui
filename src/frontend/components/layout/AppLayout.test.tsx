@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { setProjects } from '../../redux/slices/projects';
 import { AppLayout } from './AppLayout';
 import { HomePage } from '../../pages/HomePage';
 import { chatStorage } from '../../services/chatStorage';
-import { getAllThreadsByUserId } from '../../services/agent-rest';
+import { getAllThreadsByUserId, getThreadState } from '../../services/agent-rest';
 import { getProjects, getThreadsByProject } from '../../services/projects-api';
 import { markChatAsClientCreated, unmarkChatAsClientCreated } from '../../services/newChatTracker';
 
@@ -88,6 +88,20 @@ vi.mock('../Sidebar', () => ({
     </>
   ),
 }));
+
+const clientCreatedTestIds = new Set<string>();
+
+beforeEach(() => {
+  vi.mocked(getAllThreadsByUserId).mockReset();
+  vi.mocked(getThreadState).mockReset();
+  unmarkChatAsClientCreated('c1');
+});
+
+afterEach(() => {
+  unmarkChatAsClientCreated('c1');
+  for (const id of clientCreatedTestIds) unmarkChatAsClientCreated(id);
+  clientCreatedTestIds.clear();
+});
 
 function seedStore() {
   const store = createTestStore();
@@ -170,6 +184,7 @@ describe('AppLayout — project delete and chat count', () => {
       await user.click(screen.getByRole('button', { name: 'Start chat: What can you do for me?' }));
     }
     const chatId = store.getState().chats.chats[0].id;
+    clientCreatedTestIds.add(chatId);
 
     // A successful stream response clears this marker before history settles.
     if (streamConnected) unmarkChatAsClientCreated(chatId);
@@ -179,6 +194,34 @@ describe('AppLayout — project delete and chat count', () => {
       expect(store.getState().chats.threadsListHydrated).toBe(true);
     });
     expect(store.getState().chats.chats.map((chat) => chat.id)).toContain(chatId);
+  });
+
+  it.each([false, true])('warms a backend thread instead of a new local chat (marker cleared: %s)', async (markerCleared) => {
+    let resolveHistory!: (history: Array<{ id: string; updatedAt: string }>) => void;
+    vi.mocked(getAllThreadsByUserId).mockReturnValueOnce(
+      new Promise((resolve) => { resolveHistory = resolve; }),
+    );
+    const store = createTestStore();
+    renderLayout(store);
+
+    markChatAsClientCreated('c1');
+    store.dispatch(addChat({
+      id: 'c1',
+      title: 'New Chat',
+      timestamp: '2026-11-11T00:00:00.000Z',
+      preview: '',
+      messages: [],
+      historicalActivities: {},
+      feedback: {},
+    }));
+    if (markerCleared) unmarkChatAsClientCreated('c1');
+    resolveHistory([{ id: 'backend-chat', updatedAt: '2026-01-01T00:00:00.000Z' }]);
+
+    await waitFor(() => {
+      expect(store.getState().chats.threadsListHydrated).toBe(true);
+    });
+    expect(store.getState().chats.chats.map((chat) => chat.id)).toContain('c1');
+    expect(getThreadState).toHaveBeenCalledExactlyOnceWith('backend-chat');
   });
 
   it('preserves a chat already connecting at mount when its marker clears before history returns', async () => {

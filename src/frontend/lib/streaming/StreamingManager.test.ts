@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StreamingManager } from './StreamingManager';
 import type { StreamCallback } from './StreamingManager';
-import { markChatAsClientCreated, isClientCreatedChat } from '@/services/newChatTracker';
+import { markChatAsClientCreated, isClientCreatedChat, unmarkChatAsClientCreated } from '@/services/newChatTracker';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,7 @@ describe('StreamingManager', () => {
   });
 
   afterEach(() => {
+    unmarkChatAsClientCreated(BASE_REQUEST.threadId);
     vi.restoreAllMocks();
   });
 
@@ -269,6 +270,52 @@ describe('StreamingManager', () => {
     await manager.stream(BASE_REQUEST, makeCallbacks());
 
     expect(isClientCreatedChat('thread-1')).toBe(false);
+  });
+
+  it.each(['HTTP error', 'network failure'])(
+    'allows server hydration after a first POST ends in %s',
+    async (failure) => {
+      markChatAsClientCreated(BASE_REQUEST.threadId);
+      if (failure === 'HTTP error') {
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
+      } else {
+        vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      }
+
+      const callbacks = makeCallbacks({
+        onError: vi.fn(() => {
+          expect(isClientCreatedChat(BASE_REQUEST.threadId)).toBe(false);
+        }),
+      });
+      await new StreamingManager().stream(BASE_REQUEST, callbacks);
+
+      expect(callbacks.onError).toHaveBeenCalledOnce();
+      expect(isClientCreatedChat(BASE_REQUEST.threadId)).toBe(false);
+    },
+  );
+
+  it('unmarks a client-created chat when the first POST is cancelled', async () => {
+    markChatAsClientCreated(BASE_REQUEST.threadId);
+    vi.mocked(fetch).mockImplementationOnce(
+      (_url, opts) => new Promise<Response>((_resolve, reject) => {
+        opts?.signal?.addEventListener('abort', () => {
+          const error = new Error('Aborted');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      }),
+    );
+
+    const manager = new StreamingManager();
+    const callbacks = makeCallbacks();
+    const streamPromise = manager.stream(BASE_REQUEST, callbacks);
+    expect(isClientCreatedChat(BASE_REQUEST.threadId)).toBe(true);
+    manager.cancel();
+    await streamPromise;
+
+    expect(isClientCreatedChat(BASE_REQUEST.threadId)).toBe(false);
+    expect(callbacks.onStatusChange).toHaveBeenCalledWith('cancelled');
+    expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
   it('forwards message_id from token SSE to onToken callback', async () => {

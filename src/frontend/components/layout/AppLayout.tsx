@@ -228,7 +228,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         }
 
         // Pre-fetch most recent thread's messages (warm the cache)
-        const topThread = reconciled.find((c) => c.messages.length === 0);
+        const topThread = reconciled.find(
+          (c) => c.messages.length === 0 && backendIds.has(c.id) && !isClientCreatedChat(c.id),
+        );
         if (topThread) {
           getThreadState(topThread.id).then((msgs) => {
             if (msgs.length > 0) {
