@@ -112,6 +112,7 @@ function combineToolCallandResult(messages: Message[]) {
                 const merged: Record<string, unknown> = {
                   ...tc,
                   content: normalizeContent(message.content),
+                  status: message.status,
                 };
                 if (toolMsg.artifact !== undefined) {
                   merged.artifact = toolMsg.artifact;
