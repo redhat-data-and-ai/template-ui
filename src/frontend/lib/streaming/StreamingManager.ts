@@ -214,6 +214,8 @@ export class StreamingManager {
         callbacks.onDone();
       }
     } catch (error: unknown) {
+      unmarkChatAsClientCreated(request.threadId);
+
       let err: Error;
       if (error instanceof Error) {
         err = error;

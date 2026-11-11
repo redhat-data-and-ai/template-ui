@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useStore } from 'react-redux';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -115,8 +116,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const chatsRef = useRef(chats);
-  useEffect(() => { chatsRef.current = chats; }, [chats]);
+  const store = useStore<RootState>();
 
   useEffect(() => {
     setAuthExpiredCallback(() => {
@@ -153,6 +153,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   useEffect(() => {
     async function loadUserHistory() {
+      const initialChatIds = new Set(store.getState().chats.chats.map((c) => c.id));
+      const initialClientCreatedIds = new Set([...initialChatIds].filter(isClientCreatedChat));
       try {
         dispatch(setLoadingThreads(true));
         const history = await withProjectThreads(
@@ -160,10 +162,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         );
 
         const backendIds = new Set(history.map((t) => t.id));
-        const local = chatsRef.current;
+        const local = store.getState().chats.chats;
 
         const surviving = local.filter(
-          (c) => backendIds.has(c.id) || isClientCreatedChat(c.id),
+          (c) => backendIds.has(c.id) || isClientCreatedChat(c.id) ||
+            initialClientCreatedIds.has(c.id) || !initialChatIds.has(c.id),
         );
 
         const backendTitleMap = new Map(
@@ -225,7 +228,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         }
 
         // Pre-fetch most recent thread's messages (warm the cache)
-        const topThread = reconciled.find((c) => c.messages.length === 0);
+        const topThread = reconciled.find(
+          (c) => c.messages.length === 0 && backendIds.has(c.id) && !isClientCreatedChat(c.id),
+        );
         if (topThread) {
           getThreadState(topThread.id).then((msgs) => {
             if (msgs.length > 0) {
@@ -254,7 +259,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
 
     loadUserHistory();
-  }, [dispatch]);
+  }, [dispatch, store]);
 
   useEffect(() => {
     if (chats.length > 0) {

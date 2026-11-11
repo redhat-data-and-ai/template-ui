@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Send } from 'lucide-react';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
+import { markChatAsClientCreated } from '../services/newChatTracker';
 
 function builtinQuickPrompts(): string[] {
   return [
@@ -35,6 +36,7 @@ export function HomePage() {
   const startChat = useCallback(
     (initialPrompt?: string) => {
       const newChatId = uuidv4();
+      markChatAsClientCreated(newChatId);
       const newChat: ChatItem = {
         id: newChatId,
         title: initialPrompt?.substring(0, 40) || 'New Chat',
