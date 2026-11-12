@@ -58,6 +58,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({});
   const [hydrating, setHydrating] = useState(false);
+  const hydratedThreadRef = useRef<string | null>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
@@ -104,7 +105,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     if (!chatId || hydrating) return;
-    if (hasMessages && !needsServerRefresh) return;
+    if (thread.isLoading || thread.isResuming) return;
+    if (hydratedThreadRef.current === chatId && !needsServerRefresh) return;
 
     const locState = location.state as Record<string, unknown> | null;
     if (locState?.initialPrompt != null) return;
@@ -117,8 +119,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
     const feedbackPromise = getThreadFeedback(chatId, feedbackUserId);
 
     Promise.all([threadPromise, feedbackPromise])
-      .then(([{ messages: msgs, interrupt: pendingInterrupt }, feedbackMap]) => {
+      .then(([{ messages: msgs, interrupt: pendingInterrupt, interrupts }, feedbackMap]) => {
         if (cancelled) return;
+        hydratedThreadRef.current = chatId;
         if (msgs.length > 0) {
           dispatch(updateChat({
             id: chatId,
@@ -144,17 +147,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
             dispatch(setMessageFeedback({ chatId, messageId: msgId, feedback: fb }));
           }
         }
-        if (pendingInterrupt) {
-          dispatch(updateStreamingState({
-            chatId,
-            state: {
-              pendingInterrupt: {
-                value: pendingInterrupt.value as any,
-                resumable: pendingInterrupt.resumable,
-              },
-            },
-          }));
-        }
+        dispatch(updateStreamingState({
+          chatId,
+          state: { pendingInterrupts: interrupts ?? (pendingInterrupt ? [pendingInterrupt] : []) },
+        }));
         setHydrating(false);
       })
       .catch(() => {
@@ -370,7 +366,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
       if (!threadId || !currentChat) return;
       try {
-        await thread.resumeWithDecisions(decisions);
+        await thread.resumeWithDecisions(decisions, thread.pendingInterrupt?.id ?? '');
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
@@ -386,7 +382,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     async (response: string) => {
       if (!threadId || !currentChat) return;
       try {
-        await thread.resumeInterrupt(response);
+        await thread.resumeInterrupt(response, thread.pendingInterrupt?.id ?? '');
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
@@ -402,10 +398,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
     dispatch(
       updateStreamingState({
         chatId: threadId,
-        state: { pendingInterrupt: null },
+        state: { pendingInterrupts: thread.pendingInterrupts.filter(item => item.id !== thread.pendingInterrupt?.id) },
       }),
     );
-  }, [dispatch, threadId]);
+  }, [dispatch, threadId, thread]);
 
   const handleAlwaysAllow = useCallback(
     (toolNames: string[]) => {
@@ -417,13 +413,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
   );
 
   const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
+  const autoApprovalAttempts = useRef(new Set<string>());
+
   useEffect(() => {
     const interrupt = thread.pendingInterrupt;
-    if (typeof interrupt?.value !== 'object' || !interrupt.value.action_requests?.length) return;
+    if (!interrupt?.id || thread.isResuming || thread.isLoading || typeof interrupt.value !== 'object' || !interrupt.value.action_requests?.length) return;
+    const key = `${threadId}:${interrupt.id}`;
+    if (autoApprovalAttempts.current.has(key)) return;
 
     if (autoApproveAllTools) {
       const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
-      thread.resumeWithDecisions(allApproved).catch((err) => {
+      autoApprovalAttempts.current.add(key);
+      thread.resumeWithDecisions(allApproved, interrupt.id).catch((err) => {
         console.error('Auto-approve-all resume failed:', err);
       });
       return;
@@ -431,13 +432,14 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
     const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
     if (!allAutoApproved) return;
-    thread.resumeWithDecisions(decisions).catch((err) => {
+    autoApprovalAttempts.current.add(key);
+    thread.resumeWithDecisions(decisions, interrupt.id).catch((err) => {
       console.error('Auto-approve resume failed:', err);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.pendingInterrupt, autoApproveAllTools]);
+  }, [thread.pendingInterrupt, thread.isResuming, thread.isLoading, autoApproveAllTools]);
 
-  // Replay queued HITL decisions when agent recovers from downtime
+  // Refresh approvals after recovery; decisions are never replayed automatically.
   useEffect(() => {
     const prev = prevHealthRef.current;
     prevHealthRef.current = agentHealth.status;
@@ -450,38 +452,20 @@ export function ChatPage({ threadId }: { threadId: string }) {
         let lastUpdateCount = currentMsgCount;
         const recoveryPoll = setInterval(async () => {
           try {
-            const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
+            const { messages: msgs, interrupt, interrupts } = await getThreadStateAndInterrupt(threadId);
 
             if (interrupt) {
               dispatch(updateChat({ id: threadId, updates: { messages: msgs } }));
               thread.setMessages(msgs.map((m) => JSON.parse(JSON.stringify(m)) as Message));
 
-              const queueKey = `pending-decision:${threadId}`;
-              const raw = localStorage.getItem(queueKey);
-              if (raw) {
-                const { decisions } = JSON.parse(raw) as { decisions: Array<{ type: 'approve' | 'reject'; message?: string }> };
-                localStorage.removeItem(queueKey);
-                dispatch(updateStreamingState({
-                  chatId: threadId,
-                  state: { error: null, isLoading: false, isConnected: false, pendingInterrupt: null },
-                }));
-                clearInterval(recoveryPoll);
-                thread.resumeWithDecisions(decisions).catch((err) => {
-                  console.error('Queued decision replay failed:', err);
-                });
-              } else {
-                dispatch(updateStreamingState({
-                  chatId: threadId,
-                  state: {
-                    error: null, isLoading: false, isConnected: false,
-                    pendingInterrupt: {
-                      value: interrupt.value as any,
-                      resumable: interrupt.resumable,
-                    },
-                  },
-                }));
-                clearInterval(recoveryPoll);
-              }
+              dispatch(updateStreamingState({
+                chatId: threadId,
+                state: {
+                  error: null, isLoading: false, isConnected: false,
+                  pendingInterrupts: interrupts ?? [interrupt],
+                },
+              }));
+              clearInterval(recoveryPoll);
               return;
             }
 
@@ -583,11 +567,20 @@ export function ChatPage({ threadId }: { threadId: string }) {
               <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
             )}
             <ReconnectingBanner streamingState={streamingState} maxRetries={MAX_RETRIES} />
+            {thread.pendingInterrupts.length > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2" role="status">
+                <span>{thread.pendingInterrupts.length} pending approval{thread.pendingInterrupts.length === 1 ? '' : 's'}</span>
+                <Button variant="link" size="sm" isDisabled={thread.isResuming} onClick={() => {
+                  thread.refreshInterrupts().catch(() => dispatch(addToast({ title: 'Unable to refresh approvals', variant: 'danger' })));
+                }}>Refresh approvals</Button>
+              </div>
+            )}
             <ChatMessagesView
               key={threadId}
               messages={thread.messages}
               streamEvents={thread.streamEvents}
               isLoading={thread.isLoading || !!thread.pendingInterrupt}
+              isResuming={thread.isResuming}
               pendingInterrupt={
                 thread.pendingInterrupt &&
                 typeof thread.pendingInterrupt.value === 'object' &&
@@ -603,7 +596,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
                 !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
                   ? (
                     <InterruptBanner
+                      key={thread.pendingInterrupt.id}
                       interrupt={thread.pendingInterrupt}
+                      isSubmitting={thread.isResuming}
                       onResume={handleMCPOAuthResume}
                       onDismiss={handleInterruptDismiss}
                     />

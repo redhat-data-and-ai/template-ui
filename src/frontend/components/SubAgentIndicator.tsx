@@ -15,6 +15,7 @@ interface SubAgentIndicatorProps {
   readonly messageId: string;
   readonly index: number;
   readonly pendingInterrupt?: InterruptInfo | null;
+  readonly isResuming?: boolean;
   readonly onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
   readonly onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
   readonly isCurrentApproval?: boolean;
@@ -46,7 +47,7 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt, isResuming = false, onInterruptResume, onSingleDecision, isCurrentApproval, onAlwaysAllow }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const name = extractSubAgentName(toolCall);
@@ -70,7 +71,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
       setIsApproving(false);
       setExpanded(true);
     }
-  }, [needsApproval, pendingInterrupt]);
+  }, [needsApproval, pendingInterrupt, isResuming]);
 
   return (
     <div className="flex items-start gap-3">
@@ -177,6 +178,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                 <div role="alert" aria-live="assertive" aria-label={isInnerToolApproval ? `Tool ${innerToolLabel} requires approval` : `Sub-agent ${name} requires approval`} className="flex items-center gap-2 py-3 border-t border-yellow-500/30 bg-yellow-500/5 -mx-4 px-4 flex-wrap rounded-b-lg">
                   <button
                     type="button"
+                    disabled={isResuming}
                     autoFocus
                     onClick={() => {
                       setIsApproving(true);
@@ -197,6 +199,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                   </button>
                   <button
                     type="button"
+                    disabled={isResuming}
                     onClick={() => {
                       setIsApproving(true);
                       if (isInnerToolApproval) {
@@ -215,6 +218,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                   </button>
                   <button
                     type="button"
+                    disabled={isResuming}
                     onClick={() => {
                       setIsApproving(true);
                       onAlwaysAllow?.(alwaysAllowNames);

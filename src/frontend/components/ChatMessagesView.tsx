@@ -512,6 +512,7 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
 interface AIMessageRendererProps {
   message: Message;
   pendingInterrupt?: InterruptInfo | null;
+  isResuming?: boolean;
   onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
   onAlwaysAllow?: (toolNames: string[]) => void;
   globalApprovalIndex?: number;
@@ -521,7 +522,7 @@ interface AIMessageRendererProps {
   onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
 }
 
-export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, pendingInterrupt, isResuming = false, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
 
@@ -626,6 +627,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                 messageId={message.id ?? ''}
                 index={idx}
                 pendingInterrupt={pendingInterrupt}
+                isResuming={isResuming}
                 onInterruptResume={onInterruptResume}
                 onSingleDecision={totalActionRequests > 1 ? onSingleDecision : undefined}
                 isCurrentApproval={totalActionRequests > 1 ? isThisCurrent : undefined}
@@ -769,6 +771,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                         <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
                           <button
                             type="button"
+                            disabled={isResuming}
                             autoFocus
                             onClick={() => {
                               if (totalActionRequests > 1 && onSingleDecision) {
@@ -786,6 +789,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                           </button>
                           <button
                             type="button"
+                            disabled={isResuming}
                             onClick={() => {
                               if (totalActionRequests > 1 && onSingleDecision) {
                                 onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
@@ -801,6 +805,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
                           </button>
                           <button
                             type="button"
+                            disabled={isResuming}
                             onClick={() => {
                               onAlwaysAllow?.([toolCall.name]);
                               if (totalActionRequests > 1 && onSingleDecision) {
@@ -838,7 +843,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, onInterruptResume
 
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId]);
+  }, [messageKey, isResuming, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId]);
 
   return (
     <div className="space-y-2 w-full">
@@ -852,6 +857,7 @@ interface ChatMessagesViewProps {
   streamEvents?: StreamEvent[];
   isLoading: boolean;
   pendingInterrupt?: InterruptInfo | null;
+  isResuming?: boolean;
   onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
   onAlwaysAllow?: (toolNames: string[]) => void;
   interruptContent?: React.ReactNode;
@@ -882,6 +888,7 @@ interface ChatMessagesViewProps {
 export function ChatMessagesView({
   messages,
   isLoading,
+  isResuming = false,
   pendingInterrupt,
   onInterruptResume,
   onAlwaysAllow,
@@ -917,17 +924,21 @@ export function ChatMessagesView({
 
   const [globalDecisions, setGlobalDecisions] = useState<Array<{ type: 'approve' | 'reject'; message?: string } | null>>([]);
   const [globalApprovalIndex, setGlobalApprovalIndex] = useState(0);
+  const decidedSlotRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (globalActionRequests.length > 0) {
+    if (!isResuming && globalActionRequests.length > 0) {
+      decidedSlotRef.current = null;
       setGlobalDecisions(new Array(globalActionRequests.length).fill(null));
       setGlobalApprovalIndex(0);
     }
-  }, [globalActionRequests]);
+  }, [globalActionRequests, pendingInterrupt?.id, isResuming]);
 
   const globalAllDecisionsMade = globalActionRequests.length > 0 && globalDecisions.every(d => d !== null);
 
   const handleGlobalSingleDecision = useCallback((decision: { type: 'approve' | 'reject'; message?: string }) => {
+    if (isResuming || decidedSlotRef.current === globalApprovalIndex) return;
+    decidedSlotRef.current = globalApprovalIndex;
     const newDecisions = [...globalDecisions];
     newDecisions[globalApprovalIndex] = decision;
     setGlobalDecisions(newDecisions);
@@ -938,7 +949,7 @@ export function ChatMessagesView({
     } else {
       setGlobalApprovalIndex(nextIndex);
     }
-  }, [globalDecisions, globalApprovalIndex, globalActionRequests.length, onInterruptResume]);
+  }, [isResuming, globalDecisions, globalApprovalIndex, globalActionRequests.length, onInterruptResume]);
 
   const pendingToolNames = useMemo(() => {
     const requests = globalActionRequests;
@@ -1097,6 +1108,7 @@ export function ChatMessagesView({
                   <AIMessageRenderer
                     message={message}
                     pendingInterrupt={pendingInterrupt}
+                    isResuming={isResuming}
                     onInterruptResume={onInterruptResume}
                     onAlwaysAllow={onAlwaysAllow}
                     globalApprovalIndex={globalApprovalIndex}

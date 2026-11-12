@@ -283,3 +283,13 @@ describe('InterruptBanner — MCP auth branch', () => {
     expect(onResume).toHaveBeenCalledWith('continue');
   });
 });
+
+
+it('disables approval submission while a resume is in flight', async () => {
+  const onResume = vi.fn();
+  render(<InterruptBanner interrupt={{id:'a',value:'Please approve this action',resumable:true}} isSubmitting onResume={onResume} onDismiss={vi.fn()} />);
+  const approve = screen.getByRole('button',{name:'Approve'});
+  expect(approve).toBeDisabled();
+  await userEvent.click(approve);
+  expect(onResume).not.toHaveBeenCalled();
+});
