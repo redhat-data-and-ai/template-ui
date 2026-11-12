@@ -8,7 +8,10 @@ import {
   type StreamCallback,
   type StreamStatus,
 } from '@/lib/streaming/StreamingManager';
+import { citationTargetsInChunkResult, citationTargetsInText } from '@/lib/document-references';
+import { prefetchCitedPages } from '@/lib/processed-document';
 import { getStreamingManager } from '@/lib/streaming/streamingManagerRegistry';
+import { callMcpAppTool } from '@/services/mcp-apps-api';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import type { AppDispatch } from '@/redux/store';
 import {
@@ -36,6 +39,18 @@ import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
 import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
+
+function warmAnswerText(buffer: { current: string }, content: string, part: 'thinking' | 'text' | undefined): void {
+  if (part === 'thinking' || !content) return;
+  buffer.current += content;
+  const targets = citationTargetsInText(buffer.current);
+  if (targets.length > 0) prefetchCitedPages(targets, callMcpAppTool);
+}
+
+function warmToolMessage(message: { name?: string; content?: unknown }): void {
+  const targets = citationTargetsInChunkResult(message.name, message.content);
+  if (targets.length > 0) prefetchCitedPages(targets, callMcpAppTool);
+}
 
 type TokenPart = 'thinking' | 'text';
 
@@ -469,6 +484,7 @@ export function useStreamingAPI(threadId: string) {
   }>({ streamStartTime: null, firstTokenTime: null, streamEndTime: null });
   const isStreamingTokensRef = useRef<boolean>(false);
   const userCancelledRef = useRef(false);
+  const citedAnswerRef = useRef('');
   const submitLockRef = useRef(false);
   const streamEndedWithInterruptRef = useRef(false);
   const pendingInterruptRef = useRef(streamingState.pendingInterrupt);
@@ -577,6 +593,7 @@ export function useStreamingAPI(threadId: string) {
 
       try {
       userCancelledRef.current = false;
+      citedAnswerRef.current = '';
       setRetryCount(0);
       setWasInterrupted(false);
       const initialMessageCount = messagesRef.current.length;
@@ -718,6 +735,7 @@ export function useStreamingAPI(threadId: string) {
               if (streamClockRef.current.firstTokenTime == null) {
                 streamClockRef.current.firstTokenTime = Date.now();
               }
+              warmAnswerText(citedAnswerRef, content, part);
               dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef, subagentToolCallId);
             },
             onDraftDiscard() {
@@ -764,6 +782,7 @@ export function useStreamingAPI(threadId: string) {
               }
 
               if (m.type === 'tool') {
+                warmToolMessage(m);
                 dispatch(
                   mergeToolResult({
                     chatId: threadId,
@@ -1323,6 +1342,7 @@ export function useStreamingAPI(threadId: string) {
       const callbacks: StreamCallback = {
         onToken(content, messageId, part, subagentToolCallId) {
           lastTokenTimeRef.current = Date.now();
+          warmAnswerText(citedAnswerRef, content, part);
           dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef, subagentToolCallId);
         },
         onDraftDiscard() {
@@ -1344,6 +1364,7 @@ export function useStreamingAPI(threadId: string) {
             return;
           }
           if (m.type === 'tool') {
+            warmToolMessage(m);
             dispatch(
               mergeToolResult({
                 chatId: threadId,
@@ -1462,6 +1483,7 @@ export function useStreamingAPI(threadId: string) {
             onToken(content, messageId, part, subagentToolCallId) {
               resumeStreamSawProgress = true;
               lastTokenTimeRef.current = Date.now();
+              warmAnswerText(citedAnswerRef, content, part);
               dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef, subagentToolCallId);
             },
             onDraftDiscard() {
@@ -1482,6 +1504,7 @@ export function useStreamingAPI(threadId: string) {
               resumeStreamSawProgress = true;
 
               if (m.type === 'tool') {
+                warmToolMessage(m);
                 dispatch(
                   mergeToolResult({
                     chatId: threadId,
