@@ -19,6 +19,8 @@ function resolveXUserId(request: { session?: { user?: { preferred_username?: str
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
 const CACHE_TTL_MS = 3_000; // 3s — short TTL for recovery polling compatibility
 const CACHE_MAX_ENTRIES = 50;
+/** A chat stream stays open for a long agent turn. */
+const STREAM_TIMEOUT_MS = 20 * 60 * 1000;
 
 function getCachedThreadState(threadId: string): string | null {
   const entry = THREAD_STATE_CACHE.get(threadId);
@@ -887,7 +889,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           },
         };
 
-        const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, 300_000);
+        const streamTimeoutMs = Math.max(cfg.agent.timeout_ms, STREAM_TIMEOUT_MS);
         const runResp = await fetch(runUrl, {
           method: 'POST',
           headers: { ...headers, Accept: 'text/event-stream' },
@@ -967,7 +969,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
       const runResp = await fetch(`${getAgentHost()}/threads/${threadId}/runs/${runId}/stream`, {
         method: 'GET',
         headers: { ...headers, Accept: 'text/event-stream' },
-        signal: AbortSignal.timeout(Math.max(cfg.agent.timeout_ms, 300_000)),
+        signal: AbortSignal.timeout(Math.max(cfg.agent.timeout_ms, STREAM_TIMEOUT_MS)),
       });
       if (!runResp.ok) {
         const body = await runResp.text();
