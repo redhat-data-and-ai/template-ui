@@ -5,7 +5,7 @@ import { renderHook } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import React from 'react';
 import { configureStore } from '@reduxjs/toolkit';
-import chatsReducer, { addChat, selectStreamingState, updateChat, updateStreamingState } from '../redux/slices/chats';
+import chatsReducer, { addChat, appendSubagentTranscript, selectStreamingState, updateChat, updateStreamingState } from '../redux/slices/chats';
 import configReducer from '../redux/slices/config';
 import personalizationReducer from '../redux/slices/personalization';
 import toastsReducer from '../redux/slices/toasts';
@@ -215,6 +215,40 @@ describe('useStreamingAPI — initial state and stop()', () => {
     // The hook exposes the messages it was given
     expect(result.current.messages).toHaveLength(1);
     expect((result.current.messages[0] as { id: string }).id).toBe('injected-1');
+  });
+
+  it('an older setMessages keeps subagent words that arrived later', () => {
+    const { result } = renderHook(() => useStreamingAPI(THREAD_ID), {
+      wrapper: makeWrapper(store),
+    });
+    const taskMessage = {
+      type: 'ai',
+      id: 'ai-1',
+      content: '',
+      tool_calls: [{ id: 'task-1', name: 'task', args: { subagent_type: 'analyst' } }],
+    } as Message;
+
+    act(() => {
+      result.current.setMessages([taskMessage]);
+    });
+    const staleSetMessages = result.current.setMessages;
+    act(() => {
+      store.dispatch(appendSubagentTranscript({
+        chatId: THREAD_ID,
+        toolCallId: 'task-1',
+        messageId: 'sub-1',
+        content: 'the words that arrived later',
+        part: 'text',
+      }));
+    });
+    act(() => {
+      staleSetMessages([taskMessage]);
+    });
+
+    const toolCalls = (result.current.messages[0] as Message & {
+      tool_calls?: Array<{ transcript?: Array<{ content?: string }> }>;
+    }).tool_calls;
+    expect(toolCalls?.[0].transcript?.[0].content).toBe('the words that arrived later');
   });
 
   it('submit() transitions isLoading to true while a stream is in flight', async () => {

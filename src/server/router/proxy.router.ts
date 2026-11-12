@@ -467,7 +467,6 @@ const thinkingByMessageId = new Map<string, string>();
 const taskToolCalls = new Map<string, string>();
 const messageNamespaces = new Map<string, string>();
 const sentMsgIds = new Set<string>();
-const completedTexts: string[] = [];
 
 reply.raw.on('close', () => {
   clientGone = true;
@@ -635,31 +634,23 @@ try {
           thinkingByMessageId.set(activeMessageId, nextThinking);
         }
 
-        if (nextPartial.length > prevPartial.length && uiChunks.length === 0) {
-          const isEchoOfPrior = completedTexts.some(
-            (ct) => nextPartial.length <= ct.length && ct.startsWith(nextPartial),
-          );
-          if (!isEchoOfPrior) {
-            const delta = nextPartial.slice(prevPartial.length);
-            const tokenPayload: Record<string, unknown> = {
-              type: 'token',
-              content: delta,
-              chunk_id: chunkId,
-              part: 'text',
-            };
-            if (activeMessageId) tokenPayload.message_id = activeMessageId;
-            if (subagentToolCallId) tokenPayload.subagent_tool_call_id = subagentToolCallId;
-            reply.raw.write(`data: ${JSON.stringify(tokenPayload)}\n\n`);
-            chunkId++;
-            hasEmittedTextTokens = true;
-          }
+        const continues = nextPartial.startsWith(prevPartial);
+        if (continues && nextPartial.length > prevPartial.length && uiChunks.length === 0) {
+          const delta = nextPartial.slice(prevPartial.length);
+          const tokenPayload: Record<string, unknown> = {
+            type: 'token',
+            content: delta,
+            chunk_id: chunkId,
+            part: 'text',
+          };
+          if (activeMessageId) tokenPayload.message_id = activeMessageId;
+          if (subagentToolCallId) tokenPayload.subagent_tool_call_id = subagentToolCallId;
+          reply.raw.write(`data: ${JSON.stringify(tokenPayload)}\n\n`);
+          chunkId++;
+          hasEmittedTextTokens = true;
         }
 
-        if (eventBase === 'messages/complete' && uiChunks.length === 0 && nextPartial.length > 0) {
-          completedTexts.push(nextPartial);
-        }
-
-        if (isMessageText) {
+        if (isMessageText && continues) {
           partialByMessageId.set(activeMessageId, nextPartial);
           lastPartial = nextPartial;
         }
@@ -686,14 +677,9 @@ try {
 
 if (!clientGone) {
   if (lastPartial.length > 0 && !hasEmittedTextTokens) {
-    const isEcho = completedTexts.some(
-      (ct) => lastPartial.length <= ct.length && ct.startsWith(lastPartial),
-    );
-    if (!isEcho) {
-      const flush = { type: 'token', content: lastPartial, chunk_id: chunkId };
-      reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
-      chunkId++;
-    }
+    const flush = { type: 'token', content: lastPartial, chunk_id: chunkId };
+    reply.raw.write(`data: ${JSON.stringify(flush)}\n\n`);
+    chunkId++;
   }
 
   try {

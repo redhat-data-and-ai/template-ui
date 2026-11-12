@@ -802,6 +802,55 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(tokens).toEqual(['Hello', 'Hi', ' there']);
   });
 
+  it('keeps a shorter copy from replacing the sentence so far', async () => {
+    const agentSSE = [
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: 'Hello there' }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: 'Hi' }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-1', content: 'Hello there friend' }])}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-short' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-short', user_id: 'u1' },
+    });
+
+    const tokens = uiEvents(res.body).filter((event) => event.type === 'token').map((event) => event.content);
+    expect(tokens).toEqual(['Hello there', ' friend']);
+  });
+
+  it('sends a later sentence that starts with the same words', async () => {
+    const agentSSE = [
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-a', content: 'Now I have enough data.' }])}\n\n`,
+      `event: messages/complete\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-a', content: 'Now I have enough data.' }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-b', content: 'Now' }])}\n\n`,
+      `event: messages/partial\ndata: ${JSON.stringify([{ type: 'ai', id: 'msg-b', content: 'Now I have the score.' }])}\n\n`,
+    ].join('');
+
+    stubFetch(
+      okJson({ thread_id: 'th-shared-opening' }),
+      makeSSEResponse(agentSSE),
+      okJson({ messages: [], tasks: [] }),
+    );
+
+    const server = await buildTestServer();
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/proxy/agent/v1/stream',
+      payload: { message: 'hello', thread_id: 'th-shared-opening', user_id: 'u1' },
+    });
+
+    const tokens = uiEvents(res.body).filter((event) => event.type === 'token').map((event) => event.content);
+    expect(tokens).toEqual(['Now I have enough data.', 'Now', ' I have the score.']);
+  });
+
   it('emits a token chunk when the agent sends messages/partial', async () => {
     const agentSSE =
       `event: messages/partial\ndata: [{"type":"ai","content":"Hi there"}]\n\n`;
