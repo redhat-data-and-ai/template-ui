@@ -101,7 +101,9 @@ export function useFeedback({
   }, [locked, isSubmitting]);
 
   const handleCommentSubmit = useCallback(() => {
-    void doSendFeedback('down', comment.trim() || undefined);
+    const text = comment.trim();
+    if (!text) return;
+    void doSendFeedback('down', text);
   }, [doSendFeedback, comment]);
 
   const cancelComment = useCallback(() => {
@@ -164,10 +166,13 @@ export function FeedbackButtons({ fb }: { fb: FeedbackState }) {
 export function FeedbackCommentBox({ fb }: { fb: FeedbackState }) {
   if (!fb.showCommentInput || !!fb.existingFeedback) return null;
 
+  const commentText = fb.comment.trim();
+  const canSend = commentText.length > 0 && !fb.isSubmitting;
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      fb.handleCommentSubmit();
+      if (canSend) fb.handleCommentSubmit();
     } else if (e.key === 'Escape') {
       fb.cancelComment();
     }
@@ -180,7 +185,10 @@ export function FeedbackCommentBox({ fb }: { fb: FeedbackState }) {
           value={fb.comment}
           onChange={(e) => fb.setComment(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="What went wrong? (optional)"
+          placeholder="What went wrong?"
+          aria-label="What went wrong?"
+          aria-required="true"
+          required
           className="w-full resize-none border-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           autoFocus
           rows={1}
@@ -195,8 +203,9 @@ export function FeedbackCommentBox({ fb }: { fb: FeedbackState }) {
           </button>
           <button
             type="button"
-            className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40"
-            disabled={fb.isSubmitting}
+            className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90 transition-colors disabled:pointer-events-none disabled:opacity-40"
+            disabled={!canSend}
+            aria-disabled={!canSend}
             onClick={fb.handleCommentSubmit}
           >
             {fb.isSubmitting ? 'Sending...' : 'Send'}

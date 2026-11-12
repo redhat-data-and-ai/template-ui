@@ -168,7 +168,7 @@ describe('chats slice — appendMessageToChat', () => {
 
 describe('chats slice — subagent transcript', () => {
   function withSubagentCard() {
-    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const s = chatsReducer(initialState(), addChat(makeChat('c1')));
     const card: TestMessage = {
       type: 'ai',
       content: 'Asking the analyst.',
