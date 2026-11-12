@@ -1004,6 +1004,20 @@ export function useStreamingAPI(threadId: string) {
                 dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
               }
               lastSuccessfulConnectionRef.current = Date.now();
+              if (streamEndedWithInterruptRef.current) {
+                dispatch(updateStreamingState({
+                  chatId: threadId,
+                  state: {
+                    isLoading: false,
+                    isConnected: false,
+                    isReconnecting: false,
+                    reconnectAttempt: 0,
+                    streamDroppedMidResponse: false,
+                  },
+                }));
+                finish('success');
+                return;
+              }
               const gotFullResponse = messagesRef.current.length > initialMessageCount + 1;
               if (gotFullResponse && recoveryIntervalRef.current) {
                 clearInterval(recoveryIntervalRef.current);
