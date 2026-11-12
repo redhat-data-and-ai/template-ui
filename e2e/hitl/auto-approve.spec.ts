@@ -35,6 +35,18 @@ async function makeInterruptStream(
   callCount: { n: number },
   page: import('@playwright/test').Page,
 ): Promise<void> {
+  await page.route('**/api/proxy/agent/threads/*', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const isThreadRecord = /\/threads\/(?!search$)[^/]+$/.test(path);
+    if (route.request().method() === 'GET' && isThreadRecord) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'interrupted' }),
+      });
+    }
+    return route.fallback();
+  });
   await page.route('**/api/proxy/agent/v1/stream', (route) => {
     callCount.n++;
     if (callCount.n === 1) {
@@ -78,8 +90,7 @@ test.describe('HITL — auto-approve', () => {
       const chat = new ChatPage(page);
       await chat.expectChatRoute();
 
-      // The response should complete without the interrupt banner ever appearing
-      await chat.waitForAIResponse(15_000);
+      await expect(page.getByText('Done automatically.')).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('Action Required')).not.toBeVisible();
       await expect(page.getByText('Input Required')).not.toBeVisible();
       expect(callCount.n).toBeGreaterThanOrEqual(2);
@@ -129,7 +140,7 @@ test.describe('HITL — auto-approve', () => {
       const chat = new ChatPage(page);
       await chat.expectChatRoute();
 
-      await chat.waitForAIResponse(15_000);
+      await expect(page.getByText('Done automatically.')).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('Action Required')).not.toBeVisible();
       expect(callCount.n).toBeGreaterThanOrEqual(2);
     },
