@@ -690,6 +690,60 @@ describe('interrupt resume safety', () => {
     expect(result.current.pendingInterrupt?.id).toBe('b'); unmount();
   });
 
+  it('discards a refresh started before a resume, including across hook instances', async () => {
+    const {store,result,unmount} = setup();
+    const other = renderHook(() => useStreamingAPI(THREAD_ID), {wrapper:makeWrapper(store)});
+    let finishRefresh!: (state: Awaited<ReturnType<typeof agentRest.getThreadStateAndInterrupt>>) => void;
+    vi.spyOn(agentRest,'getThreadStateAndInterrupt').mockImplementationOnce(() => new Promise(resolve => {finishRefresh=resolve;}));
+    vi.spyOn(getStreamingManager(THREAD_ID),'stream').mockResolvedValue(undefined);
+    let refresh!: Promise<void>;
+    act(() => {refresh=other.result.current.refreshInterrupts();});
+    await act(async () => {await result.current.resumeWithDecisions([{type:'approve'}],'a');});
+    const newer = [{type:'ai',content:'Resume completed',id:'new-response'}] as Message[];
+    act(() => {result.current.setMessages(newer);});
+    await act(async () => {
+      finishRefresh({messages:[{type:'human',content:'Old messages',id:'old'}] as Message[],interrupt:approval('a'),interrupts:[approval('a'),approval('b')]});
+      await refresh;
+    });
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    expect(result.current.messages).toEqual(newer);
+    unmount();other.unmount();
+  });
+
+  it('does not refresh while a resume is in flight', async () => {
+    const {result,unmount} = setup();
+    const readState = vi.spyOn(agentRest,'getThreadStateAndInterrupt').mockClear();
+    let finish!: () => void;
+    vi.spyOn(getStreamingManager(THREAD_ID),'stream').mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    let resume!:Promise<void>;
+    act(()=>{resume=result.current.resumeWithDecisions([{type:'approve'}],'a');});
+    await act(async()=>{await result.current.refreshInterrupts();});
+    expect(readState).not.toHaveBeenCalled();
+    await act(async()=>{finish();await resume;});
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    unmount();
+  });
+
+  it('discards a refresh that resolves during a resume', async () => {
+    const {result,unmount} = setup();
+    let finishRefresh!: (state: Awaited<ReturnType<typeof agentRest.getThreadStateAndInterrupt>>) => void;
+    vi.spyOn(agentRest,'getThreadStateAndInterrupt').mockImplementationOnce(()=>new Promise(resolve=>{finishRefresh=resolve;}));
+    let finishResume!:()=>void;
+    vi.spyOn(getStreamingManager(THREAD_ID),'stream').mockImplementationOnce(()=>new Promise(resolve=>{finishResume=resolve;}));
+    let refresh!:Promise<void>;let resume!:Promise<void>;
+    act(()=>{refresh=result.current.refreshInterrupts();resume=result.current.resumeWithDecisions([{type:'approve'}],'a');});
+    const currentMessages = result.current.messages;
+    await act(async()=>{
+      finishRefresh({messages:[{type:'human',content:'stale',id:'old'}] as Message[],interrupt:null,interrupts:[]});
+      await refresh;
+    });
+    expect(result.current.messages).toEqual(currentMessages);
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['a','b']);
+    await act(async()=>{finishResume();await resume;});
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    unmount();
+  });
+
   it('discards legacy queued decisions instead of replaying them on mount', () => {
     localStorage.setItem(`pending-decision:${THREAD_ID}`, JSON.stringify({decisions:[{type:'approve'}], timestamp:Date.now()}));
     const spy = vi.spyOn(getStreamingManager(THREAD_ID), 'stream');

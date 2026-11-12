@@ -25,6 +25,7 @@ const CREATE_PR_TOOL_CALL = {
 };
 
 const hitlInterrupt: InterruptInfo = {
+  id: 'pr-approval',
   value: {
     action_requests: [{ name: 'github_create_pr', args: { title: 'My PR' } }],
     review_configs: [{ action_name: 'github_create_pr', allowed_decisions: ['approve', 'reject'] }],
@@ -162,6 +163,7 @@ const SUBAGENT_TASK = {
 };
 
 const innerToolInterrupt: InterruptInfo = {
+  id: 'inner-approval',
   value: {
     action_requests: [{
       name: 'lookup_records',
@@ -204,7 +206,7 @@ describe('AIMessageRenderer — nested subagent HITL', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /approve tool: lookup_records/i }));
-    expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }]);
+    expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }], 'inner-approval');
   });
 
   it('Always allow records the inner tool name, not the subagent', async () => {
@@ -221,7 +223,7 @@ describe('AIMessageRenderer — nested subagent HITL', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /always allow tool: lookup_records/i }));
     expect(onAlwaysAllow).toHaveBeenCalledWith(['lookup_records']);
-    expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }]);
+    expect(onInterruptResume).toHaveBeenCalledWith([{ type: 'approve' }], 'inner-approval');
   });
 
   it('does not show inner-tool approval on a completed subagent', () => {

@@ -7,7 +7,7 @@ import {
   Label,
 } from '@patternfly/react-core';
 import { Bot, Check, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
-import type { ToolCallWithContent, InterruptInfo } from '../types/deep-agent';
+import type { ToolCallWithContent, InterruptInfo, ApprovalSubmission } from '../types/deep-agent';
 import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
 
 interface SubAgentIndicatorProps {
@@ -16,7 +16,7 @@ interface SubAgentIndicatorProps {
   readonly index: number;
   readonly pendingInterrupt?: InterruptInfo | null;
   readonly isResuming?: boolean;
-  readonly onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  readonly onInterruptResume?: ApprovalSubmission;
   readonly onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
   readonly isCurrentApproval?: boolean;
   readonly onAlwaysAllow?: (toolNames: string[]) => void;
@@ -183,11 +183,11 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     onClick={() => {
                       setIsApproving(true);
                       if (isInnerToolApproval) {
-                        onInterruptResume?.(requests.map(() => ({ type: 'approve' as const })));
+                        onInterruptResume?.(requests.map(() => ({ type: 'approve' as const })), pendingInterrupt?.id ?? '');
                       } else if (onSingleDecision) {
                         onSingleDecision({ type: 'approve' });
                       } else {
-                        onInterruptResume?.([{ type: 'approve' }]);
+                        onInterruptResume?.([{ type: 'approve' }], pendingInterrupt?.id ?? '');
                       }
                     }}
                     aria-label={isInnerToolApproval ? `Approve tool: ${innerToolLabel}` : `Approve sub-agent action: ${name}`}
@@ -203,11 +203,11 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                     onClick={() => {
                       setIsApproving(true);
                       if (isInnerToolApproval) {
-                        onInterruptResume?.(requests.map(() => ({ type: 'reject' as const, message: 'User rejected this action.' })));
+                        onInterruptResume?.(requests.map(() => ({ type: 'reject' as const, message: 'User rejected this action.' })), pendingInterrupt?.id ?? '');
                       } else if (onSingleDecision) {
                         onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
                       } else {
-                        onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
+                        onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }], pendingInterrupt?.id ?? '');
                       }
                     }}
                     aria-label={isInnerToolApproval ? `Reject tool: ${innerToolLabel}` : `Reject sub-agent action: ${name}`}
@@ -223,11 +223,11 @@ export function SubAgentIndicator({ toolCall, messageId, index, pendingInterrupt
                       setIsApproving(true);
                       onAlwaysAllow?.(alwaysAllowNames);
                       if (isInnerToolApproval) {
-                        onInterruptResume?.(requests.map(() => ({ type: 'approve' as const })));
+                        onInterruptResume?.(requests.map(() => ({ type: 'approve' as const })), pendingInterrupt?.id ?? '');
                       } else if (onSingleDecision) {
                         onSingleDecision({ type: 'approve' });
                       } else {
-                        onInterruptResume?.([{ type: 'approve' }]);
+                        onInterruptResume?.([{ type: 'approve' }], pendingInterrupt?.id ?? '');
                       }
                     }}
                     aria-label={isInnerToolApproval ? `Always allow tool: ${innerToolLabel}` : `Always allow sub-agent: ${name}`}

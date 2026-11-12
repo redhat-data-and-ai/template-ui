@@ -65,6 +65,15 @@ export class StreamingManager {
   // Shared by every hook mounted for this thread, including across navigation.
   private resumeInFlight = false;
   private resumeNeedsRefresh = false;
+  private resumeGeneration = 0;
+
+  getResumeGeneration(): number {
+    return this.resumeGeneration;
+  }
+
+  canApplyRefresh(generation: number): boolean {
+    return !this.resumeInFlight && generation === this.resumeGeneration;
+  }
 
   beginResume(): void {
     if (this.resumeInFlight) throw new Error('An approval is already being submitted.');
@@ -73,10 +82,12 @@ export class StreamingManager {
       throw new Error('Wait for the current response to finish before approving.');
     }
     this.resumeInFlight = true;
+    this.resumeGeneration++;
   }
 
   endResume(needsRefresh: boolean): void {
     this.resumeInFlight = false;
+    this.resumeGeneration++;
     this.resumeNeedsRefresh = needsRefresh;
   }
 

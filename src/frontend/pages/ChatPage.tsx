@@ -15,6 +15,7 @@ import {
 } from '../redux/slices/chats';
 import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
+import { getStreamingManager } from '../lib/streaming/streamingManagerRegistry';
 import { useStreamingAPI, MAX_RETRIES } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
@@ -105,14 +106,19 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     if (!chatId || hydrating) return;
+    const locState = location.state as Record<string, unknown> | null;
+    if (locState?.initialPrompt != null || isClientCreatedChat(chatId)) {
+      // New threads are hydrated by their first stream. Loading transitions
+      // must not trigger a redundant state fetch when that stream finishes.
+      hydratedThreadRef.current = chatId;
+      return;
+    }
     if (thread.isLoading || thread.isResuming) return;
     if (hydratedThreadRef.current === chatId && !needsServerRefresh) return;
 
-    const locState = location.state as Record<string, unknown> | null;
-    if (locState?.initialPrompt != null) return;
-    if (isClientCreatedChat(chatId)) return;
-
     let cancelled = false;
+    const manager = getStreamingManager(chatId);
+    const generation = manager.getResumeGeneration();
     setHydrating(true);
 
     const threadPromise = getThreadStateAndInterrupt(chatId);
@@ -121,6 +127,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
     Promise.all([threadPromise, feedbackPromise])
       .then(([{ messages: msgs, interrupt: pendingInterrupt, interrupts }, feedbackMap]) => {
         if (cancelled) return;
+        if (!manager.canApplyRefresh(generation)) {
+          setHydrating(false);
+          return;
+        }
         hydratedThreadRef.current = chatId;
         if (msgs.length > 0) {
           dispatch(updateChat({
@@ -159,7 +169,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
     return () => { cancelled = true; setHydrating(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, feedbackUserId, needsServerRefresh]);
+  }, [chatId, feedbackUserId, needsServerRefresh, thread.isLoading, thread.isResuming]);
 
   useEffect(() => {
     if (!chatId || isClientCreatedChat(chatId)) return;
@@ -363,16 +373,17 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, [threadId, currentChat, dispatch]);
 
   const handleInterruptResume = useCallback(
-    async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
+    async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>, interruptId: string) => {
       if (!threadId || !currentChat) return;
       try {
-        await thread.resumeWithDecisions(decisions, thread.pendingInterrupt?.id ?? '');
+        await thread.resumeWithDecisions(decisions, interruptId);
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
         dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+        throw err;
       }
     },
     [thread, threadId, currentChat, dispatch],
@@ -570,7 +581,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
             {thread.pendingInterrupts.length > 0 && (
               <div className="flex items-center gap-3 px-4 py-2" role="status">
                 <span>{thread.pendingInterrupts.length} pending approval{thread.pendingInterrupts.length === 1 ? '' : 's'}</span>
-                <Button variant="link" size="sm" isDisabled={thread.isResuming} onClick={() => {
+                <Button variant="link" size="sm" isDisabled={thread.isResuming || thread.isLoading} onClick={() => {
                   thread.refreshInterrupts().catch(() => dispatch(addToast({ title: 'Unable to refresh approvals', variant: 'danger' })));
                 }}>Refresh approvals</Button>
               </div>
@@ -581,6 +592,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
               streamEvents={thread.streamEvents}
               isLoading={thread.isLoading || !!thread.pendingInterrupt}
               isResuming={thread.isResuming}
+              isApprovalBusy={thread.isLoading}
+              pendingInterrupts={thread.pendingInterrupts}
               pendingInterrupt={
                 thread.pendingInterrupt &&
                 typeof thread.pendingInterrupt.value === 'object' &&
@@ -598,7 +611,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
                     <InterruptBanner
                       key={thread.pendingInterrupt.id}
                       interrupt={thread.pendingInterrupt}
-                      isSubmitting={thread.isResuming}
+                      isSubmitting={thread.isResuming || thread.isLoading}
                       onResume={handleMCPOAuthResume}
                       onDismiss={handleInterruptDismiss}
                     />

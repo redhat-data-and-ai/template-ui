@@ -1,7 +1,8 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User, ShieldCheck } from "lucide-react";
-import type { InterruptInfo } from "../types/deep-agent";
+import type { InterruptInfo, ApprovalSubmission } from "../types/deep-agent";
+import { InterruptApprovalCard } from "./InterruptApprovalCard";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
 import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
@@ -513,7 +514,7 @@ interface AIMessageRendererProps {
   message: Message;
   pendingInterrupt?: InterruptInfo | null;
   isResuming?: boolean;
-  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  onInterruptResume?: ApprovalSubmission;
   onAlwaysAllow?: (toolNames: string[]) => void;
   globalApprovalIndex?: number;
   approvalSlotOffset?: number;
@@ -777,7 +778,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
                               if (totalActionRequests > 1 && onSingleDecision) {
                                 onSingleDecision({ type: 'approve' });
                               } else {
-                                onInterruptResume?.([{ type: 'approve' }]);
+                                onInterruptResume?.([{ type: 'approve' }], pendingInterrupt?.id ?? '');
                               }
                             }}
                             aria-label={`Approve tool call: ${toolCall.name}`}
@@ -794,7 +795,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
                               if (totalActionRequests > 1 && onSingleDecision) {
                                 onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
                               } else {
-                                onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }]);
+                                onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }], pendingInterrupt?.id ?? '');
                               }
                             }}
                             aria-label={`Reject tool call: ${toolCall.name}`}
@@ -811,7 +812,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
                               if (totalActionRequests > 1 && onSingleDecision) {
                                 onSingleDecision({ type: 'approve' });
                               } else {
-                                onInterruptResume?.([{ type: 'approve' }]);
+                                onInterruptResume?.([{ type: 'approve' }], pendingInterrupt?.id ?? '');
                               }
                             }}
                             aria-label={`Always allow tool: ${toolCall.name}`}
@@ -857,8 +858,10 @@ interface ChatMessagesViewProps {
   streamEvents?: StreamEvent[];
   isLoading: boolean;
   pendingInterrupt?: InterruptInfo | null;
+  pendingInterrupts?: InterruptInfo[];
+  isApprovalBusy?: boolean;
   isResuming?: boolean;
-  onInterruptResume?: (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => void;
+  onInterruptResume?: ApprovalSubmission;
   onAlwaysAllow?: (toolNames: string[]) => void;
   interruptContent?: React.ReactNode;
   scrollAreaRef: React.RefObject<HTMLDivElement | null>;
@@ -889,7 +892,9 @@ export function ChatMessagesView({
   messages,
   isLoading,
   isResuming = false,
+  isApprovalBusy = false,
   pendingInterrupt,
+  pendingInterrupts,
   onInterruptResume,
   onAlwaysAllow,
   interruptContent,
@@ -911,6 +916,10 @@ export function ChatMessagesView({
   onExportMarkdown,
   onExportJson,
 }: ChatMessagesViewProps) {
+  const approvalsDisabled = isResuming || isApprovalBusy;
+  // Explicit interrupt cards handle the production path, including subagent
+  // requests without a corresponding tool message in the parent thread.
+  const inlineInterrupt = pendingInterrupts ? null : pendingInterrupt;
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const prevPendingInterrupt = useRef(pendingInterrupt);
@@ -918,9 +927,9 @@ export function ChatMessagesView({
   const [srAnnouncement, setSrAnnouncement] = useState('');
 
   const globalActionRequests = useMemo(() => {
-    const v = pendingInterrupt?.value;
+    const v = inlineInterrupt?.value;
     return (typeof v === 'object' && v !== null) ? ((v as any).action_requests ?? []) : [];
-  }, [pendingInterrupt]);
+  }, [inlineInterrupt]);
 
   const [globalDecisions, setGlobalDecisions] = useState<Array<{ type: 'approve' | 'reject'; message?: string } | null>>([]);
   const [globalApprovalIndex, setGlobalApprovalIndex] = useState(0);
@@ -937,7 +946,7 @@ export function ChatMessagesView({
   const globalAllDecisionsMade = globalActionRequests.length > 0 && globalDecisions.every(d => d !== null);
 
   const handleGlobalSingleDecision = useCallback((decision: { type: 'approve' | 'reject'; message?: string }) => {
-    if (isResuming || decidedSlotRef.current === globalApprovalIndex) return;
+    if (approvalsDisabled || decidedSlotRef.current === globalApprovalIndex) return;
     decidedSlotRef.current = globalApprovalIndex;
     const newDecisions = [...globalDecisions];
     newDecisions[globalApprovalIndex] = decision;
@@ -945,11 +954,11 @@ export function ChatMessagesView({
 
     const nextIndex = globalApprovalIndex + 1;
     if (nextIndex >= globalActionRequests.length) {
-      onInterruptResume?.(newDecisions.filter(Boolean) as Array<{ type: 'approve' | 'reject'; message?: string }>);
+      onInterruptResume?.(newDecisions.filter(Boolean) as Array<{ type: 'approve' | 'reject'; message?: string }>, pendingInterrupt?.id ?? '');
     } else {
       setGlobalApprovalIndex(nextIndex);
     }
-  }, [isResuming, globalDecisions, globalApprovalIndex, globalActionRequests.length, onInterruptResume]);
+  }, [pendingInterrupt?.id, approvalsDisabled, globalDecisions, globalApprovalIndex, globalActionRequests.length, onInterruptResume]);
 
   const pendingToolNames = useMemo(() => {
     const requests = globalActionRequests;
@@ -1107,8 +1116,8 @@ export function ChatMessagesView({
                 <div className="w-full space-y-0">
                   <AIMessageRenderer
                     message={message}
-                    pendingInterrupt={pendingInterrupt}
-                    isResuming={isResuming}
+                    pendingInterrupt={inlineInterrupt}
+                    isResuming={approvalsDisabled}
                     onInterruptResume={onInterruptResume}
                     onAlwaysAllow={onAlwaysAllow}
                     globalApprovalIndex={globalApprovalIndex}
@@ -1217,6 +1226,17 @@ export function ChatMessagesView({
               </div>
             </div>
           )}
+          {pendingInterrupts?.map(interrupt => (
+            typeof interrupt.value === 'object' && interrupt.value?.action_requests?.length > 0
+              ? <InterruptApprovalCard
+                  key={`${interrupt.id}:${JSON.stringify(interrupt.value)}`}
+                  interrupt={interrupt}
+                  disabled={approvalsDisabled}
+                  onResume={onInterruptResume}
+                  onAlwaysAllow={onAlwaysAllow}
+                />
+              : null
+          ))}
           {interruptContent}
           <div ref={bottomRef} />
         </div>

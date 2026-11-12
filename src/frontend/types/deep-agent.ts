@@ -36,6 +36,11 @@ export interface McpAuthPayload {
   message: string;
 }
 
+export type ApprovalSubmission = (
+  decisions: Array<{ type: 'approve' | 'reject'; message?: string }>,
+  interruptId: string,
+) => void | Promise<void>;
+
 export type ApprovalDecision = { type: 'approve' | 'reject' | 'edit'; message?: string };
 export type InterruptResponses = Record<string, { decisions: ApprovalDecision[] } | string>;
 

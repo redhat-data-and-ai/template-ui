@@ -1219,10 +1219,15 @@ export function useStreamingAPI(threadId: string) {
   );
 
   const refreshInterrupts = useCallback(async () => {
+    const manager = managerRef.current;
+    if (!manager) return;
+    const generation = manager.getResumeGeneration();
+    if (!manager.canApplyRefresh(generation)) return;
     const state = await getThreadStateAndInterrupt(threadId);
+    if (manager !== managerRef.current || !manager.canApplyRefresh(generation)) return;
     const pending = (state.interrupts ?? (state.interrupt ? [state.interrupt] : [])).map(enrichInterrupt);
     pendingInterruptsRef.current = pending;
-    managerRef.current?.approvalsRefreshed();
+    manager.approvalsRefreshed();
     dispatch(updateChat({ id: threadId, updates: { messages: state.messages } }));
     dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupts: pending, error: null } }));
   }, [dispatch, threadId]);

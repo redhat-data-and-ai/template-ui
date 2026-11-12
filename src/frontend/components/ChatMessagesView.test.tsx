@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent, within } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
@@ -175,5 +175,36 @@ describe('ChatMessagesView — errorMessage prop', () => {
 
     expect(screen.queryByText('The agent encountered an error:')).not.toBeInTheDocument();
     expect(screen.queryByText('Some error')).not.toBeInTheDocument();
+  });
+});
+
+
+describe('ChatMessagesView — explicit interrupt ownership', () => {
+  it('submits the owning ID for identical tool names with different arguments', () => {
+    const onResume=vi.fn();
+    const a={id:'a',resumable:true,value:{action_requests:[{name:'same_tool',args:{target:'A'}}],review_configs:[]}};
+    const b={id:'b',resumable:true,value:{action_requests:[{name:'same_tool',args:{target:'B'}}],review_configs:[]}};
+    const message={type:'ai',id:'m1',content:'',tool_calls:[{id:'tc-a',name:'same_tool',args:{target:'A'}},{id:'tc-b',name:'same_tool',args:{target:'B'}}]} as unknown as Message;
+    const {container}=render(<Provider store={makeStore()}><ChatMessagesView {...makeBaseProps({messages:[message],pendingInterrupt:a,pendingInterrupts:[a,b],onInterruptResume:onResume})}/></Provider>);
+    expect(screen.getAllByRole('button',{name:'Approve',exact:true})).toHaveLength(2);
+    const cardB=container.querySelector('[data-interrupt-id="b"]')!;
+    expect(cardB.textContent).toContain('"target": "B"');
+    fireEvent.click(within(cardB as HTMLElement).getByRole('button',{name:'Approve',exact:true}));
+    expect(onResume).toHaveBeenCalledWith([{type:'approve'}],'b');
+    expect(container.querySelector('[data-interrupt-id="a"]')?.textContent).toContain('"target": "A"');
+  });
+
+  it('keeps multi-action controls disabled until the interrupt stream is idle', () => {
+    const onResume=vi.fn();
+    const interrupt={id:'a',resumable:true,value:{action_requests:[{name:'tool1',args:{}},{name:'tool2',args:{}}],review_configs:[]}};
+    const store=makeStore();
+    const props=makeBaseProps({pendingInterrupt:interrupt,pendingInterrupts:[interrupt],onInterruptResume:onResume,isLoading:true,isApprovalBusy:true});
+    const {rerender}=render(<Provider store={store}><ChatMessagesView {...props}/></Provider>);
+    const buttons=screen.getAllByRole('button',{name:'Approve',exact:true});
+    buttons.forEach(button=>{expect(button).toBeDisabled();fireEvent.click(button);});
+    expect(onResume).not.toHaveBeenCalled();
+    rerender(<Provider store={store}><ChatMessagesView {...props} isApprovalBusy={false}/></Provider>);
+    screen.getAllByRole('button',{name:'Approve',exact:true}).forEach(button=>fireEvent.click(button));
+    expect(onResume).toHaveBeenCalledWith([{type:'approve'},{type:'approve'}],'a');
   });
 });
