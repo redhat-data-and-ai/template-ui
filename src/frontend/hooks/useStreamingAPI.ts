@@ -554,12 +554,12 @@ export function useStreamingAPI(threadId: string) {
   const setMessages = useCallback(
     (msgs: Message[]) => {
       const next = cloneMessages(msgs);
-      copySubagentTranscripts(messages, next);
+      copySubagentTranscripts(messagesRef.current, next);
       dispatch(updateChat({ id: threadId, updates: { messages: next } }));
       chatStorage.saveChatByThreadId(threadId, next);
       isStreamingTokensRef.current = false;
     },
-    [dispatch, threadId, messages],
+    [dispatch, threadId],
   );
 
   const submit = useCallback(
