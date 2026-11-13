@@ -854,7 +854,7 @@ export function ChatMessagesView({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, pendingInterrupts]);
 
   const showExport = Boolean(onExportMarkdown && onExportJson && messages.length > 0);
 
