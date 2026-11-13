@@ -36,12 +36,15 @@ test('same tool with different arguments submits the clicked interrupt ID', asyn
   const cardB = page.locator(`[data-interrupt-id="${b}"]`);
   await expect(cardA).toContainText('"target": "A"');
   await expect(cardB).toContainText('"target": "B"');
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(2);
-  await cardB.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Approve/ })).toHaveCount(2);
+  await expect(cardB.getByRole('alert', { name: 'Tool call same_tool requires approval' })).toBeVisible();
+  await expect(cardB.getByText('Arguments', { exact: true })).toBeVisible();
+  await expect(cardB.getByRole('button', { name: /^Approve/ })).toBeEnabled();
+  await cardB.getByRole('button', { name: /^Approve/ }).click();
   await expect(cardB).not.toBeVisible();
   await expect(cardA).toBeVisible();
   expect(resumes).toEqual([{ [b]: { decisions: [{ type: 'approve' }] } }]);
-  await cardA.getByRole('button', { name: 'Reject', exact: true }).click();
+  await cardA.getByRole('button', { name: /^Reject/ }).click();
   await expect(cardA).not.toBeVisible();
   expect(resumes).toEqual([
     { [b]: { decisions: [{ type: 'approve' }] } },
@@ -74,16 +77,16 @@ test('multi-action approvals remain disabled until the interrupt stream reaches 
   const home = new HomePage(page);
   await home.goto(); await home.submitPrompt('Run both actions');
   const card = page.locator(`[data-interrupt-id="${a}"]`);
-  await expect(card.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(2);
-  for (const button of await card.getByRole('button', { name: 'Approve', exact: true }).all()) {
+  await expect(card.getByRole('button', { name: /^Approve/ })).toHaveCount(2);
+  for (const button of await card.getByRole('button', { name: /^Approve/ }).all()) {
     await expect(button).toBeDisabled();
   }
   expect(resumes).toEqual([]);
   await page.evaluate(() => (window as any).finishInterruptStream());
-  await expect(card.getByRole('button', { name: 'Approve', exact: true }).first()).toBeEnabled();
-  await card.getByRole('button', { name: 'Approve', exact: true }).first().click();
-  await card.getByRole('button', { name: 'Approve', exact: true }).click();
-  await expect(card).not.toBeVisible();
+  await expect(card.getByRole('button', { name: /^Approve/ }).first()).toBeEnabled();
+  await card.getByRole('button', { name: /^Approve/ }).first().click();
+  await card.getByRole('button', { name: /^Approve/ }).click();
+  await expect(card).toHaveCount(0);
   expect(resumes).toEqual([{ [a]: { decisions: [{ type: 'approve' }, { type: 'approve' }] } }]);
 });
 
@@ -109,13 +112,64 @@ test('a delayed refresh cannot restore consumed approvals or old messages', asyn
   await expect(card).toBeVisible();
   await page.getByRole('button', { name: 'Refresh approvals', exact: true }).click();
   await expect.poll(() => refreshing).toBe(true);
-  await card.getByRole('button', { name: 'Approve', exact: true }).click();
+  await card.getByRole('button', { name: /^Approve/ }).click();
   await expect(page.getByText('Fresh completed response', { exact: true })).toBeVisible();
   const refreshed = page.waitForResponse(response => response.url().includes('/state'));
   releaseRefresh();
   await refreshed;
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  await expect(card).not.toBeVisible();
+  await expect(card).toHaveCount(0);
   await expect(page.getByText('Fresh completed response', { exact: true })).toBeVisible();
   await expect(page.getByText('stale snapshot', { exact: true })).not.toBeVisible();
+});
+
+test('Enter approves after stream EOF without duplicating a tool whose result arrives before resume EOF', async ({ page }) => {
+  await mountConfig(page);
+  await page.addInitScript(({ id }) => {
+    const original = window.fetch.bind(window);
+    const event = (content: unknown, chunk_id: number, type = 'message') =>
+      `data: ${JSON.stringify({ type, content, chunk_id })}\n\n`;
+    const args = { content: 'hi', file_path: '/hi.txt' };
+    window.fetch = async (input, init) => {
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+      if (!String(input).endsWith('/v1/stream')) return original(input, init);
+      return new Response(new ReadableStream({ start(controller) {
+        const send = (text: string) => controller.enqueue(new TextEncoder().encode(text));
+        if (body.resume) {
+          (window as any).submittedApproval = body.message;
+          send(event({ type: 'tool', tool_call_id: 'write-call', content: 'Successfully wrote /hi.txt' }, 0));
+          send(event('Finishing the response', 1, 'token'));
+          (window as any).finishApprovalResume = () => controller.close();
+        } else {
+          send(event({ type: 'ai', id: 'write-message', content: '', tool_calls: [
+            { id: 'write-call', name: 'write_file', args },
+          ] }, 0));
+          send(event({ id, resumable: true, value: {
+            action_requests: [{ name: 'write_file', args }], review_configs: [],
+          } }, 1, 'interrupt'));
+          (window as any).finishApprovalInitial = () => controller.close();
+        }
+      } }), { headers: { 'Content-Type': 'text/event-stream' } });
+    };
+  }, { id: a });
+  const home = new HomePage(page);
+  await home.goto();
+  await home.submitPrompt('Write hi to hi.txt');
+  const approve = page.getByRole('button', { name: 'Approve tool call: write_file', exact: true });
+  await expect(approve).toBeDisabled();
+  await page.evaluate(() => (window as any).finishApprovalInitial());
+  await expect(approve).toBeEnabled();
+  await expect(approve).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Finishing the response', { exact: true })).toBeVisible();
+  // Resume is still streaming: the completed original must be the only tool card.
+  await expect(page.getByRole('button', { name: /^(Expand|Collapse) tool call: write_file$/ })).toHaveCount(1);
+  await expect(page.getByText('Waiting...', { exact: true })).toHaveCount(0);
+  await expect(approve).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).submittedApproval)).toEqual({
+    [a]: { decisions: [{ type: 'approve' }] },
+  });
+  await page.evaluate(() => (window as any).finishApprovalResume());
+  await expect(page.locator('[data-interrupt-id]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^(Expand|Collapse) tool call: write_file$/ })).toHaveCount(1);
 });

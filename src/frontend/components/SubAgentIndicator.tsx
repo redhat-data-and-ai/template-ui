@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { ToolApprovalControls } from './ToolApprovalControls';
+import type { ToolApproval } from '../hooks/useInterruptApprovals';
+import { useEffect, useState } from 'react';
 import {
   Card,
   CardBody,
@@ -14,6 +16,7 @@ interface SubAgentIndicatorProps {
   readonly toolCall: ToolCallWithContent;
   readonly messageId: string;
   readonly index: number;
+  readonly approval?: ToolApproval;
 }
 
 type VisualStatus = 'delegating' | 'complete' | 'error';
@@ -41,8 +44,10 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
+  const needsApproval = Boolean(approval && !approval.decision);
+  useEffect(() => { if (needsApproval) setExpanded(true); }, [needsApproval]);
   const name = extractSubAgentName(toolCall);
   const delegationText = extractDelegationText(toolCall);
   const status = deriveStatus(toolCall);
@@ -58,7 +63,7 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
         <Bot className="w-4 h-4 text-blue-500" />
       </div>
       <div className="flex-1 min-w-0">
-        <Card isCompact className="shadow-card">
+        <Card isCompact className={`shadow-card ${needsApproval ? 'border-yellow-500/60' : ''}`} data-interrupt-id={approval?.interruptId} data-action-index={approval?.actionIndex}>
           <CardHeader
             className="cursor-pointer"
             onClick={() => setExpanded((v) => !v)}
@@ -77,7 +82,7 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
                 </CardTitle>
                 <Label
                   isCompact
-                  color={config.color}
+                  color={needsApproval ? 'yellow' : config.color}
                   icon={
                     <StatusIcon
                       className={`w-3 h-3 ${config.animate ? 'animate-spin' : ''}`}
@@ -85,7 +90,7 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
                     />
                   }
                 >
-                  {config.label}
+                  {needsApproval ? 'Approval required' : config.label}
                 </Label>
               </div>
               <span aria-hidden="true">
@@ -125,7 +130,7 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
                   </pre>
                 </div>
               )}
-              {status === 'delegating' && (
+              {status === 'delegating' && !needsApproval && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                   Sub-agent is processing&hellip;
@@ -133,6 +138,7 @@ export function SubAgentIndicator({ toolCall, messageId, index }: SubAgentIndica
               )}
             </CardBody>
           )}
+          {approval && <ToolApprovalControls approval={approval} />}
         </Card>
       </div>
     </div>

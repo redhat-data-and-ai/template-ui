@@ -2,7 +2,9 @@ import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
 import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User } from "lucide-react";
 import type { InterruptInfo, ApprovalSubmission } from "../types/deep-agent";
-import { InterruptApprovalCard } from "./InterruptApprovalCard";
+import { ToolApprovalControls } from "./ToolApprovalControls";
+import { bindToolApprovals, useInterruptApprovals } from "../hooks/useInterruptApprovals";
+import type { ToolApproval } from "../hooks/useInterruptApprovals";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
 import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
@@ -512,19 +514,39 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
 
 interface AIMessageRendererProps {
   message: Message;
+  approvalBindings?: Map<string, ToolApproval>;
 }
 
-export function AIMessageRenderer({ message }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, approvalBindings }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
+  const userCollapsed = useRef(new Set<string>());
+  const userExpanded = useRef(new Set<string>());
+  useEffect(() => {
+    const regular = message.type === 'ai' && Array.isArray(message.tool_calls)
+      ? message.tool_calls.filter(call => !isSubAgentToolCall(call) && call.name !== 'write_todos') : [];
+    setExpandedItems(previous => {
+      const next = new Set(previous);
+      regular.forEach((call, index) => {
+        const key = `${message.id}-${index}`;
+        if (call.id && approvalBindings?.has(call.id) && !userCollapsed.current.has(key)) next.add(key);
+        if ((call as { content?: unknown }).content != null && !userExpanded.current.has(key)) next.delete(key);
+      });
+      return next.size === previous.size && [...next].every(key => previous.has(key)) ? previous : next;
+    });
+  }, [messageKey, message, approvalBindings]);
 
   const toggleExpand = (itemId: string) => {
     setExpandedItems(prev => {
       const next = new Set(prev);
       if (prev.has(itemId)) {
         next.delete(itemId);
+        userCollapsed.current.add(itemId);
+        userExpanded.current.delete(itemId);
       } else {
         next.add(itemId);
+        userCollapsed.current.delete(itemId);
+        userExpanded.current.add(itemId);
       }
       return next;
     });
@@ -553,6 +575,7 @@ export function AIMessageRenderer({ message }: AIMessageRendererProps) {
                 toolCall={toolCall as any}
                 messageId={message.id ?? ''}
                 index={idx}
+                approval={toolCall.id ? approvalBindings?.get(toolCall.id) : undefined}
               />
             );
           })}
@@ -566,16 +589,20 @@ export function AIMessageRenderer({ message }: AIMessageRendererProps) {
                 {regularCalls.map((toolCall, idx) => {
                   const itemId = `${message.id}-${idx}`;
                   const isExpanded = expandedItems.has(itemId);
+                  const approval = toolCall.id ? approvalBindings?.get(toolCall.id) : undefined;
+                  const needsApproval = Boolean(approval && !approval.decision);
                   const mcpAppDesc = parseMcpApp((toolCall as Record<string, unknown>).mcpApp);
                   const hasMcpApp = Boolean(mcpAppDesc);
                   // Keep the tool body mounted when an MCP App is present so collapse hides
                   // the iframe instead of destroying it (host teardown runs on real unmount).
-                  const keepToolBodyMounted = isExpanded || hasMcpApp;
+                  const keepToolBodyMounted = isExpanded || (!needsApproval && hasMcpApp);
 
                   return (
                     <div
                       key={itemId}
-                      className="bg-card border border-border rounded-xl overflow-hidden shadow-card transition-colors"
+                      data-interrupt-id={approval?.interruptId}
+                      data-action-index={approval?.actionIndex}
+                      className={cn("bg-card border rounded-xl overflow-hidden shadow-card transition-colors", needsApproval ? "border-yellow-500/60" : "border-border")}
                     >
                       <button
                         onClick={() => toggleExpand(itemId)}
@@ -630,7 +657,7 @@ export function AIMessageRenderer({ message }: AIMessageRendererProps) {
                                 </pre>
                               </>
                             )}
-                            {hasMcpApp && (
+                            {!needsApproval && hasMcpApp && (
                               <>
                                 {isExpanded && (
                                   <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
@@ -648,7 +675,7 @@ export function AIMessageRenderer({ message }: AIMessageRendererProps) {
                                 />
                               </>
                             )}
-                            {isExpanded && (
+                            {isExpanded && !needsApproval && (
                               <>
                                 <div className={cn(
                                   "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",
@@ -679,6 +706,7 @@ export function AIMessageRenderer({ message }: AIMessageRendererProps) {
                           </div>
                         </div>
                       )}
+                      {approval && <ToolApprovalControls approval={approval} />}
                     </div>
                   );
                 })}
@@ -700,7 +728,7 @@ export function AIMessageRenderer({ message }: AIMessageRendererProps) {
 
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems]);
+  }, [messageKey, expandedItems, approvalBindings]);
 
   return (
     <div className="space-y-2 w-full">
@@ -771,6 +799,8 @@ export function ChatMessagesView({
   onExportJson,
 }: ChatMessagesViewProps) {
   const approvalsDisabled = isResuming || isApprovalBusy;
+  const approvals = useInterruptApprovals(pendingInterrupts, approvalsDisabled, onInterruptResume, onAlwaysAllow);
+  const { bindings, unmatched } = bindToolApprovals(messages, approvals);
   const pendingInterrupt = pendingInterrupts[0];
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -913,6 +943,7 @@ export function ChatMessagesView({
                 <div className="w-full space-y-0">
                   <AIMessageRenderer
                     message={message}
+                    approvalBindings={bindings}
                   />
                   <MessageActionsRow
                     isLastAiInTurn={isLastAiInTurn}
@@ -1014,17 +1045,13 @@ export function ChatMessagesView({
               </div>
             </div>
           )}
-          {pendingInterrupts.map(interrupt => (
-            typeof interrupt.value === 'object' && interrupt.value?.action_requests?.length > 0
-              ? <InterruptApprovalCard
-                  key={`${interrupt.id}:${JSON.stringify(interrupt.value)}`}
-                  interrupt={interrupt}
-                  disabled={approvalsDisabled}
-                  onResume={onInterruptResume}
-                  onAlwaysAllow={onAlwaysAllow}
-                />
-              : null
-          ))}
+          {unmatched.map((approval, index) => {
+            // Some subgraph tool calls are absent from parent-thread messages.
+            // Show their exact request in the same tool-card UI; never guess an owner.
+            const id = `pending-${approval.interruptId ?? index}-${approval.actionIndex}`;
+            const message = { type: 'ai', id, content: '', tool_calls: [{ id, name: approval.request.name, args: approval.request.args }] } as Message;
+            return <AIMessageRenderer key={approval.key} message={message} approvalBindings={new Map([[id, approval]])} />;
+          })}
           {interruptContent}
           <div ref={bottomRef} />
         </div>

@@ -76,8 +76,8 @@ describe('InterruptBanner — tool approval branch', () => {
   });
 
   // NOTE: in production, structured HITLInterruptValue interrupts (with action_requests)
-  // are routed through ChatPage → ChatMessagesView → InterruptApprovalCard, NOT through
-  // InterruptBanner.  Those flows are covered by InterruptApprovalCard.test.tsx.
+  // are routed through ChatPage → ChatMessagesView → inline tool approval controls, NOT through
+  // InterruptBanner.  Those flows are covered by ToolApprovalControls.test.tsx.
 });
 
 describe('InterruptBanner — generic input branch', () => {

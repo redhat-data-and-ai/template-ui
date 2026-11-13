@@ -191,11 +191,11 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     } };
     const props = makeBaseProps({ messages: [message], pendingInterrupts: [interrupt], onInterruptResume: onResume });
     const { rerender } = render(<Provider store={store}><ChatMessagesView {...props} /></Provider>);
-    expect(screen.getAllByRole('button', { name: 'Approve', exact: true })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve', exact: true }));
+    expect(screen.getAllByRole('button', { name: /^Approve/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /^Approve/ }));
     expect(onResume).toHaveBeenCalledExactlyOnceWith([{ type: 'approve' }], 'inner');
     rerender(<Provider store={store}><ChatMessagesView {...props} pendingInterrupts={[]} /></Provider>);
-    expect(screen.queryByRole('region', { name: 'Pending tool approval' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument();
   });
 
   it('submits the owning ID for identical tool names with different arguments', () => {
@@ -204,13 +204,52 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     const b={id:'b',resumable:true,value:{action_requests:[{name:'same_tool',args:{target:'B'}}],review_configs:[]}};
     const message={type:'ai',id:'m1',content:'',tool_calls:[{id:'tc-a',name:'same_tool',args:{target:'A'}},{id:'tc-b',name:'same_tool',args:{target:'B'}}]} as unknown as Message;
     const {container}=render(<Provider store={makeStore()}><ChatMessagesView {...makeBaseProps({messages:[message],pendingInterrupts:[a,b],onInterruptResume:onResume})}/></Provider>);
-    expect(screen.getAllByRole('button',{name:'Approve',exact:true})).toHaveLength(2);
+    expect(screen.getAllByRole('button',{name:/^Approve/})).toHaveLength(2);
     const cardB=container.querySelector('[data-interrupt-id="b"]')!;
     expect(cardB.textContent).toContain('"target": "B"');
-    fireEvent.click(within(cardB as HTMLElement).getByRole('button',{name:'Approve',exact:true}));
+    fireEvent.click(within(cardB as HTMLElement).getByRole('button',{name:/^Approve/}));
     expect(onResume).toHaveBeenCalledTimes(1);
     expect(onResume).toHaveBeenCalledWith([{type:'approve'}],'b');
     expect(container.querySelector('[data-interrupt-id="a"]')?.textContent).toContain('"target": "A"');
+  });
+
+  it('keeps ambiguous identical tool calls separate from their exact approval request', () => {
+    const onResume = vi.fn();
+    const message = { type: 'ai', id: 'm', content: '', tool_calls: [
+      { id: 'first', name: 'write_file', args: { file_path: '/hi.txt', content: 'hi' } },
+      { id: 'second', name: 'write_file', args: { file_path: '/hi.txt', content: 'hi' } },
+    ] } as unknown as Message;
+    const interrupt = { id: 'owner', resumable: true, value: {
+      action_requests: [{ name: 'write_file', args: { content: 'hi', file_path: '/hi.txt' } }], review_configs: [],
+    } };
+    const { container } = render(<Provider store={makeStore()}><ChatMessagesView {...makeBaseProps({
+      messages: [message], pendingInterrupts: [interrupt], onInterruptResume: onResume,
+    })}/></Provider>);
+    expect(screen.getAllByRole('button', { name: /^Approve/ })).toHaveLength(1);
+    const card = container.querySelector('[data-interrupt-id="owner"]') as HTMLElement;
+    expect(within(card).getByText('Arguments')).toBeVisible();
+    expect(card).toHaveTextContent('/hi.txt');
+    fireEvent.click(within(card).getByRole('button', { name: /^Approve/ }));
+    expect(onResume).toHaveBeenCalledExactlyOnceWith([{ type: 'approve' }], 'owner');
+  });
+
+  it('does not create a second tool card when its result arrives before resume ends', () => {
+    const onResume = vi.fn(() => new Promise<void>(() => {}));
+    const message = { type: 'ai', id: 'write', content: '', tool_calls: [
+      { id: 'call-write', name: 'write_file', args: { file_path: '/hi.txt', content: 'hi' } },
+    ] } as unknown as Message;
+    const interrupt = { id: 'write-approval', resumable: true, value: {
+      action_requests: [{ name: 'write_file', args: { content: 'hi', file_path: '/hi.txt' } }], review_configs: [],
+    } };
+    const props = makeBaseProps({ messages: [message], pendingInterrupts: [interrupt], onInterruptResume: onResume });
+    const store = makeStore();
+    const { rerender } = render(<Provider store={store}><ChatMessagesView {...props}/></Provider>);
+    fireEvent.click(screen.getByRole('button', { name: /^Approve/ }));
+    const completed = { ...message, tool_calls: [{ ...message.tool_calls![0], content: 'Successfully wrote /hi.txt' }] } as Message;
+    rerender(<Provider store={store}><ChatMessagesView {...props} messages={[completed]} isResuming /></Provider>);
+    expect(screen.getAllByText('write_file', { exact: true })).toHaveLength(1);
+    expect(screen.queryByText('Waiting...')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument();
   });
 
   it('keeps multi-action controls disabled until the interrupt stream is idle', () => {
@@ -219,11 +258,11 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     const store=makeStore();
     const props=makeBaseProps({pendingInterrupts:[interrupt],onInterruptResume:onResume,isLoading:true,isApprovalBusy:true});
     const {rerender}=render(<Provider store={store}><ChatMessagesView {...props}/></Provider>);
-    const buttons=screen.getAllByRole('button',{name:'Approve',exact:true});
+    const buttons=screen.getAllByRole('button',{name:/^Approve/});
     buttons.forEach(button=>{expect(button).toBeDisabled();fireEvent.click(button);});
     expect(onResume).not.toHaveBeenCalled();
     rerender(<Provider store={store}><ChatMessagesView {...props} isApprovalBusy={false}/></Provider>);
-    screen.getAllByRole('button',{name:'Approve',exact:true}).forEach(button=>fireEvent.click(button));
+    screen.getAllByRole('button',{name:/^Approve/}).forEach(button=>fireEvent.click(button));
     expect(onResume).toHaveBeenCalledWith([{type:'approve'},{type:'approve'}],'a');
   });
 });
