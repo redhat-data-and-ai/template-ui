@@ -602,13 +602,6 @@ export function ChatPage({ threadId }: { threadId: string }) {
               isResuming={thread.isResuming}
               isApprovalBusy={thread.isLoading}
               pendingInterrupts={thread.pendingInterrupts}
-              pendingInterrupt={
-                thread.pendingInterrupt &&
-                typeof thread.pendingInterrupt.value === 'object' &&
-                'action_requests' in thread.pendingInterrupt.value
-                  ? thread.pendingInterrupt
-                  : null
-              }
               onInterruptResume={handleInterruptResume}
               onAlwaysAllow={handleAlwaysAllow}
 

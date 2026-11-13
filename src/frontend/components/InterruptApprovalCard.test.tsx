@@ -7,6 +7,37 @@ const interrupt = { id: 'group-a', resumable: true, value: {
 } };
 
 describe('InterruptApprovalCard', () => {
+  it.each([
+    ['Approve', { type: 'approve' }],
+    ['Reject', { type: 'reject', message: 'User rejected this action.' }],
+  ] as const)('submits %s with the owning interrupt ID', async (button, decision) => {
+    const onResume = vi.fn();
+    render(<InterruptApprovalCard
+      interrupt={{ ...interrupt, value: { ...interrupt.value, action_requests: [interrupt.value.action_requests[0]] } }}
+      disabled={false}
+      onResume={onResume}
+    />);
+    fireEvent.click(screen.getByRole('button', { name: button, exact: true }));
+    await waitFor(() => expect(onResume).toHaveBeenCalledExactlyOnceWith([decision], interrupt.id));
+  });
+
+  it.each([
+    ['lookup_records', { query: 'example' }, 'lookup_records'],
+    ['task', { subagent_type: 'researcher' }, 'researcher'],
+  ])('always allows %s and submits its approval once', async (name, args, allowedName) => {
+    const onResume = vi.fn();
+    const onAlwaysAllow = vi.fn();
+    render(<InterruptApprovalCard
+      interrupt={{ ...interrupt, value: { ...interrupt.value, action_requests: [{ name, args }] } }}
+      disabled={false}
+      onResume={onResume}
+      onAlwaysAllow={onAlwaysAllow}
+    />);
+    fireEvent.click(screen.getByRole('button', { name: 'Always allow', exact: true }));
+    expect(onAlwaysAllow).toHaveBeenCalledExactlyOnceWith([allowedName]);
+    await waitFor(() => expect(onResume).toHaveBeenCalledExactlyOnceWith([{ type: 'approve' }], interrupt.id));
+  });
+
   it('keeps action ordering and the owning ID when decisions are made out of order', () => {
     const onResume = vi.fn();
     const { container } = render(<InterruptApprovalCard interrupt={interrupt} disabled={false} onResume={onResume} />);

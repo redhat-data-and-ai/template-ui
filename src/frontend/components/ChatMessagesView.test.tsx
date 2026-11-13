@@ -42,7 +42,7 @@ function makeBaseProps(overrides: Record<string, unknown> = {}) {
   return {
     messages: [HUMAN_MESSAGE],
     isLoading: false,
-    pendingInterrupt: undefined as any,
+    pendingInterrupts: [],
     scrollAreaRef: React.createRef<HTMLDivElement>(),
     onSubmit: vi.fn(),
     onCancel: vi.fn(),
@@ -180,12 +180,30 @@ describe('ChatMessagesView — errorMessage prop', () => {
 
 
 describe('ChatMessagesView — explicit interrupt ownership', () => {
+  it('renders subagent tool approval without a matching parent tool call and removes it when resolved', () => {
+    const onResume = vi.fn();
+    const store = makeStore();
+    const message = { type: 'ai', id: 'parent', content: '', tool_calls: [
+      { id: 'task', name: 'task', args: { subagent_type: 'researcher' } },
+    ] } as unknown as Message;
+    const interrupt = { id: 'inner', resumable: true, value: {
+      action_requests: [{ name: 'lookup_records', args: { query: 'example' } }], review_configs: [],
+    } };
+    const props = makeBaseProps({ messages: [message], pendingInterrupts: [interrupt], onInterruptResume: onResume });
+    const { rerender } = render(<Provider store={store}><ChatMessagesView {...props} /></Provider>);
+    expect(screen.getAllByRole('button', { name: 'Approve', exact: true })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve', exact: true }));
+    expect(onResume).toHaveBeenCalledExactlyOnceWith([{ type: 'approve' }], 'inner');
+    rerender(<Provider store={store}><ChatMessagesView {...props} pendingInterrupts={[]} /></Provider>);
+    expect(screen.queryByRole('region', { name: 'Pending tool approval' })).not.toBeInTheDocument();
+  });
+
   it('submits the owning ID for identical tool names with different arguments', () => {
     const onResume=vi.fn();
     const a={id:'a',resumable:true,value:{action_requests:[{name:'same_tool',args:{target:'A'}}],review_configs:[]}};
     const b={id:'b',resumable:true,value:{action_requests:[{name:'same_tool',args:{target:'B'}}],review_configs:[]}};
     const message={type:'ai',id:'m1',content:'',tool_calls:[{id:'tc-a',name:'same_tool',args:{target:'A'}},{id:'tc-b',name:'same_tool',args:{target:'B'}}]} as unknown as Message;
-    const {container}=render(<Provider store={makeStore()}><ChatMessagesView {...makeBaseProps({messages:[message],pendingInterrupt:a,pendingInterrupts:[a,b],onInterruptResume:onResume})}/></Provider>);
+    const {container}=render(<Provider store={makeStore()}><ChatMessagesView {...makeBaseProps({messages:[message],pendingInterrupts:[a,b],onInterruptResume:onResume})}/></Provider>);
     expect(screen.getAllByRole('button',{name:'Approve',exact:true})).toHaveLength(2);
     const cardB=container.querySelector('[data-interrupt-id="b"]')!;
     expect(cardB.textContent).toContain('"target": "B"');
@@ -199,7 +217,7 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     const onResume=vi.fn();
     const interrupt={id:'a',resumable:true,value:{action_requests:[{name:'tool1',args:{}},{name:'tool2',args:{}}],review_configs:[]}};
     const store=makeStore();
-    const props=makeBaseProps({pendingInterrupt:interrupt,pendingInterrupts:[interrupt],onInterruptResume:onResume,isLoading:true,isApprovalBusy:true});
+    const props=makeBaseProps({pendingInterrupts:[interrupt],onInterruptResume:onResume,isLoading:true,isApprovalBusy:true});
     const {rerender}=render(<Provider store={store}><ChatMessagesView {...props}/></Provider>);
     const buttons=screen.getAllByRole('button',{name:'Approve',exact:true});
     buttons.forEach(button=>{expect(button).toBeDisabled();fireEvent.click(button);});

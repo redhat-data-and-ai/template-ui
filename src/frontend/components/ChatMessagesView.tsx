@@ -1,11 +1,11 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User, ShieldCheck } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User } from "lucide-react";
 import type { InterruptInfo, ApprovalSubmission } from "../types/deep-agent";
 import { InterruptApprovalCard } from "./InterruptApprovalCard";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
 import { cn } from "../lib/utils";
 import {
   Dropdown,
@@ -512,94 +512,23 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
 
 interface AIMessageRendererProps {
   message: Message;
-  pendingInterrupt?: InterruptInfo | null;
-  isResuming?: boolean;
-  onInterruptResume?: ApprovalSubmission;
-  onAlwaysAllow?: (toolNames: string[]) => void;
-  globalApprovalIndex?: number;
-  approvalSlotOffset?: number;
-  totalActionRequests?: number;
-  allDecisionsMade?: boolean;
-  onSingleDecision?: (decision: { type: 'approve' | 'reject'; message?: string }) => void;
 }
 
-export function AIMessageRenderer({ message, pendingInterrupt, isResuming = false, onInterruptResume, onAlwaysAllow, globalApprovalIndex = 0, approvalSlotOffset = 0, totalActionRequests = 0, allDecisionsMade = false, onSingleDecision }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
-
-  const userExpandedRef = useRef<Set<string>>(new Set());
-  const userCollapsedRef = useRef<Set<string>>(new Set());
-
-  const pendingToolNames = useMemo(
-    () => {
-      const v = pendingInterrupt?.value;
-      const requests = (typeof v === 'object' && v !== null) ? (v.action_requests ?? []) : [];
-      return new Set(requests.map((r) => r.name));
-    },
-    [pendingInterrupt],
-  );
-
-  useEffect(() => {
-    const allToolCalls = (message as { tool_calls?: unknown[] }).tool_calls;
-    if (!Array.isArray(allToolCalls)) return;
-    const visibleCalls = allToolCalls.filter(
-      (tc) => tc && typeof tc === 'object' && !isSubAgentToolCall(tc as never) && (tc as { name?: string }).name !== 'write_todos',
-    );
-
-    setExpandedItems((prev) => {
-      const next = new Set(prev);
-      let changed = false;
-
-      visibleCalls.forEach((tc: any, idx: number) => {
-        const itemId = `${message.id}-${idx}`;
-        const needsApproval = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !tc.content;
-        const isFinished = tc.content != null;
-
-        if (needsApproval && !next.has(itemId) && !userCollapsedRef.current.has(itemId)) {
-          next.add(itemId);
-          changed = true;
-        } else if (isFinished && next.has(itemId) && !userExpandedRef.current.has(itemId)) {
-          next.delete(itemId);
-          changed = true;
-        }
-      });
-
-      return changed ? next : prev;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingToolNames, message.id, messageKey]);
 
   const toggleExpand = (itemId: string) => {
     setExpandedItems(prev => {
       const next = new Set(prev);
       if (prev.has(itemId)) {
         next.delete(itemId);
-        userExpandedRef.current.delete(itemId);
-        userCollapsedRef.current.add(itemId);
       } else {
         next.add(itemId);
-        userCollapsedRef.current.delete(itemId);
-        userExpandedRef.current.add(itemId);
       }
       return next;
     });
   };
-
-  const approvalSlotByToolCallId = useMemo(() => {
-    const allToolCalls = (message as any).tool_calls ?? [];
-    const map = new Map<string, number>();
-    let localSlot = 0;
-    for (const tc of allToolCalls) {
-      if (tc.name === 'write_todos') continue;
-      const isApprovable = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !(tc as Record<string, unknown>).content;
-      if (isApprovable) {
-        const key = tc.id ?? `${tc.name}-${localSlot}`;
-        map.set(key, approvalSlotOffset + localSlot);
-        localSlot++;
-      }
-    }
-    return map;
-  }, [message, pendingToolNames, approvalSlotOffset]);
 
   const renderMessage = useMemo(() => {
     const isToolCallStart = message.type === 'ai' && Array.isArray(message?.tool_calls) && message?.tool_calls?.length > 0;
@@ -618,21 +547,12 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
       return (
         <div className="space-y-2 w-full" aria-live="off">
           {subAgentCalls.map((toolCall, idx) => {
-            const tcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
-            const slot = approvalSlotByToolCallId.get(tcId);
-            const isThisCurrent = slot !== undefined && slot === globalApprovalIndex && !allDecisionsMade;
             return (
               <SubAgentIndicator
                 key={`${message.id}-sa-${idx}`}
                 toolCall={toolCall as any}
                 messageId={message.id ?? ''}
                 index={idx}
-                pendingInterrupt={pendingInterrupt}
-                isResuming={isResuming}
-                onInterruptResume={onInterruptResume}
-                onSingleDecision={totalActionRequests > 1 ? onSingleDecision : undefined}
-                isCurrentApproval={totalActionRequests > 1 ? isThisCurrent : undefined}
-                onAlwaysAllow={onAlwaysAllow}
               />
             );
           })}
@@ -646,24 +566,16 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
                 {regularCalls.map((toolCall, idx) => {
                   const itemId = `${message.id}-${idx}`;
                   const isExpanded = expandedItems.has(itemId);
-                  const needsApproval = (pendingToolNames.has(toolCall.name) || pendingToolNames.has('task')) && !(toolCall as Record<string, unknown>).content;
-                  const regTcId = (toolCall as any).id ?? `${toolCall.name}-${idx}`;
-                  const regSlot = approvalSlotByToolCallId.get(regTcId);
-                  const isThisCurrentApproval = regSlot !== undefined && regSlot === globalApprovalIndex && !allDecisionsMade;
-                  const showButtons = totalActionRequests <= 1 ? needsApproval : (needsApproval && isThisCurrentApproval);
                   const mcpAppDesc = parseMcpApp((toolCall as Record<string, unknown>).mcpApp);
                   const hasMcpApp = Boolean(mcpAppDesc);
                   // Keep the tool body mounted when an MCP App is present so collapse hides
                   // the iframe instead of destroying it (host teardown runs on real unmount).
-                  const keepToolBodyMounted = isExpanded || (!needsApproval && hasMcpApp);
+                  const keepToolBodyMounted = isExpanded || hasMcpApp;
 
                   return (
                     <div
                       key={itemId}
-                      className={cn(
-                        "bg-card border rounded-xl overflow-hidden shadow-card transition-colors",
-                        needsApproval ? "border-yellow-500/60" : "border-border",
-                      )}
+                      className="bg-card border border-border rounded-xl overflow-hidden shadow-card transition-colors"
                     >
                       <button
                         onClick={() => toggleExpand(itemId)}
@@ -718,7 +630,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
                                 </pre>
                               </>
                             )}
-                            {!needsApproval && hasMcpApp && (
+                            {hasMcpApp && (
                               <>
                                 {isExpanded && (
                                   <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
@@ -736,7 +648,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
                                 />
                               </>
                             )}
-                            {isExpanded && !needsApproval && (
+                            {isExpanded && (
                               <>
                                 <div className={cn(
                                   "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",
@@ -767,62 +679,6 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
                           </div>
                         </div>
                       )}
-
-                      {showButtons && onInterruptResume && (
-                        <div role="alert" aria-live="assertive" aria-label={`Tool call ${toolCall.name} requires approval`} className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
-                          <button
-                            type="button"
-                            disabled={isResuming}
-                            autoFocus
-                            onClick={() => {
-                              if (totalActionRequests > 1 && onSingleDecision) {
-                                onSingleDecision({ type: 'approve' });
-                              } else {
-                                onInterruptResume?.([{ type: 'approve' }], pendingInterrupt?.id ?? '');
-                              }
-                            }}
-                            aria-label={`Approve tool call: ${toolCall.name}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                            style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}
-                          >
-                            <Check className="w-3 h-3" aria-hidden="true" />
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isResuming}
-                            onClick={() => {
-                              if (totalActionRequests > 1 && onSingleDecision) {
-                                onSingleDecision({ type: 'reject', message: 'User rejected this action.' });
-                              } else {
-                                onInterruptResume?.([{ type: 'reject', message: 'User rejected this action.' }], pendingInterrupt?.id ?? '');
-                              }
-                            }}
-                            aria-label={`Reject tool call: ${toolCall.name}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-90 transition-colors"
-                            style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}
-                          >
-                            Reject
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isResuming}
-                            onClick={() => {
-                              onAlwaysAllow?.([toolCall.name]);
-                              if (totalActionRequests > 1 && onSingleDecision) {
-                                onSingleDecision({ type: 'approve' });
-                              } else {
-                                onInterruptResume?.([{ type: 'approve' }], pendingInterrupt?.id ?? '');
-                              }
-                            }}
-                            aria-label={`Always allow tool: ${toolCall.name}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground hover:bg-muted/70 transition-colors"
-                          >
-                            <ShieldCheck className="w-3 h-3" aria-hidden="true" />
-                            Always allow
-                          </button>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -844,7 +700,7 @@ export function AIMessageRenderer({ message, pendingInterrupt, isResuming = fals
 
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, isResuming, expandedItems, globalApprovalIndex, allDecisionsMade, pendingInterrupt, onInterruptResume, onAlwaysAllow, onSingleDecision, totalActionRequests, approvalSlotByToolCallId]);
+  }, [messageKey, expandedItems]);
 
   return (
     <div className="space-y-2 w-full">
@@ -857,7 +713,6 @@ interface ChatMessagesViewProps {
   messages: Message[];
   streamEvents?: StreamEvent[];
   isLoading: boolean;
-  pendingInterrupt?: InterruptInfo | null;
   pendingInterrupts?: InterruptInfo[];
   isApprovalBusy?: boolean;
   isResuming?: boolean;
@@ -893,8 +748,7 @@ export function ChatMessagesView({
   isLoading,
   isResuming = false,
   isApprovalBusy = false,
-  pendingInterrupt,
-  pendingInterrupts,
+  pendingInterrupts = [],
   onInterruptResume,
   onAlwaysAllow,
   interruptContent,
@@ -917,69 +771,12 @@ export function ChatMessagesView({
   onExportJson,
 }: ChatMessagesViewProps) {
   const approvalsDisabled = isResuming || isApprovalBusy;
-  // Explicit interrupt cards handle the production path, including subagent
-  // requests without a corresponding tool message in the parent thread.
-  const inlineInterrupt = pendingInterrupts ? null : pendingInterrupt;
+  const pendingInterrupt = pendingInterrupts[0];
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const prevPendingInterrupt = useRef(pendingInterrupt);
   const prevIsLoading = useRef(isLoading);
   const [srAnnouncement, setSrAnnouncement] = useState('');
-
-  const globalActionRequests = useMemo(() => {
-    const v = inlineInterrupt?.value;
-    return (typeof v === 'object' && v !== null) ? ((v as any).action_requests ?? []) : [];
-  }, [inlineInterrupt]);
-
-  const [globalDecisions, setGlobalDecisions] = useState<Array<{ type: 'approve' | 'reject'; message?: string } | null>>([]);
-  const [globalApprovalIndex, setGlobalApprovalIndex] = useState(0);
-  const decidedSlotRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!isResuming && globalActionRequests.length > 0) {
-      decidedSlotRef.current = null;
-      setGlobalDecisions(new Array(globalActionRequests.length).fill(null));
-      setGlobalApprovalIndex(0);
-    }
-  }, [globalActionRequests, pendingInterrupt?.id, isResuming]);
-
-  const globalAllDecisionsMade = globalActionRequests.length > 0 && globalDecisions.every(d => d !== null);
-
-  const handleGlobalSingleDecision = useCallback((decision: { type: 'approve' | 'reject'; message?: string }) => {
-    if (approvalsDisabled || decidedSlotRef.current === globalApprovalIndex) return;
-    decidedSlotRef.current = globalApprovalIndex;
-    const newDecisions = [...globalDecisions];
-    newDecisions[globalApprovalIndex] = decision;
-    setGlobalDecisions(newDecisions);
-
-    const nextIndex = globalApprovalIndex + 1;
-    if (nextIndex >= globalActionRequests.length) {
-      onInterruptResume?.(newDecisions.filter(Boolean) as Array<{ type: 'approve' | 'reject'; message?: string }>, pendingInterrupt?.id ?? '');
-    } else {
-      setGlobalApprovalIndex(nextIndex);
-    }
-  }, [pendingInterrupt?.id, approvalsDisabled, globalDecisions, globalApprovalIndex, globalActionRequests.length, onInterruptResume]);
-
-  const pendingToolNames = useMemo(() => {
-    const requests = globalActionRequests;
-    return new Set(requests.map((r: any) => r.name));
-  }, [globalActionRequests]);
-
-  const approvalSlotOffsets = useMemo(() => {
-    const offsets = new Map<number, number>();
-    let runningOffset = 0;
-    messages.forEach((m, idx) => {
-      offsets.set(idx, runningOffset);
-      if (m.type === 'ai' && Array.isArray((m as any).tool_calls)) {
-        for (const tc of (m as any).tool_calls) {
-          if (tc.name === 'write_todos') continue;
-          const isApprovable = (pendingToolNames.has(tc.name) || pendingToolNames.has('task')) && !(tc as Record<string, unknown>).content;
-          if (isApprovable) runningOffset++;
-        }
-      }
-    });
-    return offsets;
-  }, [messages, pendingToolNames]);
 
   useEffect(() => {
     if (prevPendingInterrupt.current && !pendingInterrupt) {
@@ -1116,15 +913,6 @@ export function ChatMessagesView({
                 <div className="w-full space-y-0">
                   <AIMessageRenderer
                     message={message}
-                    pendingInterrupt={inlineInterrupt}
-                    isResuming={approvalsDisabled}
-                    onInterruptResume={onInterruptResume}
-                    onAlwaysAllow={onAlwaysAllow}
-                    globalApprovalIndex={globalApprovalIndex}
-                    approvalSlotOffset={approvalSlotOffsets.get(messageIndex) ?? 0}
-                    totalActionRequests={globalActionRequests.length}
-                    allDecisionsMade={globalAllDecisionsMade}
-                    onSingleDecision={handleGlobalSingleDecision}
                   />
                   <MessageActionsRow
                     isLastAiInTurn={isLastAiInTurn}
@@ -1226,7 +1014,7 @@ export function ChatMessagesView({
               </div>
             </div>
           )}
-          {pendingInterrupts?.map(interrupt => (
+          {pendingInterrupts.map(interrupt => (
             typeof interrupt.value === 'object' && interrupt.value?.action_requests?.length > 0
               ? <InterruptApprovalCard
                   key={`${interrupt.id}:${JSON.stringify(interrupt.value)}`}
