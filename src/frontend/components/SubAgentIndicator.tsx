@@ -138,6 +138,16 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
               )}
             </CardBody>
           )}
+          {needsApproval && approval && Object.keys(approval.request.args ?? {}).length > 0 && (
+            <div className="px-4 py-3 border-t border-yellow-500/30">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                Arguments
+              </p>
+              <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                {JSON.stringify(approval.request.args, null, 2)}
+              </pre>
+            </div>
+          )}
           {approval && <ToolApprovalControls approval={approval} />}
         </Card>
       </div>
