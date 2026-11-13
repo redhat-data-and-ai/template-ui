@@ -2,12 +2,9 @@ import { Check, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { ToolApproval } from '../hooks/useInterruptApprovals';
 
-/** Preserve the original inline approval toolbar and its button styles. */
 export function ToolApprovalControls({ approval }: { approval: ToolApproval }) {
   const approveRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    // Interrupts can arrive before stream EOF, while decisions are disabled.
-    // Focus when approval becomes available, rather than only on mount.
     if (!approval.disabled && !approval.decision) approveRef.current?.focus({ preventScroll: true });
   }, [approval.disabled, approval.decision]);
   if (approval.decision) return null;

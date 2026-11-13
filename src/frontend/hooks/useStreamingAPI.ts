@@ -799,8 +799,6 @@ export function useStreamingAPI(threadId: string) {
               }
             },
             onDone() {
-              // An interrupt is a successful pause, not an incomplete response
-              // requiring reconnect polling. Auto-approval waits for this point.
               if (streamEndedWithInterruptRef.current) {
                 lastSuccessfulConnectionRef.current = Date.now();
                 if (recoveryIntervalRef.current) {
@@ -1180,7 +1178,6 @@ export function useStreamingAPI(threadId: string) {
           resume: true,
           resumeResponses: { [interruptId]: response },
         }, callbacks);
-        // Cancellation is an uncertain outcome too: it does not undo a server resume.
         if (manager.getStatus() === 'cancelled') failure = new Error('Approval submission was interrupted.');
         if (failure) throw failure;
         const unresolved = [...remaining.values()];

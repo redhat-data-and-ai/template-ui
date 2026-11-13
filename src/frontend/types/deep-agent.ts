@@ -45,7 +45,6 @@ export type ApprovalDecision = { type: 'approve' | 'reject' | 'edit'; message?: 
 export type InterruptResponses = Record<string, { decisions: ApprovalDecision[] } | string>;
 
 export interface InterruptInfo {
-  /** Absent only for legacy servers; such interrupts cannot be submitted safely. */
   id?: string;
   value: string | HITLInterruptValue;
   resumable: boolean;

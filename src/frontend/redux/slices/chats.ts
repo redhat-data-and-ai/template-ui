@@ -11,7 +11,6 @@ export interface StreamingState {
   error: string | null;
   currentRunId: string | null;
   activeSubAgent: SubAgentInfo | null;
-  /** First pending approval, retained as a presentation convenience. */
   pendingInterrupt: InterruptInfo | null;
   pendingInterrupts: InterruptInfo[];
   isResuming: boolean;

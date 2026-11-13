@@ -17,7 +17,6 @@ export interface ToolApproval {
   alwaysAllow?: () => void;
 }
 
-/** Keep the original per-action decision order, independent of displayed cards. */
 export function useInterruptApprovals(
   interrupts: InterruptInfo[],
   disabled: boolean,
@@ -94,8 +93,6 @@ export function bindToolApprovals(messages: Message[], approvals: ToolApproval[]
       )
     ) && canonical(call.args ?? {}) === canonical(approval.request.args ?? {}));
     if (matches.length === 1) bindings.set(matches[0].id!, approval);
-    // The result may arrive before the resume stream ends and clears its interrupt.
-    // An already-decided request needs no fallback card while that happens.
     else if (!approval.decision) unmatched.push(approval);
   }
   return { bindings, unmatched };

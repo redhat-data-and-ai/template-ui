@@ -108,8 +108,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     if (!chatId || hydrating) return;
     const locState = location.state as Record<string, unknown> | null;
     if (locState?.initialPrompt != null || isClientCreatedChat(chatId)) {
-      // New threads are hydrated by their first stream. Loading transitions
-      // must not trigger a redundant state fetch when that stream finishes.
+      // New threads are hydrated by their first stream
       hydratedThreadRef.current = chatId;
       return;
     }

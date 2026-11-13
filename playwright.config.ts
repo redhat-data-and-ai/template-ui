@@ -28,8 +28,6 @@ export default defineConfig({
       PORT: '18080',
       AUTH_ENABLED: 'false',
       ENVIRONMENT: 'test',
-      // All browser contexts share one server/IP. Keep suite traffic from
-      // exhausting the production limit; 429 behavior is tested via mocks.
       SECURITY_RATE_LIMIT_MAX: '10000',
       AGENT_HOST: 'http://localhost:19999',
       COOKIE_SIGN: 'playwright-test-secret-32-chars-min-length',
