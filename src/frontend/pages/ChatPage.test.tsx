@@ -4,14 +4,16 @@ import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestStore } from '../test-utils/createTestStore';
-import { addChat, setLoadingThreads, updateChat } from '../redux/slices/chats';
+import { addChat, setLoadingThreads, updateChat, updateStreamingState } from '../redux/slices/chats';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
+import { getThreadFeedback } from '../services/feedback-api';
 import { getStreamingManager, releaseAllStreamingManagers } from '../lib/streaming/streamingManagerRegistry';
 import { useStreamingAPI } from '../hooks/useStreamingAPI';
 import { ChatPage } from './ChatPage';
 
 vi.mock('../hooks/useStreamingAPI', () => ({ useStreamingAPI: vi.fn(), MAX_RETRIES: 3 }));
-vi.mock('../hooks/useAgentHealth', () => ({ useAgentHealth: () => ({ status: 'healthy' }) }));
+const health = vi.hoisted(() => ({ status: 'healthy' }));
+vi.mock('../hooks/useAgentHealth', () => ({ useAgentHealth: () => health }));
 vi.mock('../services/agent-rest', () => ({ getThreadStateAndInterrupt: vi.fn() }));
 vi.mock('../services/feedback-api', () => ({ getThreadFeedback: vi.fn(async () => ({})) }));
 vi.mock('../components/ChatMessagesView', () => ({ ChatMessagesView: () => <div>Messages</div> }));
@@ -42,6 +44,7 @@ function setup() {
 describe('ChatPage hydration ordering', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    health.status = 'healthy';
     releaseAllStreamingManagers();
     localStorage.clear();
   });
@@ -72,5 +75,57 @@ describe('ChatPage hydration ordering', () => {
     expect(store.getState().chats.chats[0].messages).toEqual(newer);
     expect(store.getState().chats.streamingStates['hydration-thread']?.pendingInterrupt).toBeUndefined();
     view.unmount();
+  });
+
+  it('restores pending approvals even when feedback retrieval fails', async () => {
+    vi.mocked(getThreadFeedback).mockRejectedValueOnce(new TypeError('Network unavailable'));
+    const { store, view, resolveOld, old } = setup();
+    await act(async () => { resolveOld(old); });
+    expect(store.getState().chats.streamingStates['hydration-thread']?.pendingInterrupts).toEqual(old.interrupts);
+    view.unmount();
+  });
+
+  it('allows approvals after hydration recovers a failed fallback refresh', async () => {
+    const manager = getStreamingManager('hydration-thread');
+    manager.beginResume();
+    manager.endResume(true);
+    expect(() => manager.beginResume()).toThrow('Refresh pending approvals');
+    const { view, resolveOld, old } = setup();
+    await act(async () => { resolveOld(old); });
+    expect(() => manager.beginResume()).not.toThrow();
+    manager.endResume(false);
+    view.unmount();
+  });
+
+  it('discards a health-recovery snapshot that overlaps a complete resume', async () => {
+    const { store, ui, view, resolveOld, old } = setup();
+    await act(async () => { resolveOld(old); });
+    let resolveRecovery!: (value: any) => void;
+    vi.mocked(getThreadStateAndInterrupt).mockImplementationOnce(
+      () => new Promise(resolve => { resolveRecovery = resolve; }),
+    );
+    vi.useFakeTimers();
+    try {
+      health.status = 'unhealthy';
+      view.rerender(ui());
+      health.status = 'healthy';
+      view.rerender(ui());
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+      expect(getThreadStateAndInterrupt).toHaveBeenCalledTimes(2);
+      const manager = getStreamingManager('hydration-thread');
+      act(() => {
+        manager.beginResume();
+        manager.endResume(false);
+        store.dispatch(updateChat({ id: 'hydration-thread', updates: { messages: newer } }));
+        store.dispatch(updateStreamingState({ chatId: 'hydration-thread', state: { pendingInterrupts: [] } }));
+      });
+      await act(async () => { resolveRecovery(old); });
+      expect(store.getState().chats.chats[0].messages).toEqual(newer);
+      expect(store.getState().chats.streamingStates['hydration-thread']?.pendingInterrupts).toEqual([]);
+    } finally {
+      view.unmount();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });

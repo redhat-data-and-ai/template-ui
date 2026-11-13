@@ -122,7 +122,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
     setHydrating(true);
 
     const threadPromise = getThreadStateAndInterrupt(chatId);
-    const feedbackPromise = getThreadFeedback(chatId, feedbackUserId);
+    const feedbackPromise = getThreadFeedback(chatId, feedbackUserId).catch(
+      (): Record<string, 'up' | 'down'> => ({}),
+    );
 
     Promise.all([threadPromise, feedbackPromise])
       .then(([{ messages: msgs, interrupt: pendingInterrupt, interrupts }, feedbackMap]) => {
@@ -161,6 +163,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
           chatId,
           state: { pendingInterrupts: interrupts ?? (pendingInterrupt ? [pendingInterrupt] : []) },
         }));
+        manager.approvalsRefreshed();
         setHydrating(false);
       })
       .catch(() => {
@@ -463,7 +466,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
         let lastUpdateCount = currentMsgCount;
         const recoveryPoll = setInterval(async () => {
           try {
+            const manager = getStreamingManager(threadId);
+            const generation = manager.getResumeGeneration();
+            if (!manager.canApplyRefresh(generation)) return;
             const { messages: msgs, interrupt, interrupts } = await getThreadStateAndInterrupt(threadId);
+            if (!manager.canApplyRefresh(generation)) return;
 
             if (interrupt) {
               dispatch(updateChat({ id: threadId, updates: { messages: msgs } }));
@@ -476,6 +483,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
                   pendingInterrupts: interrupts ?? [interrupt],
                 },
               }));
+              manager.approvalsRefreshed();
               clearInterval(recoveryPoll);
               return;
             }

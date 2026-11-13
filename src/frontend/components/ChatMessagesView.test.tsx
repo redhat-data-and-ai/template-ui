@@ -190,6 +190,7 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     const cardB=container.querySelector('[data-interrupt-id="b"]')!;
     expect(cardB.textContent).toContain('"target": "B"');
     fireEvent.click(within(cardB as HTMLElement).getByRole('button',{name:'Approve',exact:true}));
+    expect(onResume).toHaveBeenCalledTimes(1);
     expect(onResume).toHaveBeenCalledWith([{type:'approve'}],'b');
     expect(container.querySelector('[data-interrupt-id="a"]')?.textContent).toContain('"target": "A"');
   });

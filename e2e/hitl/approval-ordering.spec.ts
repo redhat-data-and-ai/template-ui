@@ -43,7 +43,10 @@ test('same tool with different arguments submits the clicked interrupt ID', asyn
   expect(resumes).toEqual([{ [b]: { decisions: [{ type: 'approve' }] } }]);
   await cardA.getByRole('button', { name: 'Reject', exact: true }).click();
   await expect(cardA).not.toBeVisible();
-  expect(resumes[1]).toEqual({ [a]: { decisions: [{ type: 'reject', message: 'User rejected this action.' }] } });
+  expect(resumes).toEqual([
+    { [b]: { decisions: [{ type: 'approve' }] } },
+    { [a]: { decisions: [{ type: 'reject', message: 'User rejected this action.' }] } },
+  ]);
 });
 
 test('multi-action approvals remain disabled until the interrupt stream reaches EOF', async ({ page }) => {
