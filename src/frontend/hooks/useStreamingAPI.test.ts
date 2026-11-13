@@ -12,6 +12,9 @@ import toastsReducer from '../redux/slices/toasts';
 import userSettingsReducer, { addAlwaysAllowedTool } from '../redux/slices/userSettings';
 import projectsReducer from '../redux/slices/projects';
 import { useStreamingAPI, RECOVERY_POLL_TIMEOUT_MS, _startRecoveryPolling, isNonRecoverableHttpStatus } from './useStreamingAPI';
+import { getStreamingManager, releaseAllStreamingManagers } from '../lib/streaming/streamingManagerRegistry';
+import { updateStreamingState } from '../redux/slices/chats';
+import * as agentRest from '../services/agent-rest';
 import * as projectsApi from '../services/projects-api';
 import { markChatAsClientCreated, unmarkChatAsClientCreated } from '../services/newChatTracker';
 
@@ -596,5 +599,156 @@ describe('_startRecoveryPolling — deadline fires independently of pending requ
 
     // Stale result must not trigger onRecovered or dispatch state
     expect(onRecovered).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('interrupt resume safety', () => {
+  const approval = (id: string) => ({ id, resumable: true, value: {
+    action_requests: [{ name: `tool-${id}`, args: {} }], review_configs: [],
+  } });
+  function setup() {
+    const store = makeStore(); seedChat(store);
+    store.dispatch(updateStreamingState({chatId: THREAD_ID, state: {pendingInterrupts: [approval('a'), approval('b')]}}));
+    const hook = renderHook(() => useStreamingAPI(THREAD_ID), {wrapper: makeWrapper(store)});
+    return {store, ...hook};
+  }
+  afterEach(() => { vi.restoreAllMocks(); releaseAllStreamingManagers(); localStorage.clear(); });
+
+  it('treats an interrupt-only stream as a successful pause without reconnect polling', async () => {
+    const {store, result, unmount} = setup();
+    const spy = vi.spyOn(getStreamingManager(THREAD_ID), 'stream').mockImplementation(async (_r, cb) => {
+      cb.onStatusChange('connecting');
+      cb.onInterrupt(approval('a'));
+      cb.onStatusChange('idle');
+      cb.onDone();
+    });
+    await act(async () => {
+      await result.current.submit({messages:[{type:'human',content:'Run a tool',id:'h1'}]});
+    });
+    const state = selectStreamingState(store.getState(), THREAD_ID);
+    expect(state.isLoading).toBe(false);
+    expect(state.isReconnecting).toBe(false);
+    expect(result.current.pendingInterrupt?.id).toBe('a');
+    expect(spy).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  it('serializes concurrent calls across hook instances and keys the response', async () => {
+    const {store, result, unmount} = setup();
+    const other = renderHook(() => useStreamingAPI(THREAD_ID), {wrapper: makeWrapper(store)});
+    let finish!: () => void;
+    const spy = vi.spyOn(getStreamingManager(THREAD_ID), 'stream').mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    let first!: Promise<void>;
+    await act(async () => {
+      first = result.current.resumeWithDecisions([{type: 'approve'}], 'a');
+      await expect(other.result.current.resumeWithDecisions([{type: 'reject'}], 'a')).rejects.toThrow('already being submitted');
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0].resumeResponses).toEqual({a: {decisions: [{type:'approve'}]}});
+    expect(selectStreamingState(store.getState(), THREAD_ID).isResuming).toBe(true);
+    await act(async () => { finish(); await first; });
+    expect(result.current.pendingInterrupts.map(i => i.id)).toEqual(['b']);
+    expect(result.current.isResuming).toBe(false);
+    unmount(); other.unmount();
+  });
+
+  it('rejects stale IDs and decisions without an interrupt identity', async () => {
+    const {result, unmount} = setup();
+    const spy = vi.spyOn(getStreamingManager(THREAD_ID), 'stream');
+    await expect(result.current.resumeWithDecisions([{type:'approve'}], 'old')).rejects.toThrow('no longer pending');
+    await expect(result.current.resumeInterrupt('continue', '')).rejects.toThrow('no longer pending');
+    expect(spy).not.toHaveBeenCalled(); unmount();
+  });
+
+  it('does not queue or replay a rejected decision against a later interrupt', async () => {
+    const {result, unmount} = setup();
+    const later = approval('later');
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockResolvedValue({messages:[],interrupt:later,interrupts:[later]});
+    const spy = vi.spyOn(getStreamingManager(THREAD_ID), 'stream').mockImplementation(async (_r, cb) => {
+      await cb.onError(Object.assign(new Error('Cannot resume: thread is not in interrupted state'), {status:400}));
+    });
+    await act(async () => {
+      await expect(result.current.resumeWithDecisions([{type:'approve'}], 'a')).rejects.toThrow('Cannot resume');
+    });
+    expect(localStorage.getItem(`pending-decision:${THREAD_ID}`)).toBeNull();
+    expect(result.current.pendingInterrupt?.id).toBe('later');
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    expect(spy).toHaveBeenCalledTimes(1); unmount();
+  });
+
+  it('requires a successful state refresh after an uncertain outcome', async () => {
+    const {result, unmount} = setup();
+    const refresh = vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockRejectedValue(new Error('offline'));
+    const spy = vi.spyOn(getStreamingManager(THREAD_ID), 'stream').mockImplementationOnce(async (_r, cb) => { await cb.onError(new Error('network failed')); }).mockResolvedValue(undefined);
+    await act(async () => { await expect(result.current.resumeInterrupt('continue', 'a')).rejects.toThrow('network failed'); });
+    await expect(result.current.resumeInterrupt('continue', 'a')).rejects.toThrow('Refresh pending approvals');
+    expect(spy).toHaveBeenCalledTimes(1);
+    refresh.mockResolvedValue({messages:[],interrupt:approval('a'),interrupts:[approval('a'),approval('b')]});
+    await act(async () => { await result.current.refreshInterrupts(); });
+    await act(async () => { await result.current.resumeInterrupt('continue','a'); });
+    expect(result.current.pendingInterrupt?.id).toBe('b'); unmount();
+  });
+
+  it('discards a refresh started before a resume, including across hook instances', async () => {
+    const {store,result,unmount} = setup();
+    const other = renderHook(() => useStreamingAPI(THREAD_ID), {wrapper:makeWrapper(store)});
+    let finishRefresh!: (state: Awaited<ReturnType<typeof agentRest.getThreadStateAndInterrupt>>) => void;
+    vi.spyOn(agentRest,'getThreadStateAndInterrupt').mockImplementationOnce(() => new Promise(resolve => {finishRefresh=resolve;}));
+    vi.spyOn(getStreamingManager(THREAD_ID),'stream').mockResolvedValue(undefined);
+    let refresh!: Promise<void>;
+    act(() => {refresh=other.result.current.refreshInterrupts();});
+    await act(async () => {await result.current.resumeWithDecisions([{type:'approve'}],'a');});
+    const newer = [{type:'ai',content:'Resume completed',id:'new-response'}] as Message[];
+    act(() => {result.current.setMessages(newer);});
+    await act(async () => {
+      finishRefresh({messages:[{type:'human',content:'Old messages',id:'old'}] as Message[],interrupt:approval('a'),interrupts:[approval('a'),approval('b')]});
+      await refresh;
+    });
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    expect(result.current.messages).toEqual(newer);
+    unmount();other.unmount();
+  });
+
+  it('does not refresh while a resume is in flight', async () => {
+    const {result,unmount} = setup();
+    const readState = vi.spyOn(agentRest,'getThreadStateAndInterrupt').mockClear();
+    let finish!: () => void;
+    vi.spyOn(getStreamingManager(THREAD_ID),'stream').mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    let resume!:Promise<void>;
+    act(()=>{resume=result.current.resumeWithDecisions([{type:'approve'}],'a');});
+    await act(async()=>{await result.current.refreshInterrupts();});
+    expect(readState).not.toHaveBeenCalled();
+    await act(async()=>{finish();await resume;});
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    unmount();
+  });
+
+  it('discards a refresh that resolves during a resume', async () => {
+    const {result,unmount} = setup();
+    let finishRefresh!: (state: Awaited<ReturnType<typeof agentRest.getThreadStateAndInterrupt>>) => void;
+    vi.spyOn(agentRest,'getThreadStateAndInterrupt').mockImplementationOnce(()=>new Promise(resolve=>{finishRefresh=resolve;}));
+    let finishResume!:()=>void;
+    vi.spyOn(getStreamingManager(THREAD_ID),'stream').mockImplementationOnce(()=>new Promise(resolve=>{finishResume=resolve;}));
+    let refresh!:Promise<void>;let resume!:Promise<void>;
+    act(()=>{refresh=result.current.refreshInterrupts();resume=result.current.resumeWithDecisions([{type:'approve'}],'a');});
+    const currentMessages = result.current.messages;
+    await act(async()=>{
+      finishRefresh({messages:[{type:'human',content:'stale',id:'old'}] as Message[],interrupt:null,interrupts:[]});
+      await refresh;
+    });
+    expect(result.current.messages).toEqual(currentMessages);
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['a','b']);
+    await act(async()=>{finishResume();await resume;});
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    unmount();
+  });
+
+  it('discards legacy queued decisions instead of replaying them on mount', () => {
+    localStorage.setItem(`pending-decision:${THREAD_ID}`, JSON.stringify({decisions:[{type:'approve'}], timestamp:Date.now()}));
+    const spy = vi.spyOn(getStreamingManager(THREAD_ID), 'stream');
+    const {unmount} = setup();
+    expect(localStorage.getItem(`pending-decision:${THREAD_ID}`)).toBeNull();
+    expect(spy).not.toHaveBeenCalled(); unmount();
   });
 });

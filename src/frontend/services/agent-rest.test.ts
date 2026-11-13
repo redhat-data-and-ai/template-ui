@@ -351,10 +351,9 @@ describe('agent-rest', () => {
       expect(result.interrupt).toEqual({ value: 'confirm', resumable: false });
     });
 
-    it('returns empty messages and null interrupt on failure', async () => {
+    it('rejects an unavailable state instead of treating it as no pending interrupts', async () => {
       vi.mocked(authenticatedFetch).mockRejectedValue(new Error('boom'));
-      const result = await getThreadStateAndInterrupt('t1');
-      expect(result).toEqual({ messages: [], interrupt: null });
+      await expect(getThreadStateAndInterrupt('t1')).rejects.toThrow('Unable to refresh thread state');
     });
 
     it('returns messages with null interrupt when no tasks', async () => {
@@ -389,10 +388,21 @@ describe('agent-rest', () => {
       }
     });
 
-    it('still returns fallback on network error (no .status)', async () => {
+    it('rejects network errors so reconciliation cannot silently succeed', async () => {
       vi.mocked(authenticatedFetch).mockRejectedValue(new Error('ECONNREFUSED'));
-      const result = await getThreadStateAndInterrupt('t1');
-      expect(result).toEqual({ messages: [], interrupt: null });
+      await expect(getThreadStateAndInterrupt('t1')).rejects.toThrow('Unable to refresh thread state');
     });
+  });
+});
+
+
+describe('pending interrupt collection', () => {
+  it('preserves IDs from every task and deduplicates repeated IDs', async () => {
+    const a = {id:'a',value:'Approve A',resumable:true};
+    const b = {id:'b',value:'Approve B',resumable:true};
+    vi.mocked(authenticatedFetch).mockResolvedValueOnce(new Response(JSON.stringify({tasks:[{interrupts:[a]},{interrupts:[b,a]}]})));
+    const state = await getThreadStateAndInterrupt('multiple');
+    expect(state.interrupts).toEqual([a,b]);
+    expect(state.interrupt).toEqual(a);
   });
 });

@@ -12,6 +12,8 @@ export interface StreamingState {
   currentRunId: string | null;
   activeSubAgent: SubAgentInfo | null;
   pendingInterrupt: InterruptInfo | null;
+  pendingInterrupts: InterruptInfo[];
+  isResuming: boolean;
   taskSteps: TaskStep[];
   isReconnecting: boolean;
   reconnectAttempt: number;
@@ -47,6 +49,8 @@ const DEFAULT_STREAMING_STATE: StreamingState = {
   currentRunId: null,
   activeSubAgent: null,
   pendingInterrupt: null,
+  pendingInterrupts: [],
+  isResuming: false,
   taskSteps: [],
   isReconnecting: false,
   reconnectAttempt: 0,
@@ -214,7 +218,24 @@ const chatsSlice = createSlice({
     ) {
       const { chatId, state: nextPartial } = action.payload;
       const prev = state.streamingStates[chatId] ?? DEFAULT_STREAMING_STATE;
-      state.streamingStates[chatId] = { ...prev, ...nextPartial };
+      const next = { ...prev, ...nextPartial };
+      if (nextPartial.pendingInterrupts !== undefined) {
+        next.pendingInterrupt = nextPartial.pendingInterrupts[0] ?? null;
+      } else if (nextPartial.pendingInterrupt !== undefined) {
+        const interrupt = nextPartial.pendingInterrupt;
+        if (!interrupt) {
+          next.pendingInterrupts = [];
+        } else {
+          const pending = prev.pendingInterrupts ?? [];
+          next.pendingInterrupts = interrupt.id
+            ? (pending.some(item => item.id === interrupt.id)
+              ? pending.map(item => item.id === interrupt.id ? interrupt : item)
+              : [...pending, interrupt])
+            : [interrupt];
+          next.pendingInterrupt = next.pendingInterrupts[0] ?? null;
+        }
+      }
+      state.streamingStates[chatId] = next;
     },
     setError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;

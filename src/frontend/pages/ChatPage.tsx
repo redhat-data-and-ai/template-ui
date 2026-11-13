@@ -15,6 +15,7 @@ import {
 } from '../redux/slices/chats';
 import { selectDebugMode, addAlwaysAllowedTool, selectAutoApproveAllTools } from '../redux/slices/userSettings';
 import { addToast } from '../redux/slices/toasts';
+import { getStreamingManager } from '../lib/streaming/streamingManagerRegistry';
 import { useStreamingAPI, MAX_RETRIES } from '../hooks/useStreamingAPI';
 import { useRateLimitState } from '../hooks/useRateLimitState';
 import { ChatMessagesView } from '../components/ChatMessagesView';
@@ -58,6 +59,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([]);
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({});
   const [hydrating, setHydrating] = useState(false);
+  const hydratedThreadRef = useRef<string | null>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
@@ -104,21 +106,33 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     if (!chatId || hydrating) return;
-    if (hasMessages && !needsServerRefresh) return;
-
     const locState = location.state as Record<string, unknown> | null;
-    if (locState?.initialPrompt != null) return;
-    if (isClientCreatedChat(chatId)) return;
+    if (locState?.initialPrompt != null || isClientCreatedChat(chatId)) {
+      // New threads are hydrated by their first stream
+      hydratedThreadRef.current = chatId;
+      return;
+    }
+    if (thread.isLoading || thread.isResuming) return;
+    if (hydratedThreadRef.current === chatId && !needsServerRefresh) return;
 
     let cancelled = false;
+    const manager = getStreamingManager(chatId);
+    const generation = manager.getResumeGeneration();
     setHydrating(true);
 
     const threadPromise = getThreadStateAndInterrupt(chatId);
-    const feedbackPromise = getThreadFeedback(chatId, feedbackUserId);
+    const feedbackPromise = getThreadFeedback(chatId, feedbackUserId).catch(
+      (): Record<string, 'up' | 'down'> => ({}),
+    );
 
     Promise.all([threadPromise, feedbackPromise])
-      .then(([{ messages: msgs, interrupt: pendingInterrupt }, feedbackMap]) => {
+      .then(([{ messages: msgs, interrupt: pendingInterrupt, interrupts }, feedbackMap]) => {
         if (cancelled) return;
+        if (!manager.canApplyRefresh(generation)) {
+          setHydrating(false);
+          return;
+        }
+        hydratedThreadRef.current = chatId;
         if (msgs.length > 0) {
           dispatch(updateChat({
             id: chatId,
@@ -144,17 +158,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
             dispatch(setMessageFeedback({ chatId, messageId: msgId, feedback: fb }));
           }
         }
-        if (pendingInterrupt) {
-          dispatch(updateStreamingState({
-            chatId,
-            state: {
-              pendingInterrupt: {
-                value: pendingInterrupt.value as any,
-                resumable: pendingInterrupt.resumable,
-              },
-            },
-          }));
-        }
+        dispatch(updateStreamingState({
+          chatId,
+          state: { pendingInterrupts: interrupts ?? (pendingInterrupt ? [pendingInterrupt] : []) },
+        }));
+        manager.approvalsRefreshed();
         setHydrating(false);
       })
       .catch(() => {
@@ -163,7 +171,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
     return () => { cancelled = true; setHydrating(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, feedbackUserId, needsServerRefresh]);
+  }, [chatId, feedbackUserId, needsServerRefresh, thread.isLoading, thread.isResuming]);
 
   useEffect(() => {
     if (!chatId || isClientCreatedChat(chatId)) return;
@@ -367,16 +375,17 @@ export function ChatPage({ threadId }: { threadId: string }) {
   }, [threadId, currentChat, dispatch]);
 
   const handleInterruptResume = useCallback(
-    async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>) => {
+    async (decisions: Array<{ type: 'approve' | 'reject'; message?: string }>, interruptId: string) => {
       if (!threadId || !currentChat) return;
       try {
-        await thread.resumeWithDecisions(decisions);
+        await thread.resumeWithDecisions(decisions, interruptId);
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
       } catch (err) {
         console.error('Failed to resume:', err);
         dispatch(addToast({ title: 'Failed to resume', variant: 'danger' }));
+        throw err;
       }
     },
     [thread, threadId, currentChat, dispatch],
@@ -386,7 +395,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     async (response: string) => {
       if (!threadId || !currentChat) return;
       try {
-        await thread.resumeInterrupt(response);
+        await thread.resumeInterrupt(response, thread.pendingInterrupt?.id ?? '');
         setTimeout(() => {
           hasFinalizeEventOccurredRef.current = true;
         }, 100);
@@ -402,10 +411,10 @@ export function ChatPage({ threadId }: { threadId: string }) {
     dispatch(
       updateStreamingState({
         chatId: threadId,
-        state: { pendingInterrupt: null },
+        state: { pendingInterrupts: thread.pendingInterrupts.filter(item => item.id !== thread.pendingInterrupt?.id) },
       }),
     );
-  }, [dispatch, threadId]);
+  }, [dispatch, threadId, thread]);
 
   const handleAlwaysAllow = useCallback(
     (toolNames: string[]) => {
@@ -417,13 +426,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
   );
 
   const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
+  const autoApprovalAttempts = useRef(new Set<string>());
+
   useEffect(() => {
     const interrupt = thread.pendingInterrupt;
-    if (typeof interrupt?.value !== 'object' || !interrupt.value.action_requests?.length) return;
+    if (!interrupt?.id || thread.isResuming || thread.isLoading || typeof interrupt.value !== 'object' || !interrupt.value.action_requests?.length) return;
+    const key = `${threadId}:${interrupt.id}`;
+    if (autoApprovalAttempts.current.has(key)) return;
 
     if (autoApproveAllTools) {
       const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
-      thread.resumeWithDecisions(allApproved).catch((err) => {
+      autoApprovalAttempts.current.add(key);
+      thread.resumeWithDecisions(allApproved, interrupt.id).catch((err) => {
         console.error('Auto-approve-all resume failed:', err);
       });
       return;
@@ -431,13 +445,14 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
     const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
     if (!allAutoApproved) return;
-    thread.resumeWithDecisions(decisions).catch((err) => {
+    autoApprovalAttempts.current.add(key);
+    thread.resumeWithDecisions(decisions, interrupt.id).catch((err) => {
       console.error('Auto-approve resume failed:', err);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.pendingInterrupt, autoApproveAllTools]);
+  }, [thread.pendingInterrupt, thread.isResuming, thread.isLoading, autoApproveAllTools]);
 
-  // Replay queued HITL decisions when agent recovers from downtime
+  // Refresh approvals after recovery; decisions are never replayed automatically.
   useEffect(() => {
     const prev = prevHealthRef.current;
     prevHealthRef.current = agentHealth.status;
@@ -450,38 +465,25 @@ export function ChatPage({ threadId }: { threadId: string }) {
         let lastUpdateCount = currentMsgCount;
         const recoveryPoll = setInterval(async () => {
           try {
-            const { messages: msgs, interrupt } = await getThreadStateAndInterrupt(threadId);
+            const manager = getStreamingManager(threadId);
+            const generation = manager.getResumeGeneration();
+            if (!manager.canApplyRefresh(generation)) return;
+            const { messages: msgs, interrupt, interrupts } = await getThreadStateAndInterrupt(threadId);
+            if (!manager.canApplyRefresh(generation)) return;
 
             if (interrupt) {
               dispatch(updateChat({ id: threadId, updates: { messages: msgs } }));
               thread.setMessages(msgs.map((m) => JSON.parse(JSON.stringify(m)) as Message));
 
-              const queueKey = `pending-decision:${threadId}`;
-              const raw = localStorage.getItem(queueKey);
-              if (raw) {
-                const { decisions } = JSON.parse(raw) as { decisions: Array<{ type: 'approve' | 'reject'; message?: string }> };
-                localStorage.removeItem(queueKey);
-                dispatch(updateStreamingState({
-                  chatId: threadId,
-                  state: { error: null, isLoading: false, isConnected: false, pendingInterrupt: null },
-                }));
-                clearInterval(recoveryPoll);
-                thread.resumeWithDecisions(decisions).catch((err) => {
-                  console.error('Queued decision replay failed:', err);
-                });
-              } else {
-                dispatch(updateStreamingState({
-                  chatId: threadId,
-                  state: {
-                    error: null, isLoading: false, isConnected: false,
-                    pendingInterrupt: {
-                      value: interrupt.value as any,
-                      resumable: interrupt.resumable,
-                    },
-                  },
-                }));
-                clearInterval(recoveryPoll);
-              }
+              dispatch(updateStreamingState({
+                chatId: threadId,
+                state: {
+                  error: null, isLoading: false, isConnected: false,
+                  pendingInterrupts: interrupts ?? [interrupt],
+                },
+              }));
+              manager.approvalsRefreshed();
+              clearInterval(recoveryPoll);
               return;
             }
 
@@ -583,18 +585,22 @@ export function ChatPage({ threadId }: { threadId: string }) {
               <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
             )}
             <ReconnectingBanner streamingState={streamingState} maxRetries={MAX_RETRIES} />
+            {thread.pendingInterrupts.length > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2" role="status">
+                <span>{thread.pendingInterrupts.length} pending approval{thread.pendingInterrupts.length === 1 ? '' : 's'}</span>
+                <Button variant="link" size="sm" isDisabled={thread.isResuming || thread.isLoading} onClick={() => {
+                  thread.refreshInterrupts().catch(() => dispatch(addToast({ title: 'Unable to refresh approvals', variant: 'danger' })));
+                }}>Refresh approvals</Button>
+              </div>
+            )}
             <ChatMessagesView
               key={threadId}
               messages={thread.messages}
               streamEvents={thread.streamEvents}
               isLoading={thread.isLoading || !!thread.pendingInterrupt}
-              pendingInterrupt={
-                thread.pendingInterrupt &&
-                typeof thread.pendingInterrupt.value === 'object' &&
-                'action_requests' in thread.pendingInterrupt.value
-                  ? thread.pendingInterrupt
-                  : null
-              }
+              isResuming={thread.isResuming}
+              isApprovalBusy={thread.isLoading}
+              pendingInterrupts={thread.pendingInterrupts}
               onInterruptResume={handleInterruptResume}
               onAlwaysAllow={handleAlwaysAllow}
 
@@ -603,7 +609,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
                 !(typeof thread.pendingInterrupt.value === 'object' && 'action_requests' in thread.pendingInterrupt.value)
                   ? (
                     <InterruptBanner
+                      key={thread.pendingInterrupt.id}
                       interrupt={thread.pendingInterrupt}
+                      isSubmitting={thread.isResuming || thread.isLoading}
                       onResume={handleMCPOAuthResume}
                       onDismiss={handleInterruptDismiss}
                     />

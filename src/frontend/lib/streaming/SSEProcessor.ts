@@ -5,7 +5,7 @@ export type SSEChunk =
   | { type: 'token'; content: string; chunk_id: number; message_id?: string }
   | { type: 'draft_discard'; chunk_id: number }
   | { type: 'message'; content: Message; chunk_id: number }
-  | { type: 'interrupt'; content: { value: HITLInterruptValue | string; resumable: boolean }; chunk_id: number };
+  | { type: 'interrupt'; content: { id?: string; value: HITLInterruptValue | string; resumable: boolean }; chunk_id: number };
 
 export type McpStatusData = {
   tool: string;
@@ -66,6 +66,7 @@ function parseSSEChunkPayload(parsed: unknown): SSEChunk | null {
     return {
       type: 'interrupt',
       content: {
+        ...(typeof contentUnknown.id === 'string' ? { id: contentUnknown.id } : {}),
         value: (isRecord(rawValue) || typeof rawValue === 'string' ? rawValue : {}) as HITLInterruptValue | string,
         resumable: contentUnknown.resumable === true,
       },

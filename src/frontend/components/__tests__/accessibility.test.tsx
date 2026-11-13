@@ -21,6 +21,7 @@ import { RedHatLogo } from '../RedHatLogo';
 import { MemoryList } from '../settings/MemoryList';
 import { RulesEditor } from '../settings/RulesEditor';
 import { SubAgentIndicator } from '../SubAgentIndicator';
+import { ToolApprovalControls } from '../ToolApprovalControls';
 import { Sidebar } from '../Sidebar';
 
 // Mock fetch for components that call personalization API on mount.
@@ -415,41 +416,23 @@ describe('SubAgentIndicator — accessibility', () => {
     expect(header).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('approval alert uses role="alert" when approval is needed', () => {
-    const interruptValue = {
-      action_requests: [{ name: 'data_analyst' }],
-    };
-    render(
-      <SubAgentIndicator
-        toolCall={baseToolCall}
-        messageId="msg-1"
-        index={0}
-        pendingInterrupt={{ value: interruptValue } as any}
-        onInterruptResume={() => {}}
-        onAlwaysAllow={() => {}}
-      />,
-    );
-    const alert = document.querySelector('[role="alert"]');
-    expect(alert).toBeInTheDocument();
-  });
 
-  it('approve/reject/always-allow buttons have descriptive aria-labels', () => {
-    const interruptValue = {
-      action_requests: [{ name: 'data_analyst' }],
-    };
-    render(
-      <SubAgentIndicator
-        toolCall={baseToolCall}
-        messageId="msg-1"
-        index={0}
-        pendingInterrupt={{ value: interruptValue } as any}
-        onInterruptResume={() => {}}
-        onAlwaysAllow={() => {}}
-      />,
+});
+
+describe('Inline tool approval — accessibility', () => {
+  it('passes axe audit and exposes the original decision buttons', async () => {
+    const { container } = render(
+      <ToolApprovalControls approval={{
+        key: 'approval', interruptId: 'approval', actionIndex: 0,
+        request: { name: 'data_analyst', args: {} },
+        disabled: false, decision: null, decide: vi.fn(), alwaysAllow: vi.fn(),
+      }} />,
     );
-    expect(screen.getByRole('button', { name: /approve sub-agent action/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reject sub-agent action/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /always allow sub-agent/i })).toBeInTheDocument();
+    expect(screen.getByRole('alert', { name: 'Tool call data_analyst requires approval' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Approve/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Reject/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Always allow/ })).toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
   });
 });
 

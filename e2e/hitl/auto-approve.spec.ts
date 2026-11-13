@@ -41,7 +41,7 @@ async function makeInterruptStream(
       const body =
         `data: ${JSON.stringify({
           type: 'interrupt',
-          content: { value, resumable: true },
+          content: { id: 'a'.repeat(32), value, resumable: true },
           chunk_id: 0,
         })}\n\n` + 'data: [DONE]\n\n';
       return route.fulfill({
@@ -50,6 +50,8 @@ async function makeInterruptStream(
         body,
       });
     }
+    const request = route.request().postDataJSON();
+    expect(request.message).toEqual({['a'.repeat(32)]: {decisions:[{type:'approve'}]}});
     const body = `data: ${JSON.stringify({ type: 'token', content: 'Done automatically.', chunk_id: 0 })}\n\ndata: [DONE]\n\n`;
     return route.fulfill({
       status: 200,
@@ -134,4 +136,29 @@ test.describe('HITL — auto-approve', () => {
       expect(callCount.n).toBeGreaterThanOrEqual(2);
     },
   );
+});
+
+
+test('does not auto-replay a rejected approval after refreshing the same interrupt', async ({page}) => {
+  await setLocalStorageSettings(page, {autoApproveAllTools:true});
+  await mountConfig(page);
+  const interrupt = {id:'a'.repeat(32),value:TOOL_APPROVAL_INTERRUPT,resumable:true};
+  let calls = 0;
+  let refreshed = false;
+  await page.route('**/api/proxy/agent/threads/*/state', route => {
+    refreshed = true;
+    return route.fulfill({json:{values:{messages:[{type:'human',content:'Search GitHub',id:'h1'}]},tasks:[{interrupts:[interrupt]}]}});
+  });
+  await page.route('**/api/proxy/agent/v1/stream', route => {
+    calls++;
+    if (calls === 1) return route.fulfill({contentType:'text/event-stream',body:`data: ${JSON.stringify({type:'interrupt',content:interrupt,chunk_id:0})}\n\ndata: [DONE]\n\n`});
+    return route.fulfill({status:400,json:{error:'Cannot resume: thread is not in interrupted state'}});
+  });
+  const home = new HomePage(page);
+  await home.goto(); await home.submitPrompt('Search GitHub');
+  await expect.poll(()=>refreshed).toBe(true);
+  await expect(page.getByText('1 pending approval',{exact:true})).toBeVisible();
+  expect(calls).toBe(2);
+  const queued = await page.evaluate(()=>Object.keys(localStorage).filter(key=>key.startsWith('pending-decision:')));
+  expect(queued).toEqual([]);
 });

@@ -9,7 +9,7 @@ export function tokenChunk(text: string, chunkId: number): string {
 export function interruptChunk(value: object | string, chunkId: number): string {
   return `data: ${JSON.stringify({
     type: 'interrupt',
-    content: { value, resumable: true },
+    content: { id: 'a'.repeat(32), value, resumable: true },
     chunk_id: chunkId,
   })}\n\n`;
 }

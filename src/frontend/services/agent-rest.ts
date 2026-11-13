@@ -1,6 +1,7 @@
 import { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { authenticatedFetch } from "./authenticated-fetch";
 import { buildAgentApiUrl } from "../lib/app-paths";
+import type { InterruptInfo } from "../types/deep-agent";
 import { withMcpAppArguments } from "../types/mcp-apps";
 
 export interface Thread {
@@ -210,11 +211,11 @@ export async function deleteThread(threadId: string): Promise<boolean> {
  * Fetch full state for a single thread (lazy, on-demand).
  * Called only when a user navigates into a specific chat.
  */
-async function fetchThreadStateRaw(threadId: string): Promise<Record<string, unknown> | null> {
+async function fetchThreadStateRaw(threadId: string, fresh = false): Promise<Record<string, unknown> | null> {
   const stateUrl = buildAgentApiUrl(`/threads/${threadId}/state`);
   try {
     const resp = await authenticatedFetch(stateUrl, {
-      headers: getAuthHeaders(),
+      headers: { ...getAuthHeaders(), ...(fresh ? { 'Cache-Control': 'no-cache' } : {}) },
     });
     if (!resp.ok) {
       let errorDetail = `Thread state request failed (status: ${resp.status})`;
@@ -255,41 +256,36 @@ export async function getThreadState(threadId: string): Promise<Message[]> {
   return [];
 }
 
-export async function getThreadPendingInterrupt(
-  threadId: string,
-): Promise<{ value: unknown; resumable: boolean } | null> {
+/** Collect every pending interrupt, including those in separate parallel tasks. */
+export function extractPendingInterrupts(state: Record<string, unknown>): InterruptInfo[] {
+  const tasks = Array.isArray(state.tasks) ? state.tasks : [];
+  const raw = tasks.flatMap(task => Array.isArray(task?.interrupts) ? task.interrupts : []);
+  // Some servers expose interrupts only at the top level.
+  if (!raw.length && Array.isArray(state.interrupts)) raw.push(...state.interrupts);
+  const seen = new Set<string>();
+  return raw.flatMap(item => {
+    if (!item || typeof item !== 'object') return [];
+    const id = typeof item.id === 'string' ? item.id : undefined;
+    if (id && seen.has(id)) return [];
+    if (id) seen.add(id);
+    return [{ ...(id ? { id } : {}), value: item.value, resumable: item.resumable !== false }];
+  });
+}
+
+export async function getThreadPendingInterrupt(threadId: string): Promise<InterruptInfo | null> {
   const state = await fetchThreadStateRaw(threadId);
-  if (!state) return null;
-  const tasks = Array.isArray(state?.tasks) ? state.tasks : [];
-  for (const task of tasks) {
-    if (Array.isArray((task as any)?.interrupts) && (task as any).interrupts.length > 0) {
-      const first = (task as any).interrupts[0];
-      return { value: first.value, resumable: first.resumable !== false };
-    }
-  }
-  return null;
+  return state ? extractPendingInterrupts(state)[0] ?? null : null;
 }
 
 export async function getThreadStateAndInterrupt(
   threadId: string,
-): Promise<{ messages: Message[]; interrupt: { value: unknown; resumable: boolean } | null }> {
-  const state = await fetchThreadStateRaw(threadId);
-  if (!state) return { messages: [], interrupt: null };
-
-  const msgs = state?.values ? (state.values as Record<string, unknown>)?.messages : undefined;
+): Promise<{ messages: Message[]; interrupt: InterruptInfo | null; interrupts: InterruptInfo[] }> {
+  const state = await fetchThreadStateRaw(threadId, true);
+  // Do not interpret an unreachable server as an empty, successfully reconciled checkpoint.
+  if (!state) throw new Error('Unable to refresh thread state. Retry when the agent is available.');
+  const msgs = state.values ? (state.values as Record<string, unknown>).messages : undefined;
   const messages = Array.isArray(msgs) && msgs.length > 0
-    ? combineToolCallandResult(normalizeMessages(msgs))
-    : [];
-
-  let interrupt: { value: unknown; resumable: boolean } | null = null;
-  const tasks = Array.isArray(state?.tasks) ? state.tasks : [];
-  for (const task of tasks) {
-    if (Array.isArray((task as any)?.interrupts) && (task as any).interrupts.length > 0) {
-      const first = (task as any).interrupts[0];
-      interrupt = { value: first.value, resumable: first.resumable !== false };
-      break;
-    }
-  }
-
-  return { messages, interrupt };
+    ? combineToolCallandResult(normalizeMessages(msgs)) : [];
+  const interrupts = extractPendingInterrupts(state);
+  return { messages, interrupt: interrupts[0] ?? null, interrupts };
 }
