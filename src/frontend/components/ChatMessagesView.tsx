@@ -799,7 +799,7 @@ export function ChatMessagesView({
   onExportJson,
 }: ChatMessagesViewProps) {
   const approvalsDisabled = isResuming || isApprovalBusy;
-  const approvals = useInterruptApprovals(pendingInterrupts, approvalsDisabled, onInterruptResume, onAlwaysAllow);
+  const approvals = useInterruptApprovals(pendingInterrupts, approvalsDisabled, onInterruptResume, onAlwaysAllow, isResuming);
   const { bindings, unmatched } = bindToolApprovals(messages, approvals);
   const pendingInterrupt = pendingInterrupts[0];
   const bottomRef = useRef<HTMLDivElement>(null);

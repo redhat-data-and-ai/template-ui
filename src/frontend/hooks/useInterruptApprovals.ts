@@ -12,6 +12,7 @@ export interface ToolApproval {
   actionIndex: number;
   request: HITLActionRequest;
   disabled: boolean;
+  waitingForResume?: boolean;
   decision: Decision | null;
   decide: (decision: Decision) => void;
   alwaysAllow?: () => void;
@@ -22,6 +23,7 @@ export function useInterruptApprovals(
   disabled: boolean,
   onResume?: ApprovalSubmission,
   onAlwaysAllow?: (names: string[]) => void,
+  isResuming = false,
 ): ToolApproval[] {
   const [states, setStates] = useState<Record<string, DecisionState>>({});
   const live = useRef(states);
@@ -56,6 +58,7 @@ export function useInterruptApprovals(
       actionIndex: index,
       request,
       disabled: controlsDisabled,
+      waitingForResume: isResuming,
       decision: state.decisions[index],
       decide: (decision: Decision) => { void decide(index, decision); },
       alwaysAllow: onAlwaysAllow ? () => {

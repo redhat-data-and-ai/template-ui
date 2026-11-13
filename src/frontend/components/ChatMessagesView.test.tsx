@@ -252,6 +252,24 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     expect(screen.queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument();
   });
 
+  it('explains the disabled controls only while another approval is resuming', () => {
+    const store = makeStore();
+    const interrupt = { id: 'pending', resumable: true, value: {
+      action_requests: [{ name: 'write_file', args: { file_path: '/tmp/waiting.txt' } }], review_configs: [],
+    } };
+    const props = makeBaseProps({ pendingInterrupts: [interrupt], onInterruptResume: vi.fn(), isApprovalBusy: true });
+    const { rerender } = render(<Provider store={store}><ChatMessagesView {...props} /></Provider>);
+    const message = 'Waiting for the current approval to finish…';
+    expect(screen.getByRole('button', { name: /^Approve/ })).toBeDisabled();
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    rerender(<Provider store={store}><ChatMessagesView {...props} isResuming /></Provider>);
+    expect(screen.getByText(message)).toBeVisible();
+    expect(screen.getByRole('button', { name: /^Approve/ })).toBeDisabled();
+    rerender(<Provider store={store}><ChatMessagesView {...props} isApprovalBusy={false} /></Provider>);
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Approve/ })).toBeEnabled();
+  });
+
   it('keeps multi-action controls disabled until the interrupt stream is idle', () => {
     const onResume=vi.fn();
     const interrupt={id:'a',resumable:true,value:{action_requests:[{name:'tool1',args:{}},{name:'tool2',args:{}}],review_configs:[]}};
