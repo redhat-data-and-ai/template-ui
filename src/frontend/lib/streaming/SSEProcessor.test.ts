@@ -219,3 +219,10 @@ describe('SSEProcessor', () => {
     expect(events[0].kind).toBe('chunk');
   });
 });
+
+
+it('preserves IDs for each interrupt in a multi-interrupt stream', () => {
+  const processor = new SSEProcessor();
+  const events = processor.feed(['a','b'].map((id,chunk_id) => `data: ${JSON.stringify({type:'interrupt',content:{id,value:`Approve ${id}`,resumable:true},chunk_id})}\n\n`).join(''));
+  expect(events.map(event => event.kind === 'chunk' && event.data.type === 'interrupt' ? event.data.content.id : null)).toEqual(['a','b']);
+});

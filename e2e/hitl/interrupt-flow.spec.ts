@@ -23,7 +23,7 @@ function makeInterruptBody(value: string | object, chunkId = 0): string {
   return (
     `data: ${JSON.stringify({
       type: 'interrupt',
-      content: { value, resumable: true },
+      content: { id: 'a'.repeat(32), value, resumable: true },
       chunk_id: chunkId,
     })}\n\n` + 'data: [DONE]\n\n'
   );
@@ -184,4 +184,38 @@ test.describe('HITL — interrupt banner rendering', () => {
     await expect(page.getByText('Input Required')).not.toBeVisible({ timeout: 10_000 });
     expect(callCount).toBeGreaterThanOrEqual(2);
   });
+});
+
+
+test('resumes two pending interrupts separately with their IDs, including after reload', async ({ page }) => {
+  await mountConfig(page, { title: 'HITL Test Agent' });
+  const a = {id:'a'.repeat(32),value:'Please approve action A',resumable:true};
+  const b = {id:'b'.repeat(32),value:'Please approve action B',resumable:true};
+  let pending = [a,b];
+  let threadId = '';
+  await page.route('**/api/proxy/agent/threads/search', route => route.fulfill({json:threadId ? [{thread_id:threadId,metadata:{thread_name:'Run both actions'}}] : []}));
+  const resumes: unknown[] = [];
+  await page.route('**/api/proxy/agent/threads/*/state', route => route.fulfill({json:{values:{messages:[{type:'human',content:'Run both actions',id:'h1'}]},tasks:pending.map(item=>({interrupts:[item]}))}}));
+  await page.route('**/api/proxy/agent/v1/stream', async route => {
+    const body = route.request().postDataJSON();
+    threadId = body.thread_id;
+    if (body.resume) {
+      resumes.push(body.message);
+      const id = Object.keys(body.message)[0];
+      pending = pending.filter(item=>item.id !== id);
+      return route.fulfill({contentType:'text/event-stream',body:'data: [DONE]\n\n'});
+    }
+    return route.fulfill({contentType:'text/event-stream',body:[a,b].map((content,chunk_id)=>`data: ${JSON.stringify({type:'interrupt',content,chunk_id})}\n\n`).join('')+'data: [DONE]\n\n'});
+  });
+  const home = new HomePage(page);
+  await home.goto(); await home.submitPrompt('Run both actions');
+  await expect(page.getByText('2 pending approvals')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('2 pending approvals')).toBeVisible();
+  await page.getByRole('button',{name:'Approve',exact:true}).click();
+  await expect(page.getByText('1 pending approval',{exact:true})).toBeVisible();
+  await expect(page.getByText('Please approve action B')).toBeVisible();
+  await page.getByRole('button',{name:'Reject',exact:true}).click();
+  await expect(page.getByText('Action Required')).not.toBeVisible();
+  expect(resumes).toEqual([{[a.id]:'approved'},{[b.id]:'rejected'}]);
 });

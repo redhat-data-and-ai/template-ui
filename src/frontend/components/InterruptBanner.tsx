@@ -15,6 +15,7 @@ import type { InterruptInfo } from '../types/deep-agent';
 
 interface InterruptBannerProps {
   readonly interrupt: InterruptInfo;
+  readonly isSubmitting?: boolean;
   readonly onResume: (response: string) => void;
   readonly onDismiss: () => void;
 }
@@ -54,7 +55,7 @@ function parseMcpAuthPayload(interrupt: InterruptInfo): InterruptInfo['payload']
   return null;
 }
 
-export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBannerProps) {
+export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting = false }: InterruptBannerProps) {
   const [response, setResponse] = useState('');
   const [oauthReady, setOauthReady] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -146,6 +147,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
                   variant="primary"
                   size="sm"
                   icon={<CheckCircle className="w-3.5 h-3.5" />}
+                  isDisabled={isSubmitting}
                   onClick={() => onResume('continue')}
                 >
                   Continue
@@ -176,6 +178,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
               variant="primary"
               size="sm"
               icon={<CheckCircle className="w-3.5 h-3.5" />}
+              isDisabled={isSubmitting}
               onClick={() => onResume('approved')}
             >
               Approve
@@ -184,6 +187,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
               variant="danger"
               size="sm"
               icon={<XCircle className="w-3.5 h-3.5" />}
+              isDisabled={isSubmitting}
               onClick={() => onResume('rejected')}
             >
               Reject
@@ -207,7 +211,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
             value={response}
             onChange={(_e, val) => setResponse(val)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && response.trim()) onResume(response.trim());
+              if (!isSubmitting && e.key === 'Enter' && response.trim()) onResume(response.trim());
             }}
             placeholder="Type your response..."
             aria-label="Interrupt response"
@@ -216,7 +220,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss }: InterruptBan
           <Button
             variant="primary"
             size="sm"
-            isDisabled={!response.trim()}
+            isDisabled={isSubmitting || !response.trim()}
             onClick={() => onResume(response.trim())}
           >
             Send
