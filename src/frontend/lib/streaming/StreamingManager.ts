@@ -3,7 +3,7 @@ import type { Message } from '@langchain/langgraph-sdk';
 import { parseRetryAfterSeconds, triggerRateLimit } from '@/services/authenticated-fetch';
 import { unmarkChatAsClientCreated } from '@/services/newChatTracker';
 import { buildAgentApiUrl } from '../app-paths';
-import type { HITLInterruptValue } from '@/types/deep-agent';
+import type { HITLInterruptValue, InterruptResponses } from '@/types/deep-agent';
 
 import type { SSEEvent } from './SSEProcessor';
 import { SSEProcessor } from './SSEProcessor';
@@ -16,12 +16,13 @@ export interface StreamRequest {
   token?: string;
   projectId?: string | null;
   resume?: boolean;
-  resumeDecisions?: Array<{ type: 'approve' | 'reject' | 'edit'; message?: string }>;
+  resumeResponses?: InterruptResponses;
 }
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error' | 'cancelled';
 
 export interface InterruptPayload {
+  id?: string;
   value: HITLInterruptValue | string;
   resumable: boolean;
 }
@@ -60,6 +61,39 @@ export class StreamingManager {
   private processedChunkIds = new Set<number>();
 
   private streamError: Error | null = null;
+
+  // Shared by every hook mounted for this thread, including across navigation.
+  private resumeInFlight = false;
+  private resumeNeedsRefresh = false;
+  private resumeGeneration = 0;
+
+  getResumeGeneration(): number {
+    return this.resumeGeneration;
+  }
+
+  canApplyRefresh(generation: number): boolean {
+    return !this.resumeInFlight && generation === this.resumeGeneration;
+  }
+
+  beginResume(): void {
+    if (this.resumeInFlight) throw new Error('An approval is already being submitted.');
+    if (this.resumeNeedsRefresh) throw new Error('Refresh pending approvals before retrying.');
+    if (this.status === 'connecting' || this.status === 'streaming') {
+      throw new Error('Wait for the current response to finish before approving.');
+    }
+    this.resumeInFlight = true;
+    this.resumeGeneration++;
+  }
+
+  endResume(needsRefresh: boolean): void {
+    this.resumeInFlight = false;
+    this.resumeGeneration++;
+    this.resumeNeedsRefresh = needsRefresh;
+  }
+
+  approvalsRefreshed(): void {
+    this.resumeNeedsRefresh = false;
+  }
 
   private setStatus(next: StreamStatus): void {
     this.status = next;
@@ -109,6 +143,9 @@ export class StreamingManager {
   }
 
   async stream(request: StreamRequest, callbacks: StreamCallback): Promise<void> {
+    if (request.resume && (!request.resumeResponses || !Object.keys(request.resumeResponses).length)) {
+      throw new Error('An interrupt ID is required to resume an approval.');
+    }
     this.cancel();
     this.processor.reset();
     this.processedChunkIds.clear();
@@ -136,7 +173,7 @@ export class StreamingManager {
     try {
       const body: Record<string, unknown> = {
         message: request.resume
-          ? (request.resumeDecisions?.length ? { decisions: request.resumeDecisions } : request.message)
+          ? request.resumeResponses
           : request.message,
         thread_id: request.threadId || 'default-thread',
         session_id: request.threadId || 'default-session',

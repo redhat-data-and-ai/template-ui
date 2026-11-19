@@ -833,3 +833,29 @@ describe('POST /api/proxy/agent/v1/stream', () => {
     expect(mock).not.toHaveBeenCalled();
   });
 });
+
+
+describe('interrupt identity transport', () => {
+  it('emits all stream interrupts and adds fallback interrupts without duplicates', async () => {
+    const a = {id:'a'.repeat(32),value:'Approve A',resumable:true};
+    const b = {id:'b'.repeat(32),value:'Approve B',resumable:true};
+    const c = {id:'c'.repeat(32),value:'Approve C',resumable:true};
+    stubFetch(okJson({}),makeSSEResponse(`event: updates\ndata: ${JSON.stringify({__interrupt__:[a,b]})}\n\n`),okJson({tasks:[{interrupts:[a]},{interrupts:[b,c]}]}));
+    const server = await buildTestServer();
+    const response = await server.inject({method:'POST',url:'/api/proxy/agent/v1/stream',payload:{message:'hello',thread_id:'multi-transport'}});
+    const chunks = response.body.split('\n').filter(line=>line.startsWith('data: {')).map(line=>JSON.parse(line.slice(6))).filter(chunk=>chunk.type==='interrupt');
+    expect(chunks.map(chunk=>chunk.content)).toEqual([a,b,c]);
+    await server.close();
+  });
+
+  it('forwards an interrupt-keyed resume unchanged', async () => {
+    const resume = {['a'.repeat(32)]:{decisions:[{type:'approve'}]}};
+    const mock = stubFetch(okJson({}),makeSSEResponse(''),okJson({tasks:[]}));
+    const server = await buildTestServer();
+    const response = await server.inject({method:'POST',url:'/api/proxy/agent/v1/stream',payload:{resume:true,message:resume,thread_id:'keyed-resume'}});
+    expect(response.statusCode).toBe(200);
+    const runCall = mock.mock.calls.find(([url])=>String(url).endsWith('/runs/stream'))!;
+    expect(JSON.parse(runCall[1].body).command).toEqual({resume});
+    await server.close();
+  });
+});

@@ -68,6 +68,15 @@ describe('StreamingManager', () => {
     vi.restoreAllMocks();
   });
 
+  it('sends the exact interrupt-keyed resume map', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse('data: [DONE]\n\n'));
+    const responses = { ['a'.repeat(32)]: { decisions: [{type: 'approve' as const}] } };
+    await new StreamingManager().stream({...BASE_REQUEST, resume:true, resumeResponses:responses},makeCallbacks());
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+    expect(body.message).toEqual(responses);
+    expect(body.resume).toBe(true);
+  });
+
   // ── Happy path: token + done ───────────────────────────────────────────────
   it('calls onToken then onDone for a normal stream', async () => {
     const sseBody = makeTokenSSE('Hello', 0) + 'data: [DONE]\n\n';
@@ -441,4 +450,11 @@ describe('StreamingManager', () => {
     const [err] = vi.mocked(callbacks.onError).mock.calls[0];
     expect(err.message).toBe('Specific error');
   });
+});
+
+it('rejects unkeyed resumes before cancelling or sending a request', async () => {
+  const manager = new StreamingManager();
+  const cancel = vi.spyOn(manager, 'cancel');
+  await expect(manager.stream({...BASE_REQUEST,resume:true},makeCallbacks())).rejects.toThrow('interrupt ID');
+  expect(cancel).not.toHaveBeenCalled();
 });

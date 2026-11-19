@@ -439,3 +439,15 @@ describe('chats slice — project assignment', () => {
     expect(s.chats[0].project_id).toBeNull();
   });
 });
+
+
+it('retains all pending interrupts and updates an existing interrupt by ID', () => {
+  const a = {id:'a',value:'A',resumable:true};
+  const b = {id:'b',value:'B',resumable:true};
+  let state = chatsReducer(undefined, updateStreamingState({chatId:'multi',state:{pendingInterrupt:a}}));
+  state = chatsReducer(state, updateStreamingState({chatId:'multi',state:{pendingInterrupt:b}}));
+  state = chatsReducer(state, updateStreamingState({chatId:'multi',state:{pendingInterrupt:{...a,value:'Updated A'}}}));
+  expect(state.streamingStates.multi.pendingInterrupts).toHaveLength(2);
+  state = chatsReducer(state, updateStreamingState({chatId:'multi',state:{pendingInterrupts:[b]}}));
+  expect(state.streamingStates.multi.pendingInterrupt).toEqual(b);
+});

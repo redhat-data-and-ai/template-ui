@@ -76,8 +76,8 @@ describe('InterruptBanner — tool approval branch', () => {
   });
 
   // NOTE: in production, structured HITLInterruptValue interrupts (with action_requests)
-  // are routed through ChatPage → ChatMessagesView → AIMessageRenderer, NOT through
-  // InterruptBanner.  Those flows are covered by AIMessageRenderer.test.tsx.
+  // are routed through ChatPage → ChatMessagesView → inline tool approval controls, NOT through
+  // InterruptBanner.  Those flows are covered by ToolApprovalControls.test.tsx.
 });
 
 describe('InterruptBanner — generic input branch', () => {
@@ -282,4 +282,14 @@ describe('InterruptBanner — MCP auth branch', () => {
     await userEvent.click(screen.getByRole('button', { name: /continue/i }));
     expect(onResume).toHaveBeenCalledWith('continue');
   });
+});
+
+
+it('disables approval submission while a resume is in flight', async () => {
+  const onResume = vi.fn();
+  render(<InterruptBanner interrupt={{id:'a',value:'Please approve this action',resumable:true}} isSubmitting onResume={onResume} onDismiss={vi.fn()} />);
+  const approve = screen.getByRole('button',{name:'Approve'});
+  expect(approve).toBeDisabled();
+  await userEvent.click(approve);
+  expect(onResume).not.toHaveBeenCalled();
 });

@@ -43,7 +43,7 @@ export function invalidateThreadStateCache(threadId: string): void {
 }
 
 interface StreamRequestBody {
-  message: string;
+  message: string | Record<string, unknown>;
   thread_id: string;
   user_id?: string;
   session_id?: string;
@@ -129,17 +129,17 @@ function buildToolMessageContent(msg: Record<string, any>): Record<string, unkno
  * Extract a HITL interrupt payload from a LangGraph `updates` stream event.
  * LangGraph 1.x surfaces interrupts as:
  *   { "__interrupt__": [{ value: HITLInterruptValue, resumable: boolean, ... }] }
- * Returns null when the updates event carries no interrupt.
+ * Returns an empty array when the update carries no interrupts.
  */
-function extractInterruptFromUpdates(
-  payload: unknown,
-): { value: unknown; resumable: boolean } | null {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
-  const p = payload as Record<string, unknown>;
-  const interrupts = p.__interrupt__;
-  if (!Array.isArray(interrupts) || interrupts.length === 0) return null;
-  const first = interrupts[0] as Record<string, unknown>;
-  return { value: first.value, resumable: first.resumable !== false };
+function extractInterruptsFromUpdates(payload: unknown): Array<{ id?: string; value: unknown; resumable: boolean }> {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
+  const interrupts = (payload as Record<string, unknown>).__interrupt__;
+  if (!Array.isArray(interrupts)) return [];
+  return interrupts.filter(item => item && typeof item === 'object').map(item => ({
+    ...(typeof item.id === 'string' ? { id: item.id } : {}),
+    value: item.value,
+    resumable: item.resumable !== false,
+  }));
 }
 
 /**
@@ -454,6 +454,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
           stream_mode: ['messages', 'updates'],
         };
         if (isResume) {
+          invalidateThreadStateCache(thread_id);
           runBody.command = { resume: message };
         } else {
           runBody.input = { messages: [{ role: 'human', content: message, id: randomUUID() }] };
@@ -479,7 +480,12 @@ async function proxyRoutes(fastify: FastifyInstance) {
             'Agent run/stream failed',
           );
           return reply.status(runResp.status).send({
-            error: 'Agent request failed',
+            error: (() => {
+              try {
+                const detail = JSON.parse(body);
+                return typeof detail.detail === 'string' ? detail.detail : 'Agent request failed';
+              } catch { return 'Agent request failed'; }
+            })(),
             status: runResp.status,
           });
         }
@@ -516,6 +522,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         let hasEmittedTextTokens = false;
         let interruptEmittedFromStream = false;
+        const emittedInterruptIds = new Set<string>();
         let streamEndedNormally = false;
         // Per-message tracking for draft_discard (suppress text from tool-call messages)
         let currentStreamingMsgId = '';
@@ -590,16 +597,17 @@ async function proxyRoutes(fastify: FastifyInstance) {
                 const parsed = JSON.parse(sseData) as unknown;
 
                 if (sseType === 'updates') {
-                  const interrupt = extractInterruptFromUpdates(parsed);
-                  if (interrupt) {
+                  const interrupts = extractInterruptsFromUpdates(parsed);
+                  for (const interrupt of interrupts) {
                     const interruptChunk = {
                       type: 'interrupt',
-                      content: { value: interrupt.value, resumable: interrupt.resumable },
+                      content: interrupt,
                       chunk_id: chunkId,
                     };
                     reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
                     chunkId++;
                     interruptEmittedFromStream = true;
+                    if (interrupt.id) emittedInterruptIds.add(interrupt.id);
                     request.log.info({ traceId }, 'Emitted HITL interrupt from updates stream');
                   }
                 }
@@ -716,20 +724,21 @@ async function proxyRoutes(fastify: FastifyInstance) {
             if (stateResp.ok) {
               const threadState = await stateResp.json() as Record<string, unknown>;
               const tasks = Array.isArray(threadState.tasks) ? threadState.tasks : [];
-              const interrupted = tasks.find(
-                (t: any) => Array.isArray(t?.interrupts) && t.interrupts.length > 0,
-              );
-              if (interrupted && !interruptEmittedFromStream) {
-                const firstInterrupt = (interrupted as any).interrupts[0];
+              const pending = tasks.flatMap((t: any) => Array.isArray(t?.interrupts) ? t.interrupts : []);
+              for (const interrupt of pending) {
+                if (interrupt.id && emittedInterruptIds.has(interrupt.id)) continue;
+                if (!interrupt.id && interruptEmittedFromStream) continue;
                 const interruptChunk = {
                   type: 'interrupt',
                   content: {
-                    value: firstInterrupt?.value ?? null,
-                    resumable: true,
+                    ...(typeof interrupt.id === 'string' ? { id: interrupt.id } : {}),
+                    value: interrupt.value ?? null,
+                    resumable: interrupt.resumable !== false,
                   },
                   chunk_id: chunkId,
                 };
                 reply.raw.write(`data: ${JSON.stringify(interruptChunk)}\n\n`);
+                if (interrupt.id) emittedInterruptIds.add(interrupt.id);
                 chunkId++;
                 request.log.info({ traceId }, 'Emitted HITL interrupt from thread state (post-stream fallback)');
               }
@@ -963,7 +972,7 @@ async function proxyRoutes(fastify: FastifyInstance) {
 
         // Check BFF cache for GET /threads/{id}/state
         const threadStateMatch = request.method === 'GET' && path.match(/^threads\/([^/]+)\/state$/);
-        if (threadStateMatch) {
+        if (threadStateMatch && request.headers['cache-control'] !== 'no-cache') {
           const cached = getCachedThreadState(threadStateMatch[1]);
           if (cached) {
             request.log.info({ traceId }, 'Thread state cache HIT');

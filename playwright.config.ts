@@ -28,6 +28,7 @@ export default defineConfig({
       PORT: '18080',
       AUTH_ENABLED: 'false',
       ENVIRONMENT: 'test',
+      SECURITY_RATE_LIMIT_MAX: '10000',
       AGENT_HOST: 'http://localhost:19999',
       COOKIE_SIGN: 'playwright-test-secret-32-chars-min-length',
     },
