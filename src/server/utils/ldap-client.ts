@@ -14,14 +14,23 @@ export const PRIVILEGED_ROLES = new Set(["owners", "admins", "builders"]);
 
 export type LdapRole = "owners" | "admins" | "builders" | "users" | "denied";
 
+const COOLDOWN_TRANSIENT_MS = 3_000;
+const COOLDOWN_INVALID_CREDENTIALS_MS = 30_000;
+const COOLDOWN_ACCOUNT_LOCKED_MS = 60_000;
+
 const memoryCache = new Map<string, { result: boolean; ts: number }>();
 
 let ldapClient: Client | null = null;
 let bindFailed = false;
+let bindFailedAt = 0;
 let bindPromise: Promise<Client | null> | null = null;
 
 function getCacheTtl(): number {
   return parseInt(process.env.LDAP_CACHE_TTL_SECONDS || "300", 10) * 1000;
+}
+
+function escapeLdapFilter(value: string): string {
+  return value.replace(/[\\*()\x00]/g, (c) => `\\${c.charCodeAt(0).toString(16).padStart(2, "0")}`);
 }
 
 function deriveBaseDn(ldapUrl: string): string {
@@ -33,7 +42,7 @@ function deriveBaseDn(ldapUrl: string): string {
       .map((part) => `dc=${part}`)
       .join(",");
   } catch {
-    return "dc=redhat,dc=com";
+    return "";
   }
 }
 
@@ -47,10 +56,10 @@ function getGroupSearchBase(): string {
 }
 
 function getBindDn(): string {
+  if (process.env.LDAP_BIND_DN) return process.env.LDAP_BIND_DN;
   const ldapUrl = process.env.LDAP_URL || "";
   const baseDn = deriveBaseDn(ldapUrl);
   const uid = process.env.LDAP_BASE_UID || "";
-  if (uid.includes(",")) return uid;
   return `uid=${uid},ou=users,${baseDn}`;
 }
 
@@ -63,36 +72,66 @@ function getMemberAttrs(): string[] {
 async function doBind(): Promise<Client | null> {
   const ldapUrl = process.env.LDAP_URL;
   if (!ldapUrl) return null;
+  if (!ldapUrl.startsWith("ldaps://")) {
+    console.error("[LDAP] LDAP_URL must use ldaps:// — refusing to send credentials in cleartext");
+    return null;
+  }
 
   const password = process.env.LDAP_PASSWORD || "";
   const bindDn = getBindDn();
   const connectTimeout =
     parseInt(process.env.LDAP_CONNECT_TIMEOUT || "10", 10) * 1000;
-
-  try {
-    const tlsOptions: Record<string, unknown> = {};
-    if (process.env.LDAP_CA_CERT) {
-      tlsOptions.ca = fs.readFileSync(process.env.LDAP_CA_CERT);
-    }
-    ldapClient = new Client({
-      url: ldapUrl,
-      connectTimeout,
-      tlsOptions,
-      autoRebind: true,
-    });
-    await ldapClient.bind(bindDn, password);
-    bindFailed = false;
-    return ldapClient;
-  } catch (err) {
-    console.error("[LDAP] Bind failed:", (err as Error).message);
-    bindFailed = true;
-    ldapClient = null;
-    return null;
+  const tlsOptions: Record<string, unknown> = {};
+  if (process.env.LDAP_CA_CERT) {
+    tlsOptions.ca = fs.readFileSync(process.env.LDAP_CA_CERT);
   }
+
+  console.info("[LDAP] Attempting bind — url=%s group_search_base=%s", ldapUrl, getGroupSearchBase());
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      ldapClient = new Client({ url: ldapUrl, connectTimeout, tlsOptions, autoRebind: true });
+      await ldapClient.bind(bindDn, password);
+      bindFailed = false;
+      console.info("[LDAP] Bound successfully to %s", ldapUrl);
+      return ldapClient;
+    } catch (err) {
+      const msg = (err as Error).message || "";
+      let cooldown: number;
+      let reason: string;
+
+      if (msg.includes("invalidCredentials")) {
+        cooldown = COOLDOWN_INVALID_CREDENTIALS_MS;
+        reason = "invalid credentials";
+      } else if (msg.includes("unwillingToPerform")) {
+        cooldown = COOLDOWN_ACCOUNT_LOCKED_MS;
+        reason = "account locked";
+      } else {
+        cooldown = COOLDOWN_TRANSIENT_MS;
+        reason = "connection error";
+      }
+
+      const isAuthError = cooldown > COOLDOWN_TRANSIENT_MS;
+      const isLastAttempt = attempt === 1 || isAuthError;
+
+      if (isLastAttempt) {
+        console.error("[LDAP] Bind failed: %s (retry in %ds)", reason, cooldown / 1000);
+        bindFailed = true;
+        bindFailedAt = Date.now() + cooldown;
+        ldapClient = null;
+        return null;
+      }
+
+      console.warn("[LDAP] Bind transient error on attempt 1 — retrying immediately");
+    }
+  }
+  return null;
 }
 
 async function ensureBound(): Promise<Client | null> {
   if (!process.env.LDAP_URL) return null;
+
+  if (bindFailed && Date.now() < bindFailedAt) return null;
 
   if (bindPromise) return bindPromise;
 
@@ -154,10 +193,10 @@ export async function isUserInGroup(
   if (cached !== null) return cached;
 
   const searchBase = getGroupSearchBase();
-  const ldapUrl = process.env.LDAP_URL || "";
-  const baseDn = deriveBaseDn(ldapUrl);
   const memberAttrs = getMemberAttrs();
   const userAttr = process.env.LDAP_USER_ATTR || "uid";
+  const bindDn = getBindDn();
+  const userBase = bindDn.includes(",") ? bindDn.substring(bindDn.indexOf(",") + 1) : "";
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const client = await ensureBound();
@@ -166,7 +205,7 @@ export async function isUserInGroup(
     try {
       const { searchEntries } = await client.search(searchBase, {
         scope: "sub",
-        filter: `(cn=${groupCn})`,
+        filter: `(cn=${escapeLdapFilter(groupCn)})`,
         attributes: memberAttrs,
       });
 
@@ -186,8 +225,7 @@ export async function isUserInGroup(
             const memberLower = memberStr.toLowerCase();
             if (
               memberLower === userId.toLowerCase() ||
-              memberLower ===
-                `${userAttr}=${userId.toLowerCase()},ou=users,${baseDn}`
+              (userBase && memberLower === `${userAttr}=${userId.toLowerCase()},${userBase}`)
             ) {
               found = true;
               break;
@@ -211,7 +249,7 @@ export async function isUserInGroup(
         bindFailed = true;
       }
       if (attempt === 0) {
-        console.log("[LDAP] Retrying with fresh connection");
+        console.warn("[LDAP] Retrying with fresh connection");
         continue;
       }
       return false;
