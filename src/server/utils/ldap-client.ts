@@ -58,9 +58,9 @@ function getGroupSearchBase(): string {
 
 function getBindDn(): string {
   if (process.env.LDAP_BIND_DN) return process.env.LDAP_BIND_DN;
-  const ldapUrl = process.env.LDAP_URL || "";
-  const baseDn = deriveBaseDn(ldapUrl);
   const uid = process.env.LDAP_BASE_UID || "";
+  if (uid.includes(",")) return uid; // legacy: LDAP_BASE_UID was a full DN
+  const baseDn = deriveBaseDn(process.env.LDAP_URL || "");
   return `uid=${uid},ou=users,${baseDn}`;
 }
 

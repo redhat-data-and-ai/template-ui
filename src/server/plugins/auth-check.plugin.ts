@@ -62,7 +62,11 @@ function shouldSkipAuth(request: FastifyRequest): boolean {
 }
 
 function ldapConfigured(): boolean {
-  return !!(process.env.LDAP_URL && process.env.LDAP_BASE_UID && process.env.LDAP_PASSWORD);
+  return !!(
+    process.env.LDAP_URL &&
+    (process.env.LDAP_BIND_DN || process.env.LDAP_BASE_UID) &&
+    process.env.LDAP_PASSWORD
+  );
 }
 
 async function authCheck(
