@@ -30,6 +30,7 @@ function getCacheTtl(): number {
 }
 
 function escapeLdapFilter(value: string): string {
+  // eslint-disable-next-line no-control-regex
   return value.replace(/[\\*()\x00]/g, (c) => `\\${c.charCodeAt(0).toString(16).padStart(2, "0")}`);
 }
 

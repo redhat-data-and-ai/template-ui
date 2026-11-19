@@ -16,7 +16,7 @@ export function FullReportModal({ result, prevScore, onClose }: FullReportModalP
   const detail = result.results_detail;
   const byMetric = detail?.summary?.summary_stats?.by_metric;
   const byConversation = detail?.summary?.summary_stats?.by_conversation;
-  const turns = detail?.turns ?? [];
+  const turns = useMemo(() => detail?.turns ?? [], [detail]);
 
   const availableTags = [...new Set(turns.map((t) => t.tag).filter((t): t is string => !!t))];
   const [activeTag, setActiveTag] = useState('all');
@@ -70,7 +70,7 @@ export function FullReportModal({ result, prevScore, onClose }: FullReportModalP
       displayData: { ...result, pass: dPass, fail: dFail, error: dError, eval_score: dScore },
       displayScore: dScore,
     };
-  }, [activeTag, turns, byMetric, result]);
+  }, [activeTag, isFiltered, turns, byMetric, result]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
