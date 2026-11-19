@@ -64,11 +64,6 @@ function getBindDn(): string {
   return `uid=${uid},ou=users,${baseDn}`;
 }
 
-function getUserBase(): string {
-  if (process.env.LDAP_USER_BASE) return process.env.LDAP_USER_BASE;
-  return deriveBaseDn(process.env.LDAP_URL || "");
-}
-
 function getMemberAttrs(): string[] {
   const envVal = process.env.LDAP_MEMBER_ATTRS;
   if (envVal) return envVal.split(",").map((a) => a.trim());
@@ -111,13 +106,14 @@ async function doBind(): Promise<Client | null> {
       try { await client.unbind(); } catch { /* ignore — connection may already be closed */ }
 
       const code = (err as { status?: number }).status;
+      const msg = (err as Error).message || "";
       let cooldown: number;
       let reason: string;
 
-      if (code === 49) {
+      if (code === 49 || msg.includes("invalidCredentials")) {
         cooldown = COOLDOWN_INVALID_CREDENTIALS_MS;
         reason = "invalid credentials";
-      } else if (code === 53) {
+      } else if (code === 53 || msg.includes("unwillingToPerform")) {
         cooldown = COOLDOWN_ACCOUNT_LOCKED_MS;
         reason = "account locked";
       } else {
@@ -209,7 +205,6 @@ export async function isUserInGroup(
   const searchBase = getGroupSearchBase();
   const memberAttrs = getMemberAttrs();
   const userAttr = process.env.LDAP_USER_ATTR || "uid";
-  const userBase = getUserBase();
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const client = await ensureBound();
@@ -236,9 +231,10 @@ export async function isUserInGroup(
                   ? member.toString("utf-8")
                   : String(member);
             const memberLower = memberStr.toLowerCase();
+            const userLower = userId.toLowerCase();
             if (
-              memberLower === userId.toLowerCase() ||
-              (userBase && memberLower === `${userAttr}=${userId},${userBase}`.toLowerCase())
+              memberLower === userLower ||
+              memberLower.startsWith(`${userAttr}=${userLower},`)
             ) {
               found = true;
               break;
