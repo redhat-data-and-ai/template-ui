@@ -64,6 +64,11 @@ function getBindDn(): string {
   return `uid=${uid},ou=users,${baseDn}`;
 }
 
+function getUserBase(): string {
+  if (process.env.LDAP_USER_BASE) return process.env.LDAP_USER_BASE;
+  return deriveBaseDn(process.env.LDAP_URL || "");
+}
+
 function getMemberAttrs(): string[] {
   const envVal = process.env.LDAP_MEMBER_ATTRS;
   if (envVal) return envVal.split(",").map((a) => a.trim());
@@ -95,21 +100,24 @@ async function doBind(): Promise<Client | null> {
   console.info("[LDAP] Attempting bind — url=%s group_search_base=%s", ldapUrl, getGroupSearchBase());
 
   for (let attempt = 0; attempt < 2; attempt++) {
+    const client = new Client({ url: ldapUrl, connectTimeout, tlsOptions, autoRebind: true });
     try {
-      ldapClient = new Client({ url: ldapUrl, connectTimeout, tlsOptions, autoRebind: true });
-      await ldapClient.bind(bindDn, password);
+      await client.bind(bindDn, password);
+      ldapClient = client;
       bindFailed = false;
       console.info("[LDAP] Bound successfully to %s", ldapUrl);
       return ldapClient;
     } catch (err) {
-      const msg = (err as Error).message || "";
+      try { await client.unbind(); } catch { /* ignore — connection may already be closed */ }
+
+      const code = (err as { status?: number }).status;
       let cooldown: number;
       let reason: string;
 
-      if (msg.includes("invalidCredentials")) {
+      if (code === 49) {
         cooldown = COOLDOWN_INVALID_CREDENTIALS_MS;
         reason = "invalid credentials";
-      } else if (msg.includes("unwillingToPerform")) {
+      } else if (code === 53) {
         cooldown = COOLDOWN_ACCOUNT_LOCKED_MS;
         reason = "account locked";
       } else {
@@ -201,8 +209,7 @@ export async function isUserInGroup(
   const searchBase = getGroupSearchBase();
   const memberAttrs = getMemberAttrs();
   const userAttr = process.env.LDAP_USER_ATTR || "uid";
-  const bindDn = getBindDn();
-  const userBase = bindDn.includes(",") ? bindDn.substring(bindDn.indexOf(",") + 1) : "";
+  const userBase = getUserBase();
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const client = await ensureBound();
@@ -231,7 +238,7 @@ export async function isUserInGroup(
             const memberLower = memberStr.toLowerCase();
             if (
               memberLower === userId.toLowerCase() ||
-              (userBase && memberLower === `${userAttr}=${userId.toLowerCase()},${userBase}`)
+              (userBase && memberLower === `${userAttr}=${userId},${userBase}`.toLowerCase())
             ) {
               found = true;
               break;
