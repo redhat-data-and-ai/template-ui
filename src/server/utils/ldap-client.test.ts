@@ -71,6 +71,60 @@ describe('ldap-client', () => {
     });
   });
 
+  describe('getBindDn', () => {
+    it('uses LDAP_BIND_DN override when set', async () => {
+      process.env.LDAP_BIND_DN = 'uid=svc,cn=users,cn=accounts,dc=ipa,dc=example,dc=com';
+      mocks.search.mockResolvedValue({
+        searchEntries: [{ memberUid: ['user1'] }],
+      });
+      const { isUserInGroup } = await freshModule();
+      await isUserInGroup('user1', 'test-group');
+      expect(mocks.bind).toHaveBeenCalledWith(
+        'uid=svc,cn=users,cn=accounts,dc=ipa,dc=example,dc=com',
+        'secret',
+      );
+      delete process.env.LDAP_BIND_DN;
+    });
+
+    it('derives bind DN from LDAP_BASE_UID when LDAP_BIND_DN is not set', async () => {
+      delete process.env.LDAP_BIND_DN;
+      mocks.search.mockResolvedValue({
+        searchEntries: [{ memberUid: ['user1'] }],
+      });
+      const { isUserInGroup } = await freshModule();
+      await isUserInGroup('user1', 'test-group');
+      expect(mocks.bind).toHaveBeenCalledWith(
+        'uid=svc-user,ou=users,dc=example,dc=com',
+        'secret',
+      );
+    });
+  });
+
+  describe('getGroupSearchBase', () => {
+    it('uses LDAP_GROUP_SEARCH_BASE override when set', async () => {
+      process.env.LDAP_GROUP_SEARCH_BASE = 'cn=groups,cn=accounts,dc=ipa,dc=example,dc=com';
+      mocks.search.mockResolvedValue({ searchEntries: [] });
+      const { isUserInGroup } = await freshModule();
+      await isUserInGroup('user1', 'test-group');
+      expect(mocks.search).toHaveBeenCalledWith(
+        'cn=groups,cn=accounts,dc=ipa,dc=example,dc=com',
+        expect.objectContaining({ filter: '(cn=test-group)' }),
+      );
+      delete process.env.LDAP_GROUP_SEARCH_BASE;
+    });
+
+    it('defaults to derived group search base when override not set', async () => {
+      delete process.env.LDAP_GROUP_SEARCH_BASE;
+      mocks.search.mockResolvedValue({ searchEntries: [] });
+      const { isUserInGroup } = await freshModule();
+      await isUserInGroup('user1', 'test-group');
+      expect(mocks.search).toHaveBeenCalledWith(
+        'ou=adhoc,ou=managedGroups,dc=example,dc=com',
+        expect.anything(),
+      );
+    });
+  });
+
   describe('isUserInGroup', () => {
     it('returns false when LDAP_URL is not set', async () => {
       delete process.env.LDAP_URL;
@@ -105,11 +159,39 @@ describe('ldap-client', () => {
       expect(await isUserInGroup('user1', 'test-group')).toBe(false);
     });
 
-    it('returns false when bind fails', async () => {
-      mocks.bind.mockRejectedValue(new Error('bind failed'));
+    it('returns false when bind fails with transient error (retries twice)', async () => {
+      mocks.bind.mockRejectedValue(new Error('connection refused'));
 
       const { isUserInGroup } = await freshModule();
       expect(await isUserInGroup('user1', 'test-group')).toBe(false);
+      expect(mocks.bind).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns false immediately on invalidCredentials without retrying', async () => {
+      mocks.bind.mockRejectedValue(new Error('invalidCredentials'));
+
+      const { isUserInGroup } = await freshModule();
+      expect(await isUserInGroup('user1', 'test-group')).toBe(false);
+      expect(mocks.bind).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns false immediately on account locked without retrying', async () => {
+      mocks.bind.mockRejectedValue(new Error('unwillingToPerform'));
+
+      const { isUserInGroup } = await freshModule();
+      expect(await isUserInGroup('user1', 'test-group')).toBe(false);
+      expect(mocks.bind).toHaveBeenCalledTimes(1);
+    });
+
+    it('cooldown blocks subsequent bind attempts after auth error', async () => {
+      mocks.bind.mockRejectedValue(new Error('invalidCredentials'));
+
+      const { isUserInGroup } = await freshModule();
+      await isUserInGroup('user1', 'test-group');
+      mocks.bind.mockReset();
+
+      await isUserInGroup('user1', 'test-group');
+      expect(mocks.bind).not.toHaveBeenCalled();
     });
 
     it('uses Redis cache when available', async () => {
@@ -132,6 +214,24 @@ describe('ldap-client', () => {
     it('returns false when no search entries found', async () => {
       const { isUserInGroup } = await freshModule();
       expect(await isUserInGroup('user1', 'test-group')).toBe(false);
+    });
+
+    it('returns true when user matches IPA full DN (cn=users,cn=accounts)', async () => {
+      process.env.LDAP_BIND_DN = 'uid=svc,cn=users,cn=accounts,dc=ipa,dc=example,dc=com';
+      mocks.search.mockResolvedValue({
+        searchEntries: [{ member: ['uid=user1,cn=users,cn=accounts,dc=ipa,dc=example,dc=com'] }],
+      });
+      const { isUserInGroup } = await freshModule();
+      expect(await isUserInGroup('user1', 'test-group')).toBe(true);
+      delete process.env.LDAP_BIND_DN;
+    });
+
+    it('member matching is case-insensitive', async () => {
+      mocks.search.mockResolvedValue({
+        searchEntries: [{ memberUid: ['USER1'] }],
+      });
+      const { isUserInGroup } = await freshModule();
+      expect(await isUserInGroup('user1', 'test-group')).toBe(true);
     });
   });
 
