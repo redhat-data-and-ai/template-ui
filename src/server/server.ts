@@ -110,6 +110,7 @@ export async function setupServer(): Promise<FastifyInstance> {
   const fastify = Fastify({
     logger: envToLogger[environment] ?? true,
     bodyLimit: cfg.server.body_limit,
+    http: { maxHeaderSize: 128 * 1024 },
     // One line per request instead of two, and none at all for successful
     // kubelet probes — they were 100% of this pod's log volume.
     logController: new ProbeAwareLogController(),
