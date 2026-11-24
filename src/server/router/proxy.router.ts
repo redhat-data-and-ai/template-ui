@@ -630,13 +630,13 @@ async function proxyRoutes(fastify: FastifyInstance) {
                 }
 
                 // Reset per-message state before translation
-                if (sseType === 'messages/partial' && Array.isArray(parsed) && parsed.length > 0) {
+                if ((sseType === 'messages/partial' || sseType === 'messages/complete') && Array.isArray(parsed) && parsed.length > 0) {
                   const peekId = (parsed[0] as Record<string, any>)?.id ?? '';
                   if (peekId && peekId !== currentStreamingMsgId) {
                     currentStreamingMsgId = peekId;
                     prevPartial = '';
                     prevThinking = '';
-                  } else if (!peekId) {
+                  } else if (!peekId && sseType === 'messages/partial') {
                     currentStreamingMsgId = '';
                   }
                 }
@@ -658,9 +658,16 @@ async function proxyRoutes(fastify: FastifyInstance) {
                   (sseType === 'messages/partial' || sseType === 'messages/complete')
                   && partialMsg
                   && typeof partialMsg === 'object'
-                  && typeof partialContent !== 'string'
                 ) {
-                  nextThinking = splitMessageParts(partialMsg).thinking;
+                  if (typeof partialContent === 'string') {
+                    const kwargs = (partialMsg as Record<string, unknown>).additional_kwargs;
+                    const extra = kwargs && typeof kwargs === 'object'
+                      ? (kwargs as Record<string, unknown>).reasoning_content ?? (kwargs as Record<string, unknown>).reasoning
+                      : undefined;
+                    if (typeof extra === 'string' && extra.length > 0) nextThinking = extra;
+                  } else {
+                    nextThinking = splitMessageParts(partialMsg).thinking;
+                  }
                 }
                 if (nextThinking.startsWith(prevThinking) && nextThinking.length > prevThinking.length) {
                   const thinkingDelta = nextThinking.slice(prevThinking.length);

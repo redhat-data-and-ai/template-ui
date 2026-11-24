@@ -155,8 +155,9 @@ export class StreamingManager {
     this.processedChunkIds.clear();
     this.streamError = null;
 
-    this.abortController = new AbortController();
-    const signal = this.abortController.signal;
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
 
     this.setStatus('connecting');
     callbacks.onStatusChange('connecting');
@@ -271,8 +272,10 @@ export class StreamingManager {
       }
 
       if (err.name === 'AbortError') {
-        this.setStatus('cancelled');
-        callbacks.onStatusChange('cancelled');
+        if (this.abortController === controller || this.abortController === null) {
+          this.setStatus('cancelled');
+          callbacks.onStatusChange('cancelled');
+        }
       } else {
         this.setStatus('error');
         callbacks.onStatusChange('error');
@@ -280,7 +283,7 @@ export class StreamingManager {
       }
     } finally {
       reader?.releaseLock?.();
-      this.abortController = null;
+      if (this.abortController === controller) this.abortController = null;
     }
   }
 

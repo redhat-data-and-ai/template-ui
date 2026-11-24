@@ -480,20 +480,21 @@ function visibleToolCalls(message: Message): Array<{ id?: string; name: string; 
 /** Status under the transcript for the question being answered now. */
 function CurrentTurnStatus({ messages }: { messages: Message[] }) {
   const turn = currentTurnMessages(messages);
-  const steps: Array<{ key: string; label: string; status: 'done' | 'running' | 'error' }> = [];
-  let anyRunning = false;
+  const stepsByKey = new Map<string, { key: string; label: string; status: 'done' | 'running' | 'error' }>();
   for (const message of turn) {
     if (message.type !== 'ai') continue;
     visibleToolCalls(message).forEach((toolCall, index) => {
       const running = toolCall.content == null;
-      if (running) anyRunning = true;
-      steps.push({
-        key: toolCall.id ?? `${message.id ?? 'tool'}-${index}`,
+      const key = toolCall.id ?? `${message.id ?? 'tool'}-${index}`;
+      stepsByKey.set(key, {
+        key,
         label: toolCall.name,
         status: toolCall.status === 'error' ? 'error' : running ? 'running' : 'done',
       });
     });
   }
+  const steps = [...stepsByKey.values()];
+  const anyRunning = steps.some((step) => step.status === 'running');
   if (steps.length > 0 && !anyRunning) {
     steps.push({ key: 'synthesizing', label: 'Synthesizing answer...', status: 'running' });
   }
@@ -707,6 +708,10 @@ function ThoughtProcess({
   );
 }
 
+function toolCardId(messageId: string, segmentIndex: number, itemIndex: number, toolIndex: number, toolId?: string) {
+  return toolId ?? `${messageId}-${segmentIndex}-${itemIndex}-${toolIndex}`;
+}
+
 function toolQueryHint(tool: TurnToolCall): string | null {
   const query = tool.args?.query;
   if (typeof query !== 'string' || query.trim().length === 0) return null;
@@ -729,17 +734,20 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
   const userExpanded = useRef(new Set<string>());
   useEffect(() => {
     const source = turn && turn.length > 0 ? turn : [message];
-    const regular = source.flatMap((item) => (
-      item.type === 'ai' && Array.isArray(item.tool_calls)
-        ? item.tool_calls.filter(call => !isSubAgentToolCall(call) && call.name !== 'write_todos')
-        : []
-    ));
+    const messageId = message.id ?? '';
     setExpandedItems(previous => {
       const next = new Set(previous);
-      regular.forEach((call, index) => {
-        const key = call.id ?? `${message.id}-0-${index}`;
-        if (call.id && approvalBindings?.has(call.id) && !userCollapsed.current.has(key)) next.add(key);
-        if ((call as { content?: unknown }).content != null && !userExpanded.current.has(key)) next.delete(key);
+      buildTurnSegments(source).forEach((segment, segmentIndex) => {
+        if (segment.type !== 'thought') return;
+        segment.items.forEach((item, itemIndex) => {
+          if (item.kind !== 'tools') return;
+          item.tools.forEach((call, toolIndex) => {
+            if (isSubAgentToolCall(call) || call.name === 'write_todos') return;
+            const key = toolCardId(messageId, segmentIndex, itemIndex, toolIndex, call.id);
+            if (call.id && approvalBindings?.has(call.id) && !userCollapsed.current.has(key)) next.add(key);
+            if (call.content != null && !userExpanded.current.has(key)) next.delete(key);
+          });
+        });
       });
       return next.size === previous.size && [...next].every(key => previous.has(key)) ? previous : next;
     });
@@ -766,11 +774,12 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
     const segments = buildTurnSegments(source);
     const lastSegment = segments.length - 1;
 
-    const customRaw = (message as Record<string, unknown>).custom_data;
-    const customData =
-      customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
-        ? (customRaw as Record<string, unknown>)
-        : null;
+    const customBlocks = source.flatMap((item) => {
+      const raw = (item as { custom_data?: unknown }).custom_data;
+      return raw != null && typeof raw === 'object' && !Array.isArray(raw)
+        ? [raw as Record<string, unknown>]
+        : [];
+    });
 
     return (
       <div className="space-y-2 w-full" aria-live="off">
@@ -833,7 +842,7 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
                     );
                   }
                   if (toolCall.name === 'write_todos') return null;
-                  const itemId = toolCall.id ?? `${message.id}-${index}-${idx}`;
+                  const itemId = toolCardId(message.id ?? '', index, itemIndex, idx, toolCall.id);
                   const isExpanded = expandedItems.has(itemId);
                   const approval = toolCall.id ? approvalBindings?.get(toolCall.id) : undefined;
                   const needsApproval = Boolean(approval && !approval.decision);
@@ -949,11 +958,11 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
             </ThoughtProcess>
           );
         })}
-        {customData && (
-          <div className="w-full mt-2">
-            <CustomDataRenderer data={customData} />
+        {customBlocks.map((data, blockIndex) => (
+          <div key={`custom-${blockIndex}`} className="w-full mt-2">
+            <CustomDataRenderer data={data} />
           </div>
-        )}
+        ))}
       </div>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1194,7 +1203,7 @@ export function ChatMessagesView({
                     chatId={chatId}
                     traceId={traceId}
                     userId={userId}
-                    existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                    existingFeedback={messageFeedback[lastTurnMessage.id ?? `msg-${messageIndex}`] ?? null}
                   />
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">

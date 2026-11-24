@@ -181,6 +181,35 @@ describe('StreamingManager', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
+  it('leaves the replacement stream cancellable after the old stream finishes aborting', async () => {
+    let secondSignal: AbortSignal | undefined;
+    vi.mocked(fetch)
+      .mockImplementationOnce((_url, opts) => new Promise((_resolve, reject) => {
+        opts?.signal?.addEventListener('abort', () => {
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }))
+      .mockImplementationOnce((_url, opts) => new Promise((_resolve, reject) => {
+        secondSignal = opts?.signal ?? undefined;
+        opts?.signal?.addEventListener('abort', () => {
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }));
+
+    const manager = new StreamingManager();
+    const first = manager.stream(BASE_REQUEST, makeCallbacks());
+    const second = manager.stream(BASE_REQUEST, makeCallbacks());
+    await first;
+    manager.cancel();
+
+    expect(secondSignal?.aborted).toBe(true);
+    await second;
+  });
+
   // ── getStatus() reflects current state ───────────────────────────────────
   it('getStatus() returns idle before and after a completed stream', async () => {
     const sseBody = makeTokenSSE('Hi', 0) + 'data: [DONE]\n\n';

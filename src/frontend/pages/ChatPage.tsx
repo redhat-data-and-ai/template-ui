@@ -427,6 +427,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   const autoApproveAllTools = useAppSelector(selectAutoApproveAllTools);
   const autoApprovalAttempts = useRef(new Set<string>());
+  const liveThread = useRef(thread);
+  liveThread.current = thread;
 
   useEffect(() => {
     const interrupt = thread.pendingInterrupt;
@@ -438,14 +440,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
     const interruptId = interrupt.id;
     let cancelled = false;
     void (async () => {
-      const paused = await waitUntilPaused(
-        () => getThreadStatus(threadId),
-        () => cancelled,
-        async () => {
-          const run = await getActiveRun(threadId);
-          return run === undefined ? null : run !== null;
-        },
-      );
+      let paused = false;
+      for (let look = 0; look < 3 && !paused && !cancelled; look++) {
+        if (autoApprovalAttempts.current.has(key)) return;
+        paused = await waitUntilPaused(
+          () => getThreadStatus(threadId),
+          () => cancelled,
+          async () => {
+            const run = await getActiveRun(threadId);
+            return run === undefined ? null : run !== null;
+          },
+        );
+      }
       if (!paused || cancelled || autoApprovalAttempts.current.has(key)) return;
       const manager = getStreamingManager(threadId);
       const status = manager.getStatus();
@@ -454,17 +460,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
         console.error('Auto-approve resume failed:', err);
       };
       autoApprovalAttempts.current.add(key);
+      const current = liveThread.current;
       if (autoApproveAllTools) {
         const allApproved = approval.action_requests.map(() => ({ type: 'approve' as const }));
-        thread.resumeWithDecisions(allApproved, interruptId).catch(fail);
+        current.resumeWithDecisions(allApproved, interruptId).catch(fail);
         return;
       }
-      const { allAutoApproved, decisions } = thread.checkAndAutoApprove(approval);
+      const { allAutoApproved, decisions } = current.checkAndAutoApprove(approval);
       if (!allAutoApproved || cancelled) {
         autoApprovalAttempts.current.delete(key);
         return;
       }
-      thread.resumeWithDecisions(decisions, interruptId).catch(fail);
+      current.resumeWithDecisions(decisions, interruptId).catch(fail);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

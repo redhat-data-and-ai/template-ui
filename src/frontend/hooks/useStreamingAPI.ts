@@ -1129,6 +1129,7 @@ export function useStreamingAPI(threadId: string) {
         state: { isResuming: true, resumingInterruptId: interruptId, error: null },
       }));
       const remaining = new Map(pending.filter(item => item.id !== interruptId).map(item => [item.id, item]));
+      let sawNewInterrupt = false;
       let failure: Error | null = null;
       let needsRefresh = false;
       try {
@@ -1165,6 +1166,7 @@ export function useStreamingAPI(threadId: string) {
             }
           },
           onInterrupt(interrupt) {
+            sawNewInterrupt = true;
             const item = enrichInterrupt(interrupt);
             remaining.set(item.id, item);
             dispatch(updateStreamingState({
@@ -1192,10 +1194,18 @@ export function useStreamingAPI(threadId: string) {
           resume: true,
           resumeResponses: { [interruptId]: response },
         }, callbacks);
-        if (manager.getStatus() === 'cancelled' && remaining.size === 0) {
+        if (manager.getStatus() === 'cancelled' && !sawNewInterrupt) {
           failure = new Error('Approval submission was interrupted.');
         }
         if (failure) throw failure;
+        if (sawNewInterrupt) {
+          try {
+            const state = await getThreadStateAndInterrupt(threadId);
+            for (const item of (state.interrupts ?? []).map(enrichInterrupt)) {
+              if (item.id) remaining.set(item.id, item);
+            }
+          } catch { /* Keep the interrupts already delivered. */ }
+        }
         const unresolved = [...remaining.values()];
         pendingInterruptsRef.current = unresolved;
         dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupts: unresolved } }));

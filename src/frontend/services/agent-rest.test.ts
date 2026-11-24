@@ -274,6 +274,22 @@ describe('agent-rest', () => {
       expect((msgs[0] as { thinking?: string }).thinking).toBe('secret chain of thought');
     });
 
+    it('keeps a raw-string list, including text after a think tag', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            values: {
+              messages: [{ type: 'human', content: ['result <think>hidden</think> tail'] }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const msgs = await getThreadState('t1');
+      expect(msgs[0].content).toBe('result <think>hidden</think> tail');
+    });
+
     it('does not strip a think tag out of a human message', async () => {
       vi.mocked(authenticatedFetch).mockResolvedValue(
         new Response(
@@ -510,10 +526,14 @@ describe('waitUntilPaused', () => {
     vi.useRealTimers();
   });
 
-  it('does not block when the thread status and runs cannot be read', async () => {
+  it('keeps looking when the thread status and runs cannot be read', async () => {
+    vi.useFakeTimers();
     const read = vi.fn().mockResolvedValue(null);
-    await expect(waitUntilPaused(read, () => false, async () => null)).resolves.toBe(true);
-    expect(read).toHaveBeenCalledTimes(1);
+    const pending = waitUntilPaused(read, () => false, async () => null);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(pending).resolves.toBe(false);
+    expect(read).toHaveBeenCalledTimes(30);
+    vi.useRealTimers();
   });
 
   it('stops when the page has moved on', async () => {

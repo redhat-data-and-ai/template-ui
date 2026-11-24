@@ -30,6 +30,15 @@ const UNKNOWN_TOOL_INTERRUPT = {
   review_configs: [{ action_name: 'dangerous_tool', allowed_decisions: ['approve', 'reject'] }],
 };
 
+async function mockPausedThread(page: import('@playwright/test').Page): Promise<void> {
+  await page.route('**/api/proxy/agent/threads/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/runs')) return route.fulfill({ json: [] });
+    if (path.endsWith('/state')) return route.fallback();
+    return route.fulfill({ json: { status: 'interrupted' } });
+  });
+}
+
 async function makeInterruptStream(
   value: object | string,
   callCount: { n: number },
@@ -71,6 +80,7 @@ test.describe('HITL — auto-approve', () => {
       await mountConfig(page, { title: 'Auto Approve Test' });
 
       const callCount = { n: 0 };
+      await mockPausedThread(page);
       await makeInterruptStream(TOOL_APPROVAL_INTERRUPT, callCount, page);
 
       const home = new HomePage(page);
@@ -122,6 +132,7 @@ test.describe('HITL — auto-approve', () => {
       await mountConfig(page, { title: 'Auto Approve All Test' });
 
       const callCount = { n: 0 };
+      await mockPausedThread(page);
       await makeInterruptStream(UNKNOWN_TOOL_INTERRUPT, callCount, page);
 
       const home = new HomePage(page);
@@ -142,6 +153,7 @@ test.describe('HITL — auto-approve', () => {
 test('does not auto-replay a rejected approval after refreshing the same interrupt', async ({page}) => {
   await setLocalStorageSettings(page, {autoApproveAllTools:true});
   await mountConfig(page);
+  await mockPausedThread(page);
   const interrupt = {id:'a'.repeat(32),value:TOOL_APPROVAL_INTERRUPT,resumable:true};
   let calls = 0;
   let refreshed = false;

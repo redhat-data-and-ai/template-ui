@@ -28,17 +28,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function splitTaggedText(text: string): MessageParts {
   const thinkingParts: string[] = [];
-  let answer = text;
-  const patterns = [
-    /<think>([\s\S]*?)<\/think>/gi,
-    /<thinking>([\s\S]*?)<\/thinking>/gi,
-  ];
-  for (const pattern of patterns) {
-    answer = answer.replace(pattern, (_full, inner: string) => {
-      if (inner) thinkingParts.push(inner);
-      return '';
-    });
-  }
+  const pattern = /<thinking>([\s\S]*?)<\/thinking>|<think>([\s\S]*?)<\/think>/gi;
+  let answer = text.replace(pattern, (_full, thinkingInner?: string, thinkInner?: string) => {
+    const inner = thinkingInner ?? thinkInner;
+    if (inner) thinkingParts.push(inner);
+    return '';
+  });
   answer = answer.replace(/<redacted_thinking>[\s\S]*?<\/redacted_thinking>/gi, '');
   const redactedOpen = answer.search(/<redacted_thinking/i);
   if (redactedOpen !== -1) {

@@ -37,6 +37,14 @@ describe('splitMessageParts', () => {
     expect(parts.answer).toBe('42');
   });
 
+  it('reads mixed think tags in the order they appear', () => {
+    const parts = splitMessageParts({
+      content: 'A <thinking>one</thinking> B <think>two</think>',
+    });
+    expect(parts.thinking).toBe('onetwo');
+    expect(parts.answer).toBe('A  B ');
+  });
+
   it('reads think tags inside a plain string', () => {
     const parts = splitMessageParts({
       content: 'Before <think>secret</think> after',

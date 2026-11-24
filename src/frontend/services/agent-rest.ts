@@ -60,17 +60,18 @@ function dedupeAnswer(content: unknown, answer: string): string {
 
 function normalizeContent(content: unknown): string {
   if (typeof content === 'string') return content;
-  return dedupeAnswer(content, splitMessageParts({ content }).answer);
+  if (!Array.isArray(content)) return dedupeAnswer(content, splitMessageParts({ content }).answer);
+  const text = content.map((block: unknown) => (
+    typeof block === 'string' ? block : splitMessageParts({ content: [block] }).answer
+  )).join('');
+  return dedupeAnswer(content, text);
 }
 
 function normalizeMessages(messages: any[]): Message[] {
   return messages.map((m) => {
     const isAi = String(m?.type ?? '').toLowerCase() === 'ai';
     if (!isAi) {
-      const content = typeof m?.content === 'string'
-        ? m.content
-        : dedupeAnswer(m?.content, splitMessageParts({ content: m?.content }).answer);
-      return { ...m, content };
+      return { ...m, content: normalizeContent(m?.content) };
     }
     const { thinking, answer } = splitMessageParts(m);
     const next = { ...m, content: dedupeAnswer(m?.content, answer) } as Message & { thinking?: string };
@@ -294,7 +295,6 @@ export async function waitUntilPaused(
     const status = await readStatus();
     const active = await hasActiveRun();
     if (status === 'interrupted' && active === false) return true;
-    if (status == null && active == null) return true;
     if (attempt < 29) await new Promise((resolve) => setTimeout(resolve, 500));
   }
   return false;
