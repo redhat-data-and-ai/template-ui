@@ -34,6 +34,35 @@ import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
 import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
 
+type TokenPart = 'thinking' | 'text';
+
+function dispatchStreamToken(
+  dispatch: AppDispatch,
+  threadId: string,
+  content: string,
+  messageId: string | undefined,
+  part: TokenPart | undefined,
+  isStreamingTokensRef: { current: boolean },
+): void {
+  const isThinking = part === 'thinking';
+  if (!isStreamingTokensRef.current) {
+    const message = {
+      type: 'ai',
+      content: isThinking ? '' : content,
+      tool_calls: [],
+      id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      ...(isThinking ? { thinking: content } : {}),
+    } as AIMessage;
+    dispatch(appendMessageToChat({ chatId: threadId, message }));
+    isStreamingTokensRef.current = true;
+    return;
+  }
+  dispatch(updateLastMessageInChat({
+    chatId: threadId,
+    content,
+    part: isThinking ? 'thinking' : 'text',
+  }));
+}
 
 function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
   const raw = interrupt.value as string | HITLInterruptValue;
@@ -535,25 +564,14 @@ export function useStreamingAPI(threadId: string) {
           streamEndedWithInterruptRef.current = false;
 
           const callbacks: StreamCallback = {
-            onToken(content, messageId) {
+            onToken(content, messageId, part) {
               lastTokenTimeRef.current = Date.now();
               lastSuccessfulConnectionRef.current = Date.now();
               setIsStreamStale(false);
               if (streamClockRef.current.firstTokenTime == null) {
                 streamClockRef.current.firstTokenTime = Date.now();
               }
-              if (!isStreamingTokensRef.current) {
-                const message: AIMessage = {
-                  type: 'ai',
-                  content,
-                  tool_calls: [],
-                  id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                };
-                dispatch(appendMessageToChat({ chatId: threadId, message }));
-                isStreamingTokensRef.current = true;
-                return;
-              }
-              dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+              dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
             },
             onDraftDiscard() {
               if (isStreamingTokensRef.current) {
@@ -1106,26 +1124,18 @@ export function useStreamingAPI(threadId: string) {
         throw new Error('Provide one decision for each requested action.');
       }
       manager.beginResume();
-      dispatch(updateStreamingState({ chatId: threadId, state: { isResuming: true, error: null } }));
+      dispatch(updateStreamingState({
+        chatId: threadId,
+        state: { isResuming: true, resumingInterruptId: interruptId, error: null },
+      }));
       const remaining = new Map(pending.filter(item => item.id !== interruptId).map(item => [item.id, item]));
       let failure: Error | null = null;
       let needsRefresh = false;
       try {
         const callbacks: StreamCallback = {
-          onToken(content, messageId) {
+          onToken(content, messageId, part) {
             lastTokenTimeRef.current = Date.now();
-            if (!isStreamingTokensRef.current) {
-              const message: AIMessage = {
-                type: 'ai',
-                content,
-                tool_calls: [],
-                id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-              };
-              dispatch(appendMessageToChat({ chatId: threadId, message }));
-              isStreamingTokensRef.current = true;
-              return;
-            }
-            dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+            dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
           },
           onDraftDiscard() {
             if (isStreamingTokensRef.current) {
@@ -1157,7 +1167,11 @@ export function useStreamingAPI(threadId: string) {
           onInterrupt(interrupt) {
             const item = enrichInterrupt(interrupt);
             remaining.set(item.id, item);
-            dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: item } }));
+            dispatch(updateStreamingState({
+              chatId: threadId,
+              state: { pendingInterrupt: item, isLoading: false, isConnected: false },
+            }));
+            managerRef.current?.cancel();
           },
           onError(error) { failure = error; },
           onStatusChange(status) {
@@ -1178,7 +1192,9 @@ export function useStreamingAPI(threadId: string) {
           resume: true,
           resumeResponses: { [interruptId]: response },
         }, callbacks);
-        if (manager.getStatus() === 'cancelled') failure = new Error('Approval submission was interrupted.');
+        if (manager.getStatus() === 'cancelled' && remaining.size === 0) {
+          failure = new Error('Approval submission was interrupted.');
+        }
         if (failure) throw failure;
         const unresolved = [...remaining.values()];
         pendingInterruptsRef.current = unresolved;
@@ -1200,7 +1216,10 @@ export function useStreamingAPI(threadId: string) {
         throw error;
       } finally {
         manager.endResume(needsRefresh);
-        dispatch(updateStreamingState({ chatId: threadId, state: { isResuming: false, isLoading: false, isConnected: false } }));
+        dispatch(updateStreamingState({
+          chatId: threadId,
+          state: { isResuming: false, resumingInterruptId: null, isLoading: false, isConnected: false },
+        }));
       }
     }, [dispatch, threadId],
   );
@@ -1264,6 +1283,7 @@ export function useStreamingAPI(threadId: string) {
     pendingInterrupt: streamingState.pendingInterrupt,
     pendingInterrupts: streamingState.pendingInterrupts,
     isResuming: streamingState.isResuming,
+    resumingInterruptId: streamingState.resumingInterruptId,
     refreshInterrupts,
     taskSteps: streamingState.taskSteps,
     submit,

@@ -24,6 +24,7 @@ export function useInterruptApprovals(
   onResume?: ApprovalSubmission,
   onAlwaysAllow?: (names: string[]) => void,
   isResuming = false,
+  resumingInterruptId?: string | null,
 ): ToolApproval[] {
   const [states, setStates] = useState<Record<string, DecisionState>>({});
   const live = useRef(states);
@@ -58,8 +59,12 @@ export function useInterruptApprovals(
       actionIndex: index,
       request,
       disabled: controlsDisabled,
-      waitingForResume: isResuming,
-      decision: state.decisions[index],
+      waitingForResume: isResuming && interrupt.id !== resumingInterruptId,
+      decision: state.decisions[index] ?? (
+        isResuming && resumingInterruptId && interrupt.id === resumingInterruptId
+          ? { type: 'approve' }
+          : null
+      ),
       decide: (decision: Decision) => { void decide(index, decision); },
       alwaysAllow: onAlwaysAllow ? () => {
         const current = live.current[key] ?? empty();

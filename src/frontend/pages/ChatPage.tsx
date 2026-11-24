@@ -26,7 +26,7 @@ import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
-import { getThreadStateAndInterrupt } from '../services/agent-rest';
+import { getActiveRun, getThreadStateAndInterrupt, getThreadStatus, waitUntilPaused } from '../services/agent-rest';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -430,27 +430,45 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   useEffect(() => {
     const interrupt = thread.pendingInterrupt;
-    if (!interrupt?.id || thread.isResuming || thread.isLoading || typeof interrupt.value !== 'object' || !interrupt.value.action_requests?.length) return;
+    if (!threadId || !interrupt?.id || thread.isResuming) return;
+    if (typeof interrupt.value !== 'object' || !interrupt.value.action_requests?.length) return;
     const key = `${threadId}:${interrupt.id}`;
     if (autoApprovalAttempts.current.has(key)) return;
-
-    if (autoApproveAllTools) {
-      const allApproved = interrupt.value.action_requests.map(() => ({ type: 'approve' as const }));
+    const approval = interrupt.value;
+    const interruptId = interrupt.id;
+    let cancelled = false;
+    void (async () => {
+      const paused = await waitUntilPaused(
+        () => getThreadStatus(threadId),
+        () => cancelled,
+        async () => {
+          const run = await getActiveRun(threadId);
+          return run === undefined ? null : run !== null;
+        },
+      );
+      if (!paused || cancelled || autoApprovalAttempts.current.has(key)) return;
+      const manager = getStreamingManager(threadId);
+      const status = manager.getStatus();
+      if (status === 'connecting' || status === 'streaming') manager.cancel();
+      const fail = (err: unknown) => {
+        console.error('Auto-approve resume failed:', err);
+      };
       autoApprovalAttempts.current.add(key);
-      thread.resumeWithDecisions(allApproved, interrupt.id).catch((err) => {
-        console.error('Auto-approve-all resume failed:', err);
-      });
-      return;
-    }
-
-    const { allAutoApproved, decisions } = thread.checkAndAutoApprove(interrupt.value);
-    if (!allAutoApproved) return;
-    autoApprovalAttempts.current.add(key);
-    thread.resumeWithDecisions(decisions, interrupt.id).catch((err) => {
-      console.error('Auto-approve resume failed:', err);
-    });
+      if (autoApproveAllTools) {
+        const allApproved = approval.action_requests.map(() => ({ type: 'approve' as const }));
+        thread.resumeWithDecisions(allApproved, interruptId).catch(fail);
+        return;
+      }
+      const { allAutoApproved, decisions } = thread.checkAndAutoApprove(approval);
+      if (!allAutoApproved || cancelled) {
+        autoApprovalAttempts.current.delete(key);
+        return;
+      }
+      thread.resumeWithDecisions(decisions, interruptId).catch(fail);
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.pendingInterrupt, thread.isResuming, thread.isLoading, autoApproveAllTools]);
+  }, [thread.pendingInterrupt, thread.isResuming, thread.isLoading, autoApproveAllTools, threadId]);
 
   // Refresh approvals after recovery; decisions are never replayed automatically.
   useEffect(() => {
@@ -597,8 +615,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
               key={threadId}
               messages={thread.messages}
               streamEvents={thread.streamEvents}
-              isLoading={thread.isLoading || !!thread.pendingInterrupt}
+              isLoading={thread.isLoading}
               isResuming={thread.isResuming}
+              resumingInterruptId={thread.resumingInterruptId}
               isApprovalBusy={thread.isLoading}
               pendingInterrupts={thread.pendingInterrupts}
               onInterruptResume={handleInterruptResume}

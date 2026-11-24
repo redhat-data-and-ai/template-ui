@@ -84,7 +84,7 @@ test.describe('HITL — auto-approve', () => {
       await chat.waitForAIResponse(15_000);
       await expect(page.getByText('Action Required')).not.toBeVisible();
       await expect(page.getByText('Input Required')).not.toBeVisible();
-      expect(callCount.n).toBeGreaterThanOrEqual(2);
+      await expect.poll(() => callCount.n, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
     },
   );
 
@@ -133,7 +133,7 @@ test.describe('HITL — auto-approve', () => {
 
       await chat.waitForAIResponse(15_000);
       await expect(page.getByText('Action Required')).not.toBeVisible();
-      expect(callCount.n).toBeGreaterThanOrEqual(2);
+      await expect.poll(() => callCount.n, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
     },
   );
 });

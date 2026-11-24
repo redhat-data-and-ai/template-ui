@@ -19,6 +19,14 @@ describe('SSEProcessor', () => {
     expect(events[0]).toMatchObject({ kind: 'chunk', data: { type: 'token', content: 'Hello', chunk_id: 0 } });
   });
 
+  it('keeps a thinking part on a token chunk', () => {
+    const events = proc.feed(makeData({ type: 'token', content: 'Let me', chunk_id: 1, part: 'thinking' }));
+    expect(events[0]).toMatchObject({
+      kind: 'chunk',
+      data: { type: 'token', content: 'Let me', chunk_id: 1, part: 'thinking' },
+    });
+  });
+
   // ── Interrupt chunk (HITLInterruptValue object) ──────────────────────────
   it('parses an interrupt chunk with object value', () => {
     const value = {
