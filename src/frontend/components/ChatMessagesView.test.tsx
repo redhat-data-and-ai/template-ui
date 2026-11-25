@@ -289,3 +289,51 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     expect(onResume).toHaveBeenCalledWith([{type:'approve'},{type:'approve'}],'a');
   });
 });
+
+describe('ChatMessagesView — clarifying question placement', () => {
+  const question = <div>Which month?</div>;
+  const runningSubagent = {
+    id: 'call-flights',
+    name: 'task',
+    args: { subagent_type: 'analyst', description: 'Find flights' },
+  };
+
+  it('shows the question when the running subagent is on a later assistant message', () => {
+    const store = makeStore();
+    render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({
+            interruptContent: question,
+            messages: [
+              HUMAN_MESSAGE,
+              { type: 'ai', id: 'ai-1', content: 'Looking now.' },
+              { type: 'ai', id: 'ai-2', content: '', tool_calls: [runningSubagent] },
+            ],
+          })}
+        />
+      </Provider>,
+    );
+
+    expect(screen.getByText('Which month?')).toBeInTheDocument();
+  });
+
+  it('shows the question when the running subagent is on the rendered assistant message', () => {
+    const store = makeStore();
+    render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({
+            interruptContent: question,
+            messages: [
+              HUMAN_MESSAGE,
+              { type: 'ai', id: 'ai-1', content: '', tool_calls: [runningSubagent] },
+            ],
+          })}
+        />
+      </Provider>,
+    );
+
+    expect(screen.getByText('Which month?')).toBeInTheDocument();
+  });
+});

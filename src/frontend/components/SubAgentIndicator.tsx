@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ToolApprovalControls } from './ToolApprovalControls';
 import type { ToolApproval } from '../hooks/useInterruptApprovals';
 import { useEffect, useState } from 'react';
@@ -17,6 +18,7 @@ interface SubAgentIndicatorProps {
   readonly messageId: string;
   readonly index: number;
   readonly approval?: ToolApproval;
+  readonly question?: ReactNode;
 }
 
 type VisualStatus = 'delegating' | 'complete' | 'error';
@@ -44,10 +46,11 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubAgentIndicatorProps) {
+export function SubAgentIndicator({ toolCall, messageId, index, approval, question }: SubAgentIndicatorProps) {
   const [expanded, setExpanded] = useState(false);
   const needsApproval = Boolean(approval && !approval.decision);
   useEffect(() => { if (needsApproval) setExpanded(true); }, [needsApproval]);
+  useEffect(() => { if (question) setExpanded(true); }, [question]);
   const name = extractSubAgentName(toolCall);
   const delegationText = extractDelegationText(toolCall);
   const status = deriveStatus(toolCall);
@@ -130,7 +133,9 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
                   </pre>
                 </div>
               )}
-              {status === 'delegating' && !needsApproval && (
+              {question ? (
+                <div className="pb-3">{question}</div>
+              ) : status === 'delegating' && !needsApproval && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                   Sub-agent is processing&hellip;

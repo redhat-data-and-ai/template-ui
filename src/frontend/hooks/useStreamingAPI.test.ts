@@ -785,9 +785,24 @@ describe('interrupt resume safety', () => {
       await refresh;
     });
     expect(result.current.messages).toEqual(currentMessages);
-    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['a','b']);
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
     await act(async()=>{finishResume();await resume;});
     expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    unmount();
+  });
+
+  it('ignores a replay of the interrupt that was just answered', async () => {
+    const {result, unmount} = setup();
+    const manager = getStreamingManager(THREAD_ID);
+    const cancel = vi.spyOn(manager, 'cancel');
+    vi.spyOn(manager, 'stream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onInterrupt(approval('a'));
+    });
+    await act(async () => {
+      await result.current.resumeWithDecisions([{type:'approve'}], 'a');
+    });
+    expect(cancel).not.toHaveBeenCalled();
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['b']);
     unmount();
   });
 

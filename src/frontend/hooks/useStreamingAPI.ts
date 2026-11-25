@@ -1136,11 +1136,19 @@ export function useStreamingAPI(threadId: string) {
         throw new Error('Provide one decision for each requested action.');
       }
       manager.beginResume();
+      const remaining = new Map(pending.filter(item => item.id !== interruptId).map(item => [item.id, item]));
+      const answered = [...remaining.values()];
+      pendingInterruptsRef.current = answered;
       dispatch(updateStreamingState({
         chatId: threadId,
-        state: { isResuming: true, resumingInterruptId: interruptId, error: null },
+        state: {
+          isResuming: true,
+          resumingInterruptId: interruptId,
+          isLoading: true,
+          error: null,
+          pendingInterrupts: answered,
+        },
       }));
-      const remaining = new Map(pending.filter(item => item.id !== interruptId).map(item => [item.id, item]));
       let sawNewInterrupt = false;
       let failure: Error | null = null;
       let needsRefresh = false;
@@ -1179,8 +1187,9 @@ export function useStreamingAPI(threadId: string) {
             }
           },
           onInterrupt(interrupt) {
-            sawNewInterrupt = true;
             const item = enrichInterrupt(interrupt);
+            if (item.id === interruptId) return;
+            sawNewInterrupt = true;
             remaining.set(item.id, item);
             dispatch(updateStreamingState({
               chatId: threadId,
@@ -1231,7 +1240,10 @@ export function useStreamingAPI(threadId: string) {
           dispatch(updateChat({ id: threadId, updates: { messages: state.messages } }));
           dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupts: refreshed } }));
           needsRefresh = false;
-        } catch { /* Keep approvals visible, but require a successful refresh before retry. */ }
+        } catch {
+          pendingInterruptsRef.current = pending;
+          dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupts: pending } }));
+        }
         const message = error instanceof Error ? error.message : 'Approval failed.';
         dispatch(updateStreamingState({ chatId: threadId, state: {
           error: needsRefresh ? `${message} Refresh the conversation before retrying.` : message,

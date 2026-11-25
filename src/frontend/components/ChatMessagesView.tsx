@@ -7,7 +7,7 @@ import { bindToolApprovals, useInterruptApprovals } from "../hooks/useInterruptA
 import type { ToolApproval } from "../hooks/useInterruptApprovals";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, Fragment, cloneElement, isValidElement } from "react";
 import { cn } from "../lib/utils";
 import {
   Dropdown,
@@ -34,6 +34,29 @@ import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButt
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
 import { splitMessageParts } from "../../server/message-parts";
+
+function isRunningToolCall(toolCall: { content?: unknown }): boolean {
+  if (toolCall.content == null) return true;
+  if (typeof toolCall.content === 'string') return toolCall.content.trim().length === 0;
+  return false;
+}
+
+function embedQuestion(node: ReactNode): ReactNode {
+  if (!isValidElement(node)) return node;
+  return cloneElement(node as React.ReactElement<{ embedded?: boolean }>, { embedded: true });
+}
+
+function answeredClarify(toolCall: { name?: string; args?: unknown; content?: unknown }): { question: string; answer: string } | null {
+  if (toolCall.name !== 'clarify') return null;
+  const args = toolCall.args;
+  const question = args && typeof args === 'object' && !Array.isArray(args)
+    && typeof (args as { question?: unknown }).question === 'string'
+    ? (args as { question: string }).question.trim()
+    : '';
+  const answer = typeof toolCall.content === 'string' ? toolCall.content.trim() : '';
+  if (!answer) return null;
+  return { question, answer };
+}
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -574,7 +597,7 @@ function messagePieces(message: Message): Array<
   if (parts.answer.trim()) pieces.push({ kind: 'text', text: parts.answer });
   const calls = (message as { tool_calls?: TurnToolCall[] }).tool_calls;
   const tools = Array.isArray(calls)
-    ? calls.filter((tc) => tc && tc.name !== 'write_todos')
+    ? calls.filter((tc) => tc && tc.name !== 'write_todos' && !(tc.name === 'clarify' && !answeredClarify(tc)))
     : [];
   if (tools.length > 0) pieces.push({ kind: 'tools', tools });
   return pieces;
@@ -714,9 +737,10 @@ interface AIMessageRendererProps {
   turn?: Message[];
   approvalBindings?: Map<string, ToolApproval>;
   thinkingLive?: boolean;
+  questionContent?: ReactNode;
 }
 
-export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLive = false }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLive = false, questionContent }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
   const userCollapsed = useRef(new Set<string>());
@@ -777,6 +801,18 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
         : [];
     });
 
+    let runningSubagentKey: string | null = null;
+    segments.forEach((segment, segmentIndex) => {
+      if (segment.type !== 'thought') return;
+      segment.items.forEach((item, itemIndex) => {
+        if (item.kind !== 'tools') return;
+        item.tools.forEach((tool, toolIndex) => {
+          if (!isSubAgentToolCall(tool) || !isRunningToolCall(tool)) return;
+          runningSubagentKey = `${segmentIndex}-${itemIndex}-${toolIndex}`;
+        });
+      });
+    });
+
     return (
       <div className="space-y-2 w-full" aria-live="off">
         {segments.map((segment, index) => {
@@ -820,6 +856,7 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
               <div key={`tools-${itemIndex}`} className="space-y-2">
                 {item.tools.map((toolCall, idx) => {
                   if (isSubAgentToolCall(toolCall)) {
+                    const key = `${index}-${itemIndex}-${idx}`;
                     return (
                       <SubAgentIndicator
                         key={`${message.id}-sa-${itemIndex}-${idx}`}
@@ -827,7 +864,17 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
                         messageId={message.id ?? ''}
                         index={idx}
                         approval={toolCall.id ? approvalBindings?.get(toolCall.id) : undefined}
+                        question={questionContent && key === runningSubagentKey ? embedQuestion(questionContent) : undefined}
                       />
+                    );
+                  }
+                  const exchange = answeredClarify(toolCall);
+                  if (exchange) {
+                    return (
+                      <div key={`${index}-ask-${idx}`} className="bg-card border border-border rounded-xl px-4 py-3 text-sm" role="group" aria-label="Answered question">
+                        {exchange.question && <p className="font-medium text-foreground">{exchange.question}</p>}
+                        <p className={exchange.question ? 'mt-1 text-muted-foreground' : 'text-muted-foreground'}>{exchange.answer}</p>
+                      </div>
                     );
                   }
                   if (toolCall.name === 'write_todos') return null;
@@ -955,7 +1002,7 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
       </div>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, turn, expandedItems, approvalBindings, thinkingLive]);
+  }, [messageKey, turn, expandedItems, approvalBindings, thinkingLive, questionContent]);
 
   return (
     <div className="space-y-2 w-full">
@@ -1073,6 +1120,26 @@ export function ChatMessagesView({
     return { lastHumanMessageIndex: lastHuman, lastAiMessageIndex: lastAi };
   }, [messages]);
 
+  const questionNestMessageIndex = useMemo(() => {
+    let parentAsking = false;
+    let onlyIndex = -1;
+    let runningCount = 0;
+    messages.forEach((message, index) => {
+      if (message.type !== 'ai' || !Array.isArray(message.tool_calls)) return;
+      for (const toolCall of message.tool_calls) {
+        const call = toolCall as { name?: string; args?: Record<string, unknown>; content?: unknown };
+        if (!isRunningToolCall(call)) continue;
+        if (call.name === 'clarify') parentAsking = true;
+        if (isSubAgentToolCall(call as { name: string; args?: Record<string, unknown> })) {
+          runningCount += 1;
+          onlyIndex = index;
+        }
+      }
+    });
+    if (parentAsking || runningCount !== 1) return -1;
+    return onlyIndex;
+  }, [messages]);
+
   const lastMessage = messages[messages.length - 1];
   const rawNoResponse = !isLoading && !pendingInterrupt && !interruptContent && messages.length > 0 && lastMessage?.type === 'human';
   const [showNoResponse, setShowNoResponse] = useState(false);
@@ -1147,12 +1214,10 @@ export function ChatMessagesView({
             if (previousAi) {
               return <Fragment key={message.id ?? `m-${messageIndex}`} />;
             }
+            const nextHumanOffset = messages.slice(messageIndex + 1).findIndex((entry) => entry.type === 'human');
+            const turnEnd = nextHumanOffset === -1 ? messages.length : messageIndex + 1 + nextHumanOffset;
             const turn = message.type === 'ai'
-              ? messages.slice(messageIndex).filter((item, offset, list) => {
-                const humanAt = list.findIndex((entry) => entry.type === 'human');
-                if (humanAt === -1) return item.type === 'ai';
-                return offset < humanAt && item.type === 'ai';
-              })
+              ? messages.slice(messageIndex, turnEnd).filter((item) => item.type === 'ai')
               : [];
             const lastTurnMessage = turn[turn.length - 1] ?? message;
             const copyText = getCopyableAiMessageText(lastTurnMessage.content);
@@ -1187,6 +1252,11 @@ export function ChatMessagesView({
                     turn={turn}
                     approvalBindings={bindings}
                     thinkingLive={thinkingLive && (lastTurnMessage.id ?? '') === (messages[lastAiMessageIndex]?.id ?? '')}
+                    questionContent={
+                      questionNestMessageIndex >= messageIndex && questionNestMessageIndex < turnEnd
+                        ? interruptContent
+                        : undefined
+                    }
                   />
                   <MessageActionsRow
                     isLastAiInTurn={isLastAiInTurn}
@@ -1274,7 +1344,7 @@ export function ChatMessagesView({
             const message = { type: 'ai', id, content: '', tool_calls: [{ id, name: approval.request.name, args: approval.request.args }] } as Message;
             return <AIMessageRenderer key={approval.key} message={message} approvalBindings={new Map([[id, approval]])} />;
           })}
-          {interruptContent}
+          {questionNestMessageIndex < 0 && interruptContent}
           <div ref={bottomRef} />
         </div>
       </div>

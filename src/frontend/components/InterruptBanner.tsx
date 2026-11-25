@@ -18,6 +18,8 @@ interface InterruptBannerProps {
   readonly isSubmitting?: boolean;
   readonly onResume: (response: string) => void;
   readonly onDismiss: () => void;
+  /** Fill a subagent card instead of lining up under a main reply. */
+  readonly embedded?: boolean;
 }
 
 function isToolApproval(value: string): boolean {
@@ -29,6 +31,37 @@ function isToolApproval(value: string): boolean {
 function interruptValueAsString(value: string | object): string {
   if (typeof value === 'string') return value;
   return JSON.stringify(value, null, 2);
+}
+
+interface UserQuestion {
+  question: string;
+  options: string[];
+}
+
+function parseUserQuestion(interrupt: InterruptInfo): UserQuestion | null {
+  const record = readQuestionRecord(interrupt.value);
+  if (!record) return null;
+  const question = typeof record.question === 'string' ? record.question.trim() : '';
+  if (!question) return null;
+  const options = Array.isArray(record.options)
+    ? record.options
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .map((item) => item.trim())
+    : [];
+  return { question, options };
+}
+
+function readQuestionRecord(raw: unknown): { question?: unknown; options?: unknown } | null {
+  if (typeof raw === 'string') {
+    try {
+      return readQuestionRecord(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if ((raw as { type?: unknown }).type !== 'user_question') return null;
+  return raw as { question?: unknown; options?: unknown };
 }
 
 function parseMcpAuthPayload(interrupt: InterruptInfo): InterruptInfo['payload'] | null {
@@ -55,14 +88,24 @@ function parseMcpAuthPayload(interrupt: InterruptInfo): InterruptInfo['payload']
   return null;
 }
 
-export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting = false }: InterruptBannerProps) {
+function questionAnswer(selected: Set<string>, typed: string): string {
+  const parts: string[] = [];
+  if (selected.size > 0) parts.push(Array.from(selected).join(', '));
+  const text = typed.trim();
+  if (text) parts.push(text);
+  return parts.join('; ');
+}
+
+export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting = false, embedded = false }: InterruptBannerProps) {
   const [response, setResponse] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [oauthReady, setOauthReady] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [oauthOrigin, setOauthOrigin] = useState<string | null>(null);
 
   const mcpAuth = parseMcpAuthPayload(interrupt);
+  const userQuestion = parseUserQuestion(interrupt);
 
   const verifyAndSetReady = useCallback(async (mcpName: string) => {
     const connected = await verifyMcpOAuthConnected(mcpName);
@@ -155,6 +198,107 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
               )}
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (userQuestion) {
+    const answer = questionAnswer(selected, response);
+    const toggleOption = (option: string) => {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(option)) next.delete(option);
+        else next.add(option);
+        return next;
+      });
+    };
+    const fields = (
+      <>
+          <p className="text-sm mb-3 whitespace-pre-wrap">{userQuestion.question}</p>
+          {userQuestion.options.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {userQuestion.options.map((option, index) => {
+                const isSelected = selected.has(option);
+                return (
+                  <button
+                    key={`${index}-${option}`}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => toggleOption(option)}
+                    className={[
+                      'px-3 py-1.5 rounded-lg text-sm border transition-all',
+                      isSelected
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-muted/50 text-foreground border-border hover:bg-muted hover:border-foreground/20',
+                    ].join(' ')}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        aria-hidden="true"
+                        className={[
+                          'inline-flex items-center justify-center w-4 h-4 rounded border text-[10px] font-bold transition-colors',
+                          isSelected
+                            ? 'bg-primary-foreground text-primary border-primary-foreground'
+                            : 'border-muted-foreground/40 text-transparent',
+                        ].join(' ')}
+                      >
+                        {isSelected ? '✓' : ''}
+                      </span>
+                      {option}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <TextInput
+              value={response}
+              onChange={(_e, val) => setResponse(val)}
+              onKeyDown={(e) => {
+                if (!isSubmitting && e.key === 'Enter' && answer) onResume(answer);
+              }}
+              placeholder={userQuestion.options.length > 0 ? 'Or type your own answer...' : 'Type your answer...'}
+              aria-label="Your answer"
+              className="flex-1"
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              isDisabled={isSubmitting || !answer}
+              onClick={() => onResume(answer)}
+            >
+              Send{selected.size > 0 ? ` (${selected.size})` : ''}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              isDisabled={isSubmitting}
+              onClick={() => onResume('The user skipped this question.')}
+            >
+              Skip
+            </Button>
+          </div>
+          {selected.size > 0 && (
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Selected: {Array.from(selected).join(', ')}
+            </p>
+          )}
+      </>
+    );
+    if (embedded) {
+      return (
+        <div role="region" aria-label="Question from the agent">
+          {fields}
+        </div>
+      );
+    }
+    return (
+      <div className="mb-3 flex items-start gap-3" role="region" aria-label="Question from the agent">
+        <div className="w-8 shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1 max-w-[85%] sm:max-w-[80%]">
+          {fields}
         </div>
       </div>
     );
