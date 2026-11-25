@@ -148,6 +148,22 @@
 
 /* Tailwind v4 reset strips native form element styles.
    Restore sane defaults so utility classes layer on top. */
+.subagent-composer {
+  position: relative;
+}
+.subagent-composer[data-empty="true"]::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  left: 1rem;
+  right: 3rem;
+  top: 0.75rem;
+  color: var(--muted-foreground);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.subagent-composer.pt-3\.5[data-empty="true"]::before {
+  top: 0.875rem;
+}
 textarea,
 input[type="text"],
 input[type="search"],

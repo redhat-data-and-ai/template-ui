@@ -62,7 +62,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
   const hydratedThreadRef = useRef<string | null>(null);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const chatInputRef = useRef<HTMLDivElement>(null);
   const hasFinalizeEventOccurredRef = useRef(false);
 
   const thread = useStreamingAPI(threadId);

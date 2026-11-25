@@ -33,6 +33,7 @@ import { selectAlwaysAllowedTools } from '@/redux/slices/userSettings';
 import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
 import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
+import { messageWithSubagentMentions, resolveRequestedSubagents } from '@/components/slash-subagents';
 
 type TokenPart = 'thinking' | 'text';
 
@@ -478,11 +479,15 @@ export function useStreamingAPI(threadId: string) {
       dispatch(updateChat({ id: threadId, updates: { messages: clones } }));
       chatStorage.saveChatByThreadId(threadId, clones);
 
-      const messageText = mergeMessageWithMcpModelContext(
-        serializeLastMessage(clones),
-        mcpModelContext,
-      );
+      const userText = serializeLastMessage(clones);
+      const messageText = mergeMessageWithMcpModelContext(userText, mcpModelContext);
       if (messageText === '') return;
+      const requestedSubagents = await resolveRequestedSubagents(userText);
+      const messagesWithMentions = messageWithSubagentMentions(clones, requestedSubagents);
+      if (messagesWithMentions !== clones) {
+        dispatch(updateChat({ id: threadId, updates: { messages: messagesWithMentions } }));
+        chatStorage.saveChatByThreadId(threadId, messagesWithMentions);
+      }
 
       const token = typeof window.USER_DATA.accessToken === 'string' ? window.USER_DATA.accessToken : undefined;
       const userId =
@@ -510,6 +515,7 @@ export function useStreamingAPI(threadId: string) {
         apiUrl,
         token,
         projectId: chatRef.current?.project_id,
+        ...(requestedSubagents.length > 0 ? { requestedSubagents } : {}),
       };
       const wasClientCreated = isClientCreatedChat(threadId);
 
@@ -534,7 +540,7 @@ export function useStreamingAPI(threadId: string) {
 
           // Remove incomplete AI message if stream dropped mid-response
           if (isStreamingTokensRef.current) {
-            dispatch(updateChat({ id: threadId, updates: { messages: clones } }));
+            dispatch(updateChat({ id: threadId, updates: { messages: messagesWithMentions } }));
             isStreamingTokensRef.current = false;
           }
         }
@@ -544,7 +550,7 @@ export function useStreamingAPI(threadId: string) {
           try {
             const history = await getThreadState(threadId);
             if (history.length > 0) {
-              const pendingMsg = clones[clones.length - 1];
+              const pendingMsg = messagesWithMentions[messagesWithMentions.length - 1];
               const serverHasPending =
                 pendingMsg?.type === 'human' &&
                 history.some((m) => m.type === 'human' && m.content === pendingMsg.content);

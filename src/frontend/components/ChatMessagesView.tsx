@@ -27,6 +27,7 @@ import rehypeSanitize from "rehype-sanitize";
 import { markdownSanitizeSchema } from "../lib/markdown-sanitize";
 import { isSubAgentToolCall, detectArtifactKind } from "../types/deep-agent";
 import { SubAgentIndicator } from "./SubAgentIndicator";
+import { highlightSubagentMentions, subagentMentionsOf } from "./slash-subagents";
 import { ArtifactViewer } from "./ArtifactViewer";
 import { McpAppHostFromToolCall } from "./McpAppHost";
 import { TodoStrip } from "./TodoStrip";
@@ -379,6 +380,30 @@ const mdComponents = {
   img: () => null,
 };
 
+function HumanMessageText({ text, names }: { text: string; names: string[] }) {
+  const parts = highlightSubagentMentions(text, names);
+  if (!parts.some((part) => part.marked)) {
+    return (
+      <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
+          {text}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+  return (
+    <span className="whitespace-pre-wrap text-sm leading-relaxed">
+      {parts.map((part, index) =>
+        part.marked ? (
+          <strong key={index} className="font-semibold underline">{part.text}</strong>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </span>
+  );
+}
+
 interface HumanMessageBubbleProps {
   message: Message;
   messageIndex: number;
@@ -453,11 +478,7 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
               </div>
             </div>
           ) : (
-            <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
-                {plain}
-              </ReactMarkdown>
-            </div>
+            <HumanMessageText text={plain} names={subagentMentionsOf(message)} />
           )}
         </div>
         {!isEditing && (
@@ -1043,7 +1064,7 @@ interface ChatMessagesViewProps {
   } | null;
   /** True only while thought tokens are arriving for this reply. */
   thinkingLive?: boolean;
-  chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  chatInputRef?: React.RefObject<HTMLDivElement | null>;
   onExportMarkdown?: () => void;
   onExportJson?: () => void;
 }
