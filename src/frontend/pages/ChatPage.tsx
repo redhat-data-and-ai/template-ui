@@ -454,14 +454,17 @@ export function ChatPage({ threadId }: { threadId: string }) {
       }
       if (!paused || cancelled || autoApprovalAttempts.current.has(key)) return;
       const manager = getStreamingManager(threadId);
-      const status = manager.getStatus();
-      if (status === 'connecting' || status === 'streaming') manager.cancel();
+      const stopLiveReply = () => {
+        const status = manager.getStatus();
+        if (status === 'connecting' || status === 'streaming') manager.cancel();
+      };
       const fail = (err: unknown) => {
         console.error('Auto-approve resume failed:', err);
       };
       autoApprovalAttempts.current.add(key);
       const current = liveThread.current;
       if (autoApproveAllTools) {
+        stopLiveReply();
         const allApproved = approval.action_requests.map(() => ({ type: 'approve' as const }));
         current.resumeWithDecisions(allApproved, interruptId).catch(fail);
         return;
@@ -471,6 +474,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
         autoApprovalAttempts.current.delete(key);
         return;
       }
+      stopLiveReply();
       current.resumeWithDecisions(decisions, interruptId).catch(fail);
     })();
     return () => { cancelled = true; };
@@ -667,6 +671,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
                     }
                   : null
               }
+              thinkingLive={streamingState.isThinking}
               chatInputRef={chatInputRef}
               onExportMarkdown={handleExportMarkdown}
               onExportJson={handleExportJson}

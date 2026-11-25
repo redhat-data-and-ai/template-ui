@@ -536,6 +536,22 @@ describe('waitUntilPaused', () => {
     vi.useRealTimers();
   });
 
+  it('treats an error thread with no active run as paused', async () => {
+    const read = vi.fn().mockResolvedValue('error');
+    await expect(waitUntilPaused(read, () => false, async () => false)).resolves.toBe(true);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps waiting when an error thread still has an active run', async () => {
+    vi.useFakeTimers();
+    const read = vi.fn().mockResolvedValue('error');
+    const pending = waitUntilPaused(read, () => false, async () => true);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(pending).resolves.toBe(false);
+    expect(read).toHaveBeenCalledTimes(30);
+    vi.useRealTimers();
+  });
+
   it('stops when the page has moved on', async () => {
     const read = vi.fn().mockResolvedValue('busy');
     await expect(waitUntilPaused(read, () => true)).resolves.toBe(false);

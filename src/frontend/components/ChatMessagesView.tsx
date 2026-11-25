@@ -540,17 +540,6 @@ function CurrentTurnStatus({ messages }: { messages: Message[] }) {
   );
 }
 
-export function isThinkingLive(message: Message, isLoading: boolean, isLastAi: boolean): boolean {
-  if (!isLoading || !isLastAi) return false;
-  const tools = (message as { tool_calls?: unknown }).tool_calls;
-  if (Array.isArray(tools) && tools.length > 0) return false;
-  const stored = (message as { thinking?: unknown }).thinking;
-  const parts = splitMessageParts(message);
-  const thinking = typeof stored === 'string' && stored.trim().length > 0 ? stored : parts.thinking;
-  if (thinking.trim().length === 0) return false;
-  return parts.answer.trim().length === 0;
-}
-
 export interface TurnToolCall {
   id?: string;
   name: string;
@@ -746,6 +735,7 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
             const key = toolCardId(messageId, segmentIndex, itemIndex, toolIndex, call.id);
             if (call.id && approvalBindings?.has(call.id) && !userCollapsed.current.has(key)) next.add(key);
             if (call.content != null && !userExpanded.current.has(key)) next.delete(key);
+            if (parseMcpApp(call.mcpApp) && !userCollapsed.current.has(key)) next.add(key);
           });
         });
       });
@@ -772,7 +762,13 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
   const renderMessage = useMemo(() => {
     const source = turn && turn.length > 0 ? turn : [message];
     const segments = buildTurnSegments(source);
-    const lastSegment = segments.length - 1;
+    let lastThinkingKey = '';
+    segments.forEach((segment, segmentIndex) => {
+      if (segment.type !== 'thought') return;
+      segment.items.forEach((item, itemIndex) => {
+        if (item.kind === 'thinking') lastThinkingKey = `${segmentIndex}-${itemIndex}`;
+      });
+    });
 
     const customBlocks = source.flatMap((item) => {
       const raw = (item as { custom_data?: unknown }).custom_data;
@@ -802,29 +798,22 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
               </div>
             );
           }
-          const toolCount = segment.items.reduce((count, item) => (
-            item.kind === 'tools' ? count + item.tools.filter((tool) => tool.name !== 'write_todos').length : count
-          ), 0);
-          const forceOpen = segment.items.some((item) => (
-            item.kind === 'tools' && item.tools.some((toolCall) => {
-              const approval = toolCall.id ? approvalBindings?.get(toolCall.id) : undefined;
-              return Boolean(approval && !approval.decision) || toolCall.content == null;
-            })
-          ));
           return (
-            <ThoughtProcess
-              key={`thought-${index}`}
-              live={thinkingLive && index === lastSegment}
-              active={index === lastSegment}
-              forceOpen={forceOpen}
-              toolCount={toolCount}
-            >
+            <Fragment key={`thought-${index}`}>
           {segment.items.map((item, itemIndex) => {
             if (item.kind === 'thinking') {
               return (
-                <div key={`think-${itemIndex}`} className="text-[13px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
-                </div>
+                <ThoughtProcess
+                  key={`think-${itemIndex}`}
+                  live={thinkingLive && lastThinkingKey === `${index}-${itemIndex}`}
+                  active={thinkingLive && lastThinkingKey === `${index}-${itemIndex}`}
+                  forceOpen={false}
+                  toolCount={0}
+                >
+                  <div className="text-[13px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
+                  </div>
+                </ThoughtProcess>
               );
             }
             return (
@@ -955,7 +944,7 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
               </div>
             );
           })}
-            </ThoughtProcess>
+            </Fragment>
           );
         })}
         {customBlocks.map((data, blockIndex) => (
@@ -1005,6 +994,8 @@ interface ChatMessagesViewProps {
     timeToFirstTokenMs: number | null;
     totalDurationMs: number;
   } | null;
+  /** True only while thought tokens are arriving for this reply. */
+  thinkingLive?: boolean;
   chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onExportMarkdown?: () => void;
   onExportJson?: () => void;
@@ -1034,6 +1025,7 @@ export function ChatMessagesView({
   messageFeedback = {},
   onEditMessage,
   lastResponseTiming = null,
+  thinkingLive = false,
   chatInputRef,
   onExportMarkdown,
   onExportJson,
@@ -1194,7 +1186,7 @@ export function ChatMessagesView({
                     message={message}
                     turn={turn}
                     approvalBindings={bindings}
-                    thinkingLive={isThinkingLive(lastTurnMessage, isLoading, (lastTurnMessage.id ?? '') === (messages[lastAiMessageIndex]?.id ?? ''))}
+                    thinkingLive={thinkingLive && (lastTurnMessage.id ?? '') === (messages[lastAiMessageIndex]?.id ?? '')}
                   />
                   <MessageActionsRow
                     isLastAiInTurn={isLastAiInTurn}

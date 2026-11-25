@@ -59,7 +59,9 @@ export function useInterruptApprovals(
       actionIndex: index,
       request,
       disabled: controlsDisabled,
-      waitingForResume: isResuming && interrupt.id !== resumingInterruptId,
+      waitingForResume: isResuming
+        && interrupt.id !== resumingInterruptId
+        && interrupts.some((item) => item.id === resumingInterruptId),
       decision: state.decisions[index] ?? (
         isResuming && resumingInterruptId && interrupt.id === resumingInterruptId
           ? { type: 'approve' }

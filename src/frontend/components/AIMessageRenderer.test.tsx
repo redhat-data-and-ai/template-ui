@@ -36,7 +36,7 @@ function renderStrict(ui: React.ReactElement) {
 }
 
 describe('AIMessageRenderer — MCP App collapse behavior', () => {
-  it('stays collapsed when mcpApp arrives with content (finished tool)', async () => {
+  it('expands when mcpApp arrives with content (finished tool)', async () => {
     const { rerender } = renderStrict(
       <AIMessageRenderer message={makeMsg({ tool_calls: [chartCall] })} />,
     );
@@ -57,9 +57,9 @@ describe('AIMessageRenderer — MCP App collapse behavior', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /collapse tool call: show_chart/i })).toHaveAttribute(
         'aria-expanded',
-        'false',
+        'true',
       );
     });
   });
@@ -85,16 +85,16 @@ describe('AIMessageRenderer — MCP App collapse behavior', () => {
     });
   });
 
-  it('stays collapsed on later stream ticks after tool finishes', async () => {
+  it('stays expanded on later stream ticks after an MCP app finishes', async () => {
     const withApp = makeMsg({
       tool_calls: [{ ...chartCall, mcpApp: MCP_APP, content: 'ok' }],
     });
     const { rerender } = renderStrict(<AIMessageRenderer message={withApp} />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /collapse tool call: show_chart/i })).toHaveAttribute(
         'aria-expanded',
-        'false',
+        'true',
       );
     });
 
@@ -109,9 +109,9 @@ describe('AIMessageRenderer — MCP App collapse behavior', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /expand tool call: show_chart/i })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /collapse tool call: show_chart/i })).toHaveAttribute(
         'aria-expanded',
-        'false',
+        'true',
       );
     });
   });

@@ -294,7 +294,7 @@ export async function waitUntilPaused(
     if (shouldStop()) return false;
     const status = await readStatus();
     const active = await hasActiveRun();
-    if (status === 'interrupted' && active === false) return true;
+    if ((status === 'interrupted' || status === 'error') && active === false) return true;
     if (attempt < 29) await new Promise((resolve) => setTimeout(resolve, 500));
   }
   return false;

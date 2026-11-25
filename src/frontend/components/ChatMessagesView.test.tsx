@@ -263,8 +263,13 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     expect(screen.getByRole('button', { name: /^Approve/ })).toBeDisabled();
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     rerender(<Provider store={store}><ChatMessagesView {...props} isResuming /></Provider>);
-    expect(screen.getByText(message)).toBeVisible();
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Approve/ })).toBeDisabled();
+    const current = { id: 'current', resumable: true, value: {
+      action_requests: [{ name: 'read_file', args: { file_path: '/tmp/current.txt' } }], review_configs: [],
+    } };
+    rerender(<Provider store={store}><ChatMessagesView {...props} pendingInterrupts={[current, interrupt]} isResuming resumingInterruptId="current" /></Provider>);
+    expect(screen.getByText(message)).toBeVisible();
     rerender(<Provider store={store}><ChatMessagesView {...props} isApprovalBusy={false} /></Provider>);
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Approve/ })).toBeEnabled();

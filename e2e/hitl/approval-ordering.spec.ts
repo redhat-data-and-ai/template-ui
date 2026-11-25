@@ -164,8 +164,6 @@ test('Enter approves after stream EOF without duplicating a tool whose result ar
   await page.keyboard.press('Enter');
   await expect(page.getByText('Finishing the response', { exact: true })).toBeVisible();
   // Resume is still streaming: the completed original must be the only tool card.
-  const thought = page.getByRole('button', { name: /Thought process/ });
-  if (await thought.getAttribute('aria-expanded') === 'false') await thought.click();
   await expect(page.getByRole('button', { name: /^(Expand|Collapse) tool call: write_file$/ })).toHaveCount(1);
   await expect(page.getByText('Waiting...', { exact: true })).toHaveCount(0);
   await expect(approve).toHaveCount(0);
@@ -174,6 +172,5 @@ test('Enter approves after stream EOF without duplicating a tool whose result ar
   });
   await page.evaluate(() => (window as any).finishApprovalResume());
   await expect(page.locator('[data-interrupt-id]')).toHaveCount(0);
-  if (await thought.getAttribute('aria-expanded') === 'false') await thought.click();
   await expect(page.getByRole('button', { name: /^(Expand|Collapse) tool call: write_file$/ })).toHaveCount(1);
 });
