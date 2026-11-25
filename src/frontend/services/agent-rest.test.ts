@@ -15,6 +15,7 @@ import {
   getThreadState,
   getThreadPendingInterrupt,
   getThreadStateAndInterrupt,
+  waitUntilPaused,
 } from './agent-rest';
 
 describe('agent-rest', () => {
@@ -223,6 +224,89 @@ describe('agent-rest', () => {
       expect((msgs[0] as any).tool_calls[0].status).toBe(status);
     });
 
+    it('keeps think tags inside a tool result', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            values: {
+              messages: [
+                {
+                  type: 'ai',
+                  content: '',
+                  tool_calls: [{ id: 'tc1', name: 'search', args: {} }],
+                },
+                {
+                  type: 'tool',
+                  content: 'result <think>hidden</think> tail',
+                  tool_call_id: 'tc1',
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const msgs = await getThreadState('t1');
+      expect((msgs[0] as any).tool_calls[0].content).toBe('result <think>hidden</think> tail');
+    });
+
+    it('keeps a saved thought after reload and leaves it out of the answer', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            values: {
+              messages: [{
+                type: 'ai',
+                content: [
+                  { type: 'thinking', thinking: 'secret chain of thought', signature: 'sig' },
+                  { type: 'text', text: 'The answer' },
+                ],
+              }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const msgs = await getThreadState('t1');
+      expect(msgs[0].content).toBe('The answer');
+      expect((msgs[0] as { thinking?: string }).thinking).toBe('secret chain of thought');
+    });
+
+    it('keeps a raw-string list, including text after a think tag', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            values: {
+              messages: [{ type: 'human', content: ['result <think>hidden</think> tail'] }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const msgs = await getThreadState('t1');
+      expect(msgs[0].content).toBe('result <think>hidden</think> tail');
+    });
+
+    it('does not strip a think tag out of a human message', async () => {
+      vi.mocked(authenticatedFetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            values: {
+              messages: [{ type: 'human', content: 'hello <think>rest' }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const msgs = await getThreadState('t1');
+      expect(msgs[0].content).toBe('hello <think>rest');
+      expect((msgs[0] as { thinking?: string }).thinking).toBeUndefined();
+    });
+
     it('normalizes object content to JSON string', async () => {
       vi.mocked(authenticatedFetch).mockResolvedValue(
         new Response(
@@ -404,5 +488,73 @@ describe('pending interrupt collection', () => {
     const state = await getThreadStateAndInterrupt('multiple');
     expect(state.interrupts).toEqual([a,b]);
     expect(state.interrupt).toEqual(a);
+  });
+});
+
+describe('waitUntilPaused', () => {
+  it('keeps looking until the thread is interrupted', async () => {
+    vi.useFakeTimers();
+    const read = vi.fn()
+      .mockResolvedValueOnce('busy')
+      .mockResolvedValueOnce('interrupted');
+    const pending = waitUntilPaused(read);
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(pending).resolves.toBe(true);
+    expect(read).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it('waits until the previous step is gone', async () => {
+    vi.useFakeTimers();
+    const read = vi.fn().mockResolvedValue('interrupted');
+    const active = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const pending = waitUntilPaused(read, () => false, active);
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(pending).resolves.toBe(true);
+    expect(active).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it('keeps waiting when the run lookup fails', async () => {
+    vi.useFakeTimers();
+    const read = vi.fn().mockResolvedValue('interrupted');
+    const active = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(false);
+    const pending = waitUntilPaused(read, () => false, active);
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(pending).resolves.toBe(true);
+    expect(active).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it('keeps looking when the thread status and runs cannot be read', async () => {
+    vi.useFakeTimers();
+    const read = vi.fn().mockResolvedValue(null);
+    const pending = waitUntilPaused(read, () => false, async () => null);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(pending).resolves.toBe(false);
+    expect(read).toHaveBeenCalledTimes(30);
+    vi.useRealTimers();
+  });
+
+  it('treats an error thread with no active run as paused', async () => {
+    const read = vi.fn().mockResolvedValue('error');
+    await expect(waitUntilPaused(read, () => false, async () => false)).resolves.toBe(true);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps waiting when an error thread still has an active run', async () => {
+    vi.useFakeTimers();
+    const read = vi.fn().mockResolvedValue('error');
+    const pending = waitUntilPaused(read, () => false, async () => true);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(pending).resolves.toBe(false);
+    expect(read).toHaveBeenCalledTimes(30);
+    vi.useRealTimers();
+  });
+
+  it('stops when the page has moved on', async () => {
+    const read = vi.fn().mockResolvedValue('busy');
+    await expect(waitUntilPaused(read, () => true)).resolves.toBe(false);
+    expect(read).not.toHaveBeenCalled();
   });
 });

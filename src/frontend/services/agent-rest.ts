@@ -3,6 +3,7 @@ import { authenticatedFetch } from "./authenticated-fetch";
 import { buildAgentApiUrl } from "../lib/app-paths";
 import type { InterruptInfo } from "../types/deep-agent";
 import { withMcpAppArguments } from "../types/mcp-apps";
+import { splitMessageParts } from "../../server/message-parts";
 
 export interface Thread {
   id: string;
@@ -50,28 +51,33 @@ function deduplicateEcho(text: string): string {
  * When mixed structured + raw-string blocks are detected (supervisor echo
  * pattern), applies deduplication.
  */
+function dedupeAnswer(content: unknown, answer: string): string {
+  if (!Array.isArray(content)) return answer;
+  const hasStructured = content.some((b: any) => b?.type === 'text' && b?.thought !== true);
+  const hasRaw = content.some((b: any) => typeof b === 'string');
+  return hasStructured && hasRaw ? deduplicateEcho(answer) : answer;
+}
+
 function normalizeContent(content: unknown): string {
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    const hasStructured = content.some((b: any) => b?.type === 'text');
-    const hasRaw = content.some((b: any) => typeof b === 'string');
-    const joined = content
-      .map((b: any) => {
-        if (typeof b === 'string') return b;
-        if (b?.type === 'text' && typeof b.text === 'string') return b.text;
-        return '';
-      })
-      .join('');
-    return hasStructured && hasRaw ? deduplicateEcho(joined) : joined;
-  }
-  return typeof content === 'object' ? JSON.stringify(content) : String(content ?? '');
+  if (!Array.isArray(content)) return dedupeAnswer(content, splitMessageParts({ content }).answer);
+  const text = content.map((block: unknown) => (
+    typeof block === 'string' ? block : splitMessageParts({ content: [block] }).answer
+  )).join('');
+  return dedupeAnswer(content, text);
 }
 
 function normalizeMessages(messages: any[]): Message[] {
-  return messages.map((m) => ({
-    ...m,
-    content: normalizeContent(m.content),
-  }));
+  return messages.map((m) => {
+    const isAi = String(m?.type ?? '').toLowerCase() === 'ai';
+    if (!isAi) {
+      return { ...m, content: normalizeContent(m?.content) };
+    }
+    const { thinking, answer } = splitMessageParts(m);
+    const next = { ...m, content: dedupeAnswer(m?.content, answer) } as Message & { thinking?: string };
+    if (thinking) next.thinking = thinking;
+    return next;
+  });
 }
 
 function extractMcpAppFromToolMessage(
@@ -244,6 +250,54 @@ async function fetchThreadStateRaw(threadId: string, fresh = false): Promise<Rec
     }
     return null;  // Network errors still return null
   }
+}
+
+export async function getThreadStatus(threadId: string): Promise<string | null> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/threads/${threadId}`), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return null;
+    const body = await resp.json() as { status?: unknown };
+    return typeof body.status === 'string' ? body.status : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A step the agent still counts as running.
+ * null means the list was read and nothing is running.
+ * undefined means the lookup failed, so the caller must not treat the thread as quiet.
+ */
+export async function getActiveRun(threadId: string): Promise<{ run_id: string } | null | undefined> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/threads/${threadId}/runs?limit=10`), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return undefined;
+    const runs = await resp.json() as Array<{ run_id?: string; status?: string }>;
+    const active = runs.find((run) => run.status === 'pending' || run.status === 'running');
+    return active?.run_id ? { run_id: active.run_id } : null;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The approval can show up before the thread is saved as paused. Look for about 15 seconds. */
+export async function waitUntilPaused(
+  readStatus: () => Promise<string | null>,
+  shouldStop: () => boolean = () => false,
+  hasActiveRun: () => Promise<boolean | null> = async () => false,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (shouldStop()) return false;
+    const status = await readStatus();
+    const active = await hasActiveRun();
+    if ((status === 'interrupted' || status === 'error') && active === false) return true;
+    if (attempt < 29) await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return false;
 }
 
 export async function getThreadState(threadId: string): Promise<Message[]> {

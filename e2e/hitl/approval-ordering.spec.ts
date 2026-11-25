@@ -113,13 +113,14 @@ test('a delayed refresh cannot restore consumed approvals or old messages', asyn
   await page.getByRole('button', { name: 'Refresh approvals', exact: true }).click();
   await expect.poll(() => refreshing).toBe(true);
   await card.getByRole('button', { name: /^Approve/ }).click();
-  await expect(page.getByText('Fresh completed response', { exact: true })).toBeVisible();
+  const answer = page.getByRole('log', { name: 'Chat messages' }).getByText('Fresh completed response', { exact: true });
+  await expect(answer).toBeVisible();
   const refreshed = page.waitForResponse(response => response.url().includes('/state'));
   releaseRefresh();
   await refreshed;
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await expect(card).toHaveCount(0);
-  await expect(page.getByText('Fresh completed response', { exact: true })).toBeVisible();
+  await expect(answer).toBeVisible();
   await expect(page.getByText('stale snapshot', { exact: true })).not.toBeVisible();
 });
 

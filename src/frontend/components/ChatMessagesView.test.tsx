@@ -263,8 +263,13 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     expect(screen.getByRole('button', { name: /^Approve/ })).toBeDisabled();
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     rerender(<Provider store={store}><ChatMessagesView {...props} isResuming /></Provider>);
-    expect(screen.getByText(message)).toBeVisible();
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Approve/ })).toBeDisabled();
+    const current = { id: 'current', resumable: true, value: {
+      action_requests: [{ name: 'read_file', args: { file_path: '/tmp/current.txt' } }], review_configs: [],
+    } };
+    rerender(<Provider store={store}><ChatMessagesView {...props} pendingInterrupts={[current, interrupt]} isResuming resumingInterruptId="current" /></Provider>);
+    expect(screen.getByText(message)).toBeVisible();
     rerender(<Provider store={store}><ChatMessagesView {...props} isApprovalBusy={false} /></Provider>);
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Approve/ })).toBeEnabled();
@@ -282,5 +287,53 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     rerender(<Provider store={store}><ChatMessagesView {...props} isApprovalBusy={false}/></Provider>);
     screen.getAllByRole('button',{name:/^Approve/}).forEach(button=>fireEvent.click(button));
     expect(onResume).toHaveBeenCalledWith([{type:'approve'},{type:'approve'}],'a');
+  });
+});
+
+describe('ChatMessagesView — clarifying question placement', () => {
+  const question = <div>Which month?</div>;
+  const runningSubagent = {
+    id: 'call-flights',
+    name: 'task',
+    args: { subagent_type: 'analyst', description: 'Find flights' },
+  };
+
+  it('shows the question when the running subagent is on a later assistant message', () => {
+    const store = makeStore();
+    render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({
+            interruptContent: question,
+            messages: [
+              HUMAN_MESSAGE,
+              { type: 'ai', id: 'ai-1', content: 'Looking now.' },
+              { type: 'ai', id: 'ai-2', content: '', tool_calls: [runningSubagent] },
+            ],
+          })}
+        />
+      </Provider>,
+    );
+
+    expect(screen.getByText('Which month?')).toBeInTheDocument();
+  });
+
+  it('shows the question when the running subagent is on the rendered assistant message', () => {
+    const store = makeStore();
+    render(
+      <Provider store={store}>
+        <ChatMessagesView
+          {...makeBaseProps({
+            interruptContent: question,
+            messages: [
+              HUMAN_MESSAGE,
+              { type: 'ai', id: 'ai-1', content: '', tool_calls: [runningSubagent] },
+            ],
+          })}
+        />
+      </Provider>,
+    );
+
+    expect(screen.getByText('Which month?')).toBeInTheDocument();
   });
 });

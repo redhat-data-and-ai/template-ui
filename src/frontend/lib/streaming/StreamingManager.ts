@@ -40,7 +40,7 @@ export type StreamMetadataPayload = {
 };
 
 export type StreamCallback = {
-  onToken: (content: string, messageId?: string) => void;
+  onToken: (content: string, messageId?: string, part?: 'thinking' | 'text') => void;
   onDraftDiscard?: () => void;
   onMessage: (message: Message) => void;
   onInterrupt: (interrupt: InterruptPayload) => void;
@@ -128,7 +128,11 @@ export class StreamingManager {
           this.processedChunkIds.add(chunkId);
 
           if (event.data.type === 'token') {
-            callbacks.onToken(event.data.content, event.data.message_id);
+            if (event.data.part) {
+              callbacks.onToken(event.data.content, event.data.message_id, event.data.part);
+            } else {
+              callbacks.onToken(event.data.content, event.data.message_id);
+            }
           } else if (event.data.type === 'draft_discard') {
             callbacks.onDraftDiscard?.();
           } else if (event.data.type === 'interrupt') {
@@ -151,8 +155,9 @@ export class StreamingManager {
     this.processedChunkIds.clear();
     this.streamError = null;
 
-    this.abortController = new AbortController();
-    const signal = this.abortController.signal;
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
 
     this.setStatus('connecting');
     callbacks.onStatusChange('connecting');
@@ -267,8 +272,10 @@ export class StreamingManager {
       }
 
       if (err.name === 'AbortError') {
-        this.setStatus('cancelled');
-        callbacks.onStatusChange('cancelled');
+        if (this.abortController === controller || this.abortController === null) {
+          this.setStatus('cancelled');
+          callbacks.onStatusChange('cancelled');
+        }
       } else {
         this.setStatus('error');
         callbacks.onStatusChange('error');
@@ -276,7 +283,7 @@ export class StreamingManager {
       }
     } finally {
       reader?.releaseLock?.();
-      this.abortController = null;
+      if (this.abortController === controller) this.abortController = null;
     }
   }
 

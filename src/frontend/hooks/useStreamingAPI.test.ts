@@ -677,6 +677,53 @@ describe('interrupt resume safety', () => {
     expect(spy).toHaveBeenCalledTimes(1); unmount();
   });
 
+  it('reloads approvals when a resume is cancelled before any new interrupt', async () => {
+    const {result, unmount} = setup();
+    const kept = [approval('a'), approval('b')];
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockResolvedValue({messages:[], interrupt: kept[0], interrupts: kept});
+    const manager = getStreamingManager(THREAD_ID);
+    vi.spyOn(manager, 'stream').mockResolvedValue(undefined);
+    vi.spyOn(manager, 'getStatus').mockReturnValue('cancelled');
+    await act(async () => {
+      await expect(result.current.resumeWithDecisions([{type:'approve'}], 'a')).rejects.toThrow('Approval submission was interrupted');
+    });
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['a', 'b']);
+    unmount();
+  });
+
+  it('keeps a new interrupt when the resume is cancelled after it arrives', async () => {
+    const {result, unmount} = setup();
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockRejectedValue(new Error('should not refresh'));
+    const manager = getStreamingManager(THREAD_ID);
+    vi.spyOn(manager, 'stream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onInterrupt(approval('new'));
+    });
+    vi.spyOn(manager, 'getStatus').mockReturnValue('cancelled');
+    await act(async () => {
+      await result.current.resumeWithDecisions([{type:'approve'}], 'a');
+    });
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['b', 'new']);
+    unmount();
+  });
+
+  it('merges a checkpoint interrupt the cancelled resume did not deliver', async () => {
+    const {result, unmount} = setup();
+    const extra = approval('extra');
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockResolvedValue({
+      messages: [], interrupt: extra, interrupts: [approval('b'), approval('new'), extra],
+    });
+    const manager = getStreamingManager(THREAD_ID);
+    vi.spyOn(manager, 'stream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onInterrupt(approval('new'));
+    });
+    vi.spyOn(manager, 'getStatus').mockReturnValue('cancelled');
+    await act(async () => {
+      await result.current.resumeWithDecisions([{type:'approve'}], 'a');
+    });
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['b', 'new', 'extra']);
+    unmount();
+  });
+
   it('requires a successful state refresh after an uncertain outcome', async () => {
     const {result, unmount} = setup();
     const refresh = vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockRejectedValue(new Error('offline'));
@@ -738,9 +785,24 @@ describe('interrupt resume safety', () => {
       await refresh;
     });
     expect(result.current.messages).toEqual(currentMessages);
-    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['a','b']);
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
     await act(async()=>{finishResume();await resume;});
     expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    unmount();
+  });
+
+  it('ignores a replay of the interrupt that was just answered', async () => {
+    const {result, unmount} = setup();
+    const manager = getStreamingManager(THREAD_ID);
+    const cancel = vi.spyOn(manager, 'cancel');
+    vi.spyOn(manager, 'stream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onInterrupt(approval('a'));
+    });
+    await act(async () => {
+      await result.current.resumeWithDecisions([{type:'approve'}], 'a');
+    });
+    expect(cancel).not.toHaveBeenCalled();
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['b']);
     unmount();
   });
 

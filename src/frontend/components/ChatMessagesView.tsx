@@ -1,19 +1,18 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Bot, User } from "lucide-react";
 import type { InterruptInfo, ApprovalSubmission } from "../types/deep-agent";
 import { ToolApprovalControls } from "./ToolApprovalControls";
 import { bindToolApprovals, useInterruptApprovals } from "../hooks/useInterruptApprovals";
 import type { ToolApproval } from "../hooks/useInterruptApprovals";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, Fragment, cloneElement, isValidElement } from "react";
 import { cn } from "../lib/utils";
 import {
   Dropdown,
   DropdownItem,
   DropdownList,
-  ExpandableSection,
   Label,
   MenuToggle,
   type MenuToggleElement,
@@ -34,6 +33,30 @@ import { TodoStrip } from "./TodoStrip";
 import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButtons";
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
+import { splitMessageParts } from "../../server/message-parts";
+
+function isRunningToolCall(toolCall: { content?: unknown }): boolean {
+  if (toolCall.content == null) return true;
+  if (typeof toolCall.content === 'string') return toolCall.content.trim().length === 0;
+  return false;
+}
+
+function embedQuestion(node: ReactNode): ReactNode {
+  if (!isValidElement(node)) return node;
+  return cloneElement(node as React.ReactElement<{ embedded?: boolean }>, { embedded: true });
+}
+
+function answeredClarify(toolCall: { name?: string; args?: unknown; content?: unknown }): { question: string; answer: string } | null {
+  if (toolCall.name !== 'clarify') return null;
+  const args = toolCall.args;
+  const question = args && typeof args === 'object' && !Array.isArray(args)
+    && typeof (args as { question?: unknown }).question === 'string'
+    ? (args as { question: string }).question.trim()
+    : '';
+  const answer = typeof toolCall.content === 'string' ? toolCall.content.trim() : '';
+  if (!answer) return null;
+  return { question, answer };
+}
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -459,82 +482,290 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
   );
 };
 
-interface AiMessageBubbleProps {
-  message: Message;
+function currentTurnMessages(messages: Message[]): Message[] {
+  let start = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].type === 'human') {
+      start = i + 1;
+      break;
+    }
+  }
+  return messages.slice(start);
 }
 
-const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
-  const { thinkingText, markdownForDisplay } = partitionMessageContent(message.content);
-  const [thinkingExpanded, setThinkingExpanded] = useState(false);
-  const customRaw = (message as Record<string, unknown>).custom_data;
-  const customData =
-    customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
-      ? (customRaw as Record<string, unknown>)
-      : null;
-  const bodyMd =
-    markdownForDisplay.length > 0
-      ? markdownForDisplay
-      : thinkingText.length > 0
-        ? ''
-        : extractMessageText(message.content);
+function visibleToolCalls(message: Message): Array<{ id?: string; name: string; content?: unknown; status?: string }> {
+  const calls = (message as { tool_calls?: Array<{ id?: string; name?: string; content?: unknown; status?: string }> }).tool_calls;
+  if (!Array.isArray(calls)) return [];
+  return calls.filter((tc): tc is { id?: string; name: string; content?: unknown; status?: string } =>
+    typeof tc?.name === 'string' && tc.name.length > 0 && tc.name !== 'write_todos');
+}
+
+/** Status under the transcript for the question being answered now. */
+function CurrentTurnStatus({ messages }: { messages: Message[] }) {
+  const turn = currentTurnMessages(messages);
+  const stepsByKey = new Map<string, { key: string; label: string; status: 'done' | 'running' | 'error' }>();
+  for (const message of turn) {
+    if (message.type !== 'ai') continue;
+    visibleToolCalls(message).forEach((toolCall, index) => {
+      const running = toolCall.content == null;
+      const key = toolCall.id ?? `${message.id ?? 'tool'}-${index}`;
+      stepsByKey.set(key, {
+        key,
+        label: toolCall.name,
+        status: toolCall.status === 'error' ? 'error' : running ? 'running' : 'done',
+      });
+    });
+  }
+  const steps = [...stepsByKey.values()];
+  const anyRunning = steps.some((step) => step.status === 'running');
+  if (steps.length > 0 && !anyRunning) {
+    steps.push({ key: 'synthesizing', label: 'Synthesizing answer...', status: 'running' });
+  }
+
+  if (steps.length === 0) {
+    return (
+      <div className="flex items-start gap-3 animate-fadeIn" role="status" aria-live="polite">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+          <Bot className="w-3.5 h-3.5 text-white" />
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" aria-hidden="true" />
+          Thinking...
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-start gap-3">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
-        <Bot className="w-4 h-4 text-white" />
+    <div className="flex items-start gap-3 animate-fadeIn" role="status" aria-live="polite">
+      <div className="flex-shrink-0 w-7 h-7 mt-0.5 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+        <Bot className="w-3.5 h-3.5 text-white" />
       </div>
-      <div className="flex-1 min-w-0 max-w-[85%] sm:max-w-[80%]">
-        <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-          {thinkingText.length > 0 && (
-            <div className="mb-3">
-              <ExpandableSection
-                toggleText="Thinking..."
-                isExpanded={thinkingExpanded}
-                onToggle={(_e, expanded) => setThinkingExpanded(expanded)}
-                isIndented
-                className="pf-v6-u-mb-0"
-              >
-                <div className="mt-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
-                  {thinkingText}
-                </div>
-              </ExpandableSection>
+      <div className="flex-1 min-w-0 py-1">
+        <div className="space-y-1.5">
+          {steps.map((step) => (
+            <div key={step.key} className="flex items-center gap-2 text-xs">
+              {step.status === 'error' ? (
+                <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" aria-hidden="true" />
+              ) : step.status === 'done' ? (
+                <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" aria-hidden="true" />
+              ) : (
+                <Loader2 className="w-3.5 h-3.5 text-primary animate-spin flex-shrink-0" aria-hidden="true" />
+              )}
+              <span className={step.status === 'done' ? 'text-muted-foreground/60' : 'text-foreground/80 font-medium'}>
+                {step.label}
+              </span>
             </div>
-          )}
-          {bodyMd.length > 0 && (
-            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
-            </div>
-          )}
-          {customData && <CustomDataRenderer data={customData} />}
+          ))}
         </div>
       </div>
     </div>
   );
-};
+}
+
+export interface TurnToolCall {
+  id?: string;
+  name: string;
+  args?: Record<string, unknown>;
+  content?: unknown;
+  status?: string;
+  mcpApp?: unknown;
+}
+
+export type TurnThoughtItem =
+  | { kind: 'thinking'; text: string }
+  | { kind: 'tools'; tools: TurnToolCall[] };
+
+export type TurnSegment =
+  | { type: 'thought'; items: TurnThoughtItem[] }
+  | { type: 'stream'; text: string };
+
+function messagePieces(message: Message): Array<
+  | { kind: 'thinking'; text: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'tools'; tools: TurnToolCall[] }
+> {
+  const stored = (message as { thinking?: unknown }).thinking;
+  const parts = splitMessageParts(message);
+  const thinking = typeof stored === 'string' && stored.length > 0 ? stored : parts.thinking;
+  const pieces: Array<
+    | { kind: 'thinking'; text: string }
+    | { kind: 'text'; text: string }
+    | { kind: 'tools'; tools: TurnToolCall[] }
+  > = [];
+  if (thinking.trim()) pieces.push({ kind: 'thinking', text: thinking });
+  if (parts.answer.trim()) pieces.push({ kind: 'text', text: parts.answer });
+  const calls = (message as { tool_calls?: TurnToolCall[] }).tool_calls;
+  const tools = Array.isArray(calls)
+    ? calls.filter((tc) => tc && tc.name !== 'write_todos' && !(tc.name === 'clarify' && !answeredClarify(tc)))
+    : [];
+  if (tools.length > 0) pieces.push({ kind: 'tools', tools });
+  return pieces;
+}
+
+/** Sentence stays outside. Later thoughts and tool calls stay in one block, in arrival order. */
+export function buildTurnSegments(messages: Message[]): TurnSegment[] {
+  const pieces: Array<
+    | { kind: 'thinking'; text: string }
+    | { kind: 'text'; text: string }
+    | { kind: 'tools'; tools: TurnToolCall[] }
+  > = [];
+  const toolListById = new Map<string, TurnToolCall[]>();
+  const toolIndexById = new Map<string, number>();
+  for (const message of messages) {
+    if (message.type !== 'ai') continue;
+    for (const piece of messagePieces(message)) {
+      if (piece.kind !== 'tools') {
+        pieces.push(piece);
+        continue;
+      }
+      const tools: TurnToolCall[] = [];
+      for (const tool of piece.tools) {
+        if (!tool.id) {
+          tools.push(tool);
+          continue;
+        }
+        const previous = toolListById.get(tool.id);
+        if (previous) {
+          previous[toolIndexById.get(tool.id) ?? 0] = tool;
+          continue;
+        }
+        toolListById.set(tool.id, tools);
+        toolIndexById.set(tool.id, tools.length);
+        tools.push(tool);
+      }
+      if (tools.length > 0) pieces.push({ kind: 'tools', tools });
+    }
+  }
+  const segments: TurnSegment[] = [];
+  let pending: TurnThoughtItem[] | null = null;
+  const flush = () => {
+    if (pending && pending.length > 0) segments.push({ type: 'thought', items: pending });
+    pending = null;
+  };
+  for (const piece of pieces) {
+    if (piece.kind === 'text') {
+      flush();
+      segments.push({ type: 'stream', text: piece.text });
+      continue;
+    }
+    if (!pending) pending = [];
+    if (piece.kind === 'thinking') pending.push({ kind: 'thinking', text: piece.text });
+    else pending.push({ kind: 'tools', tools: piece.tools });
+  }
+  flush();
+  return segments;
+}
+
+function ThoughtProcess({
+  live,
+  active,
+  forceOpen,
+  toolCount,
+  thought,
+  children,
+}: {
+  live: boolean;
+  /** True while this thought is still the end of the reply. An answer after it closes the block. */
+  active: boolean;
+  /** A tool with no result, or an approval waiting, keeps the block open. */
+  forceOpen: boolean;
+  toolCount: number;
+  thought?: string;
+  children?: ReactNode;
+}) {
+  const [choice, setChoice] = useState<boolean | null>(null);
+  const open = forceOpen || (choice ?? active);
+  const liveLabel = live && open && active;
+  if (!thought && toolCount === 0 && !children) return null;
+  return (
+    <div className="flex items-start gap-3">
+      <div className="w-8 shrink-0">
+        <div className="w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+          <Bot className="w-4 h-4 text-white" />
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 px-1 py-1 text-left text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+          aria-expanded={open}
+          onClick={() => {
+            if (forceOpen) return;
+            setChoice(!open);
+          }}
+        >
+          {open
+            ? <ChevronDown className="w-3 h-3 shrink-0" aria-hidden="true" />
+            : <ChevronRight className="w-3 h-3 shrink-0" aria-hidden="true" />}
+          <span className={cn('text-xs', liveLabel ? 'animate-pulse' : 'italic')}>
+            {liveLabel ? 'Thinking...' : 'Thought process'}
+            {!liveLabel && toolCount > 0 && (
+              <span className="text-muted-foreground/40 ml-1">
+                · {toolCount} tool call{toolCount === 1 ? '' : 's'}
+              </span>
+            )}
+          </span>
+        </button>
+        <div className={cn('ml-1 pl-3 border-l-2 border-muted-foreground/15 space-y-2', !open && 'hidden')}>
+          {thought ? (
+            <div className="text-[13px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{thought}</ReactMarkdown>
+            </div>
+          ) : null}
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function toolCardId(messageId: string, segmentIndex: number, itemIndex: number, toolIndex: number, toolId?: string) {
+  return toolId ?? `${messageId}-${segmentIndex}-${itemIndex}-${toolIndex}`;
+}
+
+function toolQueryHint(tool: TurnToolCall): string | null {
+  const query = tool.args?.query;
+  if (typeof query !== 'string' || query.trim().length === 0) return null;
+  const trimmed = query.trim();
+  return trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
+}
 
 interface AIMessageRendererProps {
   message: Message;
+  /** Every AI message in this reply. One thought holds them until the answer. */
+  turn?: Message[];
   approvalBindings?: Map<string, ToolApproval>;
+  thinkingLive?: boolean;
+  questionContent?: ReactNode;
 }
 
-export function AIMessageRenderer({ message, approvalBindings }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLive = false, questionContent }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
   const userCollapsed = useRef(new Set<string>());
   const userExpanded = useRef(new Set<string>());
   useEffect(() => {
-    const regular = message.type === 'ai' && Array.isArray(message.tool_calls)
-      ? message.tool_calls.filter(call => !isSubAgentToolCall(call) && call.name !== 'write_todos') : [];
+    const source = turn && turn.length > 0 ? turn : [message];
+    const messageId = message.id ?? '';
     setExpandedItems(previous => {
       const next = new Set(previous);
-      regular.forEach((call, index) => {
-        const key = `${message.id}-${index}`;
-        if (call.id && approvalBindings?.has(call.id) && !userCollapsed.current.has(key)) next.add(key);
-        if ((call as { content?: unknown }).content != null && !userExpanded.current.has(key)) next.delete(key);
+      buildTurnSegments(source).forEach((segment, segmentIndex) => {
+        if (segment.type !== 'thought') return;
+        segment.items.forEach((item, itemIndex) => {
+          if (item.kind !== 'tools') return;
+          item.tools.forEach((call, toolIndex) => {
+            if (isSubAgentToolCall(call) || call.name === 'write_todos') return;
+            const key = toolCardId(messageId, segmentIndex, itemIndex, toolIndex, call.id);
+            if (call.id && approvalBindings?.has(call.id) && !userCollapsed.current.has(key)) next.add(key);
+            if (call.content != null && !userExpanded.current.has(key)) next.delete(key);
+            if (parseMcpApp(call.mcpApp) && !userCollapsed.current.has(key)) next.add(key);
+          });
+        });
       });
       return next.size === previous.size && [...next].every(key => previous.has(key)) ? previous : next;
     });
-  }, [messageKey, message, approvalBindings]);
+  }, [messageKey, message, turn, approvalBindings]);
 
   const toggleExpand = (itemId: string) => {
     setExpandedItems(prev => {
@@ -553,150 +784,197 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
   };
 
   const renderMessage = useMemo(() => {
-    const isToolCallStart = message.type === 'ai' && Array.isArray(message?.tool_calls) && message?.tool_calls?.length > 0;
-    const isNormalMessage = message.type === 'ai' && (!Array.isArray(message?.tool_calls) || message?.tool_calls?.length === 0);
+    const source = turn && turn.length > 0 ? turn : [message];
+    const segments = buildTurnSegments(source);
+    let lastThinkingKey = '';
+    segments.forEach((segment, segmentIndex) => {
+      if (segment.type !== 'thought') return;
+      segment.items.forEach((item, itemIndex) => {
+        if (item.kind === 'thinking') lastThinkingKey = `${segmentIndex}-${itemIndex}`;
+      });
+    });
 
-    const customRaw = (message as Record<string, unknown>).custom_data;
-    const customData =
-      customRaw != null && typeof customRaw === 'object' && !Array.isArray(customRaw)
-        ? (customRaw as Record<string, unknown>)
-        : null;
+    const customBlocks = source.flatMap((item) => {
+      const raw = (item as { custom_data?: unknown }).custom_data;
+      return raw != null && typeof raw === 'object' && !Array.isArray(raw)
+        ? [raw as Record<string, unknown>]
+        : [];
+    });
 
-    if (isToolCallStart) {
-      const subAgentCalls = message.tool_calls?.filter((tc) => isSubAgentToolCall(tc)) ?? [];
-      const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
+    let runningSubagentKey: string | null = null;
+    segments.forEach((segment, segmentIndex) => {
+      if (segment.type !== 'thought') return;
+      segment.items.forEach((item, itemIndex) => {
+        if (item.kind !== 'tools') return;
+        item.tools.forEach((tool, toolIndex) => {
+          if (!isSubAgentToolCall(tool) || !isRunningToolCall(tool)) return;
+          runningSubagentKey = `${segmentIndex}-${itemIndex}-${toolIndex}`;
+        });
+      });
+    });
 
-      return (
-        <div className="space-y-2 w-full" aria-live="off">
-          {subAgentCalls.map((toolCall, idx) => {
+    return (
+      <div className="space-y-2 w-full" aria-live="off">
+        {segments.map((segment, index) => {
+          if (segment.type === 'stream') {
+            const firstAnswer = segments.findIndex((item) => item.type === 'stream') === index;
+            const hasThought = segments.some((item) => item.type === 'thought');
             return (
-              <SubAgentIndicator
-                key={`${message.id}-sa-${idx}`}
-                toolCall={toolCall as any}
-                messageId={message.id ?? ''}
-                index={idx}
-                approval={toolCall.id ? approvalBindings?.get(toolCall.id) : undefined}
-              />
-            );
-          })}
-
-          {regularCalls.length > 0 && (
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
-                <Settings className="w-4 h-4 text-muted-foreground" />
+              <div key={`answer-${index}`} className="flex items-start gap-3">
+                <div className="w-8 shrink-0">
+                  {firstAnswer && !hasThought && (
+                    <div className="w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
+                      <Bot className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                </div>
+                <div className="ai-response-body flex-1 min-w-0">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{segment.text}</ReactMarkdown>
+                </div>
               </div>
-              <div className="flex-1 min-w-0 space-y-2">
-                {regularCalls.map((toolCall, idx) => {
-                  const itemId = `${message.id}-${idx}`;
+            );
+          }
+          return (
+            <Fragment key={`thought-${index}`}>
+          {segment.items.map((item, itemIndex) => {
+            if (item.kind === 'thinking') {
+              return (
+                <ThoughtProcess
+                  key={`think-${itemIndex}`}
+                  live={thinkingLive && lastThinkingKey === `${index}-${itemIndex}`}
+                  active={thinkingLive && lastThinkingKey === `${index}-${itemIndex}`}
+                  forceOpen={false}
+                  toolCount={0}
+                >
+                  <div className="text-[13px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.text}</ReactMarkdown>
+                  </div>
+                </ThoughtProcess>
+              );
+            }
+            return (
+              <div key={`tools-${itemIndex}`} className="space-y-2">
+                {item.tools.map((toolCall, idx) => {
+                  if (isSubAgentToolCall(toolCall)) {
+                    const key = `${index}-${itemIndex}-${idx}`;
+                    return (
+                      <SubAgentIndicator
+                        key={`${message.id}-sa-${itemIndex}-${idx}`}
+                        toolCall={toolCall as any}
+                        messageId={message.id ?? ''}
+                        index={idx}
+                        approval={toolCall.id ? approvalBindings?.get(toolCall.id) : undefined}
+                        question={questionContent && key === runningSubagentKey ? embedQuestion(questionContent) : undefined}
+                      />
+                    );
+                  }
+                  const exchange = answeredClarify(toolCall);
+                  if (exchange) {
+                    return (
+                      <div key={`${index}-ask-${idx}`} className="bg-card border border-border rounded-xl px-4 py-3 text-sm" role="group" aria-label="Answered question">
+                        {exchange.question && <p className="font-medium text-foreground">{exchange.question}</p>}
+                        <p className={exchange.question ? 'mt-1 text-muted-foreground' : 'text-muted-foreground'}>{exchange.answer}</p>
+                      </div>
+                    );
+                  }
+                  if (toolCall.name === 'write_todos') return null;
+                  const itemId = toolCardId(message.id ?? '', index, itemIndex, idx, toolCall.id);
                   const isExpanded = expandedItems.has(itemId);
                   const approval = toolCall.id ? approvalBindings?.get(toolCall.id) : undefined;
                   const needsApproval = Boolean(approval && !approval.decision);
-                  const mcpAppDesc = parseMcpApp((toolCall as Record<string, unknown>).mcpApp);
+                  const mcpAppDesc = parseMcpApp(toolCall.mcpApp);
                   const hasMcpApp = Boolean(mcpAppDesc);
                   // Keep the tool body mounted when an MCP App is present so collapse hides
                   // the iframe instead of destroying it (host teardown runs on real unmount).
                   const keepToolBodyMounted = isExpanded || (!needsApproval && hasMcpApp);
+                  const failed = toolCall.status === 'error';
+                  const queryHint = toolQueryHint(toolCall);
 
                   return (
                     <div
                       key={itemId}
                       data-interrupt-id={approval?.interruptId}
                       data-action-index={approval?.actionIndex}
-                      className={cn("bg-card border rounded-xl overflow-hidden shadow-card transition-colors", needsApproval ? "border-yellow-500/60" : "border-border")}
+                      className={cn(
+                        "border rounded-lg overflow-hidden bg-card/50",
+                        needsApproval ? "border-yellow-500/60" : "border-border/40",
+                      )}
                     >
                       <button
+                        type="button"
                         onClick={() => toggleExpand(itemId)}
                         aria-expanded={isExpanded}
                         aria-controls={`tool-body-${itemId}`}
                         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} tool call: ${toolCall.name}`}
-                        className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
+                        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-muted/30 transition-colors"
                       >
-                        <div className="flex items-center gap-2.5">
-                          <div className="text-left">
-                            <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                              <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
-                              {(toolCall as Record<string, unknown>).status === 'error' ? (
-                                <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400" aria-hidden="true" />
-                              ) : (toolCall as Record<string, unknown>).content != null ? (
-                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" aria-hidden="true" />
-                              ) : (
-                                <Loader2 className="w-4 h-4 text-primary animate-spin" aria-hidden="true" />
-                              )}
-                            </div>
-                            <div className={cn(
-                              "text-xs mt-0.5",
-                              (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
-                            )}>
-                              {(toolCall as Record<string, unknown>).status === 'error'
-                                ? (typeof (toolCall as Record<string, unknown>).content === 'string'
-                                  && String((toolCall as Record<string, unknown>).content).replace(/^\[TOOL_ERROR]\s*/i, '').trim()
-                                  ? String((toolCall as Record<string, unknown>).content).replace(/^\[TOOL_ERROR]\s*/i, '').trim().slice(0, 150)
-                                  : 'Tool execution failed')
-                                : 'Tool execution'}
-                            </div>
-                          </div>
+                        <div className="flex items-center gap-2 text-xs min-w-0">
+                          {failed ? (
+                            <AlertCircle className="w-3 h-3 text-red-500 shrink-0" aria-hidden="true" />
+                          ) : toolCall.content != null ? (
+                            <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" aria-hidden="true" />
+                          )}
+                          <code className="font-mono text-[11px] bg-muted/50 px-1 py-0.5 rounded">{toolCall.name}</code>
+                          {queryHint && (
+                            <span className="text-muted-foreground/50 text-[11px] truncate">&quot;{queryHint}&quot;</span>
+                          )}
                         </div>
-                        {isExpanded ? (
-                          <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-                        )}
+                        <span className="flex items-center gap-2 shrink-0 ml-2">
+                          {hasMcpApp && !isExpanded && (
+                            <span className="text-[11px] text-muted-foreground/70">Click to open UI</span>
+                          )}
+                          {isExpanded ? (
+                            <ChevronDown className="w-3 h-3 text-muted-foreground/40 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" aria-hidden="true" />
+                          )}
+                        </span>
                       </button>
 
                       {keepToolBodyMounted && (
                         <div
                           id={`tool-body-${itemId}`}
-                          className={cn("border-t border-border", !isExpanded && "hidden")}
+                          className={cn("border-t border-border/30", !isExpanded && "hidden")}
                         >
-                          <div className="px-4 pb-3 max-h-72 overflow-y-auto">
+                          <div className="px-3 pb-2 max-h-72 overflow-y-auto">
                             {isExpanded && (
                               <>
-                                <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
-                                <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                                <div className="text-[10px] font-medium text-muted-foreground/50 mb-1 mt-2 uppercase tracking-wider">Arguments</div>
+                                <pre className="text-[11px] text-foreground/70 bg-muted/40 border border-border/30 p-2 rounded overflow-auto font-mono">
                                   {JSON.stringify(toolCall.args, null, 2)}
                                 </pre>
                               </>
                             )}
                             {!needsApproval && hasMcpApp && (
-                              <>
-                                {isExpanded && (
-                                  <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
-                                    Interactive UI
-                                  </div>
-                                )}
+                              <div className="mt-2">
                                 <McpAppHostFromToolCall
-                                  mcpAppRaw={(toolCall as Record<string, unknown>).mcpApp}
+                                  mcpAppRaw={toolCall.mcpApp}
                                   toolName={toolCall.name}
-                                  toolCancelled={
-                                    (toolCall as Record<string, unknown>).content != null &&
-                                    !mcpAppDesc?.result
-                                  }
+                                  toolCancelled={toolCall.content != null && !mcpAppDesc?.result}
                                   className="mb-2"
                                 />
-                              </>
+                              </div>
                             )}
                             {isExpanded && !needsApproval && (
                               <>
                                 <div className={cn(
-                                  "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",
-                                  (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
+                                  "text-[10px] font-medium mb-1 mt-2 uppercase tracking-wider",
+                                  failed ? "text-red-500/70" : "text-muted-foreground/50",
                                 )}>
-                                  {(toolCall as Record<string, unknown>).status === 'error'
-                                    ? 'Error'
-                                    : (toolCall as Record<string, unknown>).content != null
-                                      ? 'Result'
-                                      : 'Running...'}
+                                  {failed ? 'Error' : toolCall.content != null ? 'Result' : 'Running...'}
                                 </div>
                                 {(() => {
-                                  const raw = (toolCall as Record<string, unknown>).content;
+                                  const raw = toolCall.content;
                                   if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
-                                  const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+                                  const text = typeof raw === 'string' ? raw.slice(0, 2000) : JSON.stringify(raw, null, 2).slice(0, 2000);
                                   const kind = detectArtifactKind(text);
                                   if (kind !== 'text' && text.length > 100) {
                                     return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
                                   }
                                   return (
-                                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                                    <pre className="text-[11px] text-foreground/70 bg-muted/40 border border-border/30 p-2 rounded overflow-auto font-mono max-h-40">
                                       {text}
                                     </pre>
                                   );
@@ -711,24 +989,20 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                   );
                 })}
               </div>
-            </div>
-          )}
-          {customData && (
-            <div className="w-full mt-2">
-              <CustomDataRenderer data={customData} />
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (isNormalMessage) {
-      return <AiMessageBubble message={message} />;
-    }
-
-    return null;
+            );
+          })}
+            </Fragment>
+          );
+        })}
+        {customBlocks.map((data, blockIndex) => (
+          <div key={`custom-${blockIndex}`} className="w-full mt-2">
+            <CustomDataRenderer data={data} />
+          </div>
+        ))}
+      </div>
+    );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, expandedItems, approvalBindings]);
+  }, [messageKey, turn, expandedItems, approvalBindings, thinkingLive, questionContent]);
 
   return (
     <div className="space-y-2 w-full">
@@ -744,6 +1018,7 @@ interface ChatMessagesViewProps {
   pendingInterrupts?: InterruptInfo[];
   isApprovalBusy?: boolean;
   isResuming?: boolean;
+  resumingInterruptId?: string | null;
   onInterruptResume?: ApprovalSubmission;
   onAlwaysAllow?: (toolNames: string[]) => void;
   interruptContent?: React.ReactNode;
@@ -766,6 +1041,8 @@ interface ChatMessagesViewProps {
     timeToFirstTokenMs: number | null;
     totalDurationMs: number;
   } | null;
+  /** True only while thought tokens are arriving for this reply. */
+  thinkingLive?: boolean;
   chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onExportMarkdown?: () => void;
   onExportJson?: () => void;
@@ -775,6 +1052,7 @@ export function ChatMessagesView({
   messages,
   isLoading,
   isResuming = false,
+  resumingInterruptId = null,
   isApprovalBusy = false,
   pendingInterrupts = [],
   onInterruptResume,
@@ -794,12 +1072,15 @@ export function ChatMessagesView({
   messageFeedback = {},
   onEditMessage,
   lastResponseTiming = null,
+  thinkingLive = false,
   chatInputRef,
   onExportMarkdown,
   onExportJson,
 }: ChatMessagesViewProps) {
   const approvalsDisabled = isResuming || isApprovalBusy;
-  const approvals = useInterruptApprovals(pendingInterrupts, approvalsDisabled, onInterruptResume, onAlwaysAllow, isResuming);
+  const approvals = useInterruptApprovals(
+    pendingInterrupts, approvalsDisabled, onInterruptResume, onAlwaysAllow, isResuming, resumingInterruptId,
+  );
   const { bindings, unmatched } = bindToolApprovals(messages, approvals);
   const pendingInterrupt = pendingInterrupts[0];
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -837,6 +1118,26 @@ export function ChatMessagesView({
       if (m.type === 'ai') lastAi = i;
     });
     return { lastHumanMessageIndex: lastHuman, lastAiMessageIndex: lastAi };
+  }, [messages]);
+
+  const questionNestMessageIndex = useMemo(() => {
+    let parentAsking = false;
+    let onlyIndex = -1;
+    let runningCount = 0;
+    messages.forEach((message, index) => {
+      if (message.type !== 'ai' || !Array.isArray(message.tool_calls)) return;
+      for (const toolCall of message.tool_calls) {
+        const call = toolCall as { name?: string; args?: Record<string, unknown>; content?: unknown };
+        if (!isRunningToolCall(call)) continue;
+        if (call.name === 'clarify') parentAsking = true;
+        if (isSubAgentToolCall(call as { name: string; args?: Record<string, unknown> })) {
+          runningCount += 1;
+          onlyIndex = index;
+        }
+      }
+    });
+    if (parentAsking || runningCount !== 1) return -1;
+    return onlyIndex;
   }, [messages]);
 
   const lastMessage = messages[messages.length - 1];
@@ -906,22 +1207,27 @@ export function ChatMessagesView({
             if (message.type === 'tool') {
               return <Fragment key={message.id ?? `m-${messageIndex}`} />;
             }
-            const copyText = getCopyableAiMessageText(message.content);
+            const previousAi = message.type === 'ai' && messages.slice(0, messageIndex).some((item, index, list) => {
+              if (item.type !== 'ai') return false;
+              return !list.slice(index + 1, messageIndex).some((later) => later.type === 'human');
+            });
+            if (previousAi) {
+              return <Fragment key={message.id ?? `m-${messageIndex}`} />;
+            }
+            const nextHumanOffset = messages.slice(messageIndex + 1).findIndex((entry) => entry.type === 'human');
+            const turnEnd = nextHumanOffset === -1 ? messages.length : messageIndex + 1 + nextHumanOffset;
+            const turn = message.type === 'ai'
+              ? messages.slice(messageIndex, turnEnd).filter((item) => item.type === 'ai')
+              : [];
+            const lastTurnMessage = turn[turn.length - 1] ?? message;
+            const copyText = getCopyableAiMessageText(lastTurnMessage.content);
             const showResponseTiming =
               message.type === 'ai' &&
-              messageIndex === lastAiMessageIndex &&
+              lastTurnMessage === messages[lastAiMessageIndex] &&
               lastResponseTiming != null &&
               !isLoading;
 
-            const isLastAiInTurn =
-              message.type === 'ai' &&
-              (() => {
-                for (let i = messageIndex + 1; i < messages.length; i++) {
-                  if (messages[i].type === 'human') return true;
-                  if (messages[i].type === 'ai') return false;
-                }
-                return true;
-              })();
+            const isLastAiInTurn = message.type === 'ai';
 
             return (
             <div
@@ -943,16 +1249,23 @@ export function ChatMessagesView({
                 <div className="w-full space-y-0">
                   <AIMessageRenderer
                     message={message}
+                    turn={turn}
                     approvalBindings={bindings}
+                    thinkingLive={thinkingLive && (lastTurnMessage.id ?? '') === (messages[lastAiMessageIndex]?.id ?? '')}
+                    questionContent={
+                      questionNestMessageIndex >= messageIndex && questionNestMessageIndex < turnEnd
+                        ? interruptContent
+                        : undefined
+                    }
                   />
                   <MessageActionsRow
                     isLastAiInTurn={isLastAiInTurn}
                     copyText={copyText}
-                    messageId={message.id ?? `msg-${messageIndex}`}
+                    messageId={lastTurnMessage.id ?? `msg-${messageIndex}`}
                     chatId={chatId}
                     traceId={traceId}
                     userId={userId}
-                    existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                    existingFeedback={messageFeedback[lastTurnMessage.id ?? `msg-${messageIndex}`] ?? null}
                   />
                   {showResponseTiming && (
                     <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
@@ -972,28 +1285,7 @@ export function ChatMessagesView({
           );
           })}
 
-          {isLoading && (
-            <div
-              className="flex items-start gap-3 animate-fadeIn"
-              role="status"
-              aria-live="polite"
-              aria-label="Agent is thinking"
-            >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="flex gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-200" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-400" />
-                  </span>
-                  Thinking...
-                </div>
-              </div>
-            </div>
-          )}
+          {isLoading && <CurrentTurnStatus messages={messages} />}
 
           {showNoResponse && (
             <div className="flex items-start gap-3 animate-fadeIn">
@@ -1052,7 +1344,7 @@ export function ChatMessagesView({
             const message = { type: 'ai', id, content: '', tool_calls: [{ id, name: approval.request.name, args: approval.request.args }] } as Message;
             return <AIMessageRenderer key={approval.key} message={message} approvalBindings={new Map([[id, approval]])} />;
           })}
-          {interruptContent}
+          {questionNestMessageIndex < 0 && interruptContent}
           <div ref={bottomRef} />
         </div>
       </div>
