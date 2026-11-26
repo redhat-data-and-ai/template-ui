@@ -1058,7 +1058,7 @@ export function ChatMessagesView({
       </div>
       <TodoStrip messages={messages} isLoading={isLoading} />
       <McpStatusPanel mcpEvents={mcpEvents} />
-      <div className="bg-background/80 glass">
+      <div>
         <div className="max-w-3xl mx-auto">
           <InputForm
             ref={chatInputRef}

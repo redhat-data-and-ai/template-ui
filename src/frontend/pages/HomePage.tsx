@@ -117,10 +117,10 @@ export function HomePage() {
       </div>
 
       {/* Bottom input bar */}
-      <div className="bg-background px-6 pb-4 pt-3">
+      <div className="px-6 pb-4 pt-3">
         <div className="max-w-2xl mx-auto">
           <form onSubmit={handleSubmit} aria-label="Start a new chat">
-            <div className="relative rounded-2xl border border-[var(--app-border)] bg-card focus-within:border-[var(--app-accent-strong)] focus-within:ring-1 focus-within:ring-[var(--app-accent-strong)] transition-colors duration-200">
+            <div className="composer-box composer-box--inline relative">
               <label htmlFor="home-chat-input" className="sr-only">
                 Enter a prompt for {window.APP_DATA?.agentName || 'Agent'}
               </label>
@@ -131,7 +131,7 @@ export function HomePage() {
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
-                className="composer-input w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
+                className="composer-input w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[48px] max-h-[120px] rounded-none placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
                 style={{ boxShadow: 'none' }}
                 rows={1}
               />
@@ -139,7 +139,7 @@ export function HomePage() {
                 type="submit"
                 disabled={!inputValue.trim()}
                 aria-label="Send message"
-                className={`absolute right-2.5 bottom-2.5 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
+                className={`absolute right-3 top-1/2 -translate-y-1/2 flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
                   inputValue.trim()
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
                     : 'bg-muted text-muted-foreground cursor-not-allowed'

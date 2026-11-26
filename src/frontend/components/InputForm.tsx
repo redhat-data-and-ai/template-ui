@@ -51,9 +51,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           className="mb-1"
         />
       )}
-      <div className={`relative rounded-2xl border border-[var(--app-border)] transition-colors duration-200 focus-within:border-[var(--app-accent-strong)] focus-within:ring-1 focus-within:ring-[var(--app-accent-strong)] ${
-        isLoading ? "bg-muted/30" : "bg-card"
-      }`}>
+      <div className={`composer-box composer-box--actions relative ${isLoading ? "opacity-80" : ""}`}>
         <textarea
           ref={ref}
           autoFocus
@@ -63,7 +61,7 @@ export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(functio
           disabled={isLoading}
           placeholder={isLoading ? "Waiting for response..." : "Ask me anything about the data..."}
           aria-label="Type a message"
-          className={`composer-input w-full resize-none border-0 bg-transparent px-4 pt-3.5 pb-12 text-sm leading-relaxed min-h-[56px] max-h-[200px] rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
+          className={`composer-input w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[56px] max-h-[200px] rounded-none placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
           style={{ boxShadow: 'none' }}
           rows={1}
         />
