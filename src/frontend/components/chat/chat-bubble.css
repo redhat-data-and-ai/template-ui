@@ -188,24 +188,15 @@
   opacity: 1;
 }
 
-/* Selected feedback (aria-pressed) keeps its own active colour. */
-.chat-bubble .chat-bubble-actions button:not([aria-pressed="true"]) {
+/* Action buttons stay neutral grey. A selected rating (aria-pressed) is shown
+   by the filled thumb icon and a slightly stronger text colour only. */
+.chat-bubble .chat-bubble-actions button {
   color: var(--pf-t--global--text--color--subtle);
 }
 
-.chat-bubble .chat-bubble-actions button:not([aria-pressed="true"]):not(:disabled):hover {
-  color: var(--app-accent-strong);
-}
-
-/* Selected rating, portal colours: helpful = success, not helpful = accent.
-   Needed because global.css's unlayered `button { color: inherit }` beats
-   FeedbackButtons' Tailwind text-primary. */
-.chat-bubble .chat-bubble-actions button[aria-pressed="true"][aria-label="Rate response as helpful"] {
-  color: var(--pf-t--global--icon--color--status--success--default);
-}
-
-.chat-bubble .chat-bubble-actions button[aria-pressed="true"][aria-label="Rate response as not helpful"] {
-  color: var(--app-accent-strong);
+.chat-bubble .chat-bubble-actions button:not(:disabled):hover,
+.chat-bubble .chat-bubble-actions button[aria-pressed="true"] {
+  color: var(--pf-t--global--text--color--regular);
 }
 
 /* A rating locks both buttons (disabled); keep the chosen one at full strength. */

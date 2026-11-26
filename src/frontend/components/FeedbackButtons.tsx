@@ -132,10 +132,7 @@ export function FeedbackButtons({ fb }: { fb: FeedbackState }) {
     <>
       <button
         type="button"
-        className={cn(
-          baseBtn,
-          fb.existingFeedback === 'up' && 'text-primary bg-primary/10 hover:bg-primary/15 hover:text-primary',
-        )}
+        className={baseBtn}
         disabled={fb.disabled}
         aria-pressed={fb.existingFeedback === 'up' ? true : false}
         aria-label="Rate response as helpful"
@@ -145,10 +142,7 @@ export function FeedbackButtons({ fb }: { fb: FeedbackState }) {
       </button>
       <button
         type="button"
-        className={cn(
-          baseBtn,
-          fb.existingFeedback === 'down' && 'text-primary bg-primary/10 hover:bg-primary/15 hover:text-primary',
-        )}
+        className={baseBtn}
         disabled={fb.disabled}
         aria-pressed={fb.existingFeedback === 'down' ? true : false}
         aria-label="Rate response as not helpful"
