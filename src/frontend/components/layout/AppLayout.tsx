@@ -4,11 +4,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Page,
-  PageSidebar,
-  PageSidebarBody,
 } from '@patternfly/react-core';
 import { AppMasthead } from './AppMasthead';
-import { Sidebar } from '../Sidebar';
+import { AppSidebar } from '../sidebar/AppSidebar';
 import { KeyboardShortcutsDialog } from '../KeyboardShortcutsDialog';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { SessionExpiredModal } from '../SessionExpiredModal';
@@ -417,32 +415,29 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 
   const sidebar = (
-    <PageSidebar isSidebarOpen={!sidebarCollapsed} aria-label="Sidebar navigation" role="navigation">
-      <PageSidebarBody isFilled className="min-h-0">
-        <ErrorBoundary
-          onError={(error, errorInfo) => {
-            console.error('Sidebar error:', error, errorInfo);
-          }}
-        >
-          <Sidebar
-            currentChatId={currentChatId}
-            chatHistory={sidebarChats}
-            tokenExpiry={tokenExpiry}
-            activeSubAgent={activeSubAgent}
-            onNewChat={handleNewChat}
-            onSelectChat={handleSelectChat}
-            onDeleteChat={handleDeleteChat}
-            onRenameChat={handleRenameChat}
-            projects={sidebarProjects}
-            onCreateProject={createProject}
-            onUpdateProject={updateProject}
-            onDeleteProject={handleDeleteProject}
-            onAssignThread={assignThreadToProject}
-            onUnassignAll={handleUnassignAll}
-          />
-        </ErrorBoundary>
-      </PageSidebarBody>
-    </PageSidebar>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error('Sidebar error:', error, errorInfo);
+      }}
+    >
+      <AppSidebar
+        isOpen={!sidebarCollapsed}
+        currentChatId={currentChatId}
+        chatHistory={sidebarChats}
+        tokenExpiry={tokenExpiry}
+        activeSubAgent={activeSubAgent}
+        onNewChat={handleNewChat}
+        onSelectChat={handleSelectChat}
+        onDeleteChat={handleDeleteChat}
+        onRenameChat={handleRenameChat}
+        projects={sidebarProjects}
+        onCreateProject={createProject}
+        onUpdateProject={updateProject}
+        onDeleteProject={handleDeleteProject}
+        onAssignThread={assignThreadToProject}
+        onUnassignAll={handleUnassignAll}
+      />
+    </ErrorBoundary>
   );
 
   return (

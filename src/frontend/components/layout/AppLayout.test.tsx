@@ -67,8 +67,8 @@ vi.mock('../../lib/streaming/streamingManagerRegistry', () => ({
   releaseStreamingManager: vi.fn(),
 }));
 
-vi.mock('../Sidebar', () => ({
-  Sidebar: ({
+vi.mock('../sidebar/AppSidebar', () => ({
+  AppSidebar: ({
     onNewChat,
     onDeleteProject,
     onDeleteChat,

@@ -22,7 +22,7 @@ import { MemoryList } from '../settings/MemoryList';
 import { RulesEditor } from '../settings/RulesEditor';
 import { SubAgentIndicator } from '../SubAgentIndicator';
 import { ToolApprovalControls } from '../ToolApprovalControls';
-import { Sidebar } from '../Sidebar';
+import { AppSidebar } from '../sidebar/AppSidebar';
 
 // Mock fetch for components that call personalization API on mount.
 // Keep posted rules in memory so add → refetch does not wipe the list.
@@ -439,7 +439,7 @@ describe('Inline tool approval — accessibility', () => {
 // ---------------------------------------------------------------------------
 // Sidebar
 // ---------------------------------------------------------------------------
-describe('Sidebar — accessibility', () => {
+describe('AppSidebar — accessibility', () => {
   const defaultProps = {
     chatHistory: [],
     onNewChat: () => {},
@@ -449,13 +449,14 @@ describe('Sidebar — accessibility', () => {
   };
 
   it('passes axe audit (empty state)', async () => {
-    const { container } = renderWithProviders(<Sidebar {...defaultProps} />);
+    const { container } = renderWithProviders(<AppSidebar isOpen {...defaultProps} />);
     expect(await axe(container)).toHaveNoViolations();
   });
 
   it('chat list is a <ul> with accessible label', () => {
     renderWithProviders(
-      <Sidebar
+      <AppSidebar
+        isOpen
         {...defaultProps}
         chatHistory={[{ id: '1', title: 'Test Chat', timestamp: new Date(), preview: '' }]}
       />,
@@ -466,7 +467,8 @@ describe('Sidebar — accessibility', () => {
 
   it('chat items use <li> not role="option" (no interactive controls nesting violation)', () => {
     renderWithProviders(
-      <Sidebar
+      <AppSidebar
+        isOpen
         {...defaultProps}
         chatHistory={[{ id: '1', title: 'Test Chat', timestamp: new Date(), preview: '' }]}
       />,
@@ -478,7 +480,8 @@ describe('Sidebar — accessibility', () => {
 
   it('search input has accessible label', () => {
     renderWithProviders(
-      <Sidebar
+      <AppSidebar
+        isOpen
         {...defaultProps}
         chatHistory={[
           { id: '1', title: 'Thread One', timestamp: new Date(), preview: '' },
@@ -492,7 +495,7 @@ describe('Sidebar — accessibility', () => {
   });
 
   it('new chat button has accessible label', () => {
-    renderWithProviders(<Sidebar {...defaultProps} />);
-    expect(screen.getByRole('button', { name: /start new chat/i })).toBeInTheDocument();
+    renderWithProviders(<AppSidebar isOpen {...defaultProps} />);
+    expect(screen.getByRole('button', { name: /new chat/i })).toBeInTheDocument();
   });
 });
