@@ -376,6 +376,13 @@ input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c
   overflow-x: hidden;
   overflow-y: auto;
 }
+.app-sidebar-scroll .pf-v6-c-nav__list {
+  /* The list is a grid with an auto track: a long nowrap title would widen it past the container. */
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-sidebar-scroll .pf-v6-c-nav__item {
+  min-width: 0;
+}
 .app-sidebar-scroll .pf-v6-c-nav {
   --pf-v6-c-nav--RowGap: var(--pf-t--global--spacer--sm);
   padding-block-start: 0;
