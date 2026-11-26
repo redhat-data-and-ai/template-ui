@@ -47,7 +47,7 @@ export function AppMasthead({ isSidebarOpen, onToggleSidebar }: AppMastheadProps
     <>
       {platformName}
       {platformName && emphasis ? ' ' : null}
-      {emphasis ? <b>{emphasis}</b> : null}
+      {emphasis ? <b className="app-masthead-brand__emphasis">{emphasis}</b> : null}
     </>
   );
 
@@ -63,13 +63,13 @@ export function AppMasthead({ isSidebarOpen, onToggleSidebar }: AppMastheadProps
             onSidebarToggle={onToggleSidebar}
           />
         </MastheadToggle>
-        <MastheadBrand style={{ alignItems: 'center', minWidth: 0 }}>
-          <MastheadLogo component="div" style={{ width: 'max-content', maxWidth: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-            <Link to="/" aria-label={title} style={{ display: 'flex', alignItems: 'center', color: 'inherit', textDecoration: 'none' }}>
+        <MastheadBrand className="app-masthead-brand-wrap">
+          <MastheadLogo component="div" className="app-masthead-brand">
+            <Link to="/" aria-label={title} className="app-masthead-brand__link">
               {branding?.logo_url ? (
-                <img src={branding.logo_url} alt={title} style={{ height: '32px', width: 'auto' }} />
+                <img src={branding.logo_url} alt={title} className="app-masthead-brand__logo" />
               ) : (
-                <RedHatLogo style={{ height: '32px', width: 'auto', color: '#ee0000' }} />
+                <RedHatLogo className="app-masthead-brand__logo app-masthead-brand__logo--default" />
               )}
             </Link>
             {hasPlatform ? (
@@ -77,25 +77,19 @@ export function AppMasthead({ isSidebarOpen, onToggleSidebar }: AppMastheadProps
                 {isLinkableUrl(branding?.platform_url) ? (
                   <a
                     href={branding?.platform_url}
-                    style={{ color: 'inherit', textDecoration: 'none', whiteSpace: 'nowrap', fontWeight: 400 }}
+                    className="app-masthead-brand__platform"
                   >
                     {platformLabel}
                   </a>
                 ) : (
-                  <span style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>{platformLabel}</span>
+                  <span className="app-masthead-brand__platform">{platformLabel}</span>
                 )}
-                <Divider orientation={{ default: 'vertical' }} style={{ height: '1.5rem' }} data-testid="masthead-separator" />
+                <Divider orientation={{ default: 'vertical' }} className="app-masthead-brand__divider" data-testid="masthead-separator" />
               </>
             ) : null}
             <span
               title={title}
-              style={{
-                fontWeight: 600,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                minWidth: 0,
-              }}
+              className="app-masthead-brand__title"
             >
               {title}
             </span>
