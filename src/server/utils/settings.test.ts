@@ -280,6 +280,43 @@ branding:
     expect(settings.features.auth_enabled).toBe(false);
   });
 
+  it("should load platform branding keys and let env override them", () => {
+    const yaml = `
+branding:
+  title: "T"
+  platform_name: "YamlName"
+  platform_name_emphasis: "Hub"
+  platform_url: "https://hub.example.com"
+`;
+    writeFileSync(testConfigPath, yaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+    delete process.env.BRANDING_PLATFORM_NAME;
+    let settings = getSettings();
+    expect(settings.branding.platform_name).toBe("YamlName");
+    expect(settings.branding.platform_name_emphasis).toBe("Hub");
+    expect(settings.branding.platform_url).toBe("https://hub.example.com");
+
+    resetSettings();
+    process.env.BRANDING_PLATFORM_NAME = "Acme";
+    process.env.BRANDING_PLATFORM_NAME_EMPHASIS = "Env Hub";
+    process.env.BRANDING_PLATFORM_URL = "https://env.example.com";
+    settings = getSettings();
+    expect(settings.branding.platform_name).toBe("Acme");
+    expect(settings.branding.platform_name_emphasis).toBe("Env Hub");
+    expect(settings.branding.platform_url).toBe("https://env.example.com");
+  });
+
+  it("should reject non-string platform branding values", () => {
+    writeFileSync(testConfigPath, `
+branding:
+  title: "T"
+  platform_name: 42
+`);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+    delete process.env.BRANDING_PLATFORM_NAME;
+    expect(() => getSettings()).toThrow(/branding.platform_name must be a string/);
+  });
+
   it("should merge partial YAML with defaults", () => {
     const partialYaml = `
 branding:

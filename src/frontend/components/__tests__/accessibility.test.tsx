@@ -495,9 +495,4 @@ describe('Sidebar — accessibility', () => {
     renderWithProviders(<Sidebar {...defaultProps} />);
     expect(screen.getByRole('button', { name: /start new chat/i })).toBeInTheDocument();
   });
-
-  it('settings button has accessible label', () => {
-    renderWithProviders(<Sidebar {...defaultProps} />);
-    expect(screen.getByRole('button', { name: /open settings/i })).toBeInTheDocument();
-  });
 });

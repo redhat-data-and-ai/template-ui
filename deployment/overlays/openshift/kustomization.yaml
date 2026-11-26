@@ -14,3 +14,25 @@ labels:
       app: template-ui
       component: ui
     includeSelectors: true
+
+patches:
+  - target:
+      kind: Deployment
+      name: template-ui
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: template-ui
+      spec:
+        template:
+          spec:
+            containers:
+              - name: template-ui
+                env:
+                  - name: BRANDING_PLATFORM_NAME
+                    value: "Red Hat"
+                  - name: BRANDING_PLATFORM_NAME_EMPHASIS
+                    value: "Internal AI Factory"
+                  - name: BRANDING_PLATFORM_URL
+                    value: "https://aifactory.dataverse.redhat.com"

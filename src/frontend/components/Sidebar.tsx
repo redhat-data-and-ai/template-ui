@@ -22,15 +22,12 @@ import {
   Trash2,
   Edit3,
   Plus,
-  Settings,
-  LogOut,
   Folder,
   FolderPlus,
   FolderMinus,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { logout } from '../services/logout';
 import { cn } from '@/lib/utils';
 import type { SidebarChatItem, SidebarProject } from '../types/chat';
 import type { SubAgentInfo } from '../types/deep-agent';
@@ -39,7 +36,6 @@ import { useSidebarDragDrop } from '../hooks/useSidebarDragDrop';
 import { ProjectEditModal } from './ProjectEditModal';
 
 interface SidebarProps {
-  userName?: string;
   currentChatId?: string;
   chatHistory: SidebarChatItem[];
   tokenExpiry?: Date;
@@ -60,7 +56,6 @@ interface SidebarProps {
 }
 
 function SidebarComponent({
-  userName = 'User',
   currentChatId,
   chatHistory,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -505,35 +500,6 @@ function SidebarComponent({
             </span>
           </div>
         </Tooltip>
-      </div>
-
-      <div className="shrink-0 p-3 border-t border-sidebar-border">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-sm font-semibold text-primary">
-            {userName.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{userName}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/settings')}
-            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
-            aria-label="Open settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void logout();
-            }}
-            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
-            aria-label="Log out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
       <Modal

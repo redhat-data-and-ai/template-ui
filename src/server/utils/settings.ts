@@ -96,6 +96,9 @@ interface BrandingConfig {
   title: string;
   version: string;
   favicon_url?: string;
+  platform_name?: string;
+  platform_name_emphasis?: string;
+  platform_url?: string;
   colors: {
     light: BrandingThemeColors;
     dark: BrandingThemeColors;
@@ -296,6 +299,13 @@ function validateConfig(config: UISettings): void {
     throw new Error("Config validation error: branding.title is required");
   }
 
+  for (const key of ["platform_name", "platform_name_emphasis", "platform_url"] as const) {
+    const value = config.branding[key];
+    if (value !== undefined && typeof value !== "string") {
+      throw new Error(`Config validation error: branding.${key} must be a string`);
+    }
+  }
+
   // Color validation
   const validateColor = (path: string, value: string) => {
     if (!hexColorRegex.test(value)) {
@@ -389,6 +399,15 @@ function applyEnvOverrides(config: UISettings): void {
   }
   if (process.env.BRANDING_LOGO_URL) {
     config.branding.logo_url = process.env.BRANDING_LOGO_URL;
+  }
+  if (process.env.BRANDING_PLATFORM_NAME) {
+    config.branding.platform_name = process.env.BRANDING_PLATFORM_NAME;
+  }
+  if (process.env.BRANDING_PLATFORM_NAME_EMPHASIS) {
+    config.branding.platform_name_emphasis = process.env.BRANDING_PLATFORM_NAME_EMPHASIS;
+  }
+  if (process.env.BRANDING_PLATFORM_URL) {
+    config.branding.platform_url = process.env.BRANDING_PLATFORM_URL;
   }
   if (process.env.BRANDING_FAVICON_URL) {
     config.branding.favicon_url = process.env.BRANDING_FAVICON_URL;

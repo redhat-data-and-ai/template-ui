@@ -1,29 +1,17 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from 'react-redux';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Page,
-  Masthead,
-  MastheadMain,
-  MastheadBrand,
-  MastheadToggle,
-  MastheadContent,
   PageSidebar,
   PageSidebarBody,
-  PageToggleButton,
-  Toolbar,
-  ToolbarContent,
-  ToolbarItem,
-  ToolbarGroup,
 } from '@patternfly/react-core';
-import { BarsIcon } from '@patternfly/react-icons';
-import { RedHatLogo } from '../RedHatLogo';
+import { AppMasthead } from './AppMasthead';
 import { Sidebar } from '../Sidebar';
 import { KeyboardShortcutsDialog } from '../KeyboardShortcutsDialog';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { SessionExpiredModal } from '../SessionExpiredModal';
-import { DebugToggle } from '../DebugToggle';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import {
   selectAllChats,
@@ -101,7 +89,6 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const dispatch = useAppDispatch();
   const chats = useAppSelector(selectAllChats);
-  const branding = useAppSelector((state: RootState) => state.config.branding);
   const {
     sidebarProjects,
     createProject,
@@ -268,12 +255,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [chats]);
 
   const userData = useMemo(() => window.USER_DATA, []);
-  const userName =
-    userData?.displayName ||
-    userData?.name ||
-    userData?.given_name ||
-    userData?.preferred_username ||
-    'User';
   const tokenExpiry = useMemo(() => {
     if (userData?.expiresAt) {
       return new Date(userData.expiresAt);
@@ -432,51 +413,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   });
 
   const masthead = (
-    <Masthead display={{ default: 'inline' }} className="!bg-card !border-b !border-border">
-      <MastheadToggle>
-        <PageToggleButton
-          variant="plain"
-          aria-label="Toggle sidebar"
-          isSidebarOpen={!sidebarCollapsed}
-          onSidebarToggle={() => setSidebarCollapsed((prev) => !prev)}
-          id="nav-toggle"
-        >
-          <BarsIcon />
-        </PageToggleButton>
-      </MastheadToggle>
-      <MastheadMain>
-        <MastheadBrand>
-          <Link to="/" className="flex items-center gap-2 no-underline text-inherit" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="flex items-center gap-2">
-              {branding?.logo_url ? (
-                <img
-                  src={branding.logo_url}
-                  alt={branding.title || 'Logo'}
-                  className="h-5 w-auto"
-                  style={{ height: '1.25rem', width: 'auto', maxHeight: '1.25rem' }}
-                />
-              ) : (
-                <RedHatLogo className="h-5 w-auto" style={{ color: '#ee0000' }} />
-              )}
-              <span className="text-base font-semibold text-foreground">
-                {branding?.title || window.APP_DATA?.agentName || 'Agent'}
-              </span>
-            </div>
-          </Link>
-        </MastheadBrand>
-      </MastheadMain>
-      <MastheadContent>
-        <Toolbar id="masthead-toolbar" isFullHeight>
-          <ToolbarContent>
-            <ToolbarGroup align={{ default: 'alignEnd' }}>
-              <ToolbarItem>
-                <DebugToggle />
-              </ToolbarItem>
-            </ToolbarGroup>
-          </ToolbarContent>
-        </Toolbar>
-      </MastheadContent>
-    </Masthead>
+    <AppMasthead isSidebarOpen={!sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)} />
   );
 
   const sidebar = (
@@ -488,7 +425,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           }}
         >
           <Sidebar
-            userName={userName}
             currentChatId={currentChatId}
             chatHistory={sidebarChats}
             tokenExpiry={tokenExpiry}
