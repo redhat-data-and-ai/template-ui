@@ -1,12 +1,13 @@
-import { CheckCircle, Circle, Loader2, XCircle, ListTodo } from "lucide-react";
-import { cn } from "../lib/utils";
+import { List, ListItem, Spinner } from "@patternfly/react-core";
+import { BanIcon, CheckCircleIcon, OutlinedCircleIcon, TasksIcon } from "@patternfly/react-icons";
 import type { TodoItem } from "./todo-utils";
+import "./progress.css";
 
 const statusIcon: Record<TodoItem["status"], React.ReactNode> = {
-  pending: <Circle className="w-4 h-4 text-neutral-500 shrink-0" />,
-  in_progress: <Loader2 className="w-4 h-4 text-blue-400 animate-spin shrink-0" />,
-  completed: <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />,
-  cancelled: <XCircle className="w-4 h-4 text-neutral-600 shrink-0" />,
+  pending: <OutlinedCircleIcon color="var(--pf-t--global--icon--color--subtle)" />,
+  in_progress: <Spinner size="sm" aria-label="In progress" />,
+  completed: <CheckCircleIcon color="var(--pf-t--global--icon--color--status--success--default)" />,
+  cancelled: <BanIcon color="var(--pf-t--global--icon--color--subtle)" />,
 };
 
 interface TodoListRendererProps {
@@ -20,50 +21,29 @@ export function TodoListRenderer({ todos, strikeAll = false }: TodoListRendererP
   const completed = todos.filter(t => t.status === "completed").length;
 
   return (
-    <div className="rounded-lg border border-neutral-700/40 bg-neutral-800/40 overflow-hidden w-full">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-neutral-700/30 bg-neutral-800/60">
-        <ListTodo className="w-4 h-4 text-neutral-400" />
-        <span className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
-          Tasks
-        </span>
-        <span className="ml-auto text-xs text-neutral-500">
-          {completed}/{todos.length}
-        </span>
+    <div className="app-todos app-todos--box">
+      <div className="app-todos__header">
+        <TasksIcon aria-hidden="true" />
+        <span className="app-todos__title">Tasks</span>
+        <span className="app-todos__count">{completed}/{todos.length}</span>
       </div>
-      <ul className="divide-y divide-neutral-700/20">
+      <List isPlain className="app-todos__list">
         {todos.map((todo, idx) => {
           // When strikeAll is true, only show icons for completed/cancelled items
           const showIcon = !strikeAll || todo.status === "completed" || todo.status === "cancelled";
-
+          const muted = strikeAll || todo.status === "completed" || todo.status === "cancelled";
           return (
-            <li
+            <ListItem
               key={`${idx}-${todo.content}`}
-              className={cn(
-                "flex items-start gap-2.5 px-3 py-2 text-sm transition-opacity",
-                (strikeAll || todo.status === "completed" || todo.status === "cancelled") && "opacity-60",
-              )}
+              icon={showIcon ? (statusIcon[todo.status] ?? statusIcon.pending) : <span className="app-todos__icon-gap" />}
             >
-              {showIcon ? (
-                statusIcon[todo.status] ?? <Circle className="w-4 h-4 text-neutral-500 shrink-0" />
-              ) : (
-                <span className="w-4 h-4 shrink-0" />
-              )}
-              <span
-                className={cn(
-                  "leading-5",
-                  strikeAll && "line-through text-neutral-500",
-                  !strikeAll && todo.status === "completed" && "line-through text-neutral-500",
-                  !strikeAll && todo.status === "cancelled" && "line-through text-neutral-600",
-                  !strikeAll && todo.status === "in_progress" && "text-blue-100",
-                  !strikeAll && todo.status === "pending" && "text-neutral-300",
-                )}
-              >
+              <span className={`app-todos__item app-todos__item--${strikeAll ? "completed" : todo.status}${muted ? " app-todos__item--struck" : ""}`}>
                 {todo.content}
               </span>
-            </li>
+            </ListItem>
           );
         })}
-      </ul>
+      </List>
     </div>
   );
 }

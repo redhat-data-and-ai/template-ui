@@ -46,15 +46,35 @@ describe('SubAgentIndicator approval arguments', () => {
   });
 });
 
+describe('SubAgentIndicator disclosure', () => {
+  it('toggles delegation and result with the keyboard-reachable header button', () => {
+    render(<SubAgentIndicator
+      toolCall={{ id: 'c', name: 'task', args: { subagent_type: 'researcher', description: 'find it' }, content: 'result text' }}
+      messageId="message" index={0} />);
+    expect(screen.getByText('result text')).not.toBeVisible();
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getByText('find it')).toBeVisible();
+    expect(screen.getByText('Delegation')).toBeVisible();
+    expect(screen.getByText('Result')).toBeVisible();
+    expect(screen.getByText('result text')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { expanded: true }));
+    expect(screen.getByText('result text')).not.toBeVisible();
+  });
+
+  it('shows Working while there is no result and Error for error results', () => {
+    const { rerender } = render(<SubAgentIndicator toolCall={toolCall} messageId="m" index={0} />);
+    expect(screen.getByText('Working')).toBeVisible();
+    rerender(<SubAgentIndicator toolCall={{ ...toolCall, content: 'Error: boom' }} messageId="m" index={0} />);
+    expect(screen.getByText('Error')).toBeVisible();
+  });
+});
+
 describe('SubAgentIndicator layout', () => {
   it('renders no icon of its own, only the status label', () => {
-    const { container } = render(
-      <SubAgentIndicator toolCall={{ ...toolCall, content: 'done' }} messageId="message" index={0} />,
-    );
+    render(<SubAgentIndicator toolCall={{ ...toolCall, content: 'done' }} messageId="message" index={0} />);
     expect(screen.getByText('Complete')).toBeInTheDocument();
-    expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
-    expect(container.querySelector('.rounded-full')).toBeNull();
-    expect(container.querySelector('svg.lucide-bot')).toBeNull();
+    expect(screen.getByRole('button', { expanded: false })).toHaveTextContent('researcher');
+    expect(screen.queryByRole('img', { name: /bot|agent|avatar/i })).toBeNull();
   });
 
   it('pads delegation and result boxes via the shared box class', () => {

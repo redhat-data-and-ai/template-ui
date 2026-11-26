@@ -1,21 +1,14 @@
+import { ExpandableSection, List, ListItem, Spinner } from "@patternfly/react-core";
 import {
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
-} from "@patternfly/react-core";
-import {
-  Loader2,
-  Activity,
-  Info,
-  Search,
-  TextSearch,
-  Brain,
-  Pen,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
+  BrainIcon,
+  InfoCircleIcon,
+  OutlinedCommentsIcon,
+  PenIcon,
+  SearchIcon,
+  ListIcon,
+} from "@patternfly/react-icons";
 import { useEffect, useState } from "react";
+import "./progress.css";
 
 export interface ProcessedEvent {
   title: string;
@@ -27,29 +20,24 @@ interface ActivityTimelineProps {
   isLoading: boolean;
 }
 
-export function ActivityTimeline({
-  processedEvents,
-  isLoading,
-}: ActivityTimelineProps) {
-  const [isTimelineCollapsed, setIsTimelineCollapsed] =
-    useState<boolean>(false);
-  const getEventIcon = (title: string, index: number) => {
-    if (index === 0 && isLoading && processedEvents.length === 0) {
-      return <Loader2 className="h-4 w-4 text-neutral-400 animate-spin" />;
-    }
-    if (title.toLowerCase().includes("generating")) {
-      return <TextSearch className="h-4 w-4 text-neutral-400" />;
-    } else if (title.toLowerCase().includes("thinking")) {
-      return <Loader2 className="h-4 w-4 text-neutral-400 animate-spin" />;
-    } else if (title.toLowerCase().includes("reflection")) {
-      return <Brain className="h-4 w-4 text-neutral-400" />;
-    } else if (title.toLowerCase().includes("research")) {
-      return <Search className="h-4 w-4 text-neutral-400" />;
-    } else if (title.toLowerCase().includes("finalizing")) {
-      return <Pen className="h-4 w-4 text-neutral-400" />;
-    }
-    return <Activity className="h-4 w-4 text-neutral-400" />;
-  };
+function eventIcon(title: string) {
+  const t = title.toLowerCase();
+  if (t.includes("generating")) return <OutlinedCommentsIcon />;
+  if (t.includes("thinking")) return <Spinner size="sm" aria-label="Thinking" />;
+  if (t.includes("reflection")) return <BrainIcon />;
+  if (t.includes("research")) return <SearchIcon />;
+  if (t.includes("finalizing")) return <PenIcon />;
+  return <ListIcon />;
+}
+
+function formatData(data: unknown): string {
+  if (typeof data === "string") return data;
+  if (Array.isArray(data)) return (data as string[]).join(", ");
+  return JSON.stringify(data);
+}
+
+export function ActivityTimeline({ processedEvents, isLoading }: ActivityTimelineProps) {
+  const [isTimelineCollapsed, setIsTimelineCollapsed] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isLoading && processedEvents.length !== 0) {
@@ -57,85 +45,40 @@ export function ActivityTimeline({
     }
   }, [isLoading, processedEvents]);
 
+  const searching = (key: string) => (
+    <ListItem key={key} icon={<Spinner size="sm" aria-label="Searching" />}>
+      <span className="app-timeline__title">Searching...</span>
+    </ListItem>
+  );
+
   return (
-    <Card isCompact isPlain className="border-none! rounded-lg bg-neutral-700! max-h-96">
-      <CardHeader
-        className="cursor-pointer"
-        onClick={() => setIsTimelineCollapsed(!isTimelineCollapsed)}
+    <div className="app-timeline">
+      <ExpandableSection
+        toggleText="Research"
+        isExpanded={!isTimelineCollapsed}
+        onToggle={(_e, isOpen) => setIsTimelineCollapsed(!isOpen)}
       >
-        <CardTitle className="flex items-center gap-2 text-sm text-neutral-100 font-normal">
-          Research
-          {isTimelineCollapsed ? (
-            <ChevronDown className="h-4 w-4 mr-2" />
+        <div className="app-timeline__body">
+          {processedEvents.length > 0 || isLoading ? (
+            <List isPlain className="app-timeline__list">
+              {isLoading && processedEvents.length === 0 && searching("initial")}
+              {processedEvents.map((eventItem, index) => (
+                <ListItem key={index} icon={eventIcon(eventItem.title)}>
+                  <span className="app-timeline__title">{eventItem.title}</span>
+                  <span className="app-timeline__data">{formatData(eventItem.data)}</span>
+                </ListItem>
+              ))}
+              {isLoading && processedEvents.length > 0 && searching("trailing")}
+            </List>
           ) : (
-            <ChevronUp className="h-4 w-4 mr-2" />
+            <div className="app-timeline__empty">
+              <InfoCircleIcon />
+              <p>No activity to display.</p>
+              <p className="app-timeline__hint">Timeline will update during processing.</p>
+            </div>
           )}
-        </CardTitle>
-      </CardHeader>
-      {!isTimelineCollapsed && (
-        <CardBody className="max-h-96 overflow-y-auto">
-            {isLoading && processedEvents.length === 0 && (
-              <div className="relative pl-8 pb-4">
-                <div className="absolute left-3 top-3.5 h-full w-0.5 bg-neutral-800" />
-                <div className="absolute left-0.5 top-2 h-5 w-5 rounded-full bg-neutral-800 flex items-center justify-center ring-4 ring-neutral-900">
-                  <Loader2 className="h-3 w-3 text-neutral-400 animate-spin" />
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-300 font-medium">
-                    Searching...
-                  </p>
-                </div>
-              </div>
-            )}
-            {processedEvents.length > 0 ? (
-              <div className="space-y-0">
-                {processedEvents.map((eventItem, index) => (
-                  <div key={index} className="relative pl-8 pb-4">
-                    {index < processedEvents.length - 1 ||
-                    (isLoading && index === processedEvents.length - 1) ? (
-                      <div className="absolute left-3 top-3.5 h-full w-0.5 bg-neutral-600" />
-                    ) : null}
-                    <div className="absolute left-0.5 top-2 h-6 w-6 rounded-full bg-neutral-600 flex items-center justify-center ring-4 ring-neutral-700">
-                      {getEventIcon(eventItem.title, index)}
-                    </div>
-                    <div>
-                      <p className="text-sm text-neutral-200 font-medium mb-0.5">
-                        {eventItem.title}
-                      </p>
-                      <p className="text-xs text-neutral-300 leading-relaxed">
-                        {typeof eventItem.data === "string"
-                          ? eventItem.data
-                          : Array.isArray(eventItem.data)
-                          ? (eventItem.data as string[]).join(", ")
-                          : JSON.stringify(eventItem.data)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {isLoading && processedEvents.length > 0 && (
-                  <div className="relative pl-8 pb-4">
-                    <div className="absolute left-0.5 top-2 h-5 w-5 rounded-full bg-neutral-600 flex items-center justify-center ring-4 ring-neutral-700">
-                      <Loader2 className="h-3 w-3 text-neutral-400 animate-spin" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-neutral-300 font-medium">
-                        Searching...
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : !isLoading ? ( // Only show "No activity" if not loading and no events
-              <div className="flex flex-col items-center justify-center h-full text-neutral-500 pt-10">
-                <Info className="h-6 w-6 mb-3" />
-                <p className="text-sm">No activity to display.</p>
-                <p className="text-xs text-neutral-600 mt-1">
-                  Timeline will update during processing.
-                </p>
-              </div>
-            ) : null}
-        </CardBody>
-      )}
-    </Card>
+        </div>
+      </ExpandableSection>
+    </div>
   );
 }

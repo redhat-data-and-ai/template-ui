@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import {
   Card,
   CardBody,
-  CardHeader,
-  CardTitle,
+  ExpandableSection,
   Label,
+  Spinner,
 } from '@patternfly/react-core';
-import { CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircleIcon, ExclamationCircleIcon } from '@patternfly/react-icons';
 import type { ToolCallWithContent } from '../types/deep-agent';
 import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
 import './sub-agent.css';
@@ -37,12 +37,11 @@ function deriveStatus(toolCall: ToolCallWithContent): VisualStatus {
 const STATUS_CONFIG: Record<VisualStatus, {
   label: string;
   color: 'blue' | 'green' | 'red';
-  icon: typeof Loader2;
-  animate: boolean;
+  icon: React.ReactNode;
 }> = {
-  delegating: { label: 'Working', color: 'blue', icon: Loader2, animate: true },
-  complete:   { label: 'Complete', color: 'green', icon: CheckCircle, animate: false },
-  error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
+  delegating: { label: 'Working', color: 'blue', icon: <Spinner size="sm" aria-label="Working" /> },
+  complete:   { label: 'Complete', color: 'green', icon: <CheckCircleIcon /> },
+  error:      { label: 'Error', color: 'red', icon: <ExclamationCircleIcon /> },
 };
 
 export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubAgentIndicatorProps) {
@@ -53,90 +52,59 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
   const delegationText = extractDelegationText(toolCall);
   const status = deriveStatus(toolCall);
   const config = STATUS_CONFIG[status];
-  const StatusIcon = config.icon;
+  const bodyId = `subagent-body-${messageId}-${index}`;
+
+  const toggle = (
+    <span className="app-subagent__toggle">
+      <span className="app-subagent__name">{name}</span>
+      <Label isCompact color={needsApproval ? 'yellow' : config.color} icon={config.icon}>
+        {needsApproval ? 'Approval required' : config.label}
+      </Label>
+    </span>
+  );
 
   return (
-    <div className="w-full min-w-0">
-      <Card isCompact className={`shadow-card ${needsApproval ? 'border-yellow-500/60' : ''}`} data-interrupt-id={approval?.interruptId} data-action-index={approval?.actionIndex}>
-        <CardHeader
-          className="cursor-pointer"
-          onClick={() => setExpanded((v) => !v)}
-          onKeyDown={(e: React.KeyboardEvent) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setExpanded((v) => !v);
-            }
-          }}
-          {...({ tabIndex: 0, role: 'button', 'aria-expanded': expanded, 'aria-controls': `subagent-body-${messageId}-${index}` } as React.HTMLAttributes<HTMLDivElement>)}
-        >
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-2.5">
-              <CardTitle className="text-sm font-medium capitalize">
-                {name}
-              </CardTitle>
-              <Label
-                isCompact
-                color={needsApproval ? 'yellow' : config.color}
-                icon={
-                  <StatusIcon
-                    className={`w-3 h-3 ${config.animate ? 'animate-spin' : ''}`}
-                    aria-hidden="true"
-                  />
-                }
-              >
-                {needsApproval ? 'Approval required' : config.label}
-              </Label>
-            </div>
-            <span aria-hidden="true">
-              {expanded ? (
-                <ChevronDown className="w-4 h-4 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
-              )}
-            </span>
-          </div>
-        </CardHeader>
-
-        {expanded && (
-          <CardBody
-            id={`subagent-body-${messageId}-${index}`}
-            className="border-t border-border pt-3 space-y-3 !pb-0"
+    <div className="app-subagent">
+      <Card
+        isCompact
+        className={`app-subagent__card${needsApproval ? ' app-subagent__card--attention' : ''}`}
+        data-interrupt-id={approval?.interruptId}
+        data-action-index={approval?.actionIndex}
+      >
+        <CardBody>
+          <ExpandableSection
+            toggleContent={toggle}
+            isExpanded={expanded}
+            onToggle={(_e, isOpen) => setExpanded(isOpen)}
+            contentId={bodyId}
+            toggleId={`${bodyId}-toggle`}
           >
-            {delegationText && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Delegation
-                </p>
-                <p className="app-subagent-box">
-                  {delegationText}
-                </p>
-              </div>
-            )}
-            {hasContent(toolCall) && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Result
-                </p>
-                <pre className="app-subagent-box">
-                  {typeof toolCall.content === 'string'
-                    ? toolCall.content
-                    : JSON.stringify(toolCall.content, null, 2)}
-                </pre>
-              </div>
-            )}
-            {status === 'delegating' && !needsApproval && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                Sub-agent is processing&hellip;
-              </div>
-            )}
-          </CardBody>
-        )}
+            <div className="app-subagent__body">
+              {delegationText && (
+                <div>
+                  <p className="app-subagent__label">Delegation</p>
+                  <p className="app-subagent-box">{delegationText}</p>
+                </div>
+              )}
+              {hasContent(toolCall) && (
+                <div>
+                  <p className="app-subagent__label">Result</p>
+                  <pre className="app-subagent-box">
+                    {typeof toolCall.content === 'string'
+                      ? toolCall.content
+                      : JSON.stringify(toolCall.content, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {status === 'delegating' && !needsApproval && (
+                <p className="app-subagent__processing">Sub-agent is processing&hellip;</p>
+              )}
+            </div>
+          </ExpandableSection>
+        </CardBody>
         {needsApproval && approval && Object.keys(approval.request.args ?? {}).length > 0 && (
-          <div className="px-4 py-3 border-t border-yellow-500/30">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-              Arguments
-            </p>
+          <div className="app-subagent__args">
+            <p className="app-subagent__label">Arguments</p>
             <pre className="app-subagent-box">
               {JSON.stringify(approval.request.args, null, 2)}
             </pre>
