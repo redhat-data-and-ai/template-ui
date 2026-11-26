@@ -40,3 +40,22 @@
   font-weight: var(--pf-t--global--font--weight--body--bold);
   margin: 0 0 var(--pf-t--global--spacer--sm);
 }
+
+/* Centre the prompt text: symmetric padding, no space reserved for the hidden selectable control or empty body. */
+.chat-welcome .chat-welcome__card .pf-v6-c-card__header {
+  padding: 15.5px 16px;
+  --pf-v6-c-card__header--PaddingBlockStart: 15.5px;
+  --pf-v6-c-card__header--PaddingBlockEnd: 15.5px;
+  align-items: center;
+}
+.chat-welcome .chat-welcome__card .pf-v6-c-card__header-main { margin: 0; padding: 0; }
+.chat-welcome .chat-welcome__card .pf-v6-c-card__title { margin: 0; padding: 0; }
+.chat-welcome .chat-welcome__card .pf-v6-c-card__title-text { margin: 0; padding: 0; line-height: 1.5; }
+.chat-welcome .chat-welcome__card .chat-welcome__card-text { display: block; line-height: 1.5; }
+.chat-welcome .chat-welcome__card .pf-v6-c-card__header-actions,
+.chat-welcome .chat-welcome__card .pf-v6-c-card__selectable-actions { margin: 0; padding: 0; }
+.chat-welcome .chat-welcome__card .pf-v6-c-card__body[hidden] { display: none; }
+.chat-welcome .chat-welcome__card:focus-within:has(:focus-visible) {
+  outline: 2px solid var(--app-accent-strong);
+  outline-offset: 2px;
+}
