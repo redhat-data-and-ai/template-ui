@@ -117,10 +117,10 @@ export function HomePage() {
       </div>
 
       {/* Bottom input bar */}
-      <div className="border-t border-border bg-background px-6 pb-4 pt-3">
+      <div className="bg-background px-6 pb-4 pt-3">
         <div className="max-w-2xl mx-auto">
           <form onSubmit={handleSubmit} aria-label="Start a new chat">
-            <div className="relative rounded-2xl border border-border bg-card shadow-card focus-within:border-primary/40 focus-within:shadow-elevated transition-all duration-200">
+            <div className="relative rounded-2xl border border-[var(--app-border)] bg-card focus-within:border-[var(--app-accent-strong)] focus-within:ring-1 focus-within:ring-[var(--app-accent-strong)] transition-colors duration-200">
               <label htmlFor="home-chat-input" className="sr-only">
                 Enter a prompt for {window.APP_DATA?.agentName || 'Agent'}
               </label>
@@ -131,7 +131,7 @@ export function HomePage() {
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={`Enter a prompt for ${window.APP_DATA?.agentName || 'Agent'}`}
-                className="w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
+                className="composer-input w-full resize-none border-0 bg-transparent text-sm leading-relaxed min-h-[44px] max-h-[120px] px-4 py-3 pr-12 rounded-2xl placeholder:opacity-60 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
                 style={{ boxShadow: 'none' }}
                 rows={1}
               />

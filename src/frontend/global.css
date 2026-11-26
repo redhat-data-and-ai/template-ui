@@ -119,7 +119,7 @@
 
 /* Tailwind v4 reset strips native form element styles.
    Restore sane defaults so utility classes layer on top. */
-textarea,
+textarea:not(.composer-input),
 input[type="text"],
 input[type="search"],
 input[type="email"],
@@ -139,7 +139,7 @@ input::placeholder {
   color: var(--muted-foreground);
   opacity: 0.7;
 }
-textarea:focus,
+textarea:not(.composer-input):focus,
 input[type="text"]:focus,
 input[type="search"]:focus,
 input[type="email"]:focus,
