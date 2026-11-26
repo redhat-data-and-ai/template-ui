@@ -368,7 +368,6 @@ describe('AppSidebar — navigation', () => {
     const plain = fireEvent.click(link);
     expect(plain).toBe(false);
     expect(onSelectChat).toHaveBeenCalledWith('c1');
-    void user;
   });
 
   it('keeps the row kebab marked visible while its menu is open', async () => {
