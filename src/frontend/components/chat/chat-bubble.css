@@ -183,21 +183,39 @@
   transition: opacity 0.15s ease;
 }
 
-.chat-bubble--bot .chat-bubble-actions {
-  justify-content: flex-start;
-}
-
 .chat-bubble .chat-bubble-col:hover > .chat-bubble-actions,
 .chat-bubble .chat-bubble-col:focus-within > .chat-bubble-actions {
   opacity: 1;
 }
 
-.chat-bubble .chat-bubble-actions button {
+/* Selected feedback (aria-pressed) keeps its own active colour. */
+.chat-bubble .chat-bubble-actions button:not([aria-pressed="true"]) {
   color: var(--pf-t--global--text--color--subtle);
 }
 
-.chat-bubble .chat-bubble-actions button:not(:disabled):hover {
+.chat-bubble .chat-bubble-actions button:not([aria-pressed="true"]):not(:disabled):hover {
   color: var(--app-accent-strong);
+}
+
+/* Selected rating, portal colours: helpful = success, not helpful = accent.
+   Needed because global.css's unlayered `button { color: inherit }` beats
+   FeedbackButtons' Tailwind text-primary. */
+.chat-bubble .chat-bubble-actions button[aria-pressed="true"][aria-label="Rate response as helpful"] {
+  color: var(--pf-t--global--icon--color--status--success--default);
+}
+
+.chat-bubble .chat-bubble-actions button[aria-pressed="true"][aria-label="Rate response as not helpful"] {
+  color: var(--app-accent-strong);
+}
+
+/* A rating locks both buttons (disabled); keep the chosen one at full strength. */
+.chat-bubble .chat-bubble-actions button[aria-pressed="true"]:disabled {
+  opacity: 1;
+}
+
+/* A recorded rating stays visible without hover. */
+.chat-bubble .chat-bubble-actions:has(button[aria-pressed="true"]) {
+  opacity: 1;
 }
 
 .chat-bubble .app-chat-meta {
