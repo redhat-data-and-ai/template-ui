@@ -373,6 +373,7 @@ input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c
 .app-sidebar-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 .app-sidebar-scroll .pf-v6-c-nav {
