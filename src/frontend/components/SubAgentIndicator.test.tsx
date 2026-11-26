@@ -45,3 +45,17 @@ describe('SubAgentIndicator approval arguments', () => {
     expect(screen.getByRole('button', { name: 'Approve tool call: task' })).toBeVisible();
   });
 });
+
+describe('SubAgentIndicator layout', () => {
+  it('pads delegation and result boxes via the shared box class', () => {
+    render(
+      <SubAgentIndicator
+        toolCall={{ id: 'c', name: 'task', args: { subagent_type: 'researcher', description: 'find it' }, content: 'result text' }}
+        messageId="message"
+        index={0}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getByText('result text')).toHaveClass('app-subagent-box');
+  });
+});

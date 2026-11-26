@@ -11,6 +11,7 @@ import {
 import { Bot, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 import type { ToolCallWithContent } from '../types/deep-agent';
 import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
+import './sub-agent.css';
 
 interface SubAgentIndicatorProps {
   readonly toolCall: ToolCallWithContent;
@@ -113,7 +114,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                     Delegation
                   </p>
-                  <p className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg whitespace-pre-wrap">
+                  <p className="app-subagent-box">
                     {delegationText}
                   </p>
                 </div>
@@ -123,7 +124,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                     Result
                   </p>
-                  <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono max-h-60">
+                  <pre className="app-subagent-box">
                     {typeof toolCall.content === 'string'
                       ? toolCall.content
                       : JSON.stringify(toolCall.content, null, 2)}
@@ -143,7 +144,7 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                 Arguments
               </p>
-              <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+              <pre className="app-subagent-box">
                 {JSON.stringify(approval.request.args, null, 2)}
               </pre>
             </div>
