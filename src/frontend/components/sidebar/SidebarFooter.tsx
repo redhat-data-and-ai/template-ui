@@ -5,9 +5,9 @@ const HEALTH: Record<
   'healthy' | 'unhealthy' | 'unknown',
   { text: string; color: 'green' | 'red' | 'grey' }
 > = {
-  healthy: { text: 'Agent: healthy', color: 'green' },
-  unhealthy: { text: 'Agent: offline', color: 'red' },
-  unknown: { text: 'Agent: unknown', color: 'grey' },
+  healthy: { text: 'Agent: Healthy', color: 'green' },
+  unhealthy: { text: 'Agent: Unhealthy', color: 'red' },
+  unknown: { text: 'Agent: Unknown', color: 'grey' },
 };
 
 export function SidebarFooter() {
@@ -15,7 +15,7 @@ export function SidebarFooter() {
   const { text, color } = HEALTH[status];
   return (
     <div className="app-sidebar-footer">
-      <Label isCompact variant="outline" color={color}>
+      <Label isCompact color={color}>
         {text}
       </Label>
     </div>

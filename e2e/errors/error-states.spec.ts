@@ -6,7 +6,7 @@ import { ChatPage } from '../page-objects/ChatPage';
 
 /**
  * Error-path tests covering:
- *   1. Agent unreachable   – /api/health/agent returns non-200; sidebar shows "Agent: offline".
+ *   1. Agent unreachable   – /api/health/agent returns non-200; sidebar shows "Agent: Unhealthy".
  *   2. Malformed stream    – SSE body contains invalid JSON; UI must not crash.
  *   3. Auth failure        – streaming endpoint returns 401; StreamingManager marks the stream
  *                            as failed (non-recoverable 4xx) and the sr-only aria-live region
@@ -15,7 +15,7 @@ import { ChatPage } from '../page-objects/ChatPage';
 test.describe('Error states', () => {
   // ── Agent unreachable ─────────────────────────────────────────────────────
 
-  test('agent unreachable: sidebar shows "Agent: offline" indicator', async ({ page }) => {
+  test('agent unreachable: sidebar shows "Agent: Unhealthy" indicator', async ({ page }) => {
     // Mount base config with agentHealth='unhealthy' so the health endpoint
     // returns 503 / { status: 'unhealthy' } from the first poll onwards.
     await mountConfig(page, { title: 'Offline Agent Test' }, {}, 'unhealthy');
@@ -26,7 +26,7 @@ test.describe('Error states', () => {
 
     // useAgentHealth polls immediately on mount; the sidebar indicator updates
     // as soon as the first health check completes.
-    await expect(page.getByText('Agent: offline')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Agent: Unhealthy')).toBeVisible({ timeout: 15_000 });
   });
 
   // ── Malformed stream ──────────────────────────────────────────────────────
