@@ -7,11 +7,29 @@ export interface SubAgentInfo {
   startedAt: number;
 }
 
+export interface SubagentTranscriptTool {
+  id?: string;
+  name: string;
+  args?: Record<string, unknown>;
+  content?: unknown;
+  status?: string;
+  mcpApp?: unknown;
+  artifact?: unknown;
+}
+
+export interface SubagentTranscriptEntry {
+  id: string;
+  thinking?: string;
+  content?: string;
+  tool_calls?: SubagentTranscriptTool[];
+}
+
 export interface ToolCallWithContent {
   name: string;
   args: Record<string, unknown>;
   id: string;
   content?: unknown;
+  transcript?: SubagentTranscriptEntry[];
 }
 
 export interface HITLActionRequest {

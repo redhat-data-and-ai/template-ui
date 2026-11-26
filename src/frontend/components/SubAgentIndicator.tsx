@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ToolApprovalControls } from './ToolApprovalControls';
 import type { ToolApproval } from '../hooks/useInterruptApprovals';
 import { useEffect, useState } from 'react';
@@ -9,14 +10,30 @@ import {
   Label,
 } from '@patternfly/react-core';
 import { Bot, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
-import type { ToolCallWithContent } from '../types/deep-agent';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { SubagentTranscriptEntry, ToolCallWithContent } from '../types/deep-agent';
 import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
+import { ToolCallRow } from './ToolCallRow';
 
 interface SubAgentIndicatorProps {
   readonly toolCall: ToolCallWithContent;
   readonly messageId: string;
   readonly index: number;
   readonly approval?: ToolApproval;
+  readonly approvalBindings?: Map<string, ToolApproval>;
+  readonly extraApprovals?: ToolApproval[];
+  readonly question?: ReactNode;
+}
+
+function hasPendingInnerApproval(
+  transcript: SubagentTranscriptEntry[] | undefined,
+  bindings: Map<string, ToolApproval> | undefined,
+): boolean {
+  return (transcript ?? []).some((entry) => (entry.tool_calls ?? []).some((tool) => {
+    const found = tool.id ? bindings?.get(tool.id) : undefined;
+    return Boolean(found && !found.decision);
+  }));
 }
 
 type VisualStatus = 'delegating' | 'complete' | 'error';
@@ -44,15 +61,58 @@ const STATUS_CONFIG: Record<VisualStatus, {
   error:      { label: 'Error', color: 'red', icon: AlertCircle, animate: false },
 };
 
-export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubAgentIndicatorProps) {
-  const [expanded, setExpanded] = useState(false);
+const streamMarkdown = {
+  table: ({ children }: { children?: ReactNode }) => (
+    <div className="overflow-x-auto my-2">
+      <table className="w-full border-collapse text-[12px]">{children}</table>
+    </div>
+  ),
+  th: ({ children }: { children?: ReactNode }) => (
+    <th className="border border-border px-2 py-1 text-left font-medium">{children}</th>
+  ),
+  td: ({ children }: { children?: ReactNode }) => (
+    <td className="border border-border px-2 py-1 align-top">{children}</td>
+  ),
+  p: ({ children }: { children?: ReactNode }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+};
+
+function SubagentThought({ text }: { text: string }) {
+  return (
+    <div className="text-[12px] leading-relaxed text-muted-foreground/60 italic [&_strong]:font-medium [&_strong]:text-muted-foreground/70 [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
+function SubagentStream({ text }: { text: string }) {
+  return (
+    <div className="text-[13px] leading-relaxed text-muted-foreground [&_p]:mb-1.5 [&_p:last-child]:mb-0">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={streamMarkdown}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
+const NO_PENDING_TOOLS = new Set<string>();
+
+export function SubAgentIndicator({ toolCall, messageId, index, approval, approvalBindings, extraApprovals, question }: SubAgentIndicatorProps) {
+  const hasInnerApproval = hasPendingInnerApproval(toolCall.transcript, approvalBindings);
+  const pendingExtras = (extraApprovals ?? []).filter((item) => !item.decision);
+  const hasExtraApproval = pendingExtras.length > 0;
+  const [expanded, setExpanded] = useState(
+    () => (!hasContent(toolCall) && (toolCall.transcript?.length ?? 0) > 0) || hasInnerApproval || hasExtraApproval,
+  );
+  const [streamChoice, setStreamChoice] = useState<boolean | null>(null);
   const needsApproval = Boolean(approval && !approval.decision);
-  useEffect(() => { if (needsApproval) setExpanded(true); }, [needsApproval]);
+  useEffect(() => { if (needsApproval || hasInnerApproval || hasExtraApproval) setExpanded(true); }, [needsApproval, hasInnerApproval, hasExtraApproval]);
+  useEffect(() => { if (question) setExpanded(true); }, [question]);
   const name = extractSubAgentName(toolCall);
   const delegationText = extractDelegationText(toolCall);
   const status = deriveStatus(toolCall);
   const config = STATUS_CONFIG[status];
   const StatusIcon = config.icon;
+  const transcript = toolCall.transcript ?? [];
+  const hasStream = transcript.length > 0;
+  const streamOpen = hasInnerApproval || hasExtraApproval || (streamChoice ?? status === 'delegating');
 
   return (
     <div className="flex items-start gap-3">
@@ -118,6 +178,35 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
                   </p>
                 </div>
               )}
+              {hasStream && (
+                <div>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 px-1 py-1 text-left text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                    aria-expanded={streamOpen}
+                    onClick={() => { if (!hasInnerApproval && !hasExtraApproval) setStreamChoice(!streamOpen); }}
+                  >
+                    {streamOpen
+                      ? <ChevronDown className="w-3 h-3 shrink-0" aria-hidden="true" />
+                      : <ChevronRight className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                    <span className={`text-xs ${streamOpen && status === 'delegating' ? 'animate-pulse' : 'italic'}`}>
+                      {streamOpen && status === 'delegating' ? 'Streaming...' : 'Stream'}
+                    </span>
+                  </button>
+                  {streamOpen && (
+                    <div className="ml-1 pl-3 border-l-2 border-muted-foreground/15 space-y-3">
+                      {transcript.map((entry) => (
+                        <TranscriptEntryView
+                          key={entry.id}
+                          entry={entry}
+                          messageId={messageId}
+                          approvalBindings={approvalBindings}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {hasContent(toolCall) && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -130,7 +219,22 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
                   </pre>
                 </div>
               )}
-              {status === 'delegating' && !needsApproval && (
+              {pendingExtras.map((extra) => (
+                <div key={extra.key}>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                    {extra.request.name}
+                  </p>
+                  {Object.keys(extra.request.args ?? {}).length > 0 && (
+                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono max-h-60">
+                      {JSON.stringify(extra.request.args, null, 2)}
+                    </pre>
+                  )}
+                  <ToolApprovalControls approval={extra} />
+                </div>
+              ))}
+              {question ? (
+                <div className="pb-3">{question}</div>
+              ) : status === 'delegating' && !needsApproval && transcript.length === 0 && pendingExtras.length === 0 && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                   Sub-agent is processing&hellip;
@@ -151,6 +255,38 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
           {approval && <ToolApprovalControls approval={approval} />}
         </Card>
       </div>
+    </div>
+  );
+}
+
+function TranscriptEntryView({
+  entry,
+  messageId,
+  approvalBindings,
+}: {
+  entry: SubagentTranscriptEntry;
+  messageId: string;
+  approvalBindings?: Map<string, ToolApproval>;
+}) {
+  return (
+    <div className="space-y-2">
+      {entry.thinking ? <SubagentThought text={entry.thinking} /> : null}
+      {entry.content ? <SubagentStream text={entry.content} /> : null}
+      {entry.tool_calls?.map((tool, toolIndex) => {
+        const rowApproval = tool.id ? approvalBindings?.get(tool.id) : undefined;
+        return (
+          <div key={tool.id ?? `${tool.name}-${toolIndex}`}>
+            <ToolCallRow
+              toolCall={tool}
+              itemId={`${messageId}-${entry.id}-${tool.id ?? toolIndex}`}
+              pendingToolNames={NO_PENDING_TOOLS}
+              showButtons={false}
+              totalActionRequests={0}
+            />
+            {rowApproval && <ToolApprovalControls approval={rowApproval} />}
+          </div>
+        );
+      })}
     </div>
   );
 }

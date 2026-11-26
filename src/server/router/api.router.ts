@@ -119,6 +119,28 @@ async function apiRoutes(fastify: FastifyInstance) {
   await fastify.register(async (protectedRoutes) => {
     await protectedRoutes.register(authCheckPlugin);
 
+    protectedRoutes.get("/config/subagents", async (_request, reply) => {
+      const cfg = getSettings();
+      const agentHost = cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
+
+      try {
+        const response = await fetch(`${agentHost}/config/subagents`, {
+          signal: AbortSignal.timeout(5_000),
+        });
+
+        if (!response.ok) {
+          return reply.code(response.status).send({
+            error: "Unable to load subagents",
+          });
+        }
+
+        reply.header("Cache-Control", "no-store");
+        return response.json();
+      } catch {
+        return reply.code(502).send({ error: "Unable to reach agent" });
+      }
+    });
+
     protectedRoutes.post("/v1/stream", async (request: FastifyRequest<{ Body: StreamRequest }>, reply: FastifyReply) => {
       return handleStreamPost(protectedRoutes, request, reply);
     });

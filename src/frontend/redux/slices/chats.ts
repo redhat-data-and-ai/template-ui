@@ -1,6 +1,6 @@
 import { createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { Message } from '@langchain/langgraph-sdk';
-import type { SubAgentInfo, InterruptInfo, TaskStep } from '../../types/deep-agent';
+import { extractDelegationText, isSubAgentToolCall, type SubAgentInfo, type InterruptInfo, type SubagentTranscriptEntry, type SubagentTranscriptTool, type TaskStep } from '../../types/deep-agent';
 import { withMcpAppArguments } from '../../types/mcp-apps';
 import { assignThreadToProjectThunk, deleteProjectThunk, unassignAllThreadsThunk } from './projects';
 
@@ -14,6 +14,7 @@ export interface StreamingState {
   pendingInterrupt: InterruptInfo | null;
   pendingInterrupts: InterruptInfo[];
   isResuming: boolean;
+  resumingInterruptId: string | null;
   taskSteps: TaskStep[];
   isReconnecting: boolean;
   reconnectAttempt: number;
@@ -51,6 +52,7 @@ const DEFAULT_STREAMING_STATE: StreamingState = {
   pendingInterrupt: null,
   pendingInterrupts: [],
   isResuming: false,
+  resumingInterruptId: null,
   taskSteps: [],
   isReconnecting: false,
   reconnectAttempt: 0,
@@ -68,12 +70,43 @@ const initialState: ChatsState = {
 
 type ToolCallRecord = {
   id?: string;
+  name?: string;
   content?: unknown;
   status?: string;
   args?: Record<string, unknown>;
   mcpApp?: Record<string, unknown>;
   artifact?: unknown;
+  transcript?: SubagentTranscriptEntry[];
 };
+
+function findToolCall(chat: ChatItem, toolCallId: string): ToolCallRecord | undefined {
+  for (const message of chat.messages) {
+    const toolCalls = (message as Message & { tool_calls?: ToolCallRecord[] }).tool_calls;
+    if (!Array.isArray(toolCalls)) continue;
+    const match = toolCalls.find((toolCall) => toolCall?.id === toolCallId);
+    if (match) return match;
+  }
+  return undefined;
+}
+
+function transcriptSize(entries: SubagentTranscriptEntry[]): number {
+  return entries.reduce((total, entry) => {
+    const tools = entry.tool_calls?.length ?? 0;
+    return total + (entry.thinking?.length ?? 0) + (entry.content?.length ?? 0) + tools;
+  }, 0);
+}
+
+function hasArgs(args: Record<string, unknown> | undefined): boolean {
+  return args != null && Object.keys(args).length > 0;
+}
+
+function transcriptEntry(transcript: SubagentTranscriptEntry[], messageId: string): SubagentTranscriptEntry {
+  const existing = messageId ? transcript.find((entry) => entry.id === messageId) : transcript.at(-1);
+  if (existing) return existing;
+  const created: SubagentTranscriptEntry = { id: messageId || `sub-${transcript.length}`, content: '' };
+  transcript.push(created);
+  return created;
+}
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
@@ -117,19 +150,136 @@ const chatsSlice = createSlice({
       const chat = state.chats.find((c) => c.id === chatId);
       if (chat) {
         const msgId = (message as Record<string, unknown>).id;
-        if (msgId && chat.messages.some((m) => (m as Record<string, unknown>).id === msgId)) {
-          return;
+        if (msgId) {
+          const existing = chat.messages.find((m) => (m as { id?: string }).id === msgId) as
+            | (Message & { tool_calls?: unknown[] })
+            | undefined;
+          if (existing) {
+            const incomingTools = (message as { tool_calls?: unknown[] }).tool_calls;
+            const alreadyHasTools = Array.isArray(existing.tool_calls) && existing.tool_calls.length > 0;
+            if (Array.isArray(incomingTools) && incomingTools.length > 0 && !alreadyHasTools) {
+              existing.tool_calls = deepClone(incomingTools);
+            }
+            return;
+          }
         }
         chat.messages.push(deepClone(message));
       }
     },
-    updateLastMessageInChat(state, action: PayloadAction<{ chatId: string; content: string }>) {
-      const { chatId, content } = action.payload;
+    appendSubagentTranscript(
+      state,
+      action: PayloadAction<{
+        chatId: string;
+        toolCallId: string;
+        messageId?: string;
+        content?: string;
+        part?: 'thinking' | 'text';
+        toolCalls?: SubagentTranscriptTool[];
+        replace?: boolean;
+      }>,
+    ) {
+      const { chatId, toolCallId, messageId, content, part, toolCalls, replace } = action.payload;
+      const chat = state.chats.find((item) => item.id === chatId);
+      const parent = chat ? findToolCall(chat, toolCallId) : undefined;
+      if (!parent) return;
+      if (!Array.isArray(parent.transcript)) parent.transcript = [];
+      if (replace) {
+        parent.transcript = parent.transcript.filter((entry) => entry.id !== (messageId ?? ''));
+      }
+      const entry = transcriptEntry(parent.transcript, messageId ?? '');
+      if (part === 'thinking') {
+        entry.thinking = (entry.thinking ?? '') + (content ?? '');
+      } else if (content) {
+        entry.content = (entry.content ?? '') + content;
+      }
+      if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+        if (!entry.tool_calls?.length) {
+          entry.tool_calls = deepClone(toolCalls);
+        } else {
+          for (const incoming of toolCalls) {
+            if (!incoming.id || !hasArgs(incoming.args)) continue;
+            const existing = entry.tool_calls.find((tool) => tool.id === incoming.id);
+            if (existing && !hasArgs(existing.args)) existing.args = deepClone(incoming.args);
+          }
+        }
+      }
+    },
+    attachSubagentTranscripts(
+      state,
+      action: PayloadAction<{
+        chatId: string;
+        transcripts: Array<{ delegation: string; entries: SubagentTranscriptEntry[] }>;
+      }>,
+    ) {
+      const { chatId, transcripts } = action.payload;
+      const chat = state.chats.find((item) => item.id === chatId);
+      if (!chat || transcripts.length === 0) return;
+      const cards: ToolCallRecord[] = [];
+      for (const message of chat.messages) {
+        const toolCalls = (message as Message & { tool_calls?: ToolCallRecord[] }).tool_calls;
+        if (!Array.isArray(toolCalls)) continue;
+        for (const toolCall of toolCalls) {
+          if (toolCall?.name && isSubAgentToolCall({ name: toolCall.name, args: toolCall.args })) cards.push(toolCall);
+        }
+      }
+      const used = new Set<number>();
+      const claim = (card: ToolCallRecord, index: number) => {
+        used.add(index);
+        const saved = transcripts[index]?.entries ?? [];
+        if (saved.length === 0) return;
+        const current = Array.isArray(card.transcript) ? card.transcript : [];
+        if (transcriptSize(current) > transcriptSize(saved)) return;
+        card.transcript = deepClone(saved);
+      };
+      for (const card of cards) {
+        const delegation = extractDelegationText(card) ?? '';
+        const index = transcripts.findIndex((item, itemIndex) => !used.has(itemIndex) && item.delegation === delegation);
+        if (index !== -1) claim(card, index);
+      }
+      for (const card of cards) {
+        if (Array.isArray(card.transcript) && card.transcript.length > 0) continue;
+        const index = transcripts.findIndex((_item, itemIndex) => !used.has(itemIndex));
+        if (index !== -1) claim(card, index);
+      }
+    },
+    mergeSubagentToolResult(
+      state,
+      action: PayloadAction<{
+        chatId: string;
+        parentToolCallId: string;
+        toolCallId: string;
+        content: unknown;
+        status?: string;
+        mcpApp?: Record<string, unknown>;
+        artifact?: unknown;
+      }>,
+    ) {
+      const { chatId, parentToolCallId, toolCallId, content, status, mcpApp, artifact } = action.payload;
+      const chat = state.chats.find((item) => item.id === chatId);
+      const parent = chat ? findToolCall(chat, parentToolCallId) : undefined;
+      const match = parent?.transcript
+        ?.flatMap((entry) => entry.tool_calls ?? [])
+        .find((toolCall) => toolCall?.id === toolCallId);
+      if (!match) return;
+      match.content = content;
+      if (status) match.status = status;
+      if (artifact !== undefined) match.artifact = artifact;
+      if (mcpApp) {
+        match.mcpApp = withMcpAppArguments(mcpApp, match.args);
+      }
+    },
+    updateLastMessageInChat(state, action: PayloadAction<{ chatId: string; content: string; part?: 'thinking' | 'text' }>) {
+      const { chatId, content, part } = action.payload;
       const chat = state.chats.find((c) => c.id === chatId);
       if (!chat || chat.messages.length === 0) {
         return;
       }
-      const last = chat.messages.at(-1) as Message & { content?: unknown };
+      const last = chat.messages.at(-1) as Message & { content?: unknown; thinking?: string };
+      if (part === 'thinking') {
+        const prevThinking = typeof last.thinking === 'string' ? last.thinking : '';
+        last.thinking = prevThinking + content;
+        return;
+      }
       let prev = '';
       if (typeof last.content === 'string') {
         prev = last.content;
@@ -303,6 +453,9 @@ export const {
   deleteChat,
   clearAllChats,
   appendMessageToChat,
+  appendSubagentTranscript,
+  attachSubagentTranscripts,
+  mergeSubagentToolResult,
   removeLastMessageFromChat,
   updateLastMessageInChat,
   mergeToolResult,

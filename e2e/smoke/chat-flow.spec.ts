@@ -16,7 +16,7 @@ test.describe('Chat flow smoke test', () => {
     const home = new HomePage(page);
     await home.goto();
 
-    await expect(page.locator('textarea')).toBeVisible();
+    await expect(page.locator('.subagent-composer')).toBeVisible();
     await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 

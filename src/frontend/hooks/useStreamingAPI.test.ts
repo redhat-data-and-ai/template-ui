@@ -406,6 +406,8 @@ describe('isNonRecoverableHttpStatus', () => {
 vi.mock('@/services/agent-rest', () => ({
   getThreadState: vi.fn(() => new Promise(() => {})),
   getThreadStateAndInterrupt: vi.fn(() => new Promise(() => {})),
+  getSubagentTranscripts: vi.fn(async () => []),
+  getActiveRun: vi.fn(async () => null),
 }));
 
 describe('_startRecoveryPolling — deadline fires independently of pending request', () => {
@@ -677,6 +679,53 @@ describe('interrupt resume safety', () => {
     expect(spy).toHaveBeenCalledTimes(1); unmount();
   });
 
+  it('reloads approvals when a resume is cancelled before any new interrupt', async () => {
+    const {result, unmount} = setup();
+    const kept = [approval('a'), approval('b')];
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockResolvedValue({messages:[], interrupt: kept[0], interrupts: kept});
+    const manager = getStreamingManager(THREAD_ID);
+    vi.spyOn(manager, 'stream').mockResolvedValue(undefined);
+    vi.spyOn(manager, 'getStatus').mockReturnValue('cancelled');
+    await act(async () => {
+      await expect(result.current.resumeWithDecisions([{type:'approve'}], 'a')).rejects.toThrow('Approval submission was interrupted');
+    });
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['a', 'b']);
+    unmount();
+  });
+
+  it('keeps a new interrupt when the resume is cancelled after it arrives', async () => {
+    const {result, unmount} = setup();
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockRejectedValue(new Error('should not refresh'));
+    const manager = getStreamingManager(THREAD_ID);
+    vi.spyOn(manager, 'stream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onInterrupt(approval('new'));
+    });
+    vi.spyOn(manager, 'getStatus').mockReturnValue('cancelled');
+    await act(async () => {
+      await result.current.resumeWithDecisions([{type:'approve'}], 'a');
+    });
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['b', 'new']);
+    unmount();
+  });
+
+  it('merges a checkpoint interrupt the cancelled resume did not deliver', async () => {
+    const {result, unmount} = setup();
+    const extra = approval('extra');
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockResolvedValue({
+      messages: [], interrupt: extra, interrupts: [approval('b'), approval('new'), extra],
+    });
+    const manager = getStreamingManager(THREAD_ID);
+    vi.spyOn(manager, 'stream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onInterrupt(approval('new'));
+    });
+    vi.spyOn(manager, 'getStatus').mockReturnValue('cancelled');
+    await act(async () => {
+      await result.current.resumeWithDecisions([{type:'approve'}], 'a');
+    });
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['b', 'new', 'extra']);
+    unmount();
+  });
+
   it('requires a successful state refresh after an uncertain outcome', async () => {
     const {result, unmount} = setup();
     const refresh = vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockRejectedValue(new Error('offline'));
@@ -688,6 +737,54 @@ describe('interrupt resume safety', () => {
     await act(async () => { await result.current.refreshInterrupts(); });
     await act(async () => { await result.current.resumeInterrupt('continue','a'); });
     expect(result.current.pendingInterrupt?.id).toBe('b'); unmount();
+  });
+
+  it('keeps the subagent stream when approvals are refreshed', async () => {
+    const { store, result, unmount } = setup();
+    const transcript = [{ id: 'sub-1', tool_calls: [{ id: 'lookup-1', name: 'lookup_records', args: { query: 'example' } }] }];
+    const local = [{
+      type: 'ai', id: 'parent', content: '',
+      tool_calls: [{ id: 'task', name: 'task', args: { subagent_type: 'researcher', description: 'Look up orders' }, transcript }],
+    }] as Message[];
+    const server = [{
+      type: 'ai', id: 'parent', content: '',
+      tool_calls: [{ id: 'task', name: 'task', args: { subagent_type: 'researcher', description: 'Look up orders' } }],
+    }] as Message[];
+    act(() => { store.dispatch(updateChat({ id: THREAD_ID, updates: { messages: local } })); });
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockResolvedValue({ messages: server, interrupt: null, interrupts: [] });
+    const saved = vi.spyOn(agentRest, 'getSubagentTranscripts').mockResolvedValue([]);
+    await act(async () => { await result.current.refreshInterrupts(); });
+    expect((store.getState().chats.chats[0].messages[0] as { tool_calls: Array<{ transcript?: unknown }> }).tool_calls[0].transcript).toEqual(transcript);
+
+    act(() => { store.dispatch(updateChat({ id: THREAD_ID, updates: { messages: server } })); });
+    saved.mockResolvedValue([{ delegation: 'Look up orders', entries: [{ id: 'saved', content: 'Saved stream' }] }]);
+    await act(async () => { await result.current.refreshInterrupts(); });
+    expect((store.getState().chats.chats[0].messages[0] as { tool_calls: Array<{ transcript?: unknown }> }).tool_calls[0].transcript).toEqual([
+      { id: 'saved', content: 'Saved stream' },
+    ]);
+    unmount();
+  });
+
+  it('keeps an existing subagent stream when a live run reconnects', async () => {
+    const { store, result, unmount } = setup();
+    const local = [{
+      type: 'ai', id: 'parent', content: '',
+      tool_calls: [{
+        id: 'task', name: 'task', args: { subagent_type: 'researcher' },
+        transcript: [{ id: 'sub-1', content: 'Earlier work' }],
+      }],
+    }] as Message[];
+    act(() => { store.dispatch(updateChat({ id: THREAD_ID, updates: { messages: local } })); });
+    vi.spyOn(agentRest, 'getActiveRun').mockResolvedValue({ run_id: 'run-1' });
+    vi.spyOn(getStreamingManager(THREAD_ID), 'attach').mockImplementation(async (_thread, _run, callbacks) => {
+      callbacks.onToken(' tail', 'sub-1', 'text', 'task');
+    });
+    await act(async () => { await result.current.attachLiveRun(); });
+    const entry = (store.getState().chats.chats[0].messages[0] as {
+      tool_calls: Array<{ transcript?: Array<{ content?: string }> }>;
+    }).tool_calls[0].transcript?.[0];
+    expect(entry?.content).toBe('Earlier work tail');
+    unmount();
   });
 
   it('discards a refresh started before a resume, including across hook instances', async () => {
@@ -738,9 +835,24 @@ describe('interrupt resume safety', () => {
       await refresh;
     });
     expect(result.current.messages).toEqual(currentMessages);
-    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['a','b']);
+    expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
     await act(async()=>{finishResume();await resume;});
     expect(result.current.pendingInterrupts.map(item=>item.id)).toEqual(['b']);
+    unmount();
+  });
+
+  it('ignores a replay of the interrupt that was just answered', async () => {
+    const {result, unmount} = setup();
+    const manager = getStreamingManager(THREAD_ID);
+    const cancel = vi.spyOn(manager, 'cancel');
+    vi.spyOn(manager, 'stream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onInterrupt(approval('a'));
+    });
+    await act(async () => {
+      await result.current.resumeWithDecisions([{type:'approve'}], 'a');
+    });
+    expect(cancel).not.toHaveBeenCalled();
+    expect(result.current.pendingInterrupts.map(item => item.id)).toEqual(['b']);
     unmount();
   });
 

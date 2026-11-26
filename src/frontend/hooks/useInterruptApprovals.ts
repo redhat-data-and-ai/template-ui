@@ -24,6 +24,7 @@ export function useInterruptApprovals(
   onResume?: ApprovalSubmission,
   onAlwaysAllow?: (names: string[]) => void,
   isResuming = false,
+  resumingInterruptId?: string | null,
 ): ToolApproval[] {
   const [states, setStates] = useState<Record<string, DecisionState>>({});
   const live = useRef(states);
@@ -58,8 +59,14 @@ export function useInterruptApprovals(
       actionIndex: index,
       request,
       disabled: controlsDisabled,
-      waitingForResume: isResuming,
-      decision: state.decisions[index],
+      waitingForResume: isResuming
+        && interrupt.id !== resumingInterruptId
+        && interrupts.some((item) => item.id === resumingInterruptId),
+      decision: state.decisions[index] ?? (
+        isResuming && resumingInterruptId && interrupt.id === resumingInterruptId
+          ? { type: 'approve' }
+          : null
+      ),
       decide: (decision: Decision) => { void decide(index, decision); },
       alwaysAllow: onAlwaysAllow ? () => {
         const current = live.current[key] ?? empty();
@@ -82,10 +89,38 @@ function canonical(value: unknown): string {
   });
 }
 
+type ApprovalCall = {
+  id?: string;
+  name: string;
+  args?: Record<string, unknown>;
+  content?: unknown;
+  transcript?: Array<{ tool_calls?: ApprovalCall[] }>;
+};
+
+function isUnfinished(call: ApprovalCall): boolean {
+  return Boolean(call.id) && call.content == null;
+}
+
+function approvalCandidates(messages: Message[]): ApprovalCall[] {
+  const found: ApprovalCall[] = [];
+  for (const message of messages) {
+    if (message.type !== 'ai' || !Array.isArray(message.tool_calls)) continue;
+    for (const raw of message.tool_calls) {
+      const call = raw as ApprovalCall;
+      if (isUnfinished(call)) found.push(call);
+      for (const entry of call.transcript ?? []) {
+        for (const inner of entry.tool_calls ?? []) {
+          if (isUnfinished(inner)) found.push(inner);
+        }
+      }
+    }
+  }
+  return found;
+}
+
 /** Bind only an unambiguous unfinished tool call with matching name AND args. */
 export function bindToolApprovals(messages: Message[], approvals: ToolApproval[]) {
-  const candidates = messages.flatMap(message => message.type === 'ai' && Array.isArray(message.tool_calls)
-    ? message.tool_calls.filter(call => call.id && (call as { content?: unknown }).content == null) : []);
+  const candidates = approvalCandidates(messages);
   const bindings = new Map<string, ToolApproval>();
   const unmatched: ToolApproval[] = [];
   for (const approval of approvals) {
