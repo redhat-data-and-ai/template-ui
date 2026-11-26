@@ -8,7 +8,7 @@
  * - Semantic HTML and form labelling
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, beforeEach, afterEach } from 'vitest';
 import { axe } from '../../test-utils/setup';
@@ -131,7 +131,7 @@ describe('HomePage — accessibility', () => {
 });
 
 // ---------------------------------------------------------------------------
-// SettingsPage — ARIA tab pattern
+// SettingsPage — navigation
 // ---------------------------------------------------------------------------
 describe('SettingsPage — accessibility', () => {
   it('passes axe audit', async () => {
@@ -139,77 +139,25 @@ describe('SettingsPage — accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
-  it('renders a tablist with correct role', () => {
+  it('section list is a labelled nav landmark of links', () => {
     renderWithProviders(<SettingsPage />);
-    const tablist = screen.getByRole('tablist');
-    expect(tablist).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' });
+    expect(within(nav).getAllByRole('link').length).toBeGreaterThan(0);
   });
 
-  it('tablist is wrapped in a nav landmark with label', () => {
+  it('exactly one section is marked current', () => {
     renderWithProviders(<SettingsPage />);
-    const tablist = screen.getByRole('tablist');
-    const nav = tablist.closest('nav');
-    expect(nav).not.toBeNull();
-    expect(nav).toHaveAttribute('aria-label');
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' });
+    const current = within(nav)
+      .getAllByRole('link')
+      .filter((l) => l.getAttribute('aria-current') === 'page');
+    expect(current).toHaveLength(1);
+    expect(current[0]).toHaveTextContent('Profile');
   });
 
-  it('tabs have role="tab" and aria-selected', () => {
+  it('the content panel is labelled by the active section', () => {
     renderWithProviders(<SettingsPage />);
-    const tabs = screen.getAllByRole('tab');
-    expect(tabs.length).toBeGreaterThan(0);
-    const selectedTabs = tabs.filter((t) => t.getAttribute('aria-selected') === 'true');
-    expect(selectedTabs.length).toBe(1);
-  });
-
-  it('each tab has aria-controls pointing to its panel', () => {
-    renderWithProviders(<SettingsPage />);
-    const tabs = screen.getAllByRole('tab');
-    tabs.forEach((tab) => {
-      const controlsId = tab.getAttribute('aria-controls');
-      expect(controlsId).toBeTruthy();
-      expect(document.getElementById(controlsId!)).toBeInTheDocument();
-    });
-  });
-
-  it('tabpanels have role="tabpanel" and aria-labelledby pointing to their tab', () => {
-    renderWithProviders(<SettingsPage />);
-    const panels = screen.getAllByRole('tabpanel');
-    expect(panels.length).toBeGreaterThan(0);
-    panels.forEach((panel) => {
-      const labelledBy = panel.getAttribute('aria-labelledby');
-      expect(labelledBy).toBeTruthy();
-      expect(document.getElementById(labelledBy!)).toBeInTheDocument();
-    });
-  });
-
-  it('inactive tab panels are hidden from assistive technology', () => {
-    renderWithProviders(<SettingsPage />);
-    const panels = document.querySelectorAll('[role="tabpanel"]');
-    const hiddenPanels = document.querySelectorAll('[role="tabpanel"][hidden]');
-    expect(panels.length).toBeGreaterThan(0);
-    expect(hiddenPanels.length).toBe(panels.length - 1);
-  });
-
-  it('arrow-key navigation moves focus between tabs', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<SettingsPage />);
-    const tabs = screen.getAllByRole('tab');
-    tabs[0].focus();
-    await user.keyboard('{ArrowDown}');
-    expect(document.activeElement).toBe(tabs[1]);
-    await user.keyboard('{ArrowUp}');
-    expect(document.activeElement).toBe(tabs[0]);
-  });
-
-  it('Home/End keys jump to first and last tabs', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<SettingsPage />);
-    const tabs = screen.getAllByRole('tab');
-    tabs[0].focus();
-    await user.keyboard('{End}');
-    expect(document.activeElement).toBe(tabs[tabs.length - 1]);
-    await user.keyboard('{Home}');
-    expect(document.activeElement).toBe(tabs[0]);
+    expect(screen.getByRole('heading', { name: 'Profile', level: 2 })).toBeInTheDocument();
   });
 
   it('back button has a descriptive aria-label', () => {
@@ -244,7 +192,7 @@ describe('AppearanceSettings — accessibility', () => {
     renderWithProviders(<AppearanceSettings />);
     const checked = screen
       .getAllByRole('radio')
-      .filter((r) => r.getAttribute('aria-checked') === 'true');
+      .filter((r) => (r as HTMLInputElement).checked);
     expect(checked.length).toBe(1);
   });
 
@@ -253,7 +201,7 @@ describe('AppearanceSettings — accessibility', () => {
     renderWithProviders(<AppearanceSettings />);
     const radios = screen.getAllByRole('radio');
     await user.click(radios[1]);
-    expect(radios[1]).toHaveAttribute('aria-checked', 'true');
+    expect(radios[1]).toBeChecked();
   });
 });
 

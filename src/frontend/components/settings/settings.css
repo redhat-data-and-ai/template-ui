@@ -1,0 +1,127 @@
+/* Settings page layout: PF Nav + Card, no header band or divider. */
+.app-settings {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-settings__header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  padding: var(--pf-t--global--spacer--md) var(--pf-t--global--spacer--lg) 0;
+}
+.app-settings__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pf-t--global--spacer--md) var(--pf-t--global--spacer--lg) var(--pf-t--global--spacer--lg);
+}
+.app-settings__layout {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: var(--pf-t--global--spacer--lg);
+  align-items: start;
+  max-width: 64rem;
+  margin-inline: auto;
+}
+@media (max-width: 640px) {
+  .app-settings__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.app-settings__nav {
+  --pf-v6-c-nav--RowGap: var(--pf-t--global--spacer--sm);
+  position: relative;
+  padding-inline-start: var(--pf-t--global--spacer--sm);
+}
+.app-settings__nav .pf-v6-c-nav__list {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Current item: PF raised row plus a bar in the gutter, as in the sidebar. */
+.app-settings__nav .pf-v6-c-nav__item {
+  position: relative;
+}
+.app-settings__nav .pf-v6-c-nav__link.pf-m-current::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--pf-t--global--spacer--sm) * -1);
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--pf-t--global--border--color--clicked);
+}
+.app-settings__panel {
+  min-width: 0;
+}
+.app-settings__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--lg);
+}
+.app-settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pf-t--global--spacer--md);
+}
+.app-settings__row > :first-child {
+  min-width: 0;
+}
+.app-settings__muted {
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--sm);
+}
+.app-settings__avatar {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--pf-t--global--font--size--2xl);
+  font-weight: 700;
+  background-color: var(--pf-t--global--background--color--secondary--default);
+  color: var(--app-text);
+  flex: none;
+}
+.app-settings__item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-settings__item-text--off {
+  color: var(--app-text-secondary);
+  text-decoration: line-through;
+}
+.app-settings__theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pf-t--global--spacer--md);
+}
+.app-settings__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--sm);
+}
+.app-settings__list > li {
+  display: flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--md);
+  min-width: 0;
+}
+.app-settings__center {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--pf-t--global--spacer--lg);
+}
+.app-settings__inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+}

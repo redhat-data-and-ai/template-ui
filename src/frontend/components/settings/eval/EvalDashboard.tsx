@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Alert, AlertActionLink, Button, EmptyState, EmptyStateBody } from '@patternfly/react-core';
 import { buildAppPath } from '../../../lib/app-paths';
 import { useEvalDashboard } from '../../../hooks/useEvalDashboard';
 import { useDatasetPresence } from '../../../hooks/useDatasetPresence';
@@ -50,7 +51,7 @@ export function EvalDashboard() {
   const hasHistory = (history?.runs?.length ?? 0) > 0;
 
   return (
-    <div className="space-y-5">
+    <div className="app-settings__stack">
       <EvalControls
         onTrigger={trigger}
         isRunning={isRunning}
@@ -61,15 +62,17 @@ export function EvalDashboard() {
       />
 
       {authRequired.length > 0 && (
-        <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 space-y-2">
-          <p className="text-sm font-medium text-yellow-800">
-            Authentication required to run eval:
-          </p>
-          <div className="flex flex-col gap-2">
+        <Alert
+          isInline
+          variant="warning"
+          title="Authentication required to run eval"
+          actionLinks={<AlertActionLink onClick={clearAuthRequired}>Dismiss</AlertActionLink>}
+        >
+          <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--sm)' }}>
             {authRequired.map((server) => (
-              <div key={server.name} className="flex flex-col gap-1">
-                <button
-                  className="w-fit rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+              <div key={server.name}>
+                <Button
+                  variant="secondary"
                   onClick={() => {
                     setConnectErrors((e) => ({ ...e, [server.name]: '' }));
                     if (!isSafeConnectUrl(server.connect_url)) {
@@ -104,18 +107,15 @@ export function EvalDashboard() {
                   }}
                 >
                   Authenticate {server.name.charAt(0).toUpperCase() + server.name.slice(1)}
-                </button>
+                </Button>
                 {connectErrors[server.name] && (
-                  <p className="text-xs text-red-600">{connectErrors[server.name]}</p>
+                  <p className="app-settings__muted">{connectErrors[server.name]}</p>
                 )}
               </div>
             ))}
+            <p>After authenticating, click Evaluate again.</p>
           </div>
-          <p className="text-xs text-yellow-700">
-            After authenticating, click Evaluate again.{' '}
-            <button className="underline" onClick={clearAuthRequired}>Dismiss</button>
-          </p>
-        </div>
+        </Alert>
       )}
 
       <EvalStatusBar
@@ -146,11 +146,9 @@ export function EvalDashboard() {
         evalState.status !== 'no_dataset' &&
         evalState.status !== 'error' &&
         evalState.status !== 'failed' && (
-        <div className="rounded-lg border border-border bg-card px-4 py-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            No evaluation history yet. Run your first eval to see results and trends.
-          </p>
-        </div>
+        <EmptyState headingLevel="h4" titleText="No evaluation history yet" variant="sm">
+          <EmptyStateBody>Run your first eval to see results and trends.</EmptyStateBody>
+        </EmptyState>
       )}
 
       {reportData && (
