@@ -20,5 +20,23 @@
 }
 .chat-welcome__card .pf-v6-c-card__title-text { font-weight: var(--pf-t--global--font--weight--body--default); }
 .chat-welcome__card-text { color: var(--app-text); font-size: var(--pf-t--global--font--size--body--default); }
-.chat-welcome .pf-chatbot__hello { color: var(--app-accent-strong); }
-.chat-welcome .pf-chatbot__question { color: var(--app-text); font-weight: var(--pf-t--global--font--weight--body--default); font-size: var(--pf-t--global--font--size--xl); }
+.chat-welcome { text-align: center; }
+.chat-welcome .pf-chatbot--layout--welcome { text-align: center; align-items: center; }
+.chat-welcome .pf-chatbot--layout--welcome .pf-v6-c-content--h1,
+.chat-welcome .pf-chatbot--layout--welcome .pf-chatbot__hello,
+.chat-welcome .pf-chatbot--layout--welcome .pf-chatbot__question {
+  color: var(--app-text);
+  font-weight: var(--pf-t--global--font--weight--heading--bold);
+}
+.chat-welcome .pf-chatbot--layout--welcome .pf-chatbot__hello { font-size: var(--pf-t--global--font--size--4xl); }
+.chat-welcome .pf-chatbot--layout--welcome .pf-chatbot__question {
+  font-size: var(--pf-t--global--font--size--md);
+  font-weight: var(--pf-t--global--font--weight--body--default);
+}
+.chat-welcome .pf-chatbot--layout--welcome .pf-chatbot__question b { font-weight: var(--pf-t--global--font--weight--body--bold); }
+.chat-welcome__subheading {
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--sm);
+  font-weight: var(--pf-t--global--font--weight--body--bold);
+  margin: 0 0 var(--pf-t--global--spacer--sm);
+}

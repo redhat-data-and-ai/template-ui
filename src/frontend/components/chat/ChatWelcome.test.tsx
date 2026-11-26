@@ -9,7 +9,9 @@ describe('ChatWelcome', () => {
   it('renders the greeting and description', () => {
     render(<ChatWelcome userName="Ada" agentTitle="Bot" prompts={prompts} onPrompt={vi.fn()} />);
     expect(screen.getByText('Hey Ada!')).toBeInTheDocument();
-    expect(screen.getByText('Bot is ready to help. What would you like to explore today?')).toBeInTheDocument();
+    expect(screen.getByText('Bot').tagName).toBe('B');
+    expect(screen.getByText(/is ready to help\. What would you like to explore today\?/)).toBeInTheDocument();
+    expect(screen.getByText(/Let's try some quick prompts/)).toBeInTheDocument();
   });
 
   it('renders one button per prompt', () => {

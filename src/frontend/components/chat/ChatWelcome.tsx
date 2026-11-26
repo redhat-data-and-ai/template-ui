@@ -13,9 +13,25 @@ export function ChatWelcome({ userName, agentTitle, prompts, onPrompt }: ChatWel
   return (
     <div className="chat-welcome">
       <ChatbotWelcomePrompt
-        title={`Hey ${userName}!`}
-        description={`${agentTitle} is ready to help. What would you like to explore today?`}
+        // PF types these as string but renders them inside spans; nodes are safe.
+        title={
+          (
+            <>
+              Hey {userName}! <span aria-hidden="true">👋</span>
+            </>
+          ) as unknown as string
+        }
+        description={
+          (
+            <>
+              <b>{agentTitle}</b> is ready to help. What would you like to explore today?
+            </>
+          ) as unknown as string
+        }
       />
+      <h2 className="chat-welcome__subheading">
+        Let&apos;s try some quick prompts <span aria-hidden="true">🚀</span>
+      </h2>
       <Gallery
         hasGutter
         className="chat-welcome__gallery"
