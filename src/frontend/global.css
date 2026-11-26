@@ -397,6 +397,8 @@ textarea.composer-input:focus-visible { outline: none; }
   flex: none;
   padding-block: var(--pf-t--global--spacer--sm);
   border: 0;
+  display: flex;
+  justify-content: center;
 }
 
 .app-nav-truncate {
