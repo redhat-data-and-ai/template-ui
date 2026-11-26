@@ -1,5 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Modal, ModalBody, ModalHeader, ModalVariant } from '@patternfly/react-core';
+import {
+  CodeBlock,
+  CodeBlockCode,
+  ExpandableSection,
+  Modal,
+  ModalBody,
+  ModalHeader,
+  ModalVariant,
+  Title,
+} from '@patternfly/react-core';
 import type { EvalRow, MetricStats } from './eval-types';
 import { ScoreGauge } from './ScoreGauge';
 import { ScoreHero } from './ScoreHero';
@@ -72,17 +81,17 @@ export function FullReportModal({ result, prevScore, onClose }: FullReportModalP
       <ModalHeader title="Agent Evaluation Report" />
       <ModalBody>
         <div className="app-settings__stack">
-          <div className="flex items-center gap-4">
+          <div className="app-settings__inline" style={{ gap: 'var(--pf-t--global--spacer--lg)' }}>
             {displayScore != null && <ScoreGauge score={displayScore} />}
             <ScoreHero data={displayData} prevScore={isFiltered ? null : prevScore} />
           </div>
 
           {displayByMetric && Object.keys(displayByMetric).length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--sm)' }}>
+              <Title headingLevel="h4" size="md">
                 Metrics
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              </Title>
+              <div className="app-settings__theme-grid">
                 {Object.entries(displayByMetric).map(([key, stats]) => (
                   <MetricCard key={key} metricKey={key} stats={stats} />
                 ))}
@@ -100,14 +109,11 @@ export function FullReportModal({ result, prevScore, onClose }: FullReportModalP
             />
           )}
 
-          <details className="mt-4">
-            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-              Raw JSON
-            </summary>
-            <pre className="mt-2 text-xs rounded bg-secondary/30 p-3 overflow-auto max-h-64 text-foreground">
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          </details>
+          <ExpandableSection toggleText="Raw JSON">
+            <CodeBlock>
+              <CodeBlockCode>{JSON.stringify(result, null, 2)}</CodeBlockCode>
+            </CodeBlock>
+          </ExpandableSection>
         </div>
       </ModalBody>
     </Modal>

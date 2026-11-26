@@ -9,10 +9,8 @@ import {
   CartesianGrid,
 } from 'recharts';
 import type { EvalTrendsResponse } from './eval-types';
-import { friendlyMetricName, useDarkMode } from './eval-utils';
-
-const CHART_COLORS_LIGHT = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed'];
-const CHART_COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
+import { Card, CardBody, Content } from '@patternfly/react-core';
+import { friendlyMetricName, SERIES_COLORS } from './eval-utils';
 
 /** Formats an axis tick label as time-only when all points share a date, otherwise as a short date. */
 function formatTickLabel(iso: string, allSameDay: boolean): string {
@@ -41,19 +39,17 @@ interface TrendChartProps {
 
 /** Full-width Recharts line chart showing overall and per-metric score trends over time. */
 export function TrendChart({ data }: TrendChartProps) {
-  const isDark = useDarkMode();
-
   if (!data.overall || data.overall.length < 2) {
     return (
-      <div className="rounded-lg border border-border bg-card px-4 py-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          Need at least 2 eval runs to show trends.
-        </p>
-      </div>
+      <Card isCompact>
+        <CardBody>
+          <Content component="p">Need at least 2 eval runs to show trends.</Content>
+        </CardBody>
+      </Card>
     );
   }
 
-  const colors = isDark ? CHART_COLORS_DARK : CHART_COLORS_LIGHT;
+  const colors = SERIES_COLORS;
   const metricKeys = Object.keys(data.metrics);
 
   const timestamps = [...new Set([
@@ -87,12 +83,12 @@ export function TrendChart({ data }: TrendChartProps) {
   });
 
   const allKeys = ['Overall', ...metricKeys];
-  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-  const axisTickColor = isDark ? '#a1a1aa' : '#71717a';
+  const gridColor = 'var(--pf-t--global--border--color--default)';
+  const axisTickColor = 'var(--pf-t--global--text--color--subtle)';
 
   return (
-    <div>
-      <div className="rounded-lg border border-border bg-card p-3">
+    <Card isCompact>
+      <CardBody>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
             <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
@@ -114,12 +110,12 @@ export function TrendChart({ data }: TrendChartProps) {
               contentStyle={{
                 fontSize: 12,
                 borderRadius: 8,
-                border: '1px solid var(--border)',
-                backgroundColor: 'var(--card)',
-                color: 'var(--foreground)',
+                border: '1px solid var(--pf-t--global--border--color--default)',
+                backgroundColor: 'var(--pf-t--global--background--color--floating--default)',
+                color: 'var(--pf-t--global--text--color--regular)',
               }}
-              itemStyle={{ color: 'var(--foreground)' }}
-              labelStyle={{ color: 'var(--foreground)', fontWeight: 600 }}
+              itemStyle={{ color: 'var(--pf-t--global--text--color--regular)' }}
+              labelStyle={{ color: 'var(--pf-t--global--text--color--regular)', fontWeight: 600 }}
               labelFormatter={(label: string) => formatTooltipLabel(label)}
               formatter={(value: number, name: string) => [`${value}%`, friendlyMetricName(name)]}
             />
@@ -135,14 +131,14 @@ export function TrendChart({ data }: TrendChartProps) {
                 stroke={colors[i % colors.length]}
                 strokeWidth={key === 'Overall' ? 2.5 : 2}
                 strokeDasharray={key === 'Overall' ? '6 3' : undefined}
-                dot={{ r: 4, strokeWidth: 2, fill: isDark ? '#1e1e2e' : '#ffffff' }}
+                dot={{ r: 4, strokeWidth: 2, fill: 'var(--pf-t--global--background--color--primary--default)' }}
                 activeDot={{ r: 6 }}
                 connectNulls
               />
             ))}
           </LineChart>
         </ResponsiveContainer>
-      </div>
-    </div>
+      </CardBody>
+    </Card>
   );
 }

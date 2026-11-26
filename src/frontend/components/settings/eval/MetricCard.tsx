@@ -1,5 +1,6 @@
+import { Card, CardBody, Content, Title } from '@patternfly/react-core';
 import type { MetricStats } from './eval-types';
-import { friendlyMetricName } from './eval-utils';
+import { friendlyMetricName, scoreTone, toneChartColor, toneTextColor } from './eval-utils';
 
 interface MetricCardProps {
   metricKey: string;
@@ -12,15 +13,18 @@ function MiniDonut({ pct, size = 40 }: { pct: number; size?: number }) {
   const r = (size - 8) / 2;
   const circ = 2 * Math.PI * r;
   const dash = (pct / 100) * circ;
-  const color = pct >= 70 ? '#059669' : pct >= 50 ? '#d97706' : '#ef4444';
   const cx = size / 2;
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--border, #e5e7eb)" strokeWidth="4" />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+      <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--pf-t--global--border--color--default)" strokeWidth="4" />
       <circle
-        cx={cx} cy={cx} r={r} fill="none"
-        stroke={color} strokeWidth="4"
+        cx={cx}
+        cy={cx}
+        r={r}
+        fill="none"
+        stroke={toneChartColor(scoreTone(pct))}
+        strokeWidth="4"
         strokeDasharray={`${dash} ${circ}`}
         strokeLinecap="round"
         transform={`rotate(-90 ${cx} ${cx})`}
@@ -33,36 +37,30 @@ function MiniDonut({ pct, size = 40 }: { pct: number; size?: number }) {
 /** Displays a single metric's pass rate with a mini donut chart and pass/total count. */
 export function MetricCard({ metricKey, stats }: MetricCardProps) {
   const hasRate = stats.pass_rate != null;
-  const rate = hasRate
-    ? stats.pass_rate * (stats.pass_rate <= 1 ? 100 : 1)
-    : null;
+  const rate = hasRate ? stats.pass_rate * (stats.pass_rate <= 1 ? 100 : 1) : null;
   const pct = rate != null ? Math.round(rate) : null;
   const total = (stats.pass ?? 0) + (stats.fail ?? 0);
 
-  const scoreCls = pct == null
-    ? 'text-muted-foreground'
-    : pct >= 70
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : pct >= 50
-        ? 'text-amber-600 dark:text-amber-400'
-        : 'text-red-600 dark:text-red-400';
-
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2.5 flex items-center gap-3">
-      <MiniDonut pct={pct ?? 0} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-medium text-foreground truncate">
-            {friendlyMetricName(metricKey)}
-          </span>
-          <span className={`text-sm font-bold tabular-nums shrink-0 ${scoreCls}`}>
-            {pct != null ? `${pct}%` : 'N/A'}
-          </span>
+    <Card isCompact>
+      <CardBody>
+        <div className="app-settings__row" style={{ justifyContent: 'flex-start' }}>
+          <MiniDonut pct={pct ?? 0} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="app-settings__row">
+              <Title headingLevel="h5" size="md" className="app-nav-truncate">
+                {friendlyMetricName(metricKey)}
+              </Title>
+              <strong style={{ color: pct != null ? toneTextColor(scoreTone(pct)) : undefined }}>
+                {pct != null ? `${pct}%` : 'N/A'}
+              </strong>
+            </div>
+            <Content component="small">
+              {stats.pass ?? 0} of {total} passed
+            </Content>
+          </div>
         </div>
-        <span className="text-xs text-muted-foreground">
-          {stats.pass ?? 0} of {total} passed
-        </span>
-      </div>
-    </div>
+      </CardBody>
+    </Card>
   );
 }
