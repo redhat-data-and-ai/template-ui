@@ -1,15 +1,16 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Settings, Bot, User } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Bot } from "lucide-react";
 import type { InterruptInfo, ApprovalSubmission } from "../types/deep-agent";
 import { ToolApprovalControls } from "./ToolApprovalControls";
 import { bindToolApprovals, useInterruptApprovals } from "../hooks/useInterruptApprovals";
 import type { ToolApproval } from "../hooks/useInterruptApprovals";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, Fragment } from "react";
+import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
 import { cn } from "../lib/utils";
 import {
+  Button,
   Dropdown,
   DropdownItem,
   DropdownList,
@@ -34,6 +35,10 @@ import { TodoStrip } from "./TodoStrip";
 import { FeedbackButtons, FeedbackCommentBox, useFeedback } from "./FeedbackButtons";
 import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
+import { ChatbotContent } from "@patternfly/chatbot/dist/esm/ChatbotContent";
+import { MessageBox, type MessageBoxHandle } from "@patternfly/chatbot/dist/esm/MessageBox";
+import "@patternfly/chatbot/dist/css/main.css";
+import { ChatBubble } from "./chat/ChatBubble";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -201,7 +206,12 @@ function MessageCopyButton({ text }: { text: string }) {
   );
 }
 
-function MessageActionsRow({
+function BotAvatar() {
+  return <Bot />;
+}
+
+/** Assistant message bubble with its copy/feedback actions and comment box. */
+function AssistantBubble({
   isLastAiInTurn,
   copyText,
   messageId,
@@ -209,6 +219,9 @@ function MessageActionsRow({
   traceId,
   userId,
   existingFeedback,
+  plain,
+  meta,
+  children,
 }: {
   isLastAiInTurn: boolean;
   copyText: string;
@@ -217,25 +230,44 @@ function MessageActionsRow({
   traceId: string | null;
   userId?: string;
   existingFeedback: 'up' | 'down' | null;
+  /** Tool-call / sub-agent messages: full width, cards sit on the transcript. */
+  plain: boolean;
+  meta?: ReactNode;
+  children: ReactNode;
 }) {
   const fb = useFeedback({ messageId, traceId, chatId, userId, existingFeedback });
 
   return (
-    <>
-      <div className="pl-11 flex items-center gap-0.5 mt-1">
-        {isLastAiInTurn && (
-          <>
-            <MessageCopyButton text={copyText} />
-            <FeedbackButtons fb={fb} />
-          </>
-        )}
-        <span className="inline-flex items-center gap-1 ml-2 text-[11px] text-muted-foreground" aria-label="AI-generated content">
-          <Bot className="w-2.5 h-2.5" aria-hidden="true" />
-          AI-generated
-        </span>
-      </div>
-      {isLastAiInTurn && <FeedbackCommentBox fb={fb} />}
-    </>
+    <ChatBubble
+      role="assistant"
+      htmlRole="article"
+      aria-label="Message from assistant"
+      avatar={<BotAvatar />}
+      wide={plain}
+      className={plain ? 'chat-bubble--plain' : undefined}
+      actions={
+        <>
+          {isLastAiInTurn && (
+            <>
+              <MessageCopyButton text={copyText} />
+              <FeedbackButtons fb={fb} />
+            </>
+          )}
+          <span className="inline-flex items-center gap-1 ml-2 text-[11px] text-muted-foreground" aria-label="AI-generated content">
+            <Bot className="w-2.5 h-2.5" aria-hidden="true" />
+            AI-generated
+          </span>
+        </>
+      }
+      footer={
+        <>
+          {isLastAiInTurn && <FeedbackCommentBox fb={fb} />}
+          {meta}
+        </>
+      }
+    >
+      {children}
+    </ChatBubble>
   );
 }
 
@@ -393,69 +425,61 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
     setIsEditing(false);
   };
 
-  return (
-    <div className="flex items-end gap-3 justify-end group/msg">
-      <div className={cn("flex flex-col items-end", isEditing ? "w-full sm:w-[75%]" : "max-w-[85%] sm:max-w-[75%]")}>
-        <div
-          className={cn(
-            "relative rounded-2xl rounded-br-sm break-words px-4 py-3 bg-primary text-primary-foreground shadow-card",
-            isEditing ? "w-full" : "w-fit",
-          )}
-        >
-          {isEditing ? (
-            <div className="space-y-2">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                className="w-full min-h-[88px] rounded-lg border border-primary-foreground/35 bg-primary-foreground/10 p-2.5 text-sm text-primary-foreground placeholder:text-primary-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary-foreground/40"
-                aria-label="Edit message"
-              />
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => saveEdit()}
-                  aria-label="Save edited message"
-                  className="rounded-md bg-primary-foreground px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-foreground/90"
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => cancelEdit()}
-                  aria-label="Cancel editing message"
-                  className="rounded-md border border-primary-foreground/40 px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-foreground/10"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm leading-relaxed [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
-                {plain}
-              </ReactMarkdown>
-            </div>
-          )}
-        </div>
-        {!isEditing && (
-          <div className="mt-2 opacity-0 transition-opacity group-hover/msg:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
-            <MessageCopyButton text={plain} />
-            <button
-              type="button"
-              onClick={() => startEdit()}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-muted/40 hover:text-muted-foreground disabled:pointer-events-none disabled:opacity-40"
-              aria-label="Edit message"
-              disabled={!canEdit}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
+  if (isEditing) {
+    return (
+      <ChatBubble
+        role="user"
+        htmlRole="article"
+        aria-label="Message from human"
+        wide
+        className="chat-bubble--editing"
+      >
+        <div className="space-y-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="app-chat-edit-input"
+            aria-label="Edit message"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" size="sm" onClick={() => saveEdit()} aria-label="Save edited message">
+              Save
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => cancelEdit()} aria-label="Cancel editing message">
+              Cancel
+            </Button>
           </div>
-        )}
+        </div>
+      </ChatBubble>
+    );
+  }
+
+  return (
+    <ChatBubble
+      role="user"
+      htmlRole="article"
+      aria-label="Message from human"
+      actions={
+        <>
+          <MessageCopyButton text={plain} />
+          <button
+            type="button"
+            onClick={() => startEdit()}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted/80 disabled:pointer-events-none disabled:opacity-40"
+            aria-label="Edit message"
+            disabled={!canEdit}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </>
+      }
+    >
+      <div className="app-chat-md [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
+          {plain}
+        </ReactMarkdown>
       </div>
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-        <User className="w-4 h-4 text-primary" />
-      </div>
-    </div>
+    </ChatBubble>
   );
 };
 
@@ -479,36 +503,29 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
         : extractMessageText(message.content);
 
   return (
-    <div className="flex items-start gap-3">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
-        <Bot className="w-4 h-4 text-white" />
-      </div>
-      <div className="flex-1 min-w-0 max-w-[85%] sm:max-w-[80%]">
-        <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-          {thinkingText.length > 0 && (
-            <div className="mb-3">
-              <ExpandableSection
-                toggleText="Thinking..."
-                isExpanded={thinkingExpanded}
-                onToggle={(_e, expanded) => setThinkingExpanded(expanded)}
-                isIndented
-                className="pf-v6-u-mb-0"
-              >
-                <div className="mt-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
-                  {thinkingText}
-                </div>
-              </ExpandableSection>
+    <>
+      {thinkingText.length > 0 && (
+        <div className="mb-3">
+          <ExpandableSection
+            toggleText="Thinking..."
+            isExpanded={thinkingExpanded}
+            onToggle={(_e, expanded) => setThinkingExpanded(expanded)}
+            isIndented
+            className="pf-v6-u-mb-0"
+          >
+            <div className="mt-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
+              {thinkingText}
             </div>
-          )}
-          {bodyMd.length > 0 && (
-            <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
-            </div>
-          )}
-          {customData && <CustomDataRenderer data={customData} />}
+          </ExpandableSection>
         </div>
-      </div>
-    </div>
+      )}
+      {bodyMd.length > 0 && (
+        <div className="app-chat-md prose prose-sm dark:prose-invert max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
+        </div>
+      )}
+      {customData && <CustomDataRenderer data={customData} />}
+    </>
   );
 };
 
@@ -581,11 +598,8 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
           })}
 
           {regularCalls.length > 0 && (
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center">
-                <Settings className="w-4 h-4 text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0 space-y-2">
+            <div className="w-full">
+              <div className="min-w-0 space-y-2">
                 {regularCalls.map((toolCall, idx) => {
                   const itemId = `${message.id}-${idx}`;
                   const isExpanded = expandedItems.has(itemId);
@@ -803,6 +817,9 @@ export function ChatMessagesView({
   const { bindings, unmatched } = bindToolApprovals(messages, approvals);
   const pendingInterrupt = pendingInterrupts[0];
   const bottomRef = useRef<HTMLDivElement>(null);
+  const setScrollArea = useCallback((node: MessageBoxHandle | null) => {
+    scrollAreaRef.current = node;
+  }, [scrollAreaRef]);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const prevPendingInterrupt = useRef(pendingInterrupt);
   const prevIsLoading = useRef(isLoading);
@@ -900,162 +917,152 @@ export function ChatMessagesView({
           </Dropdown>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto chat-scroll" ref={scrollAreaRef}>
-        <div role="log" aria-label="Chat messages" aria-live="off" aria-busy={isLoading} className="p-4 md:p-6 space-y-5 max-w-3xl mx-auto pt-8">
-          {messages.map((message, messageIndex) => {
-            if (message.type === 'tool') {
-              return <Fragment key={message.id ?? `m-${messageIndex}`} />;
-            }
-            const copyText = getCopyableAiMessageText(message.content);
-            const showResponseTiming =
-              message.type === 'ai' &&
-              messageIndex === lastAiMessageIndex &&
-              lastResponseTiming != null &&
-              !isLoading;
-
-            const isLastAiInTurn =
-              message.type === 'ai' &&
-              (() => {
-                for (let i = messageIndex + 1; i < messages.length; i++) {
-                  if (messages[i].type === 'human') return true;
-                  if (messages[i].type === 'ai') return false;
-                }
-                return true;
-              })();
-
-            return (
-            <div
-              key={message.id || `msg-${messageIndex}`}
-              role="article"
-              aria-label={`Message from ${message.type === 'human' ? 'human' : 'assistant'}`}
-              className="animate-fadeInUpSmooth group"
-              style={{ animationDelay: `${Math.min(messageIndex * 30, 150)}ms`, opacity: 0 }}
-            >
-              {message.type === "human" ? (
-                <HumanMessageBubble
-                  message={message}
-                  messageIndex={messageIndex}
-                  isLastHuman={messageIndex === lastHumanMessageIndex}
-                  isLoading={isLoading}
-                  onEditMessage={onEditMessage}
-                />
-              ) : (
-                <div className="w-full space-y-0">
-                  <AIMessageRenderer
+      <ChatbotContent className="app-chat-transcript">
+        <MessageBox ref={setScrollArea} ariaLabel="Chat transcript" className="app-chat-messagebox chat-scroll">
+          <div role="log" aria-label="Chat messages" aria-live="off" aria-busy={isLoading} className="app-chat-log">
+            {messages.map((message, messageIndex) => {
+              if (message.type === 'tool') {
+                return <Fragment key={message.id ?? `m-${messageIndex}`} />;
+              }
+              const key = message.id || `msg-${messageIndex}`;
+              if (message.type === "human") {
+                return (
+                  <HumanMessageBubble
+                    key={key}
                     message={message}
-                    approvalBindings={bindings}
+                    messageIndex={messageIndex}
+                    isLastHuman={messageIndex === lastHumanMessageIndex}
+                    isLoading={isLoading}
+                    onEditMessage={onEditMessage}
                   />
-                  <MessageActionsRow
-                    isLastAiInTurn={isLastAiInTurn}
-                    copyText={copyText}
-                    messageId={message.id ?? `msg-${messageIndex}`}
-                    chatId={chatId}
-                    traceId={traceId}
-                    userId={userId}
-                    existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
-                  />
-                  {showResponseTiming && (
-                    <div aria-hidden="true" className="pl-11 mt-1 space-y-0.5 text-muted-foreground">
-                      <div className="text-[11px] text-muted-foreground">
+                );
+              }
+
+              const copyText = getCopyableAiMessageText(message.content);
+              const showResponseTiming =
+                message.type === 'ai' &&
+                messageIndex === lastAiMessageIndex &&
+                lastResponseTiming != null &&
+                !isLoading;
+
+              const isLastAiInTurn =
+                message.type === 'ai' &&
+                (() => {
+                  for (let i = messageIndex + 1; i < messages.length; i++) {
+                    if (messages[i].type === 'human') return true;
+                    if (messages[i].type === 'ai') return false;
+                  }
+                  return true;
+                })();
+              const hasToolCalls = message.type === 'ai' && Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+
+              return (
+                <AssistantBubble
+                  key={key}
+                  isLastAiInTurn={isLastAiInTurn}
+                  copyText={copyText}
+                  messageId={message.id ?? `msg-${messageIndex}`}
+                  chatId={chatId}
+                  traceId={traceId}
+                  userId={userId}
+                  existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
+                  plain={hasToolCalls}
+                  meta={showResponseTiming && (
+                    <div aria-hidden="true" className="app-chat-meta space-y-0.5">
+                      <div>
                         Response time: {(lastResponseTiming.totalDurationMs / 1000).toFixed(1)}s
                       </div>
                       {lastResponseTiming.timeToFirstTokenMs != null && (
-                        <div className="text-[10px] text-muted-foreground">
+                        <div className="text-[10px]">
                           First token: {Math.round(lastResponseTiming.timeToFirstTokenMs)}ms
                         </div>
                       )}
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          );
-          })}
+                >
+                  <AIMessageRenderer
+                    message={message}
+                    approvalBindings={bindings}
+                  />
+                </AssistantBubble>
+              );
+            })}
 
-          {isLoading && (
-            <div
-              className="flex items-start gap-3 animate-fadeIn"
-              role="status"
-              aria-live="polite"
-              aria-label="Agent is thinking"
-            >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full gradient-brand flex items-center justify-center shadow-sm">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {isLoading && (
+              <ChatBubble
+                role="assistant"
+                htmlRole="status"
+                aria-live="polite"
+                aria-label="Agent is thinking"
+                avatar={<BotAvatar />}
+              >
+                <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="flex gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-200" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce animation-delay-400" />
+                    <span className="app-chat-typing-dot animate-bounce" />
+                    <span className="app-chat-typing-dot animate-bounce animation-delay-200" />
+                    <span className="app-chat-typing-dot animate-bounce animation-delay-400" />
                   </span>
                   Thinking...
                 </div>
-              </div>
-            </div>
-          )}
+              </ChatBubble>
+            )}
 
-          {showNoResponse && (
-            <div className="flex items-start gap-3 animate-fadeIn">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center">
-                <AlertCircle className="w-4 h-4 text-destructive" />
-              </div>
-              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card max-w-lg">
-                <p className="text-sm text-muted-foreground mb-1">
+            {showNoResponse && (
+              <ChatBubble role="assistant" className="chat-bubble--danger" avatar={<AlertCircle />}>
+                <p className="text-muted-foreground mb-1">
                   {errorMessage
                     ? 'The agent encountered an error:'
                     : 'The agent didn\u0027t respond. This could be a temporary issue.'}
                 </p>
                 {errorMessage && (
-                  <p className="text-sm text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
+                  <p className="text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
                     {errorMessage}
                   </p>
                 )}
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<RotateCcw className="w-3 h-3" />}
                   onClick={() => onRetry?.()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                   aria-label="Retry operation"
                 >
-                  <RotateCcw className="w-3 h-3" />
                   Retry
-                </button>
-              </div>
-            </div>
-          )}
-          {!showNoResponse && errorMessage && !isLoading && (
-            <div className="flex items-start gap-3 animate-fadeIn">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center">
-                <AlertCircle className="w-4 h-4 text-destructive" />
-              </div>
-              <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-card max-w-lg">
-                <p className="text-sm text-muted-foreground mb-1">The agent encountered an error:</p>
-                <p className="text-sm text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
+                </Button>
+              </ChatBubble>
+            )}
+            {!showNoResponse && errorMessage && !isLoading && (
+              <ChatBubble role="assistant" className="chat-bubble--danger" avatar={<AlertCircle />}>
+                <p className="text-muted-foreground mb-1">The agent encountered an error:</p>
+                <p className="text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
                   {errorMessage}
                 </p>
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<RotateCcw className="w-3 h-3" />}
                   onClick={() => onRetry?.()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                   aria-label="Retry operation"
                 >
-                  <RotateCcw className="w-3 h-3" />
                   Retry
-                </button>
-              </div>
-            </div>
-          )}
-          {unmatched.map((approval, index) => {
-            // Some subgraph tool calls are absent from parent-thread messages.
-            // Show their exact request in the same tool-card UI; never guess an owner.
-            const id = `pending-${approval.interruptId ?? index}-${approval.actionIndex}`;
-            const message = { type: 'ai', id, content: '', tool_calls: [{ id, name: approval.request.name, args: approval.request.args }] } as Message;
-            return <AIMessageRenderer key={approval.key} message={message} approvalBindings={new Map([[id, approval]])} />;
-          })}
-          {interruptContent}
-          <div ref={bottomRef} />
-        </div>
-      </div>
+                </Button>
+              </ChatBubble>
+            )}
+            {unmatched.map((approval, index) => {
+              // Some subgraph tool calls are absent from parent-thread messages.
+              // Show their exact request in the same tool-card UI; never guess an owner.
+              const id = `pending-${approval.interruptId ?? index}-${approval.actionIndex}`;
+              const message = { type: 'ai', id, content: '', tool_calls: [{ id, name: approval.request.name, args: approval.request.args }] } as Message;
+              return (
+                <ChatBubble key={approval.key} role="assistant" avatar={<BotAvatar />} wide className="chat-bubble--plain">
+                  <AIMessageRenderer message={message} approvalBindings={new Map([[id, approval]])} />
+                </ChatBubble>
+              );
+            })}
+            {interruptContent}
+            <div ref={bottomRef} />
+          </div>
+        </MessageBox>
+      </ChatbotContent>
       <TodoStrip messages={messages} isLoading={isLoading} />
       <McpStatusPanel mcpEvents={mcpEvents} />
       <div>
