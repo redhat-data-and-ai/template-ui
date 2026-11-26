@@ -74,6 +74,21 @@ describe('userSettings slice', () => {
     expect(localStorage.getItem(themeStorageKey())).toBe('dark');
   });
 
+  it('theme key is resolved once at init, not per write', async () => {
+    window.history.pushState({}, '', '/');
+    vi.resetModules();
+    const mod = await import('./userSettings');
+    const initKey = themeStorageKey();
+    expect(initKey).toBe('template-ui-theme');
+    window.history.pushState({}, '', '/agents/foo/chat');
+    expect(themeStorageKey()).toBe('template-ui-theme:agents/foo');
+    const base = mod.default(undefined, { type: '@@INIT' });
+    mod.default(base, mod.setTheme('dark'));
+    window.history.pushState({}, '', '/');
+    expect(localStorage.getItem(initKey)).toBe('dark');
+    expect(localStorage.getItem('template-ui-theme:agents/foo')).toBeNull();
+  });
+
   it('index.html pre-paint script uses the theme key', () => {
     const html = readFileSync(resolve(__dirname, '../../../../index.html'), 'utf8');
     expect(html).toContain("'template-ui-theme'");

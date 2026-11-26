@@ -16,9 +16,10 @@ export function themeStorageKey(): string {
 export function resolveInitialTheme(
   storage: Pick<Storage, 'getItem'>,
   prefersDark: boolean,
+  key: string = themeStorageKey(),
 ): ThemeChoice {
   try {
-    const stored = storage.getItem(themeStorageKey());
+    const stored = storage.getItem(key);
     if (stored === 'light' || stored === 'dark') return stored;
   } catch {
     // storage unavailable
@@ -26,9 +27,9 @@ export function resolveInitialTheme(
   return prefersDark ? 'dark' : 'light';
 }
 
-export function persistThemeChoice(theme: ThemeChoice): void {
+export function persistThemeChoice(theme: ThemeChoice, key: string = themeStorageKey()): void {
   try {
-    localStorage.setItem(themeStorageKey(), theme);
+    localStorage.setItem(key, theme);
   } catch {
     // ignore
   }
