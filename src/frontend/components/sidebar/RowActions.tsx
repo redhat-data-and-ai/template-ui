@@ -50,6 +50,7 @@ export function RowActions({ 'aria-label': ariaLabel, groups }: RowActionsProps)
           variant="plain"
           onClick={() => setIsOpen((open) => !open)}
           isExpanded={isOpen}
+          className={isOpen ? 'app-nav-row__toggle--open' : undefined}
           aria-label={ariaLabel}
           icon={<EllipsisVIcon />}
         />

@@ -9,6 +9,7 @@ import {
 import { buildAppPath } from '../../lib/app-paths';
 import type { SidebarChatItem, SidebarProject } from '../../types/chat';
 import { ChatRow, type ChatRowContext } from './ChatList';
+import { isPlainLeftClick } from './isPlainLeftClick';
 import { RowActions, type RowActionGroup } from './RowActions';
 
 interface ProjectListProps {
@@ -134,6 +135,7 @@ export function ProjectList({
                 className="pf-v6-c-nav__link app-project-row__link"
                 title={project.name}
                 onClick={(e) => {
+                  if (!isPlainLeftClick(e)) return;
                   e.preventDefault();
                   navigate(`/project/${project.id}`);
                 }}

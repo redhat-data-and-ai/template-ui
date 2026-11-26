@@ -9,6 +9,7 @@ import { buildAppPath } from '../../lib/app-paths';
 import type { SidebarChatItem, SidebarProject } from '../../types/chat';
 import type { SubAgentInfo } from '../../types/deep-agent';
 import type { useSidebarDragDrop } from '../../hooks/useSidebarDragDrop';
+import { isPlainLeftClick } from './isPlainLeftClick';
 import { RowActions, type RowActionGroup } from './RowActions';
 
 export interface ChatRowContext {
@@ -110,6 +111,7 @@ export function ChatRow({ chat, ctx }: { chat: SidebarChatItem; ctx: ChatRowCont
         onDragStart={(e: DragEvent<HTMLElement>) => ctx.drag.handleDragStart(e, chat.id)}
         onDragEnd={ctx.drag.handleDragEnd}
         onClick={(e) => {
+          if (!isPlainLeftClick(e)) return;
           e.preventDefault();
           ctx.onSelectChat(chat.id);
         }}

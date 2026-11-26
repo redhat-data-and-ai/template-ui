@@ -394,17 +394,33 @@ input[type="url"]:focus {
 }
 .app-nav-row:hover .app-nav-row__actions,
 .app-nav-row:focus-within .app-nav-row__actions,
-.app-nav-row--active .app-nav-row__actions {
+.app-nav-row--active .app-nav-row__actions,
+.app-nav-row__actions:has(.app-nav-row__toggle--open) {
   opacity: 1;
 }
 .app-nav-row--dragging {
   opacity: 0.5;
 }
-/* Active indicator: accent bar on the leading edge. */
+/* Active item: PatternFly's raised current row (neutral surface, normal text)
+   plus a bar in the left gutter, as in the platform portal. */
+.app-sidebar-scroll {
+  padding-inline-start: var(--pf-t--global--spacer--sm);
+}
 .app-sidebar-scroll .pf-v6-c-nav__link.pf-m-current {
-  box-shadow: inset 3px 0 0 var(--app-accent-strong);
-  background-color: var(--app-accent-muted-bg);
+  background-color: var(--app-surface-raised);
   color: var(--app-text);
+}
+.app-sidebar-scroll .pf-v6-c-nav__link:not(.pf-m-current):hover {
+  background-color: var(--pf-t--global--background--color--action--plain--hover);
+}
+.app-nav-row--active::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--pf-t--global--spacer--sm) * -1);
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--pf-t--global--border--color--clicked);
 }
 .app-nav-rename {
   flex: 1 1 auto;

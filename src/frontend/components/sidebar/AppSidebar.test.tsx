@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../test-utils/render';
 import { AppSidebar } from './AppSidebar';
@@ -352,6 +352,32 @@ describe('AppSidebar — navigation', () => {
     );
     await user.click(screen.getByRole('link', { name: 'Research thread' }));
     expect(onSelectChat).toHaveBeenCalledWith('c1');
+  });
+
+  it('lets modified clicks fall through to the browser', () => {
+    const onSelectChat = vi.fn();
+    renderWithProviders(
+      <AppSidebar isOpen {...sidebarProps} onSelectChat={onSelectChat} chatHistory={[sampleChat]} />,
+    );
+    const link = screen.getByRole('link', { name: 'Research thread' });
+    const notPrevented = fireEvent.click(link, { ctrlKey: true });
+    fireEvent.click(link, { metaKey: true });
+    fireEvent.click(link, { button: 1 });
+    expect(notPrevented).toBe(true);
+    expect(onSelectChat).not.toHaveBeenCalled();
+    const plain = fireEvent.click(link);
+    expect(plain).toBe(false);
+    expect(onSelectChat).toHaveBeenCalledWith('c1');
+    void user;
+  });
+
+  it('keeps the row kebab marked visible while its menu is open', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AppSidebar isOpen {...sidebarProps} chatHistory={[sampleChat]} />);
+    const kebab = screen.getByRole('button', { name: /Actions for chat/ });
+    expect(kebab).not.toHaveClass('app-nav-row__toggle--open');
+    await user.click(kebab);
+    expect(kebab).toHaveClass('app-nav-row__toggle--open');
   });
 
   it('exposes the full title of a long thread via the title attribute', () => {
