@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.pf-v6-theme-dark *));
 
 /* ── Red Hat Brand Tokens ──────────────────────────────── */
 :root {
@@ -60,75 +60,46 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* ── Light Theme — warm, clean, Red Hat personality ──── */
+/* ── Theme values alias the neutral token layer (styles/theme-tokens.css) ── */
 :root {
   --radius: 0.625rem;
-  --background: #f8f9fa;
-  --foreground: #1a1d21;
-  --card: #ffffff;
-  --card-foreground: #1a1d21;
-  --popover: #ffffff;
-  --popover-foreground: #1a1d21;
-  --primary: #0066cc;
-  --primary-foreground: #ffffff;
-  --secondary: #f0f1f3;
-  --secondary-foreground: #2a2d31;
-  --muted: #f0f1f3;
-  --muted-foreground: #6a6e73;
-  --accent: #fff3f3;
-  --accent-foreground: #a60000;
-  --destructive: #c9190b;
-  --border: #d2d3d5;
-  --input: #d2d3d5;
-  --ring: #0066cc;
-  --chart-1: #ee0000;
-  --chart-2: #0066cc;
-  --chart-3: #3e8635;
-  --chart-4: #f0ab00;
-  --chart-5: #a30000;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #1a1d21;
-  --sidebar-primary: #0066cc;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f0f4f9;
-  --sidebar-accent-foreground: #1a1d21;
-  --sidebar-border: #e7e8ea;
-  --sidebar-ring: #0066cc;
+  --background: var(--app-page-bg);
+  --foreground: var(--app-text);
+  --card: var(--app-surface-raised);
+  --card-foreground: var(--app-text);
+  --popover: var(--app-surface-raised);
+  --popover-foreground: var(--app-text);
+  --primary: var(--app-accent);
+  --primary-foreground: var(--app-on-accent);
+  --secondary: var(--app-secondary-muted-bg);
+  --secondary-foreground: var(--app-text);
+  --muted: var(--app-secondary-muted-bg);
+  --muted-foreground: var(--app-text-secondary);
+  --accent: var(--app-accent-muted-bg);
+  --accent-foreground: var(--app-accent-strong);
+  --destructive: var(--app-danger);
+  --border: var(--app-border);
+  --input: var(--app-border);
+  --ring: var(--app-accent-strong);
+  --chart-1: var(--app-accent-strong);
+  --chart-2: var(--app-info);
+  --chart-3: var(--app-positive);
+  --chart-4: var(--app-warning);
+  --chart-5: var(--app-secondary);
+  --sidebar: var(--app-surface-raised);
+  --sidebar-foreground: var(--app-text);
+  --sidebar-primary: var(--app-accent);
+  --sidebar-primary-foreground: var(--app-on-accent);
+  --sidebar-accent: var(--app-accent-muted-bg);
+  --sidebar-accent-foreground: var(--app-text);
+  --sidebar-border: var(--app-border);
+  --sidebar-ring: var(--app-accent-strong);
 }
 
-/* ── Dark Theme — rich navy-slate with depth ─────────── */
-.dark {
-  --background: #0f1117;
-  --foreground: #e6e8eb;
-  --card: #181b23;
-  --card-foreground: #e6e8eb;
-  --popover: #181b23;
-  --popover-foreground: #e6e8eb;
-  --primary: #4dabf7;
-  --primary-foreground: #0f1117;
-  --secondary: #1e2230;
-  --secondary-foreground: #e6e8eb;
-  --muted: #1e2230;
-  --muted-foreground: #8b919a;
-  --accent: #2a1a1a;
-  --accent-foreground: #f56e6e;
-  --destructive: #f04646;
-  --border: #2a2e3a;
-  --input: #2a2e3a;
-  --ring: #4dabf7;
-  --chart-1: #f56e6e;
-  --chart-2: #4dabf7;
-  --chart-3: #51cf66;
-  --chart-4: #ffd43b;
-  --chart-5: #cc5de8;
-  --sidebar: #13151d;
-  --sidebar-foreground: #e6e8eb;
-  --sidebar-primary: #4dabf7;
-  --sidebar-primary-foreground: #0f1117;
-  --sidebar-accent: #1e2230;
-  --sidebar-accent-foreground: #e6e8eb;
-  --sidebar-border: #2a2e3a;
-  --sidebar-ring: #4dabf7;
+/* Dark mode is driven solely by PatternFly's class on <html>. Token values
+   flip in theme-tokens.css, so only dark-specific overrides belong here. */
+.pf-v6-theme-dark {
+  --destructive: var(--app-danger-text);
 }
 
 @layer base {
@@ -237,7 +208,7 @@ input[type="url"]:focus {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-.dark .gradient-brand-text {
+.pf-v6-theme-dark .gradient-brand-text {
   background: linear-gradient(135deg, #4dabf7 0%, #a78bfa 50%, #f56e6e 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -248,13 +219,13 @@ input[type="url"]:focus {
 .shadow-elevated {
   box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.08), 0 4px 16px -4px rgb(0 0 0 / 0.06);
 }
-.dark .shadow-elevated {
+.pf-v6-theme-dark .shadow-elevated {
   box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.4), 0 4px 16px -4px rgb(0 0 0 / 0.3);
 }
 .shadow-card {
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
 }
-.dark .shadow-card {
+.pf-v6-theme-dark .shadow-card {
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.3), 0 1px 2px rgb(0 0 0 / 0.2);
 }
 
