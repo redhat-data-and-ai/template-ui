@@ -47,6 +47,16 @@ describe('SubAgentIndicator approval arguments', () => {
 });
 
 describe('SubAgentIndicator layout', () => {
+  it('renders no icon of its own, only the status label', () => {
+    const { container } = render(
+      <SubAgentIndicator toolCall={{ ...toolCall, content: 'done' }} messageId="message" index={0} />,
+    );
+    expect(screen.getByText('Complete')).toBeInTheDocument();
+    expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
+    expect(container.querySelector('.rounded-full')).toBeNull();
+    expect(container.querySelector('svg.lucide-bot')).toBeNull();
+  });
+
   it('pads delegation and result boxes via the shared box class', () => {
     render(
       <SubAgentIndicator

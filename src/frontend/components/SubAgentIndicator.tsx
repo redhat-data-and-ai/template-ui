@@ -8,7 +8,7 @@ import {
   CardTitle,
   Label,
 } from '@patternfly/react-core';
-import { Bot, CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle, ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 import type { ToolCallWithContent } from '../types/deep-agent';
 import { extractSubAgentName, extractDelegationText } from '../types/deep-agent';
 import './sub-agent.css';
@@ -56,102 +56,94 @@ export function SubAgentIndicator({ toolCall, messageId, index, approval }: SubA
   const StatusIcon = config.icon;
 
   return (
-    <div className="flex items-start gap-3">
-      <div
-        className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-blue-500/15 border border-blue-500/30"
-        aria-hidden="true"
-      >
-        <Bot className="w-4 h-4 text-blue-500" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <Card isCompact className={`shadow-card ${needsApproval ? 'border-yellow-500/60' : ''}`} data-interrupt-id={approval?.interruptId} data-action-index={approval?.actionIndex}>
-          <CardHeader
-            className="cursor-pointer"
-            onClick={() => setExpanded((v) => !v)}
-            onKeyDown={(e: React.KeyboardEvent) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setExpanded((v) => !v);
-              }
-            }}
-            {...({ tabIndex: 0, role: 'button', 'aria-expanded': expanded, 'aria-controls': `subagent-body-${messageId}-${index}` } as React.HTMLAttributes<HTMLDivElement>)}
-          >
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-2.5">
-                <CardTitle className="text-sm font-medium capitalize">
-                  {name}
-                </CardTitle>
-                <Label
-                  isCompact
-                  color={needsApproval ? 'yellow' : config.color}
-                  icon={
-                    <StatusIcon
-                      className={`w-3 h-3 ${config.animate ? 'animate-spin' : ''}`}
-                      aria-hidden="true"
-                    />
-                  }
-                >
-                  {needsApproval ? 'Approval required' : config.label}
-                </Label>
-              </div>
-              <span aria-hidden="true">
-                {expanded ? (
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                )}
-              </span>
+    <div className="w-full min-w-0">
+      <Card isCompact className={`shadow-card ${needsApproval ? 'border-yellow-500/60' : ''}`} data-interrupt-id={approval?.interruptId} data-action-index={approval?.actionIndex}>
+        <CardHeader
+          className="cursor-pointer"
+          onClick={() => setExpanded((v) => !v)}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setExpanded((v) => !v);
+            }
+          }}
+          {...({ tabIndex: 0, role: 'button', 'aria-expanded': expanded, 'aria-controls': `subagent-body-${messageId}-${index}` } as React.HTMLAttributes<HTMLDivElement>)}
+        >
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2.5">
+              <CardTitle className="text-sm font-medium capitalize">
+                {name}
+              </CardTitle>
+              <Label
+                isCompact
+                color={needsApproval ? 'yellow' : config.color}
+                icon={
+                  <StatusIcon
+                    className={`w-3 h-3 ${config.animate ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                  />
+                }
+              >
+                {needsApproval ? 'Approval required' : config.label}
+              </Label>
             </div>
-          </CardHeader>
+            <span aria-hidden="true">
+              {expanded ? (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              )}
+            </span>
+          </div>
+        </CardHeader>
 
-          {expanded && (
-            <CardBody
-              id={`subagent-body-${messageId}-${index}`}
-              className="border-t border-border pt-3 space-y-3 !pb-0"
-            >
-              {delegationText && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Delegation
-                  </p>
-                  <p className="app-subagent-box">
-                    {delegationText}
-                  </p>
-                </div>
-              )}
-              {hasContent(toolCall) && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Result
-                  </p>
-                  <pre className="app-subagent-box">
-                    {typeof toolCall.content === 'string'
-                      ? toolCall.content
-                      : JSON.stringify(toolCall.content, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {status === 'delegating' && !needsApproval && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                  Sub-agent is processing&hellip;
-                </div>
-              )}
-            </CardBody>
-          )}
-          {needsApproval && approval && Object.keys(approval.request.args ?? {}).length > 0 && (
-            <div className="px-4 py-3 border-t border-yellow-500/30">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                Arguments
-              </p>
-              <pre className="app-subagent-box">
-                {JSON.stringify(approval.request.args, null, 2)}
-              </pre>
-            </div>
-          )}
-          {approval && <ToolApprovalControls approval={approval} />}
-        </Card>
-      </div>
+        {expanded && (
+          <CardBody
+            id={`subagent-body-${messageId}-${index}`}
+            className="border-t border-border pt-3 space-y-3 !pb-0"
+          >
+            {delegationText && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Delegation
+                </p>
+                <p className="app-subagent-box">
+                  {delegationText}
+                </p>
+              </div>
+            )}
+            {hasContent(toolCall) && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Result
+                </p>
+                <pre className="app-subagent-box">
+                  {typeof toolCall.content === 'string'
+                    ? toolCall.content
+                    : JSON.stringify(toolCall.content, null, 2)}
+                </pre>
+              </div>
+            )}
+            {status === 'delegating' && !needsApproval && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground pb-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                Sub-agent is processing&hellip;
+              </div>
+            )}
+          </CardBody>
+        )}
+        {needsApproval && approval && Object.keys(approval.request.args ?? {}).length > 0 && (
+          <div className="px-4 py-3 border-t border-yellow-500/30">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+              Arguments
+            </p>
+            <pre className="app-subagent-box">
+              {JSON.stringify(approval.request.args, null, 2)}
+            </pre>
+          </div>
+        )}
+        {approval && <ToolApprovalControls approval={approval} />}
+      </Card>
     </div>
   );
 }
