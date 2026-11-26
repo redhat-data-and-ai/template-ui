@@ -1,0 +1,49 @@
+/* Content surface and disclaimer banner (ported from the platform portal). */
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.app-disclaimer-slot {
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.app-disclaimer-banner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.9rem;
+  border-radius: 0.5rem;
+  background-color: var(--app-disclaimer-bg);
+  border: 1px solid var(--app-disclaimer-border);
+  color: var(--app-disclaimer-text);
+}
+
+.app-disclaimer-banner__text {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.app-content-surface {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: var(--pf-t--global--border--radius--large);
+  border: 1px solid var(--app-border);
+  background-color: var(--app-surface-raised);
+}

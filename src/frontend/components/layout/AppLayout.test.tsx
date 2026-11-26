@@ -145,6 +145,21 @@ function renderLayout(store: ReturnType<typeof createTestStore>) {
   );
 }
 
+describe('AppLayout — disclaimer', () => {
+  it('renders exactly one disclaimer, even around the home composer', async () => {
+    vi.mocked(getAllThreadsByUserId).mockResolvedValue([]);
+    render(
+      <Provider store={createTestStore()}>
+        <MemoryRouter>
+          <AppLayout><HomePage /></AppLayout>
+        </MemoryRouter>
+      </Provider>,
+    );
+    expect(screen.getAllByText(/You are interacting with an AI tool/)).toHaveLength(1);
+    await waitFor(() => expect(getAllThreadsByUserId).toHaveBeenCalled());
+  });
+});
+
 describe('AppLayout — project delete and chat count', () => {
   beforeEach(() => {
     mocks.deleteProject.mockReset();

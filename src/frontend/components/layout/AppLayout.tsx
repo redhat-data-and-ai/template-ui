@@ -6,6 +6,7 @@ import {
   Page,
 } from '@patternfly/react-core';
 import { AppMasthead } from './AppMasthead';
+import { DisclaimerBanner } from './DisclaimerBanner';
 import { AppSidebar } from '../sidebar/AppSidebar';
 import { KeyboardShortcutsDialog } from '../KeyboardShortcutsDialog';
 import { ErrorBoundary } from '../ErrorBoundary';
@@ -453,8 +454,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           console.error('Main content error:', error, errorInfo);
         }}
       >
-        <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {children}
+        <main id="main-content" className="app-main">
+          <DisclaimerBanner />
+          <div className="app-content-surface">{children}</div>
         </main>
       </ErrorBoundary>
     </Page>

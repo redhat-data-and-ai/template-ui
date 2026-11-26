@@ -10,6 +10,7 @@ import '@patternfly/patternfly/patternfly.css';
 import '@patternfly/patternfly/patternfly-addons.css';
 
 import './styles/theme-tokens.css';
+import './styles/layout.css';
 import './global.css';
 
 type InjectedRecord = Record<string, unknown>;
