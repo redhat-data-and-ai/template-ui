@@ -14,7 +14,6 @@ import {
 } from '@patternfly/react-core';
 import { Link } from 'react-router-dom';
 import { RedHatLogo } from '../RedHatLogo';
-import { DebugToggle } from '../DebugToggle';
 import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
 import { useAppSelector } from '../../redux/hooks';
@@ -107,9 +106,6 @@ export function AppMasthead({ isSidebarOpen, onToggleSidebar }: AppMastheadProps
         <Toolbar id="app-masthead-toolbar" isStatic>
           <ToolbarContent>
             <ToolbarGroup variant="action-group-plain" align={{ default: 'alignEnd' }} gap={{ default: 'gapMd' }}>
-              <ToolbarItem>
-                <DebugToggle />
-              </ToolbarItem>
               <ToolbarItem>
                 <ThemeToggle />
               </ToolbarItem>

@@ -23,8 +23,9 @@ import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { ReconnectingBanner } from '../components/ReconnectingBanner';
 import { InterruptBanner } from '../components/InterruptBanner';
 import { TaskProgressStepper } from '../components/TaskProgressStepper';
-import { TasksSidebar } from '../components/TasksSidebar';
+import { TasksSidebar, hasTasksSidebarContent } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
+import { DebugToggle } from '../components/DebugToggle';
 import { ProcessedEvent } from '../components/ActivityTimeline';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
 import { isClientCreatedChat } from '../services/newChatTracker';
@@ -572,6 +573,8 @@ export function ChatPage({ threadId }: { threadId: string }) {
     (m) => m.type === 'ai' && Array.isArray((m as any).tool_calls) && (m as any).tool_calls.length > 0,
   );
 
+  const showTasks = hasTasksSidebarContent(thread.messages, thread.isLoading);
+
   return (
     <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
       <ChatActionsProvider value={chatActions}>
@@ -644,14 +647,20 @@ export function ChatPage({ threadId }: { threadId: string }) {
               chatInputRef={chatInputRef}
               onExportMarkdown={handleExportMarkdown}
               onExportJson={handleExportJson}
+              headerActions={<DebugToggle />}
             />
           </div>
           {debugMode && (
             <div className="w-64 shrink-0 self-stretch border-l border-border hidden lg:flex lg:flex-col p-2 gap-2">
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto border-t border-border pt-2">
+              {showTasks && (
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
+                </div>
+              )}
+              <div
+                className={`flex-1 min-h-0 overflow-y-auto${showTasks ? ' border-t border-border pt-2' : ''}`}
+                data-testid="debug-panel-slot"
+              >
                 <DebugPanel messages={thread.messages} streamingState={streamingState} />
               </div>
             </div>

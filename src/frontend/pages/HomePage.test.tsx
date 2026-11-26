@@ -96,3 +96,10 @@ describe('HomePage quick prompts', () => {
     expect(screen.queryByRole('button', { name: /Help me analyze a dataset/i })).not.toBeInTheDocument();
   });
 });
+
+describe('HomePage debug toggle', () => {
+  it('does not render the debug toggle on the welcome page', () => {
+    renderWithProviders(<HomePage />);
+    expect(screen.queryByRole('button', { name: /debug mode/i })).toBeNull();
+  });
+});

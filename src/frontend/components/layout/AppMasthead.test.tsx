@@ -41,6 +41,11 @@ beforeEach(() => {
 });
 
 describe('AppMasthead', () => {
+  it('has no debug toggle (it lives in the chat header)', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: /debug mode/i })).toBeNull();
+  });
+
   it('renders the logo and the agent title', () => {
     setup();
     expect(screen.getByRole('img', { name: 'My Agent' })).toBeInTheDocument();

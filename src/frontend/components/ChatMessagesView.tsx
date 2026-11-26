@@ -783,6 +783,8 @@ interface ChatMessagesViewProps {
   chatInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onExportMarkdown?: () => void;
   onExportJson?: () => void;
+  /** Extra controls rendered at the right of the chat header bar (next to export). */
+  headerActions?: React.ReactNode;
 }
 
 export function ChatMessagesView({
@@ -811,6 +813,7 @@ export function ChatMessagesView({
   chatInputRef,
   onExportMarkdown,
   onExportJson,
+  headerActions,
 }: ChatMessagesViewProps) {
   const approvalsDisabled = isResuming || isApprovalBusy;
   const approvals = useInterruptApprovals(pendingInterrupts, approvalsDisabled, onInterruptResume, onAlwaysAllow, isResuming);
@@ -876,7 +879,7 @@ export function ChatMessagesView({
   const showExport = Boolean(onExportMarkdown && onExportJson && messages.length > 0);
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="relative flex flex-col h-full min-h-0 overflow-hidden">
       <div
         aria-live="polite"
         aria-atomic="true"
@@ -884,8 +887,10 @@ export function ChatMessagesView({
       >
         {srAnnouncement}
       </div>
-      {showExport && (
-        <div className="shrink-0 flex justify-end items-center px-4 md:px-6 py-2 border-b border-border bg-background/90">
+      {(showExport || headerActions) && (
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1" data-testid="chat-header-actions">
+          {headerActions}
+          {showExport && (
           <Dropdown
             isOpen={exportMenuOpen}
             onOpenChange={(open) => setExportMenuOpen(open)}
@@ -915,6 +920,7 @@ export function ChatMessagesView({
               </DropdownItem>
             </DropdownList>
           </Dropdown>
+          )}
         </div>
       )}
       <ChatbotContent className="app-chat-transcript">

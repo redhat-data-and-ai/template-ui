@@ -63,6 +63,12 @@ function extractEntries(messages: Message[]): ToolCallEntry[] {
   return entries;
 }
 
+/** True when TasksSidebar would render (tool-call entries exist, or a run is in flight). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function hasTasksSidebarContent(messages: Message[], isLoading: boolean): boolean {
+  return isLoading || extractEntries(messages).length > 0;
+}
+
 export function TasksSidebar({ messages, isLoading }: TasksSidebarProps) {
   const entries = extractEntries(messages);
   if (entries.length === 0 && !isLoading) return null;
