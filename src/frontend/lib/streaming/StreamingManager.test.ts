@@ -101,6 +101,19 @@ describe('StreamingManager', () => {
     expect(resumed.requested_subagents).toBeUndefined();
   });
 
+  it('reattaches to a live run and keeps the subagent stamp', async () => {
+    const payload = {
+      type: 'token', content: 'Hello', chunk_id: 0, message_id: 'sub-1', subagent_tool_call_id: 'call-parent',
+    };
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(`data: ${JSON.stringify(payload)}\n\n`));
+    const callbacks = makeCallbacks();
+    await new StreamingManager().attach('thread-1', 'run-9', callbacks);
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(String(url)).toContain('/v1/stream/thread-1/run-9');
+    expect(init?.method).toBe('GET');
+    expect(callbacks.onToken).toHaveBeenCalledWith('Hello', 'sub-1', undefined, 'call-parent');
+  });
+
   // ── Happy path: token + done ───────────────────────────────────────────────
   it('calls onToken then onDone for a normal stream', async () => {
     const sseBody = makeTokenSSE('Hello', 0) + 'data: [DONE]\n\n';

@@ -36,6 +36,18 @@ import { CustomDataRenderer } from "./CustomDataRenderer";
 import { parseMcpApp } from "../types/mcp-apps";
 import { splitMessageParts } from "../../server/message-parts";
 
+function singleRunningSubagentId(messages: Message[]): string | null {
+  const running: string[] = [];
+  for (const message of messages) {
+    const calls = (message as Message & { tool_calls?: Array<{ id?: string; name: string; args?: Record<string, unknown>; content?: unknown }> }).tool_calls;
+    if (message.type !== 'ai' || !Array.isArray(calls)) continue;
+    for (const call of calls) {
+      if (call.id && isSubAgentToolCall(call) && isRunningToolCall(call)) running.push(call.id);
+    }
+  }
+  return running.length === 1 ? running[0] : null;
+}
+
 function isRunningToolCall(toolCall: { content?: unknown }): boolean {
   if (toolCall.content == null) return true;
   if (typeof toolCall.content === 'string') return toolCall.content.trim().length === 0;
@@ -757,11 +769,13 @@ interface AIMessageRendererProps {
   /** Every AI message in this reply. One thought holds them until the answer. */
   turn?: Message[];
   approvalBindings?: Map<string, ToolApproval>;
+  extraApprovals?: ToolApproval[];
+  extraApprovalOwnerId?: string;
   thinkingLive?: boolean;
   questionContent?: ReactNode;
 }
 
-export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLive = false, questionContent }: AIMessageRendererProps) {
+export function AIMessageRenderer({ message, turn, approvalBindings, extraApprovals, extraApprovalOwnerId, thinkingLive = false, questionContent }: AIMessageRendererProps) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const messageKey = JSON.stringify(message);
   const userCollapsed = useRef(new Set<string>());
@@ -885,6 +899,8 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
                         messageId={message.id ?? ''}
                         index={idx}
                         approval={toolCall.id ? approvalBindings?.get(toolCall.id) : undefined}
+                        approvalBindings={approvalBindings}
+                        extraApprovals={toolCall.id === extraApprovalOwnerId ? extraApprovals : undefined}
                         question={questionContent && key === runningSubagentKey ? embedQuestion(questionContent) : undefined}
                       />
                     );
@@ -1023,7 +1039,7 @@ export function AIMessageRenderer({ message, turn, approvalBindings, thinkingLiv
       </div>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageKey, turn, expandedItems, approvalBindings, thinkingLive, questionContent]);
+  }, [messageKey, turn, expandedItems, approvalBindings, extraApprovals, extraApprovalOwnerId, thinkingLive, questionContent]);
 
   return (
     <div className="space-y-2 w-full">
@@ -1103,6 +1119,9 @@ export function ChatMessagesView({
     pendingInterrupts, approvalsDisabled, onInterruptResume, onAlwaysAllow, isResuming, resumingInterruptId,
   );
   const { bindings, unmatched } = bindToolApprovals(messages, approvals);
+  const runningSubagentId = singleRunningSubagentId(messages);
+  const nestedApprovals = runningSubagentId ? unmatched : [];
+  const looseApprovals = runningSubagentId ? [] : unmatched;
   const pendingInterrupt = pendingInterrupts[0];
   const bottomRef = useRef<HTMLDivElement>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -1272,6 +1291,8 @@ export function ChatMessagesView({
                     message={message}
                     turn={turn}
                     approvalBindings={bindings}
+                    extraApprovals={nestedApprovals}
+                    extraApprovalOwnerId={runningSubagentId ?? undefined}
                     thinkingLive={thinkingLive && (lastTurnMessage.id ?? '') === (messages[lastAiMessageIndex]?.id ?? '')}
                     questionContent={
                       questionNestMessageIndex >= messageIndex && questionNestMessageIndex < turnEnd
@@ -1358,7 +1379,7 @@ export function ChatMessagesView({
               </div>
             </div>
           )}
-          {unmatched.map((approval, index) => {
+          {looseApprovals.map((approval, index) => {
             // Some subgraph tool calls are absent from parent-thread messages.
             // Show their exact request in the same tool-card UI; never guess an owner.
             const id = `pending-${approval.interruptId ?? index}-${approval.actionIndex}`;

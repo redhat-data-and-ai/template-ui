@@ -406,6 +406,8 @@ describe('isNonRecoverableHttpStatus', () => {
 vi.mock('@/services/agent-rest', () => ({
   getThreadState: vi.fn(() => new Promise(() => {})),
   getThreadStateAndInterrupt: vi.fn(() => new Promise(() => {})),
+  getSubagentTranscripts: vi.fn(async () => []),
+  getActiveRun: vi.fn(async () => null),
 }));
 
 describe('_startRecoveryPolling — deadline fires independently of pending request', () => {
@@ -735,6 +737,54 @@ describe('interrupt resume safety', () => {
     await act(async () => { await result.current.refreshInterrupts(); });
     await act(async () => { await result.current.resumeInterrupt('continue','a'); });
     expect(result.current.pendingInterrupt?.id).toBe('b'); unmount();
+  });
+
+  it('keeps the subagent stream when approvals are refreshed', async () => {
+    const { store, result, unmount } = setup();
+    const transcript = [{ id: 'sub-1', tool_calls: [{ id: 'lookup-1', name: 'lookup_records', args: { query: 'example' } }] }];
+    const local = [{
+      type: 'ai', id: 'parent', content: '',
+      tool_calls: [{ id: 'task', name: 'task', args: { subagent_type: 'researcher', description: 'Look up orders' }, transcript }],
+    }] as Message[];
+    const server = [{
+      type: 'ai', id: 'parent', content: '',
+      tool_calls: [{ id: 'task', name: 'task', args: { subagent_type: 'researcher', description: 'Look up orders' } }],
+    }] as Message[];
+    act(() => { store.dispatch(updateChat({ id: THREAD_ID, updates: { messages: local } })); });
+    vi.spyOn(agentRest, 'getThreadStateAndInterrupt').mockResolvedValue({ messages: server, interrupt: null, interrupts: [] });
+    const saved = vi.spyOn(agentRest, 'getSubagentTranscripts').mockResolvedValue([]);
+    await act(async () => { await result.current.refreshInterrupts(); });
+    expect((store.getState().chats.chats[0].messages[0] as { tool_calls: Array<{ transcript?: unknown }> }).tool_calls[0].transcript).toEqual(transcript);
+
+    act(() => { store.dispatch(updateChat({ id: THREAD_ID, updates: { messages: server } })); });
+    saved.mockResolvedValue([{ delegation: 'Look up orders', entries: [{ id: 'saved', content: 'Saved stream' }] }]);
+    await act(async () => { await result.current.refreshInterrupts(); });
+    expect((store.getState().chats.chats[0].messages[0] as { tool_calls: Array<{ transcript?: unknown }> }).tool_calls[0].transcript).toEqual([
+      { id: 'saved', content: 'Saved stream' },
+    ]);
+    unmount();
+  });
+
+  it('keeps an existing subagent stream when a live run reconnects', async () => {
+    const { store, result, unmount } = setup();
+    const local = [{
+      type: 'ai', id: 'parent', content: '',
+      tool_calls: [{
+        id: 'task', name: 'task', args: { subagent_type: 'researcher' },
+        transcript: [{ id: 'sub-1', content: 'Earlier work' }],
+      }],
+    }] as Message[];
+    act(() => { store.dispatch(updateChat({ id: THREAD_ID, updates: { messages: local } })); });
+    vi.spyOn(agentRest, 'getActiveRun').mockResolvedValue({ run_id: 'run-1' });
+    vi.spyOn(getStreamingManager(THREAD_ID), 'attach').mockImplementation(async (_thread, _run, callbacks) => {
+      callbacks.onToken(' tail', 'sub-1', 'text', 'task');
+    });
+    await act(async () => { await result.current.attachLiveRun(); });
+    const entry = (store.getState().chats.chats[0].messages[0] as {
+      tool_calls: Array<{ transcript?: Array<{ content?: string }> }>;
+    }).tool_calls[0].transcript?.[0];
+    expect(entry?.content).toBe('Earlier work tail');
+    unmount();
   });
 
   it('discards a refresh started before a resume, including across hook instances', async () => {

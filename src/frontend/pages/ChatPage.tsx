@@ -10,6 +10,7 @@ import {
   selectChatsError,
   selectStreamingState,
   setMessageFeedback,
+  attachSubagentTranscripts,
   updateChat,
   updateStreamingState,
 } from '../redux/slices/chats';
@@ -26,7 +27,7 @@ import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { ProcessedEvent } from '../components/ActivityTimeline';
-import { getActiveRun, getThreadStateAndInterrupt, getThreadStatus, waitUntilPaused } from '../services/agent-rest';
+import { getActiveRun, getSubagentTranscripts, getThreadStateAndInterrupt, getThreadStatus, waitUntilPaused } from '../services/agent-rest';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -42,6 +43,7 @@ import {
   type McpModelContextUpdate,
 } from '../contexts/ChatActionsContext';
 import { formatMcpModelContext } from '../types/mcp-apps';
+import { withLocalTranscripts } from '../lib/with-local-transcripts';
 
 export function ChatPage({ threadId }: { threadId: string }) {
   const dispatch = useAppDispatch();
@@ -116,6 +118,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     if (hydratedThreadRef.current === chatId && !needsServerRefresh) return;
 
     let cancelled = false;
+    const localMessages = currentChat?.messages ?? [];
     const manager = getStreamingManager(chatId);
     const generation = manager.getResumeGeneration();
     setHydrating(true);
@@ -126,7 +129,7 @@ export function ChatPage({ threadId }: { threadId: string }) {
     );
 
     Promise.all([threadPromise, feedbackPromise])
-      .then(([{ messages: msgs, interrupt: pendingInterrupt, interrupts }, feedbackMap]) => {
+      .then(async ([{ messages: msgs, interrupt: pendingInterrupt, interrupts }, feedbackMap]) => {
         if (cancelled) return;
         if (!manager.canApplyRefresh(generation)) {
           setHydrating(false);
@@ -134,10 +137,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
         }
         hydratedThreadRef.current = chatId;
         if (msgs.length > 0) {
+          const kept = withLocalTranscripts(localMessages, msgs);
           dispatch(updateChat({
             id: chatId,
             updates: {
-              messages: msgs,
+              messages: kept,
               title: (() => {
                 const first = msgs.find(m => m.type === 'human');
                 const content = first ? String(first.content) : '';
@@ -145,7 +149,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
               })(),
             },
           }));
-          thread.setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
+          thread.setMessages(kept.map(m => JSON.parse(JSON.stringify(m))));
+          const saved = await getSubagentTranscripts(chatId);
+          if (!cancelled && saved.length > 0) {
+            dispatch(attachSubagentTranscripts({ chatId, transcripts: saved }));
+          }
           if (needsServerRefresh) {
             dispatch(updateStreamingState({
               chatId,
@@ -172,6 +180,11 @@ export function ChatPage({ threadId }: { threadId: string }) {
     return () => { cancelled = true; setHydrating(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, feedbackUserId, needsServerRefresh, thread.isLoading, thread.isResuming]);
+
+  useEffect(() => {
+    if (!chatId || hydrating || isClientCreatedChat(chatId)) return;
+    void thread.attachLiveRun();
+  }, [chatId, hydrating, thread.attachLiveRun]);
 
   useEffect(() => {
     if (!chatId || isClientCreatedChat(chatId)) return;
@@ -440,6 +453,21 @@ export function ChatPage({ threadId }: { threadId: string }) {
     const interruptId = interrupt.id;
     let cancelled = false;
     void (async () => {
+      const current = liveThread.current;
+      const fail = (err: unknown) => {
+        console.error('Auto-approve resume failed:', err);
+      };
+      if (!autoApproveAllTools) {
+        const { allAutoApproved, decisions } = current.checkAndAutoApprove(approval);
+        if (allAutoApproved && !cancelled) {
+          const manager = getStreamingManager(threadId);
+          const status = manager.getStatus();
+          if (status === 'connecting' || status === 'streaming') manager.cancel();
+          autoApprovalAttempts.current.add(key);
+          current.resumeWithDecisions(decisions, interruptId).catch(fail);
+          return;
+        }
+      }
       let paused = false;
       for (let look = 0; look < 3 && !paused && !cancelled; look++) {
         if (autoApprovalAttempts.current.has(key)) return;
@@ -458,24 +486,21 @@ export function ChatPage({ threadId }: { threadId: string }) {
         const status = manager.getStatus();
         if (status === 'connecting' || status === 'streaming') manager.cancel();
       };
-      const fail = (err: unknown) => {
-        console.error('Auto-approve resume failed:', err);
-      };
       autoApprovalAttempts.current.add(key);
-      const current = liveThread.current;
+      const latest = liveThread.current;
       if (autoApproveAllTools) {
         stopLiveReply();
         const allApproved = approval.action_requests.map(() => ({ type: 'approve' as const }));
-        current.resumeWithDecisions(allApproved, interruptId).catch(fail);
+        latest.resumeWithDecisions(allApproved, interruptId).catch(fail);
         return;
       }
-      const { allAutoApproved, decisions } = current.checkAndAutoApprove(approval);
+      const { allAutoApproved, decisions } = latest.checkAndAutoApprove(approval);
       if (!allAutoApproved || cancelled) {
         autoApprovalAttempts.current.delete(key);
         return;
       }
       stopLiveReply();
-      current.resumeWithDecisions(decisions, interruptId).catch(fail);
+      latest.resumeWithDecisions(decisions, interruptId).catch(fail);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

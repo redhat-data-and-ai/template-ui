@@ -1,9 +1,14 @@
 import { AIMessage, Message } from "@langchain/langgraph-sdk";
 import { authenticatedFetch } from "./authenticated-fetch";
 import { buildAgentApiUrl } from "../lib/app-paths";
-import type { InterruptInfo } from "../types/deep-agent";
+import type { InterruptInfo, SubagentTranscriptEntry } from "../types/deep-agent";
 import { withMcpAppArguments } from "../types/mcp-apps";
 import { splitMessageParts } from "../../server/message-parts";
+
+export interface SavedSubagentTranscript {
+  delegation: string;
+  entries: SubagentTranscriptEntry[];
+}
 
 export interface Thread {
   id: string;
@@ -298,6 +303,19 @@ export async function waitUntilPaused(
     if (attempt < 29) await new Promise((resolve) => setTimeout(resolve, 500));
   }
   return false;
+}
+
+export async function getSubagentTranscripts(threadId: string): Promise<SavedSubagentTranscript[]> {
+  try {
+    const resp = await authenticatedFetch(buildAgentApiUrl(`/threads/${threadId}/subagent-transcripts`), {
+      headers: getAuthHeaders(),
+    });
+    if (!resp.ok) return [];
+    const body = await resp.json() as { transcripts?: SavedSubagentTranscript[] };
+    return Array.isArray(body.transcripts) ? body.transcripts : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function getThreadState(threadId: string): Promise<Message[]> {

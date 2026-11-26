@@ -3,8 +3,11 @@ import type { Message } from '@langchain/langgraph-sdk';
 import chatsReducer, {
   addChat,
   appendMessageToChat,
+  appendSubagentTranscript,
+  attachSubagentTranscripts,
   clearAllChats,
   deleteChat,
+  mergeSubagentToolResult,
   mergeToolResult,
   resolveAllPendingToolCalls,
   selectChatsByProject,
@@ -19,7 +22,18 @@ import chatsReducer, {
 import { assignThreadToProjectThunk, deleteProjectThunk, unassignAllThreadsThunk } from './projects';
 
 /** Minimal fixture shape that matches the runtime duck-type expected by chats slice reducers. */
-type TestToolCall = { id: string; name: string; args: Record<string, unknown>; content?: string };
+type TestToolCall = {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  content?: string;
+  transcript?: Array<{
+    id: string;
+    thinking?: string;
+    content?: string;
+    tool_calls?: Array<{ id?: string; name: string; args?: Record<string, unknown>; content?: unknown }>;
+  }>;
+};
 type TestMessage = {
   type: 'ai' | 'human';
   content: string;
@@ -261,6 +275,99 @@ describe('chats slice — mergeToolResult', () => {
       mcpApp?: { arguments?: { topic?: string } };
     };
     expect(toolCall.mcpApp?.arguments?.topic).toBe('from-app');
+  });
+});
+
+describe('chats slice — subagent transcript', () => {
+  function withSubagentCard() {
+    const s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const card: TestMessage = {
+      type: 'ai',
+      content: 'Asking the analyst.',
+      id: 'orch-1',
+      tool_calls: [{ id: 'call-parent', name: 'analyst', args: { subagent_type: 'analyst' } }],
+    };
+    return chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(card) }));
+  }
+
+  function parentTool(s: ChatsState): TestToolCall {
+    return (s.chats[0].messages[0] as TestMessage).tool_calls![0];
+  }
+
+  it('adds a marked sentence to that card and leaves the orchestrator message alone', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: 'Hello', part: 'text',
+    }));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: ' there', part: 'text',
+    }));
+    expect((s.chats[0].messages[0] as TestMessage).content).toBe('Asking the analyst.');
+    expect(parentTool(s).transcript).toEqual([{ id: 'sub-1', content: 'Hello there' }]);
+  });
+
+  it('matches a saved transcript to the card with the same delegation', () => {
+    let s = chatsReducer(initialState(), addChat(makeChat('c1')));
+    const card: TestMessage = {
+      type: 'ai',
+      content: '',
+      id: 'orch-1',
+      tool_calls: [
+        { id: 'call-b', name: 'analyst', args: { subagent_type: 'analyst', description: 'Second question' } },
+        { id: 'call-a', name: 'analyst', args: { subagent_type: 'analyst', description: 'First question' } },
+      ],
+    };
+    s = chatsReducer(s, appendMessageToChat({ chatId: 'c1', message: asMsg(card) }));
+    s = chatsReducer(s, attachSubagentTranscripts({
+      chatId: 'c1',
+      transcripts: [
+        { delegation: 'First question', entries: [{ id: 'a', content: 'First answer' }] },
+        { delegation: 'Second question', entries: [{ id: 'b', content: 'Second answer' }] },
+      ],
+    }));
+    const tools = (s.chats[0].messages[0] as TestMessage).tool_calls!;
+    expect(tools[0].transcript?.[0].content).toBe('Second answer');
+    expect(tools[1].transcript?.[0].content).toBe('First answer');
+  });
+
+  it('keeps a longer transcript already on the card', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1', content: 'Hello there', part: 'text',
+    }));
+    s = chatsReducer(s, attachSubagentTranscripts({
+      chatId: 'c1',
+      transcripts: [{ delegation: '', entries: [{ id: 'saved', content: 'Hi' }] }],
+    }));
+    expect(parentTool(s).transcript?.[0].content).toBe('Hello there');
+  });
+
+  it('fills empty tool arguments when the same call arrives with its SQL', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1',
+      toolCalls: [{ id: 'sql-1', name: 'execute_sql', args: {} }],
+    }));
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1', toolCallId: 'call-parent', messageId: 'sub-1',
+      toolCalls: [{ id: 'sql-1', name: 'execute_sql', args: { sql: 'select 1' } }],
+    }));
+    expect(parentTool(s).transcript?.[0].tool_calls?.[0].args).toEqual({ sql: 'select 1' });
+  });
+
+  it('fills the inner tool row and leaves the card result empty', () => {
+    let s = withSubagentCard();
+    s = chatsReducer(s, appendSubagentTranscript({
+      chatId: 'c1',
+      toolCallId: 'call-parent',
+      messageId: 'sub-1',
+      toolCalls: [{ id: 'inner-1', name: 'get_sql', args: {} }],
+    }));
+    s = chatsReducer(s, mergeSubagentToolResult({
+      chatId: 'c1', parentToolCallId: 'call-parent', toolCallId: 'inner-1', content: 'rows',
+    }));
+    expect(parentTool(s).content).toBeUndefined();
+    expect(parentTool(s).transcript?.[0].tool_calls?.[0].content).toBe('rows');
   });
 });
 

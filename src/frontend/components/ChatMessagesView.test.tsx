@@ -198,6 +198,62 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     expect(screen.queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument();
   });
 
+  it('puts a subagent tool approval inside that subagent card', () => {
+    const onResume = vi.fn();
+    const message = { type: 'ai', id: 'parent', content: '', tool_calls: [{
+      id: 'task', name: 'task', args: { subagent_type: 'researcher' },
+      transcript: [{ id: 'sub-1', tool_calls: [{ id: 'lookup-1', name: 'lookup_records', args: { query: 'example' } }] }],
+    }] } as unknown as Message;
+    const interrupt = { id: 'inner', resumable: true, value: {
+      action_requests: [{ name: 'lookup_records', args: { query: 'example' } }], review_configs: [],
+    } };
+    const { container } = render(<Provider store={makeStore()}><ChatMessagesView {...makeBaseProps({
+      messages: [message], pendingInterrupts: [interrupt], onInterruptResume: onResume,
+    })} /></Provider>);
+    const card = screen.getByRole('button', { name: /researcher/i }).closest('.shadow-card') as HTMLElement;
+    const approve = within(card).getByRole('button', { name: /^Approve/ });
+    expect(screen.getAllByRole('button', { name: /^Approve/ })).toHaveLength(1);
+    expect(container.querySelectorAll('[data-interrupt-id="inner"]')).toHaveLength(0);
+    fireEvent.click(approve);
+    expect(onResume).toHaveBeenCalledExactlyOnceWith([{ type: 'approve' }], 'inner');
+  });
+
+  it('puts an unmatched subagent approval inside the one working card', () => {
+    const message = { type: 'ai', id: 'parent', content: '', tool_calls: [{
+      id: 'task', name: 'task', args: { subagent_type: 'initiative-scoring' },
+      transcript: [{ id: 'sub-1', tool_calls: [{ id: 'sql-1', name: 'execute_sql', args: { sql: 'select 1' } }] }],
+    }] } as unknown as Message;
+    const interrupt = { id: 'inner', resumable: true, value: {
+      action_requests: [{ name: 'execute_sql', args: { sql: 'select distinct region' } }], review_configs: [],
+    } };
+    render(<Provider store={makeStore()}><ChatMessagesView {...makeBaseProps({
+      messages: [message], pendingInterrupts: [interrupt], onInterruptResume: vi.fn(),
+    })} /></Provider>);
+    const card = screen.getByRole('button', { name: /initiative-scoring/i }).closest('.shadow-card') as HTMLElement;
+    expect(within(card).getByRole('button', { name: /^Approve/ })).toBeInTheDocument();
+    expect(within(card).getByText(/select distinct region/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Approve/ })).toHaveLength(1);
+  });
+
+  it('keeps an approval under the conversation when two subagent cards match', () => {
+    const tool = { name: 'lookup_records', args: { query: 'example' } };
+    const message = { type: 'ai', id: 'parent', content: '', tool_calls: [
+      { id: 'task-a', name: 'task', args: { subagent_type: 'researcher' }, transcript: [{ id: 'a', tool_calls: [{ ...tool, id: 'lookup-a' }] }] },
+      { id: 'task-b', name: 'task', args: { subagent_type: 'analyst' }, transcript: [{ id: 'b', tool_calls: [{ ...tool, id: 'lookup-b' }] }] },
+    ] } as unknown as Message;
+    const interrupt = { id: 'inner', resumable: true, value: {
+      action_requests: [{ name: 'lookup_records', args: { query: 'example' } }], review_configs: [],
+    } };
+    render(<Provider store={makeStore()}><ChatMessagesView {...makeBaseProps({
+      messages: [message], pendingInterrupts: [interrupt], onInterruptResume: vi.fn(),
+    })} /></Provider>);
+    for (const name of [/researcher/i, /analyst/i]) {
+      const card = screen.getByRole('button', { name }).closest('.shadow-card') as HTMLElement;
+      expect(within(card).queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument();
+    }
+    expect(screen.getAllByRole('button', { name: /^Approve/ })).toHaveLength(1);
+  });
+
   it('submits the owning ID for identical tool names with different arguments', () => {
     const onResume=vi.fn();
     const a={id:'a',resumable:true,value:{action_requests:[{name:'same_tool',args:{target:'A'}}],review_configs:[]}};

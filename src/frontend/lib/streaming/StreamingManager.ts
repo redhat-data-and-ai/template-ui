@@ -41,9 +41,9 @@ export type StreamMetadataPayload = {
 };
 
 export type StreamCallback = {
-  onToken: (content: string, messageId?: string, part?: 'thinking' | 'text') => void;
+  onToken: (content: string, messageId?: string, part?: 'thinking' | 'text', subagentToolCallId?: string) => void;
   onDraftDiscard?: () => void;
-  onMessage: (message: Message) => void;
+  onMessage: (message: Message, subagentToolCallId?: string) => void;
   onInterrupt: (interrupt: InterruptPayload) => void;
   onError: (error: Error) => void | Promise<void>;
   onStatusChange: (status: StreamStatus) => void;
@@ -129,7 +129,10 @@ export class StreamingManager {
           this.processedChunkIds.add(chunkId);
 
           if (event.data.type === 'token') {
-            if (event.data.part) {
+            const toolCallId = event.data.subagent_tool_call_id;
+            if (toolCallId) {
+              callbacks.onToken(event.data.content, event.data.message_id, event.data.part, toolCallId);
+            } else if (event.data.part) {
               callbacks.onToken(event.data.content, event.data.message_id, event.data.part);
             } else {
               callbacks.onToken(event.data.content, event.data.message_id);
@@ -138,6 +141,8 @@ export class StreamingManager {
             callbacks.onDraftDiscard?.();
           } else if (event.data.type === 'interrupt') {
             callbacks.onInterrupt(event.data.content);
+          } else if (event.data.subagent_tool_call_id) {
+            callbacks.onMessage(event.data.content, event.data.subagent_tool_call_id);
           } else {
             callbacks.onMessage(event.data.content);
           }
@@ -275,6 +280,69 @@ export class StreamingManager {
         }
       }
 
+      if (err.name === 'AbortError') {
+        if (this.abortController === controller || this.abortController === null) {
+          this.setStatus('cancelled');
+          callbacks.onStatusChange('cancelled');
+        }
+      } else {
+        this.setStatus('error');
+        callbacks.onStatusChange('error');
+        await callbacks.onError(err);
+      }
+    } finally {
+      reader?.releaseLock?.();
+      if (this.abortController === controller) this.abortController = null;
+    }
+  }
+
+  async attach(threadId: string, runId: string, callbacks: StreamCallback): Promise<void> {
+    this.cancel();
+    this.processor.reset();
+    this.processedChunkIds.clear();
+    this.streamError = null;
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
+    this.setStatus('connecting');
+    callbacks.onStatusChange('connecting');
+
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      const response = await fetch(buildAgentApiUrl(`/v1/stream/${threadId}/${runId}`), {
+        method: 'GET',
+        credentials: 'include',
+        signal,
+      });
+      if (!response.ok) {
+        const err: Error & { status?: number } = new Error(`HTTP error! status: ${response.status}`);
+        err.status = response.status;
+        throw err;
+      }
+      reader = response.body?.getReader();
+      if (!reader) throw new Error('Failed to get reader from response body');
+      this.setStatus('streaming');
+      callbacks.onStatusChange('streaming');
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (value !== undefined) {
+          this.handleEvents(this.processor.feed(decoder.decode(value, { stream: true })), callbacks);
+        }
+        if (done) break;
+      }
+      const flushText = decoder.decode();
+      if (flushText.length > 0) this.handleEvents(this.processor.feed(flushText), callbacks);
+      if (this.streamError) {
+        this.setStatus('error');
+        callbacks.onStatusChange('error');
+      } else {
+        this.setStatus('idle');
+        callbacks.onStatusChange('idle');
+        callbacks.onDone();
+      }
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error('Unknown stream error');
       if (err.name === 'AbortError') {
         if (this.abortController === controller || this.abortController === null) {
           this.setStatus('cancelled');

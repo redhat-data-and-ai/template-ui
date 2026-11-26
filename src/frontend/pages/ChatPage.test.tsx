@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestStore } from '../test-utils/createTestStore';
 import { addChat, setLoadingThreads, updateChat, updateStreamingState } from '../redux/slices/chats';
-import { getThreadStateAndInterrupt } from '../services/agent-rest';
+import { getSubagentTranscripts, getThreadStateAndInterrupt } from '../services/agent-rest';
 import { getThreadFeedback } from '../services/feedback-api';
 import { getStreamingManager, releaseAllStreamingManagers } from '../lib/streaming/streamingManagerRegistry';
 import { useStreamingAPI } from '../hooks/useStreamingAPI';
@@ -14,7 +14,10 @@ import { ChatPage } from './ChatPage';
 vi.mock('../hooks/useStreamingAPI', () => ({ useStreamingAPI: vi.fn(), MAX_RETRIES: 3 }));
 const health = vi.hoisted(() => ({ status: 'healthy' }));
 vi.mock('../hooks/useAgentHealth', () => ({ useAgentHealth: () => health }));
-vi.mock('../services/agent-rest', () => ({ getThreadStateAndInterrupt: vi.fn() }));
+vi.mock('../services/agent-rest', () => ({
+  getThreadStateAndInterrupt: vi.fn(),
+  getSubagentTranscripts: vi.fn(async () => []),
+}));
 vi.mock('../services/feedback-api', () => ({ getThreadFeedback: vi.fn(async () => ({})) }));
 vi.mock('../components/ChatMessagesView', () => ({ ChatMessagesView: () => <div>Messages</div> }));
 
@@ -32,7 +35,7 @@ function setup() {
     messages, pendingInterrupt: null, pendingInterrupts: [], isLoading: false, isResuming: false,
     setMessages: vi.fn(), mcpEvents: [], streamEvents: [], checkAndAutoApprove: vi.fn(),
     resumeWithDecisions: vi.fn(), resumeInterrupt: vi.fn(), refreshInterrupts: vi.fn(),
-    stop: vi.fn(), taskSteps: [],
+    stop: vi.fn(), taskSteps: [], attachLiveRun: vi.fn(),
   };
   vi.mocked(useStreamingAPI).mockImplementation(() => thread as any);
   const ui = () => <Provider store={store}><MemoryRouter><ChatPage threadId="hydration-thread" /></MemoryRouter></Provider>;
@@ -74,6 +77,71 @@ describe('ChatPage hydration ordering', () => {
     await act(async () => { resolveOld(old); });
     expect(store.getState().chats.chats[0].messages).toEqual(newer);
     expect(store.getState().chats.streamingStates['hydration-thread']?.pendingInterrupt).toBeUndefined();
+    view.unmount();
+  });
+
+  it('keeps a subagent stream already on screen when the chat loads again', async () => {
+    const transcript = [{ id: 'sub-1', tool_calls: [{ id: 'lookup-1', name: 'lookup_records', args: { query: 'example' } }] }];
+    const local = [{
+      type: 'ai', id: 'parent', content: '',
+      tool_calls: [{ id: 'task', name: 'task', args: { subagent_type: 'researcher' }, transcript }],
+    }];
+    const server = [{
+      type: 'ai', id: 'parent', content: '',
+      tool_calls: [{ id: 'task', name: 'task', args: { subagent_type: 'researcher' } }],
+    }];
+    const store = createTestStore();
+    store.dispatch(addChat({
+      id: 'hydration-thread', title: 'Test', timestamp: new Date().toISOString(),
+      preview: '', messages: local as any, historicalActivities: {}, feedback: {},
+    }));
+    store.dispatch(setLoadingThreads(false));
+    vi.mocked(getThreadStateAndInterrupt).mockResolvedValue({ messages: server as any, interrupt: null, interrupts: [] });
+    vi.mocked(getSubagentTranscripts).mockResolvedValue([]);
+    vi.mocked(useStreamingAPI).mockImplementation(() => ({
+      messages: local, pendingInterrupt: null, pendingInterrupts: [], isLoading: false, isResuming: false,
+      setMessages: vi.fn(), mcpEvents: [], streamEvents: [], checkAndAutoApprove: vi.fn(),
+      resumeWithDecisions: vi.fn(), resumeInterrupt: vi.fn(), refreshInterrupts: vi.fn(),
+      stop: vi.fn(), taskSteps: [], attachLiveRun: vi.fn(),
+    }) as any);
+    const view = render(
+      <Provider store={store}><MemoryRouter><ChatPage threadId="hydration-thread" /></MemoryRouter></Provider>,
+    );
+    await waitFor(() => {
+      const call = (store.getState().chats.chats[0].messages[0] as any).tool_calls[0];
+      expect(call.transcript).toEqual(transcript);
+    });
+    view.unmount();
+  });
+
+  it('approves an always-allowed tool while the parent run is still busy', async () => {
+    const resumeWithDecisions = vi.fn().mockResolvedValue(undefined);
+    const interrupt = {
+      id: 'inner', resumable: true,
+      value: { action_requests: [{ name: 'execute_sql', args: { sql: 'select 1' } }], review_configs: [] },
+    };
+    const store = createTestStore();
+    store.dispatch(addChat({
+      id: 'hydration-thread', title: 'Test', timestamp: new Date().toISOString(),
+      preview: '', messages, historicalActivities: {}, feedback: {},
+    }));
+    store.dispatch(setLoadingThreads(false));
+    const manager = getStreamingManager('hydration-thread');
+    vi.spyOn(manager, 'getStatus').mockReturnValue('streaming');
+    const cancel = vi.spyOn(manager, 'cancel');
+    vi.mocked(useStreamingAPI).mockImplementation(() => ({
+      messages, pendingInterrupt: interrupt, pendingInterrupts: [interrupt], isLoading: false, isResuming: false,
+      setMessages: vi.fn(), mcpEvents: [], streamEvents: [],
+      checkAndAutoApprove: () => ({ allAutoApproved: true, decisions: [{ type: 'approve' }] }),
+      resumeWithDecisions, resumeInterrupt: vi.fn(), refreshInterrupts: vi.fn(),
+      stop: vi.fn(), taskSteps: [], attachLiveRun: vi.fn(),
+    }) as any);
+    const view = render(
+      <Provider store={store}><MemoryRouter><ChatPage threadId="hydration-thread" /></MemoryRouter></Provider>,
+    );
+    await waitFor(() => expect(resumeWithDecisions).toHaveBeenCalledWith([{ type: 'approve' }], 'inner'));
+    expect(cancel).toHaveBeenCalled();
+    expect(cancel.mock.invocationCallOrder[0]).toBeLessThan(resumeWithDecisions.mock.invocationCallOrder[0]);
     view.unmount();
   });
 

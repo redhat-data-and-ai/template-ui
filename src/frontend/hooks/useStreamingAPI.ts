@@ -13,6 +13,9 @@ import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import type { AppDispatch } from '@/redux/store';
 import {
   appendMessageToChat,
+  appendSubagentTranscript,
+  attachSubagentTranscripts,
+  mergeSubagentToolResult,
   removeLastMessageFromChat,
   mergeToolResult,
   resolveAllPendingToolCalls,
@@ -24,7 +27,8 @@ import {
   type StreamingState,
 } from '@/redux/slices/chats';
 import { chatStorage } from '@/services/chatStorage';
-import { getThreadState, getThreadStateAndInterrupt } from '@/services/agent-rest';
+import { getActiveRun, getSubagentTranscripts, getThreadState, getThreadStateAndInterrupt } from '@/services/agent-rest';
+import { withLocalTranscripts } from '@/lib/with-local-transcripts';
 import { buildAppPath } from '@/lib/app-paths';
 import { addToast } from '@/redux/slices/toasts';
 import { assignThreadToProjectThunk } from '@/redux/slices/projects';
@@ -37,6 +41,54 @@ import { messageWithSubagentMentions, resolveRequestedSubagents } from '@/compon
 
 type TokenPart = 'thinking' | 'text';
 
+function dispatchSubagentMessage(
+  dispatch: AppDispatch,
+  threadId: string,
+  message: Message,
+  parentToolCallId: string,
+  replace = false,
+): void {
+  if (message.type === 'tool') {
+    const toolMessage = message as Message & {
+      tool_call_id?: string;
+      status?: string;
+      mcpApp?: Record<string, unknown>;
+      artifact?: unknown;
+    };
+    dispatch(mergeSubagentToolResult({
+      chatId: threadId,
+      parentToolCallId,
+      toolCallId: toolMessage.tool_call_id ?? '',
+      content: toolMessage.content,
+      status: toolMessage.status,
+      mcpApp: toolMessage.mcpApp,
+      artifact: toolMessage.artifact,
+    }));
+    return;
+  }
+  const toolCalls = message.type === 'ai' && Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  if (toolCalls.length > 0) {
+    dispatch(appendSubagentTranscript({
+      chatId: threadId,
+      toolCallId: parentToolCallId,
+      messageId: message.id,
+      toolCalls,
+      replace,
+    }));
+    return;
+  }
+  if (typeof message.content === 'string' && message.content) {
+    dispatch(appendSubagentTranscript({
+      chatId: threadId,
+      toolCallId: parentToolCallId,
+      messageId: message.id,
+      content: message.content,
+      part: 'text',
+      replace,
+    }));
+  }
+}
+
 function dispatchStreamToken(
   dispatch: AppDispatch,
   threadId: string,
@@ -44,7 +96,18 @@ function dispatchStreamToken(
   messageId: string | undefined,
   part: TokenPart | undefined,
   isStreamingTokensRef: { current: boolean },
+  subagentToolCallId?: string,
 ): void {
+  if (subagentToolCallId) {
+    dispatch(appendSubagentTranscript({
+      chatId: threadId,
+      toolCallId: subagentToolCallId,
+      messageId,
+      content,
+      part: part === 'thinking' ? 'thinking' : 'text',
+    }));
+    return;
+  }
   const isThinking = part === 'thinking';
   dispatch(updateStreamingState({ chatId: threadId, state: { isThinking } }));
   if (!isStreamingTokensRef.current) {
@@ -575,14 +638,14 @@ export function useStreamingAPI(threadId: string) {
           streamEndedWithInterruptRef.current = false;
 
           const callbacks: StreamCallback = {
-            onToken(content, messageId, part) {
+            onToken(content, messageId, part, subagentToolCallId) {
               lastTokenTimeRef.current = Date.now();
               lastSuccessfulConnectionRef.current = Date.now();
               setIsStreamStale(false);
               if (streamClockRef.current.firstTokenTime == null) {
                 streamClockRef.current.firstTokenTime = Date.now();
               }
-              dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
+              dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef, subagentToolCallId);
             },
             onDraftDiscard() {
               if (isStreamingTokensRef.current) {
@@ -590,7 +653,11 @@ export function useStreamingAPI(threadId: string) {
                 isStreamingTokensRef.current = false;
               }
             },
-            onMessage(m) {
+            onMessage(m, subagentToolCallId) {
+              if (subagentToolCallId) {
+                dispatchSubagentMessage(dispatch, threadId, m, subagentToolCallId);
+                return;
+              }
               dispatch(updateStreamingState({ chatId: threadId, state: { isThinking: false } }));
               isStreamingTokensRef.current = false;
               if (m.type === 'human') {
@@ -1160,9 +1227,9 @@ export function useStreamingAPI(threadId: string) {
       let needsRefresh = false;
       try {
         const callbacks: StreamCallback = {
-          onToken(content, messageId, part) {
+          onToken(content, messageId, part, subagentToolCallId) {
             lastTokenTimeRef.current = Date.now();
-            dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
+            dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef, subagentToolCallId);
           },
           onDraftDiscard() {
             if (isStreamingTokensRef.current) {
@@ -1170,7 +1237,11 @@ export function useStreamingAPI(threadId: string) {
               isStreamingTokensRef.current = false;
             }
           },
-          onMessage(m) {
+          onMessage(m, subagentToolCallId) {
+            if (subagentToolCallId) {
+              dispatchSubagentMessage(dispatch, threadId, m, subagentToolCallId);
+              return;
+            }
             dispatch(updateStreamingState({ chatId: threadId, state: { isThinking: false } }));
             isStreamingTokensRef.current = false;
             if (m.type === 'human') return;
@@ -1285,9 +1356,85 @@ export function useStreamingAPI(threadId: string) {
     const pending = (state.interrupts ?? (state.interrupt ? [state.interrupt] : [])).map(enrichInterrupt);
     pendingInterruptsRef.current = pending;
     manager.approvalsRefreshed();
-    dispatch(updateChat({ id: threadId, updates: { messages: state.messages } }));
+    const kept = withLocalTranscripts(messages, state.messages);
+    dispatch(updateChat({ id: threadId, updates: { messages: kept } }));
     dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupts: pending, error: null } }));
+    const saved = await getSubagentTranscripts(threadId);
+    if (manager !== managerRef.current || !manager.canApplyRefresh(generation)) return;
+    if (saved.length > 0) {
+      dispatch(attachSubagentTranscripts({ chatId: threadId, transcripts: saved }));
+    }
+  }, [dispatch, messages, threadId]);
+
+  const connectedRef = useRef(false);
+  connectedRef.current = streamingState.isConnected;
+  const attachStartedRef = useRef(false);
+  const attachRetriedRef = useRef(false);
+  const attachForceRef = useRef(false);
+  const attachLiveRunRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    attachStartedRef.current = false;
+    attachRetriedRef.current = false;
+  }, [threadId]);
+
+  const attachLiveRun = useCallback(async () => {
+    const forced = attachForceRef.current;
+    attachForceRef.current = false;
+    if (!threadId || attachStartedRef.current) return;
+    if (connectedRef.current && !forced) return;
+    const run = await getActiveRun(threadId);
+    if (!run || attachStartedRef.current) return;
+    if (connectedRef.current && !forced) return;
+    attachStartedRef.current = true;
+    const manager = managerRef.current;
+    if (!manager) {
+      attachStartedRef.current = false;
+      return;
+    }
+    dispatch(updateStreamingState({
+      chatId: threadId,
+      state: { isLoading: true, isConnected: true, error: null, currentRunId: run.run_id },
+    }));
+    await manager.attach(threadId, run.run_id, {
+      onToken(content, messageId, part, subagentToolCallId) {
+        if (!subagentToolCallId) return;
+        dispatch(appendSubagentTranscript({
+          chatId: threadId,
+          toolCallId: subagentToolCallId,
+          messageId,
+          content,
+          part: part === 'thinking' ? 'thinking' : 'text',
+        }));
+      },
+      onMessage(message, subagentToolCallId) {
+        if (!subagentToolCallId) return;
+        dispatchSubagentMessage(dispatch, threadId, message, subagentToolCallId, false);
+      },
+      onInterrupt() {
+        // A replayed run can repeat an old pause. A real pause comes from thread state.
+      },
+      onError() {
+        dispatch(updateStreamingState({
+          chatId: threadId,
+          state: { isLoading: false, isConnected: false },
+        }));
+        if (!attachRetriedRef.current) {
+          attachRetriedRef.current = true;
+          attachStartedRef.current = false;
+          attachForceRef.current = true;
+          void attachLiveRunRef.current();
+        }
+      },
+      onStatusChange() {},
+      onDone() {
+        dispatch(updateStreamingState({
+          chatId: threadId,
+          state: { isLoading: false, isConnected: false },
+        }));
+      },
+    });
   }, [dispatch, threadId]);
+  attachLiveRunRef.current = attachLiveRun;
 
   const stop = useCallback(() => {
     userCancelledRef.current = true;
@@ -1332,6 +1479,7 @@ export function useStreamingAPI(threadId: string) {
     checkAndAutoApprove,
     resumeInterrupt,
     stop,
+    attachLiveRun,
     setMessages,
     retryCount,
     isStreamStale,
