@@ -25,8 +25,10 @@ export interface AppMastheadProps {
   onToggleSidebar: () => void;
 }
 
-function isHttpUrl(value: string | undefined): value is string {
+function isLinkableUrl(value: string | undefined): value is string {
   if (!value) return false;
+  // Same-origin relative path ("/x"), but not protocol-relative ("//host").
+  if (value.startsWith('/')) return !value.startsWith('//') && !value.startsWith('/\\');
   try {
     const { protocol } = new URL(value);
     return protocol === 'http:' || protocol === 'https:';
@@ -73,7 +75,7 @@ export function AppMasthead({ isSidebarOpen, onToggleSidebar }: AppMastheadProps
             </Link>
             {hasPlatform ? (
               <>
-                {isHttpUrl(branding?.platform_url) ? (
+                {isLinkableUrl(branding?.platform_url) ? (
                   <a
                     href={branding?.platform_url}
                     style={{ color: 'inherit', textDecoration: 'none', whiteSpace: 'nowrap', fontWeight: 400 }}

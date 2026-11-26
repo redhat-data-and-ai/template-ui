@@ -62,6 +62,17 @@ describe('AppMasthead', () => {
     expect(screen.getByText('Acme')).toBeInTheDocument();
   });
 
+  it('links a same-origin relative platform url', () => {
+    setup({ platform_name: 'Acme', platform_url: '/' });
+    expect(screen.getByRole('link', { name: 'Acme' })).toHaveAttribute('href', '/');
+  });
+
+  it('renders plain text for a protocol-relative platform url', () => {
+    setup({ platform_name: 'Acme', platform_url: '//evil.com' });
+    expect(screen.queryByRole('link', { name: /Acme/ })).toBeNull();
+    expect(screen.getByText('Acme')).toBeInTheDocument();
+  });
+
   it('renders only the emphasis part when platform_name is absent', () => {
     setup({ platform_name_emphasis: 'Hub' });
     expect(screen.getByText('Hub').tagName).toBe('B');
