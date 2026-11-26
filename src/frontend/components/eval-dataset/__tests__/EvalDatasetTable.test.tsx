@@ -40,23 +40,23 @@ describe('EvalDatasetTable', () => {
   it('does not call onDelete when trash icon is first clicked', () => {
     const onDelete = vi.fn();
     render(<EvalDatasetTable cases={[makeCase()]} onEdit={vi.fn()} onDelete={onDelete} />);
-    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete test_case' }));
     expect(onDelete).not.toHaveBeenCalled();
   });
 
   it('shows confirm and cancel buttons after trash click', () => {
     render(<EvalDatasetTable cases={[makeCase()]} onEdit={vi.fn()} onDelete={vi.fn()} />);
-    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete test_case' }));
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     // Trash icon itself is gone
-    expect(screen.queryByTitle('Delete')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete test_case' })).not.toBeInTheDocument();
   });
 
   it('calls onDelete with the correct id when confirm is clicked', () => {
     const onDelete = vi.fn();
     render(<EvalDatasetTable cases={[makeCase({ id: 'abc-123' })]} onEdit={vi.fn()} onDelete={onDelete} />);
-    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete test_case' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(onDelete).toHaveBeenCalledOnce();
     expect(onDelete).toHaveBeenCalledWith('abc-123');
@@ -64,17 +64,17 @@ describe('EvalDatasetTable', () => {
 
   it('restores the trash icon when Cancel is clicked', () => {
     render(<EvalDatasetTable cases={[makeCase()]} onEdit={vi.fn()} onDelete={vi.fn()} />);
-    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete test_case' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     // Cancel button gone, trash icon restored
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
-    expect(screen.getByTitle('Delete')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete test_case' })).toBeInTheDocument();
   });
 
   it('does not call onDelete when Cancel is clicked', () => {
     const onDelete = vi.fn();
     render(<EvalDatasetTable cases={[makeCase()]} onEdit={vi.fn()} onDelete={onDelete} />);
-    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete test_case' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onDelete).not.toHaveBeenCalled();
   });
@@ -82,7 +82,7 @@ describe('EvalDatasetTable', () => {
   it('calls onEdit with the correct id when edit icon is clicked', () => {
     const onEdit = vi.fn();
     render(<EvalDatasetTable cases={[makeCase({ id: 'xyz-999' })]} onEdit={onEdit} onDelete={vi.fn()} />);
-    fireEvent.click(screen.getByTitle('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit test_case' }));
     expect(onEdit).toHaveBeenCalledWith('xyz-999');
   });
 
@@ -116,10 +116,10 @@ describe('EvalDatasetTable', () => {
       makeCase({ id: 'row-2', name: 'second_case' }),
     ];
     render(<EvalDatasetTable cases={cases} onEdit={vi.fn()} onDelete={vi.fn()} />);
-    const trashButtons = screen.getAllByTitle('Delete');
+    const trashButtons = screen.getAllByRole('button', { name: /^Delete \w+_case$/ });
     fireEvent.click(trashButtons[0]);
     // Second row still shows the trash icon
-    expect(screen.getByTitle('Delete')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete second_case' })).toBeInTheDocument();
     // First row shows confirm/cancel
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
