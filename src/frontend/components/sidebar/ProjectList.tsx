@@ -11,6 +11,30 @@ import type { SidebarChatItem, SidebarProject } from '../../types/chat';
 import { ChatRow, type ChatRowContext } from './ChatList';
 import { isPlainLeftClick } from './isPlainLeftClick';
 import { RowActions, type RowActionGroup } from './RowActions';
+import { useTruncationTooltip } from './useTruncationTooltip';
+
+function ProjectLink({ project, onOpen }: { project: SidebarProject; onOpen: () => void }) {
+  const { textRef, handlers, tooltip } = useTruncationTooltip(project.name);
+  return (
+    <a
+      href={buildAppPath(`/project/${project.id}`)}
+      className="pf-v6-c-nav__link app-project-row__link"
+      {...handlers}
+      onClick={(e) => {
+        if (!isPlainLeftClick(e)) return;
+        e.preventDefault();
+        onOpen();
+      }}
+    >
+      <FolderIcon aria-hidden />
+      <span ref={textRef} className="pf-v6-c-nav__link-text app-nav-truncate">
+        {project.name}
+      </span>
+      {tooltip}
+      <span className="app-project-row__count">{project.threadCount}</span>
+    </a>
+  );
+}
 
 interface ProjectListProps {
   projects: SidebarProject[];
@@ -130,20 +154,7 @@ export function ProjectList({
                   className={`app-project-row__chevron${expanded ? ' is-expanded' : ''}`}
                 />
               </button>
-              <a
-                href={buildAppPath(`/project/${project.id}`)}
-                className="pf-v6-c-nav__link app-project-row__link"
-                title={project.name}
-                onClick={(e) => {
-                  if (!isPlainLeftClick(e)) return;
-                  e.preventDefault();
-                  navigate(`/project/${project.id}`);
-                }}
-              >
-                <FolderIcon aria-hidden />
-                <span className="pf-v6-c-nav__link-text app-nav-truncate">{project.name}</span>
-                <span className="app-project-row__count">{project.threadCount}</span>
-              </a>
+              <ProjectLink project={project} onOpen={() => navigate(`/project/${project.id}`)} />
               <div className="app-nav-row__actions">
                 <RowActions
                   aria-label={`Actions for project ${project.name}`}

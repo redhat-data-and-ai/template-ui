@@ -379,12 +379,14 @@ describe('AppSidebar — navigation', () => {
     expect(kebab).toHaveClass('app-nav-row__toggle--open');
   });
 
-  it('exposes the full title of a long thread via the title attribute', () => {
+  it('keeps the full title as the accessible name and has no native title tooltip', () => {
     const long = 'x'.repeat(200);
     renderWithProviders(
       <AppSidebar isOpen {...sidebarProps} chatHistory={[{ ...sampleChat, title: long }]} />,
     );
-    expect(screen.getByRole('link', { name: long })).toHaveAttribute('title', long);
+    const link = screen.getByRole('link', { name: long });
+    expect(link).not.toHaveAttribute('title');
+    expect(link).toHaveAttribute('href');
   });
 
   it('shows an empty state when there are no chats', () => {

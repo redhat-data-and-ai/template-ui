@@ -439,13 +439,6 @@ textarea.composer-input:focus-visible { outline: none; }
 .app-sidebar-scroll {
   padding-inline-start: var(--pf-t--global--spacer--sm);
 }
-.app-sidebar-scroll .pf-v6-c-nav__link.pf-m-current {
-  background-color: var(--app-surface-raised);
-  color: var(--app-text);
-}
-.app-sidebar-scroll .pf-v6-c-nav__link:not(.pf-m-current):hover {
-  background-color: var(--pf-t--global--background--color--action--plain--hover);
-}
 .app-nav-row--active::before {
   content: '';
   position: absolute;

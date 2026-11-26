@@ -11,6 +11,7 @@ import type { SubAgentInfo } from '../../types/deep-agent';
 import type { useSidebarDragDrop } from '../../hooks/useSidebarDragDrop';
 import { isPlainLeftClick } from './isPlainLeftClick';
 import { RowActions, type RowActionGroup } from './RowActions';
+import { useTruncationTooltip } from './useTruncationTooltip';
 
 export interface ChatRowContext {
   currentChatId?: string;
@@ -30,6 +31,7 @@ export interface ChatRowContext {
 }
 
 export function ChatRow({ chat, ctx }: { chat: SidebarChatItem; ctx: ChatRowContext }) {
+  const { textRef, handlers, tooltip } = useTruncationTooltip(chat.title);
   const isActive = ctx.currentChatId === chat.id;
   const isDragging = ctx.drag.draggedThreadId === chat.id;
   const isEditing = ctx.editingChat === chat.id;
@@ -106,7 +108,7 @@ export function ChatRow({ chat, ctx }: { chat: SidebarChatItem; ctx: ChatRowCont
         href={buildAppPath(`/chat/${chat.id}`)}
         className={`pf-v6-c-nav__link${isActive ? ' pf-m-current' : ''}`}
         aria-current={isActive ? 'page' : undefined}
-        title={chat.title}
+        {...handlers}
         draggable
         onDragStart={(e: DragEvent<HTMLElement>) => ctx.drag.handleDragStart(e, chat.id)}
         onDragEnd={ctx.drag.handleDragEnd}
@@ -116,7 +118,10 @@ export function ChatRow({ chat, ctx }: { chat: SidebarChatItem; ctx: ChatRowCont
           ctx.onSelectChat(chat.id);
         }}
       >
-        <span className="pf-v6-c-nav__link-text app-nav-truncate">{chat.title}</span>
+        <span ref={textRef} className="pf-v6-c-nav__link-text app-nav-truncate">
+          {chat.title}
+        </span>
+        {tooltip}
         {isActive && ctx.activeSubAgent && (
           <Label isCompact color="blue" icon={<SpinnerIcon className="app-spin" />}>
             <span className="capitalize">{ctx.activeSubAgent.name}</span>
