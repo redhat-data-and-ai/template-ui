@@ -65,7 +65,7 @@ agent:
 
     expect(settings.branding.logo_url).toBe("/test-logo.svg");
     expect(settings.branding.title).toBe("Test Agent");
-    expect(settings.branding.colors.light.primary).toBe("#ff0000");
+    expect(settings.branding.colors?.light.primary).toBe("#ff0000");
     expect(settings.features.debug_mode_default).toBe(true);
     expect(settings.features.auth_enabled).toBe(false);
     expect(settings.features.mcp_apps_enabled).toBe(true);
@@ -348,6 +348,37 @@ branding:
     expect(settings.features.debug_mode_default).toBe(false);
     expect(settings.agent.timeout_ms).toBe(30000);
     expect(settings.server.port).toBe(8080);
+  });
+
+  it("leaves branding.colors undefined when the config has no colors", () => {
+    writeFileSync(testConfigPath, `
+branding:
+  title: "No Colors"
+`);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+    for (const k of Object.keys(process.env)) {
+      if (k.startsWith("BRANDING_") && /(PRIMARY|ACCENT|BG|FG)_(LIGHT|DARK)$/.test(k)) delete process.env[k];
+    }
+
+    const settings = getSettings();
+    expect(settings.branding.colors).toBeUndefined();
+  });
+
+  it("preserves colors supplied in YAML", () => {
+    writeFileSync(testConfigPath, `
+branding:
+  title: "Colors"
+  colors:
+    light:
+      primary: "#123456"
+      accent: "#a60000"
+      background: "#ffffff"
+      foreground: "#1a1a1a"
+`);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    const settings = getSettings();
+    expect(settings.branding.colors?.light.primary).toBe("#123456");
   });
 
   it("should validate all 8 color fields", () => {
