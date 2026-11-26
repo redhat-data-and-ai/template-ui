@@ -118,13 +118,15 @@
 }
 
 /* Tailwind v4 reset strips native form element styles.
-   Restore sane defaults so utility classes layer on top. */
-textarea:not(.composer-input),
-input[type="text"],
-input[type="search"],
-input[type="email"],
-input[type="password"],
-input[type="url"] {
+   Restore sane defaults for plain (non-PatternFly) fields so utility classes
+   layer on top. PatternFly form controls draw their own box on a wrapper, so
+   they and the chat composer are excluded to avoid a double border. */
+textarea:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
+input[type="text"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
+input[type="search"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
+input[type="email"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
+input[type="password"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
+input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *) {
   background-color: var(--card);
   color: var(--foreground);
   border: 1px solid var(--border);
@@ -139,12 +141,12 @@ input::placeholder {
   color: var(--muted-foreground);
   opacity: 0.7;
 }
-textarea:not(.composer-input):focus,
-input[type="text"]:focus,
-input[type="search"]:focus,
-input[type="email"]:focus,
-input[type="password"]:focus,
-input[type="url"]:focus {
+textarea:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
+input[type="text"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
+input[type="search"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
+input[type="email"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
+input[type="password"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
+input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
   outline: none;
