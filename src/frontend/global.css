@@ -360,7 +360,15 @@ input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c
   display: flex;
   flex-direction: column;
   gap: var(--pf-t--global--spacer--sm);
-  padding-block-start: var(--pf-t--global--spacer--md);
+  /* Must equal .app-main's padding-block-start so both first items share a top edge. */
+  padding-block-start: var(--app-shell-top-gap);
+}
+.app-sidebar-top > .pf-v6-c-button {
+  height: 40px;
+  min-height: 40px;
+  padding-block: 0;
+  align-items: center;
+  justify-content: center;
 }
 .app-sidebar-scroll {
   flex: 1 1 auto;

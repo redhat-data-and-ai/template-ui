@@ -1,5 +1,10 @@
 /* Content surface and disclaimer banner (ported from the platform portal). */
+:root {
+  --app-shell-top-gap: var(--pf-t--global--spacer--md);
+}
+
 .app-main {
+  padding-block-start: var(--app-shell-top-gap);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -21,7 +26,8 @@
   align-items: center;
   width: 100%;
   box-sizing: border-box;
-  padding: 0.55rem 0.9rem;
+  height: 40px;
+  padding: 0 0.9rem;
   border-radius: 0.5rem;
   background-color: var(--app-disclaimer-bg);
   border: 1px solid var(--app-disclaimer-border);
@@ -31,7 +37,7 @@
 .app-disclaimer-banner__text {
   margin: 0;
   font-size: 0.8125rem;
-  line-height: 1.4;
+  line-height: 1.25;
   font-weight: 500;
 }
 
