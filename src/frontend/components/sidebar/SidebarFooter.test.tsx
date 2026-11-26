@@ -11,17 +11,19 @@ beforeEach(() => healthMock.mockReset());
 
 describe('SidebarFooter', () => {
   it.each([
-    ['healthy', 'Agent: Healthy', 'green'],
-    ['unhealthy', 'Agent: Unhealthy', 'red'],
-    ['unknown', 'Agent: Unknown', 'grey'],
-  ])('renders %s as a filled %s label', (status, text, color) => {
+    ['healthy', 'Agent: healthy'],
+    ['unhealthy', 'Agent: unhealthy'],
+    ['unknown', 'Agent: unknown'],
+  ])('renders %s as a quiet dot + text line', (status, text) => {
     healthMock.mockReturnValue({ status });
-    render(<SidebarFooter />);
-    const label = screen.getByText(text).closest('.pf-v6-c-label');
-    // PatternFly's default (grey) label carries no colour modifier class.
-    if (color === 'grey') expect(label?.className).not.toMatch(/pf-m-(green|red)/);
-    else expect(label).toHaveClass(`pf-m-${color}`);
-    expect(label).toHaveClass('pf-m-compact');
-    expect(label).not.toHaveClass('pf-m-outline');
+    const { container } = render(<SidebarFooter />);
+    const root = container.querySelector('.app-sidebar-footer');
+    expect(root).toHaveAttribute('data-health', status);
+    expect(screen.getByText(text)).toBeInTheDocument();
+    expect(container.querySelector('.pf-v6-c-label')).toBeNull();
+    expect(container.querySelector('.app-sidebar-footer__dot')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
   });
 });

@@ -395,10 +395,33 @@ textarea.composer-input:focus-visible { outline: none; }
 }
 .app-sidebar-footer {
   flex: none;
-  padding-block: var(--pf-t--global--spacer--sm);
+  margin-inline: var(--pf-t--global--spacer--md);
+  padding-block: var(--pf-t--global--spacer--md);
+  padding-inline: var(--pf-t--global--spacer--sm);
   border: 0;
+  border-block-start: var(--pf-t--global--border--width--regular) solid
+    var(--pf-t--global--border--color--default);
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--pf-t--global--spacer--sm);
+}
+.app-sidebar-footer__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pf-t--global--icon--color--disabled);
+}
+.app-sidebar-footer[data-health='healthy'] .app-sidebar-footer__dot {
+  background: var(--pf-t--global--icon--color--status--success--default);
+}
+.app-sidebar-footer[data-health='unhealthy'] .app-sidebar-footer__dot {
+  background: var(--pf-t--global--icon--color--status--danger--default);
+}
+.app-sidebar-footer__text {
+  font-size: var(--pf-t--global--font--size--sm);
+  color: var(--app-text-secondary);
 }
 
 .app-nav-truncate {

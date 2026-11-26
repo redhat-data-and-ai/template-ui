@@ -1,23 +1,17 @@
-import { Label } from '@patternfly/react-core';
 import { useAgentHealth } from '../../hooks/useAgentHealth';
 
-const HEALTH: Record<
-  'healthy' | 'unhealthy' | 'unknown',
-  { text: string; color: 'green' | 'red' | 'grey' }
-> = {
-  healthy: { text: 'Agent: Healthy', color: 'green' },
-  unhealthy: { text: 'Agent: Unhealthy', color: 'red' },
-  unknown: { text: 'Agent: Unknown', color: 'grey' },
+const HEALTH: Record<'healthy' | 'unhealthy' | 'unknown', string> = {
+  healthy: 'Agent: healthy',
+  unhealthy: 'Agent: unhealthy',
+  unknown: 'Agent: unknown',
 };
 
 export function SidebarFooter() {
   const { status } = useAgentHealth();
-  const { text, color } = HEALTH[status];
   return (
-    <div className="app-sidebar-footer">
-      <Label isCompact color={color}>
-        {text}
-      </Label>
+    <div className="app-sidebar-footer" data-health={status}>
+      <span className="app-sidebar-footer__dot" aria-hidden="true" />
+      <span className="app-sidebar-footer__text">{HEALTH[status]}</span>
     </div>
   );
 }
