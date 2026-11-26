@@ -1,5 +1,6 @@
 import type { Message } from '@langchain/langgraph-sdk';
-import { ProgressStep, ProgressStepper, Spinner } from '@patternfly/react-core';
+import { Label, Spinner } from '@patternfly/react-core';
+import { CheckCircleIcon } from '@patternfly/react-icons';
 import './progress.css';
 import { isSubAgentToolCall, extractSubAgentName } from '../types/deep-agent';
 
@@ -49,40 +50,41 @@ export function TaskProgressStepper({ messages, isLoading }: TaskProgressStepper
   const steps = deriveSteps(messages);
   if (steps.length === 0) return null;
   const showProcessing = isLoading && steps.every((s) => s.status === 'complete');
-  // PF compact steppers label only the current step: the latest running one, else the latest step.
-  const runningIdx = steps.map((s) => s.status).lastIndexOf('running');
-  const currentIdx = showProcessing ? -1 : runningIdx >= 0 ? runningIdx : steps.length - 1;
+
+  const items = [
+    ...steps.map((step) => ({
+      key: step.id,
+      name: step.name,
+      status: step.status as 'complete' | 'running',
+      isSubAgent: step.isSubAgent,
+    })),
+    ...(showProcessing
+      ? [{ key: 'processing', name: 'Processing', status: 'running' as const, isSubAgent: false }]
+      : []),
+  ];
 
   return (
     <div className="app-task-strip" role="region" aria-label="Task progress">
-      <ProgressStepper isCompact aria-label="Task progress steps">
-        {steps.map((step, idx) => (
-          <ProgressStep
-            key={step.id}
-            variant={step.status === 'complete' ? 'success' : 'info'}
-            isCurrent={idx === currentIdx}
-            title={step.name}
-            icon={step.status === 'running' ? <Spinner size="sm" aria-label="Running" /> : undefined}
-            id={`task-step-${step.id}`}
-            titleId={`task-step-${step.id}-title`}
-            aria-label={`${step.name}: ${step.status === 'complete' ? 'complete' : 'running'}`}
-          >
-            <span className={step.isSubAgent ? 'app-task-strip__sub' : undefined}>{step.name}</span>
-          </ProgressStep>
+      <div className="app-task-strip__row" role="list" aria-label="Task progress steps">
+        {items.map((item, idx) => (
+          <div key={item.key} className="app-task-strip__item" role="listitem">
+            {idx > 0 && (
+              <span
+                aria-hidden="true"
+                className={`app-task-strip__connector${items[idx - 1].status === 'complete' ? ' app-task-strip__connector--done' : ''}`}
+              />
+            )}
+            <Label
+              isCompact
+              color={item.status === 'complete' ? 'green' : 'blue'}
+              icon={item.status === 'complete' ? <CheckCircleIcon /> : <Spinner size="sm" aria-hidden="true" />}
+            >
+              <span className={item.isSubAgent ? 'app-task-strip__sub' : undefined}>{item.name}</span>
+              <span className="pf-v6-screen-reader">{item.status === 'complete' ? ': complete' : ': running'}</span>
+            </Label>
+          </div>
         ))}
-        {showProcessing && (
-          <ProgressStep
-            variant="info"
-            isCurrent
-            icon={<Spinner size="sm" aria-label="Running" />}
-            id="task-step-processing"
-            titleId="task-step-processing-title"
-            aria-label="Processing: running"
-          >
-            Processing
-          </ProgressStep>
-        )}
-      </ProgressStepper>
+      </div>
     </div>
   );
 }

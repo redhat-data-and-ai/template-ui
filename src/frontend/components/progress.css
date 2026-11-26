@@ -22,11 +22,17 @@
 .app-task-strip::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
 .app-task-strip:hover::-webkit-scrollbar-thumb { background: var(--pf-t--global--border--color--default); }
 
-.app-task-strip .pf-v6-c-progress-stepper {
-  margin: 0;
+.app-task-strip .app-task-strip__row { display: flex; align-items: center; width: max-content; }
+.app-task-strip .app-task-strip__item { display: flex; align-items: center; flex-shrink: 0; }
+.app-task-strip .app-task-strip__connector {
+  display: inline-block;
+  width: 16px;
+  height: 1px;
+  background: var(--app-border);
 }
-
-.app-task-strip .pf-v6-c-progress-stepper__step { flex-shrink: 0; }
+.app-task-strip .app-task-strip__connector--done {
+  background: color-mix(in srgb, var(--pf-t--global--color--status--success--default) 60%, var(--app-border));
+}
 .app-task-strip .app-task-strip__sub { text-transform: capitalize; font-weight: var(--pf-t--global--font--weight--body--bold); }
 
 /* Todos (strip above composer + inline list) */
@@ -92,3 +98,11 @@
 .app-tasks-sidebar .app-tasks-sidebar__name--agent { font-family: inherit; text-transform: capitalize; }
 .app-tasks-sidebar .app-tasks-sidebar__preview { display: block; font-size: 0.6875rem; color: var(--pf-t--global--text--color--subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-tasks-sidebar .app-tasks-sidebar__empty { margin: 0; padding: var(--pf-t--global--spacer--md) 0; text-align: center; font-size: 0.75rem; color: var(--pf-t--global--text--color--subtle); }
+
+/* Visible running spinner inside the blue label (default spinner colour blends with the label fill). */
+.app-task-strip .pf-v6-c-spinner.pf-m-sm {
+  --pf-v6-c-spinner--diameter: 0.75rem;
+  --pf-v6-c-spinner--Color: currentColor;
+  --pf-v6-c-spinner--m-sm--diameter: 0.75rem;
+}
+.app-task-strip .pf-v6-c-spinner .pf-v6-c-spinner__path { stroke: currentColor; stroke-width: 12; }

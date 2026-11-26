@@ -29,6 +29,11 @@ describe('TaskProgressStepper', () => {
     expect(screen.getByText('write_file')).toBeVisible();
     expect(screen.queryByText('write_todos')).not.toBeInTheDocument();
     expect(screen.queryByText('Processing')).not.toBeInTheDocument();
+    const items = screen.getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    expect(items[0]).toHaveTextContent('search_web: complete');
+    expect(items[1]).toHaveTextContent('researcher: complete');
+    expect(items[2]).toHaveTextContent('write_file: running');
   });
 
   it('shows Processing once every step is done while loading, and renders nothing with no steps', () => {
