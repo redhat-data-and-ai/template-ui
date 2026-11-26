@@ -12,6 +12,7 @@ import { EvalDatasetPage } from './pages/EvalDatasetPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastNotifications } from './components/ToastNotifications';
 import { isPrivilegedUser } from './lib/role-utils';
+import { applyBrandingColors, clearBrandingColors } from './lib/branding';
 import { useThemeSync } from './hooks/useThemeSync';
 import { loadConfig, setBranding, setFeatures } from './redux/slices/config';
 import { setConfigDefaults } from './redux/slices/userSettings';
@@ -50,14 +51,10 @@ export default function App() {
   useEffect(() => {
     if (!branding) return;
 
-    // Apply colors based on current theme
+    // Apply colors based on current theme (cleared first so removed config restores defaults)
     const colors = theme === 'dark' ? branding.colors?.dark : branding.colors?.light;
-    if (!colors) return;
-
-    document.documentElement.style.setProperty('--primary', colors.primary);
-    document.documentElement.style.setProperty('--accent', colors.accent);
-    document.documentElement.style.setProperty('--background', colors.background);
-    document.documentElement.style.setProperty('--foreground', colors.foreground);
+    clearBrandingColors(document.documentElement);
+    applyBrandingColors(colors, theme, document.documentElement);
 
     // Update document title
     if (branding.title) {
