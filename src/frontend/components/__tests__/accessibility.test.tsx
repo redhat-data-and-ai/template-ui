@@ -109,13 +109,9 @@ describe('HomePage — accessibility', () => {
     expect(promptBtns.length).toBeGreaterThan(0);
   });
 
-  it('emojis in headings are hidden from screen readers', () => {
+  it('greeting is the single level-1 heading', () => {
     renderWithProviders(<HomePage />);
-    const hiddenEmojis = document.querySelectorAll('[aria-hidden="true"]');
-    const emojiElements = Array.from(hiddenEmojis).filter(
-      (el) => el.textContent === '👋' || el.textContent === '🚀',
-    );
-    expect(emojiElements.length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
   it('quick-prompt list has an accessible group label', () => {
