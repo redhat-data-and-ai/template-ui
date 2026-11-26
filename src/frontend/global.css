@@ -300,7 +300,7 @@ input[type="url"]:focus {
 
 /* ── WCAG 2.1 AA focus visibility (MR-79) ───────────────── */
 :focus-visible {
-  outline: 2px solid var(--pf-t--global--color--brand--default, var(--primary, #0066cc));
+  outline: 2px solid var(--app-accent-strong, #c45c42);
   outline-offset: 2px;
 }
 

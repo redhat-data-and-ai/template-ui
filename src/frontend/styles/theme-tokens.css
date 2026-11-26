@@ -91,6 +91,12 @@ html {
   --pf-t--global--text--color--link--hover: var(--app-accent-strong-hover);
 }
 
+/* Tailwind's amber-700 text on the warm page surface is 4.43:1 (< 4.5:1 AA).
+   Route it to the darker status-text token in light mode only. */
+:root:not(.pf-v6-theme-dark) {
+  --color-amber-700: var(--app-warning-text);
+}
+
 /* PF declares the primary-button vars inside .pf-v6-c-button, which beats
    anything set on :root. Re-declare on the component (higher specificity). */
 .pf-v6-c-button.pf-m-primary {
