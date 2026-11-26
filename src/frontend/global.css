@@ -384,19 +384,6 @@ input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c
   justify-content: flex-start;
   gap: var(--pf-t--global--spacer--sm);
 }
-.app-sidebar-footer__dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--pf-t--global--icon--color--disabled);
-}
-.app-sidebar-footer[data-health='healthy'] .app-sidebar-footer__dot {
-  background: var(--pf-t--global--icon--color--status--success--default);
-}
-.app-sidebar-footer[data-health='unhealthy'] .app-sidebar-footer__dot {
-  background: var(--pf-t--global--icon--color--status--danger--default);
-}
 .app-sidebar-footer__text {
   font-size: var(--pf-t--global--font--size--sm);
   color: var(--app-text-secondary);
