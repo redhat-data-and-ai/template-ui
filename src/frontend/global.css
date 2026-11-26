@@ -152,28 +152,6 @@ input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c
   outline: none;
 }
 
-/* Chat composer: the wrapper draws the single border; the textarea is bare. */
-textarea.composer-input {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  padding: 0.75rem 1rem;
-}
-/* Unlayered element rules beat Tailwind utilities, so padding lives here. */
-.composer-box--actions textarea.composer-input { padding-bottom: 3rem; }
-.composer-box--inline textarea.composer-input { padding-right: 3.5rem; }
-/* The wrapper's accent border is the focus indicator, not an extra outline. */
-textarea.composer-input:focus-visible { outline: none; }
-.composer-box {
-  border: 1px solid var(--app-border);
-  border-radius: var(--pf-t--global--border--radius--small);
-  background-color: var(--app-surface-raised);
-  transition: border-color 0.15s ease;
-}
-.composer-box:focus-within {
-  border-color: var(--app-accent-strong);
-}
-
 /* PatternFly's page main container adds its own frame around our content surface. */
 .pf-v6-c-page__main-container {
   background: transparent;

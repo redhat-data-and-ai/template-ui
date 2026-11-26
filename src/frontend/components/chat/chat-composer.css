@@ -1,0 +1,34 @@
+/* Single bordered box: the wrapper draws the only border; PF's own control chrome is removed. */
+.composer-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.composer-box {
+  position: relative;
+  border: 1px solid var(--app-border);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background-color: var(--app-surface-raised);
+  transition: border-color 0.15s ease;
+}
+.composer-box:focus-within { border-color: var(--app-accent-strong); }
+.composer-box .pf-v6-c-form-control {
+  --pf-v6-c-form-control--BackgroundColor: transparent;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  width: 100%;
+  max-height: 200px;
+}
+.composer-box .pf-v6-c-form-control::before,
+.composer-box .pf-v6-c-form-control::after { display: none; }
+.composer-box .pf-v6-c-form-control textarea {
+  padding: 12px 3.5rem 12px 16px;
+  min-height: 3rem;
+  max-height: 200px;
+  outline: none;
+}
+.composer-actions {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
