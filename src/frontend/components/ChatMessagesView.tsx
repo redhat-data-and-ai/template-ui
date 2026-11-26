@@ -888,7 +888,7 @@ export function ChatMessagesView({
         {srAnnouncement}
       </div>
       {(showExport || headerActions) && (
-        <div className="absolute top-2 right-2 z-10 flex items-center gap-1" data-testid="chat-header-actions">
+        <div className="flex shrink-0 items-center justify-end gap-1 px-2 pt-2" data-testid="chat-header-actions">
           {headerActions}
           {showExport && (
           <Dropdown
