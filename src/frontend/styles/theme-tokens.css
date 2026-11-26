@@ -106,6 +106,16 @@ html {
   --pf-v6-c-button--m-primary--hover--Color: var(--app-on-accent);
 }
 
+/* Selected toggle-group item uses the portal salmon (like the portal's selected chip).
+   PF declares these vars on the button, so re-declare them at higher specificity. */
+.pf-v6-c-toggle-group__button.pf-m-selected,
+.pf-v6-c-toggle-group__button.pf-m-selected:hover {
+  --pf-v6-c-toggle-group__button--m-selected--BackgroundColor: var(--app-accent);
+  --pf-v6-c-toggle-group__button--m-selected--Color: var(--app-on-accent);
+  --pf-v6-c-toggle-group__button--m-selected--before--BorderColor: var(--app-accent);
+  --pf-v6-c-toggle-group__button--m-selected-selected--before--BorderInlineStartColor: var(--app-accent);
+}
+
 .pf-v6-theme-dark {
   --app-caution-text: #f0c24b;
   --app-warning-text: #ff9c66;
