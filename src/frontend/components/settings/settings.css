@@ -125,3 +125,7 @@
   align-items: center;
   gap: var(--pf-t--global--spacer--sm);
 }
+/* Light mode: the white surface hides PF's raised current row, so give it a neutral grey. */
+:root:not(.pf-v6-theme-dark) .app-settings__nav .pf-v6-c-nav__link.pf-m-current {
+  background-color: var(--pf-t--global--background--color--secondary--default);
+}
