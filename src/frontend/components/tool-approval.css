@@ -1,0 +1,46 @@
+/* HITL approval strip inside tool / sub-agent cards. Single divider, no extra box. */
+.app-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--pf-t--global--border--color--default);
+  background: transparent;
+}
+
+.app-approval .app-approval__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.app-approval .app-approval__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--pf-t--global--text--color--subtle);
+}
+
+.app-approval .app-approval__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Interrupt banner: breathing room between prompt text and actions. */
+.app-interrupt .app-interrupt__text {
+  margin: 0 0 0.75rem;
+  white-space: pre-wrap;
+  font-size: 0.875rem;
+}
+
+.app-interrupt .pf-v6-c-alert__description {
+  padding-block: 0.25rem 0.25rem;
+}
+
+.app-interrupt .app-interrupt__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}

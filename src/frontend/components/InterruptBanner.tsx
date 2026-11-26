@@ -12,6 +12,7 @@ import {
   verifyMcpOAuthConnected,
 } from '../services/mcp-oauth-api';
 import type { InterruptInfo } from '../types/deep-agent';
+import './tool-approval.css';
 
 interface InterruptBannerProps {
   readonly interrupt: InterruptInfo;
@@ -165,15 +166,15 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
 
   if (approval) {
     return (
-      <div className="mx-4 mb-3" role="alert">
+      <div className="mx-4 mb-3 app-interrupt" role="alert">
         <Alert
           variant="warning"
           title="Action Required"
           isInline
           actionClose={<AlertActionCloseButton onClose={onDismiss} />}
         >
-          <p className="text-sm mb-3 whitespace-pre-wrap">{valueStr}</p>
-          <div className="flex items-center gap-2">
+          <p className="app-interrupt__text">{valueStr}</p>
+          <div className="app-interrupt__actions">
             <Button
               variant="primary"
               size="sm"
@@ -199,14 +200,14 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
   }
 
   return (
-    <div className="mx-4 mb-3" role="alert">
+    <div className="mx-4 mb-3 app-interrupt" role="alert">
       <Alert
         title="Input Required"
         isInline
         actionClose={<AlertActionCloseButton onClose={onDismiss} />}
       >
-        <p className="text-sm mb-3 whitespace-pre-wrap">{valueStr}</p>
-        <div className="flex items-center gap-2">
+        <p className="app-interrupt__text">{valueStr}</p>
+        <div className="app-interrupt__actions">
           <TextInput
             value={response}
             onChange={(_e, val) => setResponse(val)}

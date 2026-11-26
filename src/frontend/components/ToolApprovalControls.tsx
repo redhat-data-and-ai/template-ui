@@ -1,6 +1,8 @@
-import { Check, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { Button, Label } from '@patternfly/react-core';
+import { CheckIcon, ShieldAltIcon } from '@patternfly/react-icons';
 import type { ToolApproval } from '../hooks/useInterruptApprovals';
+import './tool-approval.css';
 
 export function ToolApprovalControls({ approval }: { approval: ToolApproval }) {
   const approveRef = useRef<HTMLButtonElement>(null);
@@ -10,29 +12,30 @@ export function ToolApprovalControls({ approval }: { approval: ToolApproval }) {
   if (approval.decision) return null;
   const name = approval.request.name;
   return (
-    <div role="alert" aria-live="assertive" aria-label={`Tool call ${name} requires approval`} className="flex items-center gap-2 px-4 py-3 border-t border-yellow-500/30 bg-yellow-500/5 flex-wrap">
+    <div role="alert" aria-live="assertive" aria-label={`Tool call ${name} requires approval`} className="app-approval">
+      <div className="app-approval__header">
+        <Label color="orange" isCompact>Approval required</Label>
+      </div>
       {approval.waitingForResume && (
-        <p className="w-full text-xs text-muted-foreground">
-          Waiting for the current approval to finish…
-        </p>
+        <p className="app-approval__hint">Waiting for the current approval to finish…</p>
       )}
-      <button ref={approveRef} type="button" disabled={approval.disabled} onClick={() => approval.decide({ type: 'approve' })}
-        aria-label={`Approve tool call: ${name}`}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ backgroundColor: 'var(--chart-3)', color: 'var(--background)' }}>
-        <Check className="w-3 h-3" aria-hidden="true" />Approve
-      </button>
-      <button type="button" disabled={approval.disabled} onClick={() => approval.decide({ type: 'reject', message: 'User rejected this action.' })}
-        aria-label={`Reject tool call: ${name}`}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium enabled:hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ backgroundColor: 'var(--destructive)', color: 'var(--background)' }}>Reject</button>
-      {approval.alwaysAllow && (
-        <button type="button" disabled={approval.disabled} onClick={approval.alwaysAllow}
-          aria-label={`Always allow tool: ${name}`}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-muted text-foreground enabled:hover:bg-muted/70 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-          <ShieldCheck className="w-3 h-3" aria-hidden="true" />Always allow
-        </button>
-      )}
+      <div className="app-approval__actions">
+        <Button ref={approveRef} variant="primary" size="sm" icon={<CheckIcon />} isDisabled={approval.disabled}
+          onClick={() => approval.decide({ type: 'approve' })} aria-label={`Approve tool call: ${name}`}>
+          Approve
+        </Button>
+        <Button variant="danger" isDanger size="sm" isDisabled={approval.disabled}
+          onClick={() => approval.decide({ type: 'reject', message: 'User rejected this action.' })}
+          aria-label={`Reject tool call: ${name}`}>
+          Reject
+        </Button>
+        {approval.alwaysAllow && (
+          <Button variant="secondary" size="sm" icon={<ShieldAltIcon />} isDisabled={approval.disabled}
+            onClick={approval.alwaysAllow} aria-label={`Always allow tool: ${name}`}>
+            Always allow
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
