@@ -1,4 +1,4 @@
-/* Task progress strip, todos, activity timeline and tasks sidebar.
+/* Task progress strip, todos and tasks sidebar.
    Scoped component CSS (global.css element rules beat utilities). */
 
 /* Horizontal strip: never scrolls vertically; scrolls horizontally only when the
@@ -75,20 +75,6 @@
   background: var(--pf-t--global--background--color--secondary--default);
 }
 
-/* Activity timeline */
-.app-timeline {
-  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
-  border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
-  border-radius: var(--pf-t--global--border--radius--small);
-  background: var(--pf-t--global--background--color--secondary--default);
-}
-.app-timeline .app-timeline__body { max-height: 24rem; overflow-y: auto; padding-top: var(--pf-t--global--spacer--sm); }
-.app-timeline .app-timeline__title { display: block; font-size: 0.875rem; font-weight: var(--pf-t--global--font--weight--body--bold); }
-.app-timeline .app-timeline__data { display: block; font-size: 0.75rem; color: var(--pf-t--global--text--color--subtle); overflow-wrap: anywhere; }
-.app-timeline .app-timeline__empty { display: flex; flex-direction: column; align-items: center; gap: var(--pf-t--global--spacer--xs); padding: var(--pf-t--global--spacer--md); color: var(--pf-t--global--text--color--subtle); font-size: 0.875rem; }
-.app-timeline .app-timeline__empty p { margin: 0; }
-.app-timeline .app-timeline__hint { font-size: 0.75rem; }
-
 /* Tasks sidebar (debug) */
 .app-tasks-sidebar { height: 100%; }
 .app-tasks-sidebar .app-tasks-sidebar__title { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: var(--pf-t--global--spacer--sm); font-size: 0.875rem; }
@@ -99,10 +85,15 @@
 .app-tasks-sidebar .app-tasks-sidebar__preview { display: block; font-size: 0.6875rem; color: var(--pf-t--global--text--color--subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-tasks-sidebar .app-tasks-sidebar__empty { margin: 0; padding: var(--pf-t--global--spacer--md) 0; text-align: center; font-size: 0.75rem; color: var(--pf-t--global--text--color--subtle); }
 
-/* Visible running spinner inside the blue label (default spinner colour blends with the label fill). */
-.app-task-strip .pf-v6-c-spinner.pf-m-sm {
+/* Visible running spinner (default spinner colour blends with the label fill / is hairline-thin).
+   Shared by the task strip, the todo strip and the Tasks & Tools sidebar. */
+.app-task-strip .pf-v6-c-spinner.pf-m-sm,
+.app-todos .pf-v6-c-spinner.pf-m-sm,
+.app-tasks-sidebar .pf-v6-c-spinner.pf-m-sm {
   --pf-v6-c-spinner--diameter: 0.75rem;
   --pf-v6-c-spinner--Color: currentColor;
   --pf-v6-c-spinner--m-sm--diameter: 0.75rem;
 }
-.app-task-strip .pf-v6-c-spinner .pf-v6-c-spinner__path { stroke: currentColor; stroke-width: 12; }
+.app-task-strip .pf-v6-c-spinner .pf-v6-c-spinner__path,
+.app-todos .pf-v6-c-spinner .pf-v6-c-spinner__path,
+.app-tasks-sidebar .pf-v6-c-spinner .pf-v6-c-spinner__path { stroke: currentColor; stroke-width: 12; }

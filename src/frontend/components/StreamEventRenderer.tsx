@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { StreamEvent, ToolCall } from "../hooks/useDataStream";
+import { Spinner } from "@patternfly/react-core";
 import {
-  Brain,
-  CheckCircle,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Play,
-  Zap,
-} from "lucide-react";
+  AngleDownIcon,
+  AngleRightIcon,
+  BoltIcon,
+  BrainIcon,
+  CheckCircleIcon,
+  ExclamationCircleIcon,
+  PlayIcon,
+} from "@patternfly/react-icons";
 import { getToolIcon } from "../lib/toolIcons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -96,11 +97,11 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
         return (
           <div key={event.id} className="bg-purple-900/20 border border-purple-700/30 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <Brain className="w-5 h-5 text-purple-400 mt-0.5" />
+              <BrainIcon />
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm font-medium text-purple-100">AI Thinking</span>
-                  {isLoading && <Loader2 className="w-3 h-3 text-purple-400 animate-spin" />}
+                  {isLoading && <Spinner size="sm" aria-label="Loading" />}
                 </div>
                 <div className="text-sm text-purple-200/80 italic">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]}>
@@ -128,15 +129,15 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
               className="w-full flex items-center justify-between p-4 hover:bg-blue-800/20 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <ToolIcon className="w-5 h-5 text-blue-400" />
+                <ToolIcon />
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-blue-100">{toolCall.name}</span>
                 </div>
               </div>
               {isExpanded ? (
-                <ChevronDown className="w-4 h-4 text-blue-400" />
+                <AngleDownIcon />
               ) : (
-                <ChevronRight className="w-4 h-4 text-blue-400" />
+                <AngleRightIcon />
               )}
             </button>
 
@@ -163,7 +164,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
               className="w-full flex items-center justify-between p-3 hover:bg-green-800/20 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <CheckCircle className="w-4 h-4 text-green-400" />
+                <CheckCircleIcon />
                 <div className="text-left">
                   <div className="text-sm font-medium text-green-100">
                     {event.tool_calls?.[0].name} result
@@ -174,9 +175,9 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
                 </div>
               </div>
               {resultExpanded ? (
-                <ChevronDown className="w-4 h-4 text-green-400" />
+                <AngleDownIcon />
               ) : (
-                <ChevronRight className="w-4 h-4 text-green-400" />
+                <AngleRightIcon />
               )}
             </button>
 
@@ -196,7 +197,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
         return (
           <div key={event.id} className="bg-neutral-800/30 border border-neutral-700/30 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <Zap className="w-4 h-4 text-orange-400 mt-0.5" />
+              <BoltIcon />
               <div className="flex-1">
                 <div className="text-sm font-medium text-orange-100 mb-2">
                   AI Response
@@ -218,7 +219,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
         return (
           <div key={event.id} className="flex items-center justify-center py-2">
             <div className="flex items-center gap-2 text-xs text-neutral-500">
-              <CheckCircle className="w-3 h-3" />
+              <CheckCircleIcon />
               Step {event.tool_calls?.[0].name} completed
             </div>
           </div>
@@ -227,7 +228,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
       case 'start':
         return (
           <div key={event.id} className="flex items-center gap-2 text-xs text-neutral-500 mb-2">
-            <Play className="w-3 h-3" />
+            <PlayIcon />
             Session started
           </div>
         );
@@ -236,7 +237,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
         return (
           <div key={event.id} className="flex items-center justify-center py-4">
             <div className="flex items-center gap-2 text-sm text-green-400 bg-green-900/20 px-3 py-1 rounded-full border border-green-700/30">
-              <CheckCircle className="w-4 h-4" />
+              <CheckCircleIcon />
               Task completed
             </div>
           </div>
@@ -246,7 +247,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
         return (
           <div key={event.id} className="bg-red-900/20 border border-red-700/30 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <div className="w-5 h-5 text-red-400 mt-0.5">⚠️</div>
+              <ExclamationCircleIcon />
               <div className="flex-1">
                 <div className="text-sm font-medium text-red-100 mb-1">Error</div>
                 <p className="text-sm text-red-200/80">
@@ -283,7 +284,7 @@ export function StreamEventRenderer({ events, isLoading }: StreamEventRendererPr
 
       {isLoading && (
         <div className="flex items-center gap-2 text-xs text-neutral-500 justify-center py-2">
-          <Loader2 className="w-3 h-3 animate-spin" />
+          <Spinner size="sm" aria-label="Loading" />
           Processing...
         </div>
       )}

@@ -1,27 +1,40 @@
 import type React from "react";
 import type { Message } from "@langchain/langgraph-sdk";
-import { AlertCircle, Check, CheckCircle, ChevronDown, ChevronRight, Copy, Download, Loader2, Pencil, RotateCcw, Bot } from "lucide-react";
+import {
+  AngleDownIcon,
+  AngleRightIcon,
+  CheckCircleIcon,
+  CheckIcon,
+  CopyIcon,
+  DownloadIcon,
+  ExclamationCircleIcon,
+    PencilAltIcon,
+  UndoIcon,
+  RobotIcon,
+} from "@patternfly/react-icons";
 import type { InterruptInfo, ApprovalSubmission } from "../types/deep-agent";
 import { ToolApprovalControls } from "./ToolApprovalControls";
 import { bindToolApprovals, useInterruptApprovals } from "../hooks/useInterruptApprovals";
 import type { ToolApproval } from "../hooks/useInterruptApprovals";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
-import { useState, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, useId, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
 import { cn } from "../lib/utils";
 import {
   Button,
+  CodeBlock,
+  CodeBlockAction,
+  CodeBlockCode,
+  ClipboardCopyButton,
   Dropdown,
   DropdownItem,
   DropdownList,
   ExpandableSection,
-  Label,
   MenuToggle,
+  Spinner,
   type MenuToggleElement,
 } from "@patternfly/react-core";
-import {
-  ProcessedEvent,
-} from "./ActivityTimeline";
+import type { ProcessedEvent } from "../types/activity";
 import { StreamEvent } from "../hooks/useDataStream";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -39,6 +52,8 @@ import { ChatbotContent } from "@patternfly/chatbot/dist/esm/ChatbotContent";
 import { MessageBox, type MessageBoxHandle } from "@patternfly/chatbot/dist/esm/MessageBox";
 import "@patternfly/chatbot/dist/css/main.css";
 import { ChatBubble } from "./chat/ChatBubble";
+import "./rich-content.css";
+import "./sub-agent.css";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -148,8 +163,9 @@ function getPlainTextFromReactNode(node: React.ReactNode): string {
   return '';
 }
 
-function MarkdownPre({ className, children, ...props }: MdComponentProps) {
+function MarkdownPre({ children }: MdComponentProps) {
   const [copied, setCopied] = useState(false);
+  const codeId = useId();
   const codeText = useMemo(() => getPlainTextFromReactNode(children), [children]);
 
   const handleCopy = () => {
@@ -160,54 +176,50 @@ function MarkdownPre({ className, children, ...props }: MdComponentProps) {
   };
 
   return (
-    <div className="relative group/codeblock my-3">
-      <button
-        type="button"
-        onClick={() => handleCopy()}
-        className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card/90 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
-        aria-label={copied ? 'Copied' : 'Copy code'}
-      >
-        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      </button>
-      <pre
-        className={cn(
-          "bg-muted border border-border pt-10 pr-3 pb-4 pl-4 rounded-xl overflow-x-auto font-mono text-[13px]",
-          className
-        )}
-        {...props}
-      >
-        {children}
-      </pre>
-    </div>
+    <CodeBlock
+      className="app-codeblock"
+      actions={
+        <CodeBlockAction>
+          <ClipboardCopyButton
+            id={`copy-${codeId}`}
+            textId={`code-${codeId}`}
+            aria-label={copied ? 'Copied' : 'Copy code'}
+            onClick={handleCopy}
+            exitDelay={copied ? 1500 : 600}
+            variant="plain"
+          >
+            {copied ? 'Copied' : 'Copy code'}
+          </ClipboardCopyButton>
+        </CodeBlockAction>
+      }
+    >
+      <CodeBlockCode id={`code-${codeId}`}>{codeText.replace(/\n$/, '')}</CodeBlockCode>
+    </CodeBlock>
   );
 }
 
 function MessageCopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-  const disabled = text.length === 0;
 
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      className={cn(
-        'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
-      )}
+    <Button
+      variant="plain"
+      size="sm"
+      isDisabled={text.length === 0}
       aria-label={copied ? 'Copied' : 'Copy message'}
+      icon={copied ? <CheckIcon /> : <CopyIcon />}
       onClick={() => {
         void navigator.clipboard.writeText(text).then(() => {
           setCopied(true);
           window.setTimeout(() => setCopied(false), 2000);
         });
       }}
-    >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-    </button>
+    />
   );
 }
 
 function BotAvatar() {
-  return <Bot />;
+  return <RobotIcon />;
 }
 
 /** Assistant message bubble with its copy/feedback actions and comment box. */
@@ -254,7 +266,7 @@ function AssistantBubble({
             </>
           )}
           <span className="inline-flex items-center gap-1 ml-2 text-[11px] text-muted-foreground" aria-label="AI-generated content">
-            <Bot className="w-2.5 h-2.5" aria-hidden="true" />
+            <RobotIcon aria-hidden="true" />
             AI-generated
           </span>
         </>
@@ -271,119 +283,19 @@ function AssistantBubble({
   );
 }
 
+/* Typography lives in rich-content.css (.app-markdown); elements stay plain. */
 const mdComponents = {
-  h1: ({ className, children, ...props }: MdComponentProps) => (
-    <h1 className={cn("text-2xl font-bold mt-4 mb-2 text-foreground", className)} {...props}>
+  a: ({ children, href }: MdComponentProps) => (
+    <a href={href as string} target="_blank" rel="noopener noreferrer">
       {children}
-    </h1>
-  ),
-  h2: ({ className, children, ...props }: MdComponentProps) => (
-    <h2 className={cn("text-xl font-semibold mt-3 mb-2 text-foreground", className)} {...props}>
-      {children}
-    </h2>
-  ),
-  h3: ({ className, children, ...props }: MdComponentProps) => (
-    <h3 className={cn("text-lg font-semibold mt-3 mb-1 text-foreground", className)} {...props}>
-      {children}
-    </h3>
-  ),
-  p: ({ className, children, node: _node, ...props }: MdComponentProps) => (
-    <p className={cn("mb-3 leading-7 text-inherit", className)} {...props}>
-      {children}
-    </p>
-  ),
-  a: ({ className, children, href, ...props }: MdComponentProps) => (
-    <Label isCompact className="mx-0.5">
-      <a
-        className={cn("text-primary hover:text-primary/80 text-xs", className)}
-        href={href as string}
-        target="_blank"
-        rel="noopener noreferrer"
-        {...props}
-      >
-        {children}
-        <span className="sr-only"> (opens in new tab)</span>
-      </a>
-    </Label>
-  ),
-  ul: ({ className, children, ...props }: MdComponentProps) => (
-    <ul className={cn("list-disc pl-6 mb-3 space-y-1", className)} {...props}>
-      {children}
-    </ul>
-  ),
-  ol: ({ className, children, ...props }: MdComponentProps) => (
-    <ol className={cn("list-decimal pl-6 mb-3 space-y-1", className)} {...props}>
-      {children}
-    </ol>
-  ),
-  li: ({ className, children, node: _node, ...props }: MdComponentProps) => (
-    <li className={cn("mb-1 text-inherit", className)} {...props}>
-      {children}
-    </li>
-  ),
-  blockquote: ({ className, children, ...props }: MdComponentProps) => (
-    <blockquote
-      className={cn(
-        "border-l-3 border-primary/40 pl-4 italic my-3 text-sm text-muted-foreground",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </blockquote>
-  ),
-  code: ({ className, children, ...props }: MdComponentProps) => (
-    <code
-      className={cn(
-        "bg-muted rounded-md px-1.5 py-0.5 font-mono text-[13px] text-foreground",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </code>
+      <span className="sr-only"> (opens in new tab)</span>
+    </a>
   ),
   pre: MarkdownPre,
-  hr: ({ className, ...props }: MdComponentProps) => (
-    <hr className={cn("border-border my-4", className)} {...props} />
-  ),
-  table: ({ className, children, ...props }: MdComponentProps) => (
-    <div className="my-3 overflow-x-auto rounded-lg border border-border">
-      <table className={cn("border-collapse w-full", className)} {...props}>
-        {children}
-      </table>
+  table: ({ children }: MdComponentProps) => (
+    <div className="app-markdown__table">
+      <table>{children}</table>
     </div>
-  ),
-  thead: ({ className, children, ...props }: MdComponentProps) => (
-    <thead className={cn("bg-muted/70", className)} {...props}>
-      {children}
-    </thead>
-  ),
-  tbody: ({ className, children, ...props }: MdComponentProps) => (
-    <tbody className={cn("", className)} {...props}>
-      {children}
-    </tbody>
-  ),
-  tr: ({ className, children, ...props }: MdComponentProps) => (
-    <tr className={cn("border-b border-border", className)} {...props}>
-      {children}
-    </tr>
-  ),
-  th: ({ className, children, ...props }: MdComponentProps) => (
-    <th
-      className={cn(
-        "px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground",
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </th>
-  ),
-  td: ({ className, children, ...props }: MdComponentProps) => (
-    <td className={cn("px-4 py-2.5 text-sm", className)} {...props}>
-      {children}
-    </td>
   ),
   img: () => null,
 };
@@ -462,19 +374,18 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
       actions={
         <>
           <MessageCopyButton text={plain} />
-          <button
-            type="button"
+          <Button
+            variant="plain"
+            size="sm"
             onClick={() => startEdit()}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted/80 disabled:pointer-events-none disabled:opacity-40"
             aria-label="Edit message"
-            disabled={!canEdit}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
+            isDisabled={!canEdit}
+            icon={<PencilAltIcon />}
+          />
         </>
       }
     >
-      <div className="app-chat-md [&_p]:!mb-1.5 [&_p:last-child]:!mb-0">
+      <div className="app-markdown">
         <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>
           {plain}
         </ReactMarkdown>
@@ -513,14 +424,14 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
             isIndented
             className="pf-v6-u-mb-0"
           >
-            <div className="mt-2 rounded-lg bg-muted/70 p-3 font-mono text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap border border-border/60">
+            <div className="app-subagent-box">
               {thinkingText}
             </div>
           </ExpandableSection>
         </div>
       )}
       {bodyMd.length > 0 && (
-        <div className="app-chat-md prose prose-sm dark:prose-invert max-w-none">
+        <div className="app-markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]} components={mdComponents}>{bodyMd}</ReactMarkdown>
         </div>
       )}
@@ -630,11 +541,11 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                             <div className="text-sm font-medium text-foreground flex items-center gap-2">
                               <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
                               {(toolCall as Record<string, unknown>).status === 'error' ? (
-                                <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400" aria-hidden="true" />
+                                <ExclamationCircleIcon color="var(--pf-t--global--icon--color--status--danger--default)" aria-hidden="true" />
                               ) : (toolCall as Record<string, unknown>).content != null ? (
-                                <CheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" aria-hidden="true" />
+                                <CheckCircleIcon color="var(--pf-t--global--icon--color--status--success--default)" aria-hidden="true" />
                               ) : (
-                                <Loader2 className="w-4 h-4 text-primary animate-spin" aria-hidden="true" />
+                                <Spinner size="md" aria-label="Running" />
                               )}
                             </div>
                             <div className={cn(
@@ -651,9 +562,9 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                           </div>
                         </div>
                         {isExpanded ? (
-                          <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                          <AngleDownIcon aria-hidden="true" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                          <AngleRightIcon aria-hidden="true" />
                         )}
                       </button>
 
@@ -662,11 +573,11 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                           id={`tool-body-${itemId}`}
                           className={cn("border-t border-border", !isExpanded && "hidden")}
                         >
-                          <div className="px-4 pb-3 max-h-72 overflow-y-auto">
+                          <div className="app-toolcall__body">
                             {isExpanded && (
                               <>
-                                <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">Arguments</div>
-                                <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                                <div className="app-toolcall__label">Arguments</div>
+                                <pre className="app-subagent-box">
                                   {JSON.stringify(toolCall.args, null, 2)}
                                 </pre>
                               </>
@@ -674,7 +585,7 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                             {!needsApproval && hasMcpApp && (
                               <>
                                 {isExpanded && (
-                                  <div className="text-xs font-medium text-muted-foreground mb-2 mt-3 uppercase tracking-wider">
+                                  <div className="app-toolcall__label">
                                     Interactive UI
                                   </div>
                                 )}
@@ -692,8 +603,8 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                             {isExpanded && !needsApproval && (
                               <>
                                 <div className={cn(
-                                  "text-xs font-medium mb-2 mt-3 uppercase tracking-wider",
-                                  (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
+                                  "app-toolcall__label",
+                                  (toolCall as Record<string, unknown>).status === 'error' && 'app-toolcall__label--error',
                                 )}>
                                   {(toolCall as Record<string, unknown>).status === 'error'
                                     ? 'Error'
@@ -710,7 +621,7 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                                     return <ArtifactViewer content={text} title={`${toolCall.name} result`} />;
                                   }
                                   return (
-                                    <pre className="text-xs text-foreground bg-muted border border-border p-3 rounded-lg overflow-auto font-mono">
+                                    <pre className="app-subagent-box">
                                       {text}
                                     </pre>
                                   );
@@ -907,7 +818,7 @@ export function ChatMessagesView({
                 onClick={() => setExportMenuOpen((o) => !o)}
                 isExpanded={exportMenuOpen}
                 aria-label="Export conversation"
-                icon={<Download className="w-4 h-4" />}
+                icon={<DownloadIcon />}
               />
             )}
           >
@@ -1014,7 +925,7 @@ export function ChatMessagesView({
             )}
 
             {showNoResponse && (
-              <ChatBubble role="assistant" className="chat-bubble--danger" avatar={<AlertCircle />}>
+              <ChatBubble role="assistant" className="chat-bubble--danger" avatar={<ExclamationCircleIcon />}>
                 <p className="text-muted-foreground mb-1">
                   {errorMessage
                     ? 'The agent encountered an error:'
@@ -1028,7 +939,7 @@ export function ChatMessagesView({
                 <Button
                   variant="primary"
                   size="sm"
-                  icon={<RotateCcw className="w-3 h-3" />}
+                  icon={<UndoIcon />}
                   onClick={() => onRetry?.()}
                   aria-label="Retry operation"
                 >
@@ -1037,7 +948,7 @@ export function ChatMessagesView({
               </ChatBubble>
             )}
             {!showNoResponse && errorMessage && !isLoading && (
-              <ChatBubble role="assistant" className="chat-bubble--danger" avatar={<AlertCircle />}>
+              <ChatBubble role="assistant" className="chat-bubble--danger" avatar={<ExclamationCircleIcon />}>
                 <p className="text-muted-foreground mb-1">The agent encountered an error:</p>
                 <p className="text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
                   {errorMessage}
@@ -1045,7 +956,7 @@ export function ChatMessagesView({
                 <Button
                   variant="primary"
                   size="sm"
-                  icon={<RotateCcw className="w-3 h-3" />}
+                  icon={<UndoIcon />}
                   onClick={() => onRetry?.()}
                   aria-label="Retry operation"
                 >

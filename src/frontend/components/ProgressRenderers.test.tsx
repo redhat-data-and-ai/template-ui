@@ -1,11 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { Message } from '@langchain/langgraph-sdk';
 import { TaskProgressStepper } from './TaskProgressStepper';
 import { TasksSidebar } from './TasksSidebar';
 import { TodoStrip } from './TodoStrip';
-import { TodoListRenderer } from './TodoListRenderer';
-import { ActivityTimeline } from './ActivityTimeline';
 
 const messages = [
   { type: 'ai', id: 'a1', content: '', tool_calls: [
@@ -80,35 +78,6 @@ describe('TodoStrip', () => {
   it('marks everything complete once loading ends', () => {
     render(<TodoStrip messages={todoMsgs} isLoading={false} />);
     expect(screen.getByRole('region', { name: 'Current tasks' })).toHaveTextContent('3/3');
-  });
-});
-
-describe('TodoListRenderer', () => {
-  it('renders items and the completed count; nothing when empty', () => {
-    const { container, rerender } = render(<TodoListRenderer todos={[
-      { content: 'One', status: 'completed' }, { content: 'Two', status: 'pending' },
-    ]} />);
-    expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    expect(screen.getByText('1/2')).toBeVisible();
-    rerender(<TodoListRenderer todos={[]} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-});
-
-describe('ActivityTimeline', () => {
-  const events = [{ title: 'Generating Search Queries', data: ['a', 'b'] }, { title: 'Research', data: 'done' }];
-  it('lists events while loading and collapses when finished, toggling on click', () => {
-    const { rerender } = render(<ActivityTimeline processedEvents={events} isLoading />);
-    expect(screen.getByText('Generating Search Queries')).toBeVisible();
-    expect(screen.getByText('a, b')).toBeVisible();
-    rerender(<ActivityTimeline processedEvents={events} isLoading={false} />);
-    expect(screen.getByText('Generating Search Queries')).not.toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Research' }));
-    expect(screen.getByText('Generating Search Queries')).toBeVisible();
-  });
-  it('shows an empty state when idle with no events', () => {
-    render(<ActivityTimeline processedEvents={[]} isLoading={false} />);
-    expect(screen.getByText('No activity to display.')).toBeVisible();
   });
 });
 

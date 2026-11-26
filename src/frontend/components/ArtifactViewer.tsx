@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Button, Label } from '@patternfly/react-core';
-import { Copy, Check, FileText, Code, FileJson } from 'lucide-react';
+import { Button, Card, Label } from '@patternfly/react-core';
+import type { ComponentType } from 'react';
+import { CheckIcon, CodeIcon, CopyIcon, FileAltIcon } from '@patternfly/react-icons';
+import type { SVGIconProps } from '@patternfly/react-icons/dist/esm/createIcon';
+import './rich-content.css';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -12,11 +15,11 @@ interface ArtifactViewerProps {
   readonly title?: string;
 }
 
-const KIND_META: Record<ArtifactKind, { label: string; color: 'blue' | 'purple' | 'orange' | 'grey'; icon: typeof FileText }> = {
-  code: { label: 'Code', color: 'purple', icon: Code },
-  json: { label: 'JSON', color: 'orange', icon: FileJson },
-  markdown: { label: 'Markdown', color: 'blue', icon: FileText },
-  text: { label: 'Text', color: 'grey', icon: FileText },
+const KIND_META: Record<ArtifactKind, { label: string; color: 'blue' | 'purple' | 'orange' | 'grey'; icon: ComponentType<SVGIconProps> }> = {
+  code: { label: 'Code', color: 'purple', icon: CodeIcon },
+  json: { label: 'JSON', color: 'orange', icon: CodeIcon },
+  markdown: { label: 'Markdown', color: 'blue', icon: FileAltIcon },
+  text: { label: 'Text', color: 'grey', icon: FileAltIcon },
 };
 
 export function ArtifactViewer({ content, title }: ArtifactViewerProps) {
@@ -36,37 +39,35 @@ export function ArtifactViewer({ content, title }: ArtifactViewerProps) {
   };
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden bg-card">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
-        <div className="flex items-center gap-2">
-          <KindIcon className="w-3.5 h-3.5 text-muted-foreground" />
-          {title && <span className="text-xs font-medium text-foreground">{title}</span>}
+    <Card isCompact className="app-artifact">
+      <div className="app-artifact__header">
+        <div className="app-artifact__title">
+          <KindIcon aria-hidden="true" />
+          {title && <span className="app-artifact__name">{title}</span>}
           <Label isCompact color={meta.color}>{meta.label}</Label>
         </div>
         <Button
           variant="plain"
           size="sm"
-          className="p-1!"
           onClick={handleCopy}
           aria-label="Copy content"
-        >
-          {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-        </Button>
+          icon={copied ? <CheckIcon /> : <CopyIcon />}
+        />
       </div>
 
-      <div className="max-h-80 overflow-auto p-3">
+      <div className="app-artifact__body">
         {kind === 'markdown' ? (
-          <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+          <div className="app-markdown">
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, markdownSanitizeSchema]]}>{content}</ReactMarkdown>
           </div>
         ) : kind === 'json' ? (
-          <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">
+          <pre>
             {(() => { try { return JSON.stringify(JSON.parse(content), null, 2); } catch { return content; } })()}
           </pre>
         ) : (
-          <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">{content}</pre>
+          <pre>{content}</pre>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

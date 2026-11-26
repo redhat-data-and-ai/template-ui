@@ -139,13 +139,13 @@
 }
 
 /* Inherit bubble text colour inside rendered markdown. */
-.chat-bubble .chat-bubble-content .app-chat-md,
-.chat-bubble .chat-bubble-content .app-chat-md p,
-.chat-bubble .chat-bubble-content .app-chat-md li {
+.chat-bubble .chat-bubble-content .app-markdown,
+.chat-bubble .chat-bubble-content .app-markdown p,
+.chat-bubble .chat-bubble-content .app-markdown li {
   color: inherit;
 }
 
-.chat-bubble .chat-bubble-content .app-chat-md > :last-child {
+.chat-bubble .chat-bubble-content .app-markdown > :last-child {
   margin-bottom: 0;
 }
 

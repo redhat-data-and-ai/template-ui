@@ -26,7 +26,7 @@ import { TaskProgressStepper } from '../components/TaskProgressStepper';
 import { TasksSidebar, hasTasksSidebarContent } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
 import { DebugToggle } from '../components/DebugToggle';
-import { ProcessedEvent } from '../components/ActivityTimeline';
+import type { ProcessedEvent } from '../types/activity';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
