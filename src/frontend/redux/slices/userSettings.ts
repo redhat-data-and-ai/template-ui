@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { scopedStorageKey } from '../../lib/app-paths';
+import { persistThemeChoice, resolveInitialTheme } from '../../lib/theme-storage';
 
 type Theme = 'light' | 'dark';
 
@@ -14,13 +15,21 @@ interface UserSettingsState {
 
 const STORAGE_KEY = scopedStorageKey('template-ui-settings');
 
+function initialTheme(): Theme {
+  const prefersDark =
+    typeof globalThis.matchMedia === 'function' &&
+    globalThis.matchMedia('(prefers-color-scheme: dark)').matches;
+  return resolveInitialTheme(localStorage, prefersDark);
+}
+
 function loadSettings(): UserSettingsState {
+  const theme = initialTheme();
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       return {
-        theme: parsed.theme ?? 'dark',
+        theme,
         debugMode: parsed.debugMode ?? false,
         developerMode: parsed.developerMode ?? false,
         alwaysAllowedTools: Array.isArray(parsed.alwaysAllowedTools) ? parsed.alwaysAllowedTools : [],
@@ -32,7 +41,7 @@ function loadSettings(): UserSettingsState {
     // ignore
   }
   return {
-    theme: 'dark',
+    theme,
     debugMode: false,
     developerMode: false,
     alwaysAllowedTools: [],
@@ -55,10 +64,12 @@ const userSettingsSlice = createSlice({
   reducers: {
     setTheme(state, action: PayloadAction<Theme>) {
       state.theme = action.payload;
+      persistThemeChoice(state.theme);
       persistSettings(state);
     },
     toggleTheme(state) {
       state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      persistThemeChoice(state.theme);
       persistSettings(state);
     },
     setDebugMode(state, action: PayloadAction<boolean>) {

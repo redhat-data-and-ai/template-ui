@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 
-/** Reactively tracks whether the document root has the `dark` CSS class. */
+/** Reactively tracks whether the document root has the `pf-v6-theme-dark` CSS class. */
 export function useDarkMode(): boolean {
   const [isDark, setIsDark] = useState(
-    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('pf-v6-theme-dark'),
   );
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
+      setIsDark(document.documentElement.classList.contains('pf-v6-theme-dark'));
     });
     observer.observe(document.documentElement, { attributeFilter: ['class'] });
     return () => observer.disconnect();

@@ -58,7 +58,7 @@ test.describe('Home page — WCAG 2.1 AA', () => {
   test('dark mode has no violations', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.addInitScript(() => {
-      localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'dark' }));
+      localStorage.setItem('template-ui-theme', 'dark');
     });
     await page.goto('/');
     await page.waitForSelector('textarea', { state: 'visible' });
@@ -96,7 +96,7 @@ test.describe('Chat page — WCAG 2.1 AA', () => {
   test('dark mode — after AI response has no violations', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.addInitScript(() => {
-      localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'dark' }));
+      localStorage.setItem('template-ui-theme', 'dark');
     });
     const home = new HomePage(page);
     const chat = new ChatPage(page);
@@ -138,7 +138,7 @@ test.describe('Settings page — WCAG 2.1 AA', () => {
 
     test(`dark mode — ${tab} tab has no violations`, async ({ page }) => {
       await page.addInitScript(() => {
-        localStorage.setItem('template-ui-settings', JSON.stringify({ theme: 'dark' }));
+        localStorage.setItem('template-ui-theme', 'dark');
       });
       const settings = new SettingsPage(page);
       await settings.goto();
