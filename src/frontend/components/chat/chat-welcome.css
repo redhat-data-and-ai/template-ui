@@ -59,6 +59,12 @@
   outline: 2px solid var(--app-accent-strong);
   outline-offset: 2px;
 }
+/* Our ring above is the only one: drop PatternFly's inner focus ring on the selectable action. */
+.chat-welcome .chat-welcome__card .pf-v6-c-card__selectable-actions :focus-visible {
+  outline: none;
+  --pf-v6-c-card--BorderColor: var(--pf-t--global--border--color--default);
+  --pf-v6-c-card--BorderWidth: var(--pf-t--global--border--width--regular);
+}
 
 /* Prompt gallery: one column on phones. */
 @media (max-width: 37.5rem) {
