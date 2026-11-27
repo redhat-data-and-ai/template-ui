@@ -14,6 +14,7 @@ import type { TestCase, Turn, CaseTag } from './eval-dataset-types';
 import { emptyTurn } from './eval-dataset-utils';
 import { SingleTurnForm } from './SingleTurnForm';
 import { MultiTurnForm } from './MultiTurnForm';
+import '../dialogs.css';
 
 interface AddTestCaseModalProps {
   initialCase?: TestCase;

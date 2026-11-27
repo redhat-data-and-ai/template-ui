@@ -14,6 +14,7 @@ import {
   HelperText,
   HelperTextItem,
 } from '@patternfly/react-core';
+import './dialogs.css';
 
 interface ProjectEditModalProps {
   isOpen: boolean;
