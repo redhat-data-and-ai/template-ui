@@ -487,11 +487,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 
   return (
-    <Page masthead={masthead} sidebar={sidebar} className="h-screen bg-background text-foreground">
+    <Page masthead={masthead} sidebar={sidebar} className="app-page">
       {overlayOpen && (
         <div className="app-sidebar-backdrop" aria-hidden="true" onClick={closeOverlay} />
       )}
-      <a href="#main-content" className="skip-to-main sr-only">
+      <a href="#main-content" className="skip-to-main">
         Skip to main content
       </a>
       <KeyboardShortcutsDialog isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />

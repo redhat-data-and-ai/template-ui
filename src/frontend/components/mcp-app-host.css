@@ -1,0 +1,15 @@
+/* Status messages and frame wrapper for embedded MCP Apps. */
+.app-mcp-host__note {
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--app-text-secondary);
+}
+.app-mcp-host__note--error {
+  border: 1px solid var(--app-border);
+  border-radius: 0.625rem;
+  background: var(--app-secondary-muted-bg);
+  color: var(--app-danger);
+}
+.pf-v6-theme-dark .app-mcp-host__note--error { color: var(--app-danger-text); }
+.app-mcp-host__frame { overflow: hidden; }

@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import "./chat/chat-view.css";
 import { ChatComposer, type ChatComposerProps } from "./chat/ChatComposer";
 
 type InputFormProps = Pick<
@@ -9,7 +10,7 @@ type InputFormProps = Pick<
 /** Conversation composer; kept as the export name used by the chat views. */
 export const InputForm = forwardRef<HTMLTextAreaElement, InputFormProps>(function InputForm(props, ref) {
   return (
-    <div className="p-3 pb-4">
+    <div className="app-chat-composer-pad">
       <ChatComposer ref={ref} {...props} />
     </div>
   );

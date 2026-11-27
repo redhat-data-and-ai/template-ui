@@ -164,7 +164,7 @@ export function ProjectList({
             </div>
             {expanded && (
               <ul
-                className="pf-v6-c-nav__list app-project-chats max-h-48 overflow-y-auto chat-scroll"
+                className="pf-v6-c-nav__list app-project-chats chat-scroll"
                 aria-label={`${project.name} chats`}
               >
                 {projectChats.length === 0 ? (

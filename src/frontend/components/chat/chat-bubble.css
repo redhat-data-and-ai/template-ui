@@ -2,7 +2,7 @@
  * Chat transcript in the portal help-drawer bubble style.
  * Values follow the portal's HelpDrawerPanel.css (.chat-bubble*), mapped onto
  * the --app-chat-* tokens in styles/theme-tokens.css. Selectors stay
- * class-qualified because global.css has unlayered rules that beat utilities.
+ * class-qualified so they win over PatternFly defaults.
  */
 
 /* === Transcript container (PatternFly ChatbotContent + MessageBox) === */

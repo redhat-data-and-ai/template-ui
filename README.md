@@ -101,6 +101,19 @@ agent:
 
 See [`config/ui/README.md`](config/ui/README.md) for the full schema and every environment variable override.
 
+### Theming
+
+The UI is built on [PatternFly](https://www.patternfly.org/) and styled through `--app-*` design tokens declared in `src/frontend/styles/theme-tokens.css` (accent, surface, text, border and chat tokens, with light and dark values).
+
+- **Dark mode** is PatternFly's `pf-v6-theme-dark` class on `<html>`. Until the user picks a theme in Settings > Appearance, the OS `prefers-color-scheme` decides.
+- **`branding.colors`** (per mode) is applied at runtime as token overrides on `<html>`:
+  - `primary` sets `--app-accent`, `--app-accent-hover` and a readable `--app-on-accent`.
+  - `accent` sets `--app-accent-strong` (links, focus ring, active markers).
+  - `background` sets `--app-page-bg` and derives `--app-surface-raised`.
+  - `foreground` sets `--app-text`.
+  Any value you provide is used as-is; omitted values keep the built-in palette.
+- **Icons** come from `@patternfly/react-icons`; fonts are the PatternFly defaults (Red Hat Display / Text).
+
 ### Environment variable overrides
 
 Env vars take precedence over the YAML file:

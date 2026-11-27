@@ -1,5 +1,5 @@
 /* Value boxes inside the expanded sub-agent card (delegation, result, arguments).
-   Unlayered on purpose: global.css element rules beat Tailwind utilities. */
+   Scoped, unlayered component CSS. */
 .app-subagent-box {
   margin: 0;
   padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);

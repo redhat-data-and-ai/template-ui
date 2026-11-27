@@ -44,3 +44,46 @@
   align-items: center;
   gap: 0.5rem;
 }
+
+.app-interrupt {
+  margin-inline: 1rem;
+  margin-block-end: 0.75rem;
+}
+.app-interrupt .app-interrupt__input {
+  flex: 1 1 0%;
+}
+
+/* MCP authentication prompt (shown in place of the approval alert). */
+.app-interrupt-auth {
+  width: 100%;
+  animation: app-fade-in-up-smooth 0.3s ease-out forwards;
+}
+.app-interrupt-auth__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.app-interrupt-auth__avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-top: 0.125rem;
+  border-radius: 9999px;
+  background: var(--app-secondary-muted-bg);
+  color: var(--app-text-secondary);
+}
+.app-interrupt-auth__body {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+.app-interrupt-auth__text { color: var(--app-text); }
+.app-interrupt-auth__error {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #dc2626;
+}
+.app-interrupt-auth__actions { margin-top: 0.75rem; }

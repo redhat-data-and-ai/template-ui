@@ -1,0 +1,171 @@
+/*
+ * Layout and card styles for the chat transcript view (ChatMessagesView).
+ * Scoped `app-*` classes only; values map onto the --app-* tokens.
+ */
+
+.app-chat-view {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-chat-header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  padding-inline: 0.5rem;
+  padding-block-start: 0.5rem;
+}
+
+.app-chat-composer-wrap {
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+/* Vertical rhythm between siblings (block flow, margin-based). */
+.app-stack { width: 100%; }
+.app-stack > * + * { margin-top: 0.5rem; }
+
+.app-fill-width { width: 100%; }
+
+.app-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.app-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-inline-start: 0.5rem;
+  font-size: 0.6875rem;
+  color: var(--app-text-secondary);
+}
+
+.app-thinking {
+  margin-block-end: 0.75rem;
+}
+
+.app-typing {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--app-text-secondary);
+}
+.app-typing__dots {
+  display: flex;
+  gap: 0.25rem;
+}
+.app-typing__dots > .app-chat-typing-dot {
+  animation: app-bounce 1s infinite;
+}
+.app-typing__dots > .app-chat-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.app-typing__dots > .app-chat-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes app-bounce {
+  0%, 100% {
+    transform: translateY(-25%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.chat-bubble .app-chat-meta > * + * { margin-top: 0.125rem; }
+.app-chat-meta__secondary { font-size: 0.625rem; }
+
+.app-chat-error-note {
+  margin: 0 0 0.25rem;
+  color: var(--app-text-secondary);
+}
+.app-chat-error-detail {
+  margin: 0 0 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--app-danger) 5%, transparent);
+  color: var(--app-danger);
+  font-family: var(--pf-t--global--font--family--mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  overflow-wrap: break-word;
+}
+.pf-v6-theme-dark .app-chat-error-detail {
+  color: var(--app-danger-text);
+}
+
+/* === Tool-call card === */
+.app-toolcall {
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 0.875rem;
+  background: var(--app-surface-raised);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+}
+.pf-v6-theme-dark .app-toolcall {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3), 0 1px 2px rgb(0 0 0 / 0.2);
+}
+.app-toolcall--needs-approval { border-color: rgb(234 179 8 / 0.6); }
+
+.app-toolcall__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.875rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.app-toolcall__header:hover {
+  background: color-mix(in srgb, var(--app-secondary-muted-bg) 50%, transparent);
+}
+.app-toolcall__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--app-text);
+}
+.app-toolcall__name {
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background: var(--app-secondary-muted-bg);
+  font-family: var(--pf-t--global--font--family--mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.app-toolcall__subtitle {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--app-text-secondary);
+}
+.app-toolcall__subtitle--error { color: #ef4444; }
+.pf-v6-theme-dark .app-toolcall__subtitle--error { color: #f87171; }
+.app-toolcall__panel { border-top: 1px solid var(--app-border); }
+.app-toolcall__panel[hidden] { display: none; }
+.app-toolcall__waiting {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-style: italic;
+  color: var(--app-text-secondary);
+}
+.app-toolcall__mcp-app { margin-block-end: 0.5rem; }
+.app-toolcall-extra { margin-top: 0.5rem; }
+
+.app-chat-composer-pad { padding: 0.75rem 0.75rem 1rem; }

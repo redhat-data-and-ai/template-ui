@@ -19,7 +19,6 @@ import type { ToolApproval } from "../hooks/useInterruptApprovals";
 import { InputForm } from "./InputForm";
 import { McpStatusPanel } from "./McpStatusPanel";
 import { useState, useId, ReactNode, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
-import { cn } from "../lib/utils";
 import {
   Button,
   CodeBlock,
@@ -54,6 +53,7 @@ import "@patternfly/chatbot/dist/css/main.css";
 import { ChatBubble } from "./chat/ChatBubble";
 import "./rich-content.css";
 import "./sub-agent.css";
+import "./chat/chat-view.css";
 
 function extractMessageText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -265,7 +265,7 @@ function AssistantBubble({
               <FeedbackButtons fb={fb} />
             </>
           )}
-          <span className="inline-flex items-center gap-1 ml-2 text-[11px] text-muted-foreground" aria-label="AI-generated content">
+          <span className="app-ai-badge" aria-label="AI-generated content">
             <RobotIcon aria-hidden="true" />
             AI-generated
           </span>
@@ -288,7 +288,7 @@ const mdComponents = {
   a: ({ children, href }: MdComponentProps) => (
     <a href={href as string} target="_blank" rel="noopener noreferrer">
       {children}
-      <span className="sr-only"> (opens in new tab)</span>
+      <span className="pf-v6-screen-reader"> (opens in new tab)</span>
     </a>
   ),
   pre: MarkdownPre,
@@ -346,14 +346,14 @@ const HumanMessageBubble: React.FC<HumanMessageBubbleProps> = ({
         wide
         className="chat-bubble--editing"
       >
-        <div className="space-y-2">
+        <div className="app-stack">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             className="app-chat-edit-input"
             aria-label="Edit message"
           />
-          <div className="flex flex-wrap gap-2">
+          <div className="app-message-actions">
             <Button variant="primary" size="sm" onClick={() => saveEdit()} aria-label="Save edited message">
               Save
             </Button>
@@ -416,7 +416,7 @@ const AiMessageBubble: React.FC<AiMessageBubbleProps> = ({ message }) => {
   return (
     <>
       {thinkingText.length > 0 && (
-        <div className="mb-3">
+        <div className="app-thinking">
           <ExpandableSection
             toggleText="Thinking..."
             isExpanded={thinkingExpanded}
@@ -495,7 +495,7 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
       const regularCalls = message.tool_calls?.filter((tc) => !isSubAgentToolCall(tc) && tc.name !== 'write_todos') ?? [];
 
       return (
-        <div className="space-y-2 w-full" aria-live="off">
+        <div className="app-stack" aria-live="off">
           {subAgentCalls.map((toolCall, idx) => {
             return (
               <SubAgentIndicator
@@ -509,8 +509,8 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
           })}
 
           {regularCalls.length > 0 && (
-            <div className="w-full">
-              <div className="min-w-0 space-y-2">
+            <div className="app-fill-width">
+              <div className="app-stack">
                 {regularCalls.map((toolCall, idx) => {
                   const itemId = `${message.id}-${idx}`;
                   const isExpanded = expandedItems.has(itemId);
@@ -527,19 +527,19 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                       key={itemId}
                       data-interrupt-id={approval?.interruptId}
                       data-action-index={approval?.actionIndex}
-                      className={cn("bg-card border rounded-xl overflow-hidden shadow-card transition-colors", needsApproval ? "border-yellow-500/60" : "border-border")}
+                      className={needsApproval ? "app-toolcall app-toolcall--needs-approval" : "app-toolcall"}
                     >
                       <button
                         onClick={() => toggleExpand(itemId)}
                         aria-expanded={isExpanded}
                         aria-controls={`tool-body-${itemId}`}
                         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} tool call: ${toolCall.name}`}
-                        className="w-full flex items-center justify-between p-3.5 hover:bg-muted/50 transition-colors"
+                        className="app-toolcall__header"
                       >
-                        <div className="flex items-center gap-2.5">
-                          <div className="text-left">
-                            <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                              <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{toolCall.name}</code>
+                        <div>
+                          <div>
+                            <div className="app-toolcall__title">
+                              <code className="app-toolcall__name">{toolCall.name}</code>
                               {(toolCall as Record<string, unknown>).status === 'error' ? (
                                 <ExclamationCircleIcon color="var(--pf-t--global--icon--color--status--danger--default)" aria-hidden="true" />
                               ) : (toolCall as Record<string, unknown>).content != null ? (
@@ -548,10 +548,7 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                                 <Spinner size="md" aria-label="Running" />
                               )}
                             </div>
-                            <div className={cn(
-                              "text-xs mt-0.5",
-                              (toolCall as Record<string, unknown>).status === 'error' ? 'text-red-500 dark:text-red-400' : 'text-muted-foreground',
-                            )}>
+                            <div className={(toolCall as Record<string, unknown>).status === 'error' ? 'app-toolcall__subtitle app-toolcall__subtitle--error' : 'app-toolcall__subtitle'}>
                               {(toolCall as Record<string, unknown>).status === 'error'
                                 ? (typeof (toolCall as Record<string, unknown>).content === 'string'
                                   && String((toolCall as Record<string, unknown>).content).replace(/^\[TOOL_ERROR]\s*/i, '').trim()
@@ -571,7 +568,8 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                       {keepToolBodyMounted && (
                         <div
                           id={`tool-body-${itemId}`}
-                          className={cn("border-t border-border", !isExpanded && "hidden")}
+                          className="app-toolcall__panel"
+                          hidden={!isExpanded}
                         >
                           <div className="app-toolcall__body">
                             {isExpanded && (
@@ -596,16 +594,13 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                                     (toolCall as Record<string, unknown>).content != null &&
                                     !mcpAppDesc?.result
                                   }
-                                  className="mb-2"
+                                  className="app-toolcall__mcp-app"
                                 />
                               </>
                             )}
                             {isExpanded && !needsApproval && (
                               <>
-                                <div className={cn(
-                                  "app-toolcall__label",
-                                  (toolCall as Record<string, unknown>).status === 'error' && 'app-toolcall__label--error',
-                                )}>
+                                <div className={(toolCall as Record<string, unknown>).status === 'error' ? 'app-toolcall__label app-toolcall__label--error' : 'app-toolcall__label'}>
                                   {(toolCall as Record<string, unknown>).status === 'error'
                                     ? 'Error'
                                     : (toolCall as Record<string, unknown>).content != null
@@ -614,7 +609,7 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
                                 </div>
                                 {(() => {
                                   const raw = (toolCall as Record<string, unknown>).content;
-                                  if (raw == null) return <p className="text-xs text-muted-foreground italic">Waiting...</p>;
+                                  if (raw == null) return <p className="app-toolcall__waiting">Waiting...</p>;
                                   const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
                                   const kind = detectArtifactKind(text);
                                   if (kind !== 'text' && text.length > 100) {
@@ -639,7 +634,7 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
             </div>
           )}
           {customData && (
-            <div className="w-full mt-2">
+            <div className="app-fill-width app-toolcall-extra">
               <CustomDataRenderer data={customData} />
             </div>
           )}
@@ -656,7 +651,7 @@ export function AIMessageRenderer({ message, approvalBindings }: AIMessageRender
   }, [messageKey, expandedItems, approvalBindings]);
 
   return (
-    <div className="space-y-2 w-full">
+    <div className="app-stack">
       {renderMessage}
     </div>
   );
@@ -790,16 +785,16 @@ export function ChatMessagesView({
   const showExport = Boolean(onExportMarkdown && onExportJson && messages.length > 0);
 
   return (
-    <div className="relative flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="app-chat-view">
       <div
         aria-live="polite"
         aria-atomic="true"
-        className="sr-only"
+        className="pf-v6-screen-reader"
       >
         {srAnnouncement}
       </div>
       {(showExport || headerActions) && (
-        <div className="flex shrink-0 items-center justify-end gap-1 px-2 pt-2" data-testid="chat-header-actions">
+        <div className="app-chat-header-actions" data-testid="chat-header-actions">
           {headerActions}
           {showExport && (
           <Dropdown
@@ -885,12 +880,12 @@ export function ChatMessagesView({
                   existingFeedback={messageFeedback[message.id ?? `msg-${messageIndex}`] ?? null}
                   plain={hasToolCalls}
                   meta={showResponseTiming && (
-                    <div aria-hidden="true" className="app-chat-meta space-y-0.5">
+                    <div aria-hidden="true" className="app-chat-meta">
                       <div>
                         Response time: {(lastResponseTiming.totalDurationMs / 1000).toFixed(1)}s
                       </div>
                       {lastResponseTiming.timeToFirstTokenMs != null && (
-                        <div className="text-[10px]">
+                        <div className="app-chat-meta__secondary">
                           First token: {Math.round(lastResponseTiming.timeToFirstTokenMs)}ms
                         </div>
                       )}
@@ -913,11 +908,11 @@ export function ChatMessagesView({
                 aria-label="Agent is thinking"
                 avatar={<BotAvatar />}
               >
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="flex gap-1">
-                    <span className="app-chat-typing-dot animate-bounce" />
-                    <span className="app-chat-typing-dot animate-bounce animation-delay-200" />
-                    <span className="app-chat-typing-dot animate-bounce animation-delay-400" />
+                <div className="app-typing">
+                  <span className="app-typing__dots">
+                    <span className="app-chat-typing-dot" />
+                    <span className="app-chat-typing-dot" />
+                    <span className="app-chat-typing-dot" />
                   </span>
                   Thinking...
                 </div>
@@ -926,13 +921,13 @@ export function ChatMessagesView({
 
             {showNoResponse && (
               <ChatBubble role="assistant" className="chat-bubble--danger" avatar={<ExclamationCircleIcon />}>
-                <p className="text-muted-foreground mb-1">
+                <p className="app-chat-error-note">
                   {errorMessage
                     ? 'The agent encountered an error:'
                     : 'The agent didn\u0027t respond. This could be a temporary issue.'}
                 </p>
                 {errorMessage && (
-                  <p className="text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
+                  <p className="app-chat-error-detail">
                     {errorMessage}
                   </p>
                 )}
@@ -949,8 +944,8 @@ export function ChatMessagesView({
             )}
             {!showNoResponse && errorMessage && !isLoading && (
               <ChatBubble role="assistant" className="chat-bubble--danger" avatar={<ExclamationCircleIcon />}>
-                <p className="text-muted-foreground mb-1">The agent encountered an error:</p>
-                <p className="text-destructive bg-destructive/5 rounded-md px-2 py-1.5 mb-2 font-mono text-xs break-words">
+                <p className="app-chat-error-note">The agent encountered an error:</p>
+                <p className="app-chat-error-detail">
                   {errorMessage}
                 </p>
                 <Button
@@ -983,7 +978,7 @@ export function ChatMessagesView({
       <TodoStrip messages={messages} isLoading={isLoading} />
       <McpStatusPanel mcpEvents={mcpEvents} />
       <div>
-        <div className="max-w-3xl mx-auto">
+        <div className="app-chat-composer-wrap">
           <InputForm
             ref={chatInputRef}
             onSubmit={onSubmit}

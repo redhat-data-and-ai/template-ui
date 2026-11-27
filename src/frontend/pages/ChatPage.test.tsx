@@ -82,7 +82,7 @@ describe('ChatPage debug panel', () => {
     const view = await openPanel(messages);
     expect(screen.queryByText('Tasks & Tools')).toBeNull();
     const slot = screen.getByTestId('debug-panel-slot');
-    expect(slot.className).not.toContain('border-t');
+    expect(slot.className).not.toContain('app-debug-aside__section--divided');
     view.unmount();
   });
 
@@ -92,7 +92,7 @@ describe('ChatPage debug panel', () => {
       { type: 'ai', id: 'a1', content: '', tool_calls: [{ id: 'tc1', name: 'search', args: {} }] },
     ]);
     expect(screen.getByText('Tasks & Tools')).toBeInTheDocument();
-    expect(screen.getByTestId('debug-panel-slot').className).toContain('border-t');
+    expect(screen.getByTestId('debug-panel-slot').className).toContain('app-debug-aside__section--divided');
     view.unmount();
   });
 });

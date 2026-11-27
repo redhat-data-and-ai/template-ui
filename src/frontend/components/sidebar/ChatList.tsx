@@ -124,7 +124,7 @@ export function ChatRow({ chat, ctx }: { chat: SidebarChatItem; ctx: ChatRowCont
         {tooltip}
         {isActive && ctx.activeSubAgent && (
           <Label isCompact color="blue" icon={<SpinnerIcon className="app-spin" />}>
-            <span className="capitalize">{ctx.activeSubAgent.name}</span>
+            <span className="app-capitalize">{ctx.activeSubAgent.name}</span>
           </Label>
         )}
       </a>

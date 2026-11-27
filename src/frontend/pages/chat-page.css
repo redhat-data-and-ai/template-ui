@@ -1,0 +1,67 @@
+/* Chat route: status screens, split layout and the debug side panel. */
+
+.app-chat-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+}
+.app-chat-status__note { color: var(--app-text-secondary); }
+.app-chat-status__title {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  color: var(--app-text-secondary);
+}
+.app-chat-status__title--danger,
+.app-chat-status__note--danger { color: var(--app-danger); }
+.pf-v6-theme-dark .app-chat-status__title--danger,
+.pf-v6-theme-dark .app-chat-status__note--danger { color: var(--app-danger-text); }
+
+.app-chat-split {
+  display: flex;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+}
+.app-chat-main {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-width: 0;
+}
+.app-chat-pending {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+}
+
+/* Debug side panel: desktop only. */
+.app-debug-aside {
+  display: none;
+  flex: none;
+  align-self: stretch;
+  width: 16rem;
+  padding: 0.5rem;
+  gap: 0.5rem;
+  border-inline-start: 1px solid var(--app-border);
+}
+@media (min-width: 64rem) {
+  .app-debug-aside {
+    display: flex;
+    flex-direction: column;
+  }
+}
+.app-debug-aside__section {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+}
+.app-debug-aside__section--divided {
+  padding-block-start: 0.5rem;
+  border-block-start: 1px solid var(--app-border);
+}

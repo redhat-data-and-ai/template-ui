@@ -1,6 +1,6 @@
 /* Rich content inside chat bubbles: markdown, code blocks, tool-call card bodies.
    Markdown values follow the portal "Markdown inside bot bubbles" rules.
-   Scoped, unlayered: global.css element rules beat utilities. */
+   Scoped, unlayered component CSS. */
 
 /* === Markdown === */
 .app-markdown {

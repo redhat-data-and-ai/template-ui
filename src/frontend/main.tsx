@@ -11,7 +11,9 @@ import '@patternfly/patternfly/patternfly-addons.css';
 
 import './styles/theme-tokens.css';
 import './styles/layout.css';
-import './global.css';
+import './styles/base.css';
+import './components/sidebar/sidebar.css';
+import './styles/animations.css';
 
 type InjectedRecord = Record<string, unknown>;
 

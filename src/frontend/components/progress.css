@@ -1,5 +1,5 @@
 /* Task progress strip, todos and tasks sidebar.
-   Scoped component CSS (global.css element rules beat utilities). */
+   Scoped component CSS. */
 
 /* Horizontal strip: never scrolls vertically; scrolls horizontally only when the
    steps overflow, with a thin scrollbar visible on hover/scroll only. */

@@ -288,8 +288,8 @@ describe('AppSidebar — add chat to project', () => {
     await user.click(screen.getByRole('button', { name: /expand alpha/i }));
 
     const list = screen.getByRole('list', { name: /alpha chats/i });
-    expect(list.className).toMatch(/max-h-48/);
-    expect(list.className).toMatch(/overflow-y-auto/);
+    // The fixed height and scrolling live in sidebar.css (.app-project-chats).
+    expect(list).toHaveClass('app-project-chats');
   });
 
   it('unassigns a project chat instead of offering add-to-project', async () => {
