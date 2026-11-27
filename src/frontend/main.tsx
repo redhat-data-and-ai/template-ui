@@ -9,11 +9,7 @@ import { getAppBasePath } from './lib/app-paths';
 import '@patternfly/patternfly/patternfly.css';
 import '@patternfly/patternfly/patternfly-addons.css';
 
-import './styles/theme-tokens.css';
-import './styles/layout.css';
-import './styles/base.css';
-import './components/sidebar/sidebar.css';
-import './styles/animations.css';
+import './global.css';
 
 type InjectedRecord = Record<string, unknown>;
 

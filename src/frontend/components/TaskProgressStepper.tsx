@@ -1,7 +1,6 @@
 import type { Message } from '@langchain/langgraph-sdk';
-import { Label, Spinner } from '@patternfly/react-core';
-import { CheckCircleIcon } from '@patternfly/react-icons';
-import './progress.css';
+import { Label } from '@patternfly/react-core';
+import { CheckCircle, Circle, Loader2 } from 'lucide-react';
 import { isSubAgentToolCall, extractSubAgentName } from '../types/deep-agent';
 
 interface TaskProgressStepperProps {
@@ -49,42 +48,43 @@ function deriveSteps(messages: Message[]): DerivedStep[] {
 export function TaskProgressStepper({ messages, isLoading }: TaskProgressStepperProps) {
   const steps = deriveSteps(messages);
   if (steps.length === 0) return null;
-  const showProcessing = isLoading && steps.every((s) => s.status === 'complete');
-
-  const items = [
-    ...steps.map((step) => ({
-      key: step.id,
-      name: step.name,
-      status: step.status as 'complete' | 'running',
-      isSubAgent: step.isSubAgent,
-    })),
-    ...(showProcessing
-      ? [{ key: 'processing', name: 'Processing', status: 'running' as const, isSubAgent: false }]
-      : []),
-  ];
 
   return (
-    <div className="app-task-strip" role="region" aria-label="Task progress">
-      <div className="app-task-strip__row" role="list" aria-label="Task progress steps">
-        {items.map((item, idx) => (
-          <div key={item.key} className="app-task-strip__item" role="listitem">
+    <div className="flex items-center gap-1.5 px-4 py-2 overflow-x-auto">
+      {steps.map((step, idx) => {
+        const StatusIcon = step.status === 'complete' ? CheckCircle
+          : step.status === 'running' ? Loader2
+          : Circle;
+
+        return (
+          <div key={step.id} className="flex items-center gap-1.5 shrink-0">
             {idx > 0 && (
-              <span
-                aria-hidden="true"
-                className={`app-task-strip__connector${items[idx - 1].status === 'complete' ? ' app-task-strip__connector--done' : ''}`}
-              />
+              <div className={`w-4 h-px ${step.status === 'complete' ? 'bg-green-500/50' : 'bg-border'}`} />
             )}
             <Label
               isCompact
-              color={item.status === 'complete' ? 'green' : 'blue'}
-              icon={item.status === 'complete' ? <CheckCircleIcon /> : <Spinner size="sm" aria-hidden="true" />}
+              color={step.status === 'complete' ? 'green' : 'blue'}
+              icon={
+                <StatusIcon
+                  className={`w-2.5 h-2.5 ${step.status === 'running' ? 'animate-spin' : ''}`}
+                />
+              }
             >
-              <span className={item.isSubAgent ? 'app-task-strip__sub' : undefined}>{item.name}</span>
-              <span className="pf-v6-screen-reader">{item.status === 'complete' ? ': complete' : ': running'}</span>
+              <span className={step.isSubAgent ? 'capitalize font-medium' : ''}>
+                {step.name}
+              </span>
             </Label>
           </div>
-        ))}
-      </div>
+        );
+      })}
+      {isLoading && steps.every((s) => s.status === 'complete') && (
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="w-4 h-px bg-border" />
+          <Label isCompact color="blue" icon={<Loader2 className="w-2.5 h-2.5 animate-spin" />}>
+            Processing
+          </Label>
+        </div>
+      )}
     </div>
   );
 }

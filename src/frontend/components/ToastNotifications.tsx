@@ -27,7 +27,6 @@ export function ToastNotifications() {
       {toasts.map((toast) => (
         <Alert
           key={toast.id}
-          component="h2"
           variant={pfVariant[toast.variant]}
           title={toast.title}
           timeout={AUTO_DISMISS_MS}

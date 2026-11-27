@@ -1,6 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { scopedStorageKey } from '../../lib/app-paths';
-import { persistThemeChoice, resolveInitialTheme, themeStorageKey } from '../../lib/theme-storage';
 
 type Theme = 'light' | 'dark';
 
@@ -14,24 +13,14 @@ interface UserSettingsState {
 }
 
 const STORAGE_KEY = scopedStorageKey('template-ui-settings');
-// Resolved once so theme reads and writes always share a key, even if APP_DATA/location change later.
-const THEME_KEY = themeStorageKey();
-
-function initialTheme(): Theme {
-  const prefersDark =
-    typeof globalThis.matchMedia === 'function' &&
-    globalThis.matchMedia('(prefers-color-scheme: dark)').matches;
-  return resolveInitialTheme(localStorage, prefersDark, THEME_KEY);
-}
 
 function loadSettings(): UserSettingsState {
-  const theme = initialTheme();
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       return {
-        theme,
+        theme: parsed.theme ?? 'dark',
         debugMode: parsed.debugMode ?? false,
         developerMode: parsed.developerMode ?? false,
         alwaysAllowedTools: Array.isArray(parsed.alwaysAllowedTools) ? parsed.alwaysAllowedTools : [],
@@ -43,7 +32,7 @@ function loadSettings(): UserSettingsState {
     // ignore
   }
   return {
-    theme,
+    theme: 'dark',
     debugMode: false,
     developerMode: false,
     alwaysAllowedTools: [],
@@ -66,12 +55,10 @@ const userSettingsSlice = createSlice({
   reducers: {
     setTheme(state, action: PayloadAction<Theme>) {
       state.theme = action.payload;
-      persistThemeChoice(state.theme, THEME_KEY);
       persistSettings(state);
     },
     toggleTheme(state) {
       state.theme = state.theme === 'dark' ? 'light' : 'dark';
-      persistThemeChoice(state.theme, THEME_KEY);
       persistSettings(state);
     },
     setDebugMode(state, action: PayloadAction<boolean>) {

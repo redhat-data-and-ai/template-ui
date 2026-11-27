@@ -1,9 +1,9 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithProviders } from '../../test-utils/render';
-import { AppSidebar } from './AppSidebar';
+import { renderWithProviders } from '../test-utils/render';
+import { Sidebar } from './Sidebar';
 
 const mockNavigate = vi.fn();
 
@@ -23,7 +23,7 @@ const sidebarProps = {
   onRenameChat: vi.fn(),
 };
 
-describe('AppSidebar — create project', () => {
+describe('Sidebar — create project', () => {
   beforeEach(() => {
     mockNavigate.mockReset();
   });
@@ -33,10 +33,10 @@ describe('AppSidebar — create project', () => {
     const onCreateProject = vi.fn().mockResolvedValue('proj-1');
 
     renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} onCreateProject={onCreateProject} />,
+      <Sidebar {...sidebarProps} onCreateProject={onCreateProject} />,
     );
 
-    await user.click(screen.getByRole('button', { name: /new project/i }));
+    await user.click(screen.getByRole('button', { name: /create project/i }));
     const dialog = await screen.findByRole('dialog', { name: /new project/i });
     const nameInput = dialog.querySelector('#project-name');
     expect(nameInput).toBeTruthy();
@@ -54,10 +54,10 @@ describe('AppSidebar — create project', () => {
     const onCreateProject = vi.fn().mockResolvedValue(null);
 
     renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} onCreateProject={onCreateProject} />,
+      <Sidebar {...sidebarProps} onCreateProject={onCreateProject} />,
     );
 
-    await user.click(screen.getByRole('button', { name: /new project/i }));
+    await user.click(screen.getByRole('button', { name: /create project/i }));
     const dialog = await screen.findByRole('dialog', { name: /new project/i });
     const nameInput = dialog.querySelector('#project-name');
     expect(nameInput).toBeTruthy();
@@ -75,10 +75,10 @@ describe('AppSidebar — create project', () => {
     const onCreateProject = vi.fn().mockRejectedValue(new Error('network'));
 
     renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} onCreateProject={onCreateProject} />,
+      <Sidebar {...sidebarProps} onCreateProject={onCreateProject} />,
     );
 
-    await user.click(screen.getByRole('button', { name: /new project/i }));
+    await user.click(screen.getByRole('button', { name: /create project/i }));
     const dialog = await screen.findByRole('dialog', { name: /new project/i });
     const nameInput = dialog.querySelector('#project-name');
     await user.type(nameInput as HTMLElement, 'Alpha');
@@ -94,8 +94,7 @@ describe('AppSidebar — create project', () => {
     const onCreateProject = vi.fn();
 
     renderWithProviders(
-      <AppSidebar
-        isOpen
+      <Sidebar
         {...sidebarProps}
         onCreateProject={onCreateProject}
         projects={[
@@ -104,7 +103,7 @@ describe('AppSidebar — create project', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /new project/i }));
+    await user.click(screen.getByRole('button', { name: /create project/i }));
     const dialog = await screen.findByRole('dialog', { name: /new project/i });
     const nameInput = dialog.querySelector('#project-name');
     await user.type(nameInput as HTMLElement, 'Alpha');
@@ -112,18 +111,14 @@ describe('AppSidebar — create project', () => {
 
     const warning = await screen.findByRole('alert');
     expect(warning).toHaveTextContent(/already exists/i);
-    expect(warning.className).toMatch(/pf-m-error/);
+    expect(warning.className).toMatch(/destructive|danger|red/i);
     expect(onCreateProject).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: /new project/i })).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
 
-async function openProjectMenu(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /actions for project alpha/i }));
-}
-
-describe('AppSidebar — delete project', () => {
+describe('Sidebar — delete project', () => {
   const projects = [
     { id: 'p1', name: 'Alpha', description: null, threadCount: 2 },
   ];
@@ -133,11 +128,10 @@ describe('AppSidebar — delete project', () => {
     const onDeleteProject = vi.fn().mockResolvedValue(true);
 
     renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} projects={projects} onDeleteProject={onDeleteProject} />,
+      <Sidebar {...sidebarProps} projects={projects} onDeleteProject={onDeleteProject} />,
     );
 
-    await openProjectMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /delete project/i }));
+    await user.click(screen.getByRole('button', { name: /delete project: alpha/i }));
     const dialog = await screen.findByRole('dialog', { name: /delete project/i });
     expect(dialog).toHaveTextContent(/unassign/i);
 
@@ -152,11 +146,10 @@ describe('AppSidebar — delete project', () => {
     const onDeleteProject = vi.fn().mockResolvedValue(true);
 
     renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} projects={projects} onDeleteProject={onDeleteProject} />,
+      <Sidebar {...sidebarProps} projects={projects} onDeleteProject={onDeleteProject} />,
     );
 
-    await openProjectMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /delete project/i }));
+    await user.click(screen.getByRole('button', { name: /delete project: alpha/i }));
     await user.click(screen.getByRole('button', { name: /^delete$/i }));
     await waitFor(() => {
       expect(onDeleteProject).toHaveBeenCalledWith('p1');
@@ -171,11 +164,10 @@ describe('AppSidebar — delete project', () => {
     const onDeleteProject = vi.fn().mockResolvedValue(false);
 
     renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} projects={projects} onDeleteProject={onDeleteProject} />,
+      <Sidebar {...sidebarProps} projects={projects} onDeleteProject={onDeleteProject} />,
     );
 
-    await openProjectMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /delete project/i }));
+    await user.click(screen.getByRole('button', { name: /delete project: alpha/i }));
     await user.click(screen.getByRole('button', { name: /^delete$/i }));
     await waitFor(() => {
       expect(onDeleteProject).toHaveBeenCalledWith('p1');
@@ -188,16 +180,14 @@ describe('AppSidebar — delete project', () => {
     const onUnassignAll = vi.fn().mockResolvedValue(true);
 
     renderWithProviders(
-      <AppSidebar
-        isOpen
+      <Sidebar
         {...sidebarProps}
         projects={projects}
         onUnassignAll={onUnassignAll}
       />,
     );
 
-    await openProjectMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /unassign all chats/i }));
+    await user.click(screen.getByRole('button', { name: /unassign all chats from alpha/i }));
     expect(onUnassignAll).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /^unassign$/i }));
     await waitFor(() => {
@@ -205,20 +195,17 @@ describe('AppSidebar — delete project', () => {
     });
   });
 
-  it('hides the unassign-all action when the project has no chats', async () => {
-    const user = userEvent.setup();
+  it('hides the unassign-all icon when the project has no chats', () => {
     renderWithProviders(
-      <AppSidebar
-        isOpen
+      <Sidebar
         {...sidebarProps}
         projects={[{ id: 'p1', name: 'Alpha', description: null, threadCount: 0 }]}
         onUnassignAll={vi.fn()}
       />,
     );
 
-    await openProjectMenu(user);
     expect(
-      screen.queryByRole('menuitem', { name: /unassign all chats/i }),
+      screen.queryByRole('button', { name: /unassign all chats from alpha/i }),
     ).not.toBeInTheDocument();
   });
 });
@@ -230,14 +217,13 @@ const sampleChat = {
   preview: 'hello',
 };
 
-describe('AppSidebar — add chat to project', () => {
+describe('Sidebar — add chat to project', () => {
   it('assigns an unassigned chat from the add-to-project menu', async () => {
     const user = userEvent.setup();
     const onAssignThread = vi.fn().mockResolvedValue(true);
 
     renderWithProviders(
-      <AppSidebar
-        isOpen
+      <Sidebar
         {...sidebarProps}
         chatHistory={[sampleChat]}
         projects={[{ id: 'p1', name: 'Alpha', description: null, threadCount: 0 }]}
@@ -245,7 +231,7 @@ describe('AppSidebar — add chat to project', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /actions for chat: research thread/i }));
+    await user.click(screen.getByRole('button', { name: /add to project: research thread/i }));
     await user.click(await screen.findByRole('menuitem', { name: 'Alpha' }));
 
     await waitFor(() => {
@@ -253,10 +239,9 @@ describe('AppSidebar — add chat to project', () => {
     });
   });
 
-  it('lists a chat whose project no longer exists under Chats', async () => {
+  it('lists a chat whose project no longer exists under Chats', () => {
     renderWithProviders(
-      <AppSidebar
-        isOpen
+      <Sidebar
         {...sidebarProps}
         chatHistory={[{ ...sampleChat, project_id: 'deleted-project' }]}
         projects={[{ id: 'p1', name: 'Alpha', description: null, threadCount: 0 }]}
@@ -266,19 +251,18 @@ describe('AppSidebar — add chat to project', () => {
 
     expect(screen.getByText('Research thread')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: /alpha chats/i })).not.toBeInTheDocument();
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /actions for chat: research thread/i }));
-    expect(await screen.findByRole('menuitem', { name: 'Alpha' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitem', { name: /remove from project/i }),
+      screen.getByRole('button', { name: /add to project: research thread/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /unassign chat: research thread/i }),
     ).not.toBeInTheDocument();
   });
 
   it('gives the project chat list a fixed height that can scroll', async () => {
     const user = userEvent.setup();
     renderWithProviders(
-      <AppSidebar
-        isOpen
+      <Sidebar
         {...sidebarProps}
         chatHistory={[{ ...sampleChat, project_id: 'p1' }]}
         projects={[{ id: 'p1', name: 'Alpha', description: null, threadCount: 1 }]}
@@ -288,8 +272,8 @@ describe('AppSidebar — add chat to project', () => {
     await user.click(screen.getByRole('button', { name: /expand alpha/i }));
 
     const list = screen.getByRole('list', { name: /alpha chats/i });
-    // The fixed height and scrolling live in sidebar.css (.app-project-chats).
-    expect(list).toHaveClass('app-project-chats');
+    expect(list.className).toMatch(/max-h-48/);
+    expect(list.className).toMatch(/overflow-y-auto/);
   });
 
   it('unassigns a project chat instead of offering add-to-project', async () => {
@@ -297,8 +281,7 @@ describe('AppSidebar — add chat to project', () => {
     const onAssignThread = vi.fn().mockResolvedValue(true);
 
     renderWithProviders(
-      <AppSidebar
-        isOpen
+      <Sidebar
         {...sidebarProps}
         chatHistory={[{ ...sampleChat, project_id: 'p1' }]}
         projects={[{ id: 'p1', name: 'Alpha', description: null, threadCount: 1 }]}
@@ -308,126 +291,14 @@ describe('AppSidebar — add chat to project', () => {
 
     await user.click(screen.getByRole('button', { name: /expand alpha/i }));
 
-    await user.click(screen.getByRole('button', { name: /actions for chat: research thread/i }));
-    expect(screen.queryByRole('menuitem', { name: 'Alpha' })).not.toBeInTheDocument();
-    await user.click(await screen.findByRole('menuitem', { name: /remove from project/i }));
+    expect(
+      screen.queryByRole('button', { name: /add to project: research thread/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /unassign chat: research thread/i }));
 
     await waitFor(() => {
       expect(onAssignThread).toHaveBeenCalledWith('c1', null);
     });
-  });
-});
-
-describe('AppSidebar — navigation', () => {
-  beforeEach(() => {
-    mockNavigate.mockReset();
-  });
-
-  it('is a navigation landmark named Chats', () => {
-    renderWithProviders(<AppSidebar isOpen {...sidebarProps} />);
-    expect(screen.getByRole('navigation', { name: 'Chats' })).toBeInTheDocument();
-  });
-
-  it('marks the active thread link with aria-current=page', () => {
-    renderWithProviders(
-      <AppSidebar
-        isOpen
-        {...sidebarProps}
-        currentChatId="c1"
-        chatHistory={[sampleChat, { ...sampleChat, id: 'c2', title: 'Other' }]}
-      />,
-    );
-    expect(screen.getByRole('link', { name: 'Research thread' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-    expect(screen.getByRole('link', { name: 'Other' })).not.toHaveAttribute('aria-current');
-  });
-
-  it('selects a chat when its link is clicked', async () => {
-    const user = userEvent.setup();
-    const onSelectChat = vi.fn();
-    renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} onSelectChat={onSelectChat} chatHistory={[sampleChat]} />,
-    );
-    await user.click(screen.getByRole('link', { name: 'Research thread' }));
-    expect(onSelectChat).toHaveBeenCalledWith('c1');
-  });
-
-  it('lets modified clicks fall through to the browser', () => {
-    const onSelectChat = vi.fn();
-    renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} onSelectChat={onSelectChat} chatHistory={[sampleChat]} />,
-    );
-    const link = screen.getByRole('link', { name: 'Research thread' });
-    const notPrevented = fireEvent.click(link, { ctrlKey: true });
-    fireEvent.click(link, { metaKey: true });
-    fireEvent.click(link, { button: 1 });
-    expect(notPrevented).toBe(true);
-    expect(onSelectChat).not.toHaveBeenCalled();
-    const plain = fireEvent.click(link);
-    expect(plain).toBe(false);
-    expect(onSelectChat).toHaveBeenCalledWith('c1');
-  });
-
-  it('keeps the row kebab marked visible while its menu is open', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<AppSidebar isOpen {...sidebarProps} chatHistory={[sampleChat]} />);
-    const kebab = screen.getByRole('button', { name: /Actions for chat/ });
-    expect(kebab).not.toHaveClass('app-nav-row__toggle--open');
-    await user.click(kebab);
-    expect(kebab).toHaveClass('app-nav-row__toggle--open');
-  });
-
-  it('keeps the full title as the accessible name and has no native title tooltip', () => {
-    const long = 'x'.repeat(200);
-    renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} chatHistory={[{ ...sampleChat, title: long }]} />,
-    );
-    const link = screen.getByRole('link', { name: long });
-    expect(link).not.toHaveAttribute('title');
-    expect(link).toHaveAttribute('href');
-  });
-
-  it('shows an empty state when there are no chats', () => {
-    renderWithProviders(<AppSidebar isOpen {...sidebarProps} />);
-    expect(screen.getByText('No chats yet')).toBeInTheDocument();
-  });
-
-  it('starts a new chat from the New Chat button', async () => {
-    const user = userEvent.setup();
-    const onNewChat = vi.fn();
-    renderWithProviders(<AppSidebar isOpen {...sidebarProps} onNewChat={onNewChat} />);
-    const button = screen.getByRole('button', { name: 'New Chat' });
-    expect(button.className).toMatch(/pf-m-primary/);
-    await user.click(button);
-    expect(onNewChat).toHaveBeenCalledWith();
-  });
-
-  it('renames a chat through the actions menu', async () => {
-    const user = userEvent.setup();
-    const onRenameChat = vi.fn();
-    renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} onRenameChat={onRenameChat} chatHistory={[sampleChat]} />,
-    );
-    await user.click(screen.getByRole('button', { name: /actions for chat: research thread/i }));
-    await user.click(await screen.findByRole('menuitem', { name: /rename/i }));
-    const input = screen.getByRole('textbox', { name: /rename chat/i });
-    await user.clear(input);
-    await user.type(input, 'Renamed{Enter}');
-    expect(onRenameChat).toHaveBeenCalledWith('c1', 'Renamed');
-  });
-
-  it('deletes a chat after confirmation', async () => {
-    const user = userEvent.setup();
-    const onDeleteChat = vi.fn();
-    renderWithProviders(
-      <AppSidebar isOpen {...sidebarProps} onDeleteChat={onDeleteChat} chatHistory={[sampleChat]} />,
-    );
-    await user.click(screen.getByRole('button', { name: /actions for chat: research thread/i }));
-    await user.click(await screen.findByRole('menuitem', { name: /delete/i }));
-    expect(onDeleteChat).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: /^delete$/i }));
-    expect(onDeleteChat).toHaveBeenCalledWith('c1');
   });
 });

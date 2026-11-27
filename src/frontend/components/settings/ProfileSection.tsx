@@ -1,22 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Button,
-  Card,
-  CardBody,
-  DescriptionList,
-  DescriptionListDescription,
-  DescriptionListGroup,
-  DescriptionListTerm,
-  Modal,
-  ModalBody,
-  ModalFooter,
-  ModalHeader,
-  ModalVariant,
-  Switch,
-  Title,
-} from '@patternfly/react-core';
-import { TrashIcon } from '@patternfly/react-icons';
+import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant } from '@patternfly/react-core';
+import { User, Mail, Shield, Trash2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { clearAllChats, selectAllChats } from '../../redux/slices/chats';
 import { selectDeveloperMode, setDeveloperMode } from '../../redux/slices/userSettings';
@@ -65,74 +50,80 @@ export function ProfileSection() {
   };
 
   return (
-    <div className="app-settings__stack">
-      <div className="app-settings__row" style={{ justifyContent: 'flex-start' }}>
-        <div className="app-settings__avatar" aria-hidden="true">
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center text-2xl font-bold text-primary">
           {displayName.charAt(0).toUpperCase()}
         </div>
         <div>
-          <Title headingLevel="h3" size="lg">
-            {displayName}
-          </Title>
-          {username && <p className="app-settings__muted">@{username}</p>}
+          <h3 className="text-lg font-semibold text-foreground">{displayName}</h3>
+          {username && (
+            <p className="text-sm text-muted-foreground">@{username}</p>
+          )}
         </div>
       </div>
 
-      <DescriptionList isHorizontal isCompact aria-label="Account details">
+      <div className="space-y-3">
         {email && (
-          <DescriptionListGroup>
-            <DescriptionListTerm>Email</DescriptionListTerm>
-            <DescriptionListDescription>{email}</DescriptionListDescription>
-          </DescriptionListGroup>
+          <div className="flex items-center gap-3 text-sm">
+            <Mail className="w-4 h-4 text-muted-foreground" />
+            <span className="text-foreground">{email}</span>
+          </div>
         )}
-        <DescriptionListGroup>
-          <DescriptionListTerm>Username</DescriptionListTerm>
-          <DescriptionListDescription>{username || displayName}</DescriptionListDescription>
-        </DescriptionListGroup>
-        <DescriptionListGroup>
-          <DescriptionListTerm>Sign-in</DescriptionListTerm>
-          <DescriptionListDescription>Authenticated via SSO</DescriptionListDescription>
-        </DescriptionListGroup>
-      </DescriptionList>
+        <div className="flex items-center gap-3 text-sm">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span className="text-foreground">{username || displayName}</span>
+        </div>
+        <div className="flex items-center gap-3 text-sm">
+          <Shield className="w-4 h-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Authenticated via SSO</span>
+        </div>
+      </div>
 
       {isPrivilegedUser() && (
-        <div className="app-settings__row">
-          <div>
-            <Title headingLevel="h3" size="md">
-              Developer Mode
-            </Title>
-            <p className="app-settings__muted">
-              Show the Developer tab with advanced tools and agent evaluation.
-            </p>
+        <div className="pt-4 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-foreground">Developer Mode</h3>
+              <p className="text-xs text-muted-foreground">
+                Show the Developer tab with advanced tools and agent evaluation.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={developerMode}
+              aria-label="Enable Developer Mode"
+              onClick={() => dispatch(setDeveloperMode(!developerMode))}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
+                developerMode ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                  developerMode ? 'translate-x-4' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
-          <Switch
-            id="developer-mode-switch"
-            aria-label="Enable Developer Mode"
-            isChecked={developerMode}
-            onChange={(_event, checked) => dispatch(setDeveloperMode(checked))}
-          />
         </div>
       )}
 
       {chats.length > 0 && (
-        <Card isCompact>
-          <CardBody>
-            <Title headingLevel="h3" size="md" style={{ marginBlockEnd: 'var(--pf-t--global--spacer--sm)' }}>
-              Danger Zone
-            </Title>
-            <div className="app-settings__row">
-              <div>
-                <p>Delete all conversations</p>
-                <p className="app-settings__muted">
-                  Permanently remove all {chats.length} chat{chats.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <Button variant="danger" onClick={() => setConfirmDelete(true)} icon={<TrashIcon />}>
-                Delete all
-              </Button>
+        <div className="pt-4 border-t border-border">
+          <h3 className="text-sm font-medium text-destructive mb-2">Danger Zone</h3>
+          <div className="flex items-center justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/5">
+            <div>
+              <p className="text-sm font-medium text-foreground">Delete all conversations</p>
+              <p className="text-xs text-muted-foreground">
+                Permanently remove all {chats.length} chat{chats.length !== 1 ? 's' : ''}
+              </p>
             </div>
-          </CardBody>
-        </Card>
+            <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)} icon={<Trash2 className="w-3.5 h-3.5" />}>
+              Delete all
+            </Button>
+          </div>
+        </div>
       )}
 
       <Modal

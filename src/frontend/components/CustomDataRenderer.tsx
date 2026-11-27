@@ -1,4 +1,3 @@
-import './rich-content.css';
 import { Table, Thead, Tbody, Tr, Th, Td } from '@patternfly/react-table';
 
 export interface CustomDataRendererProps {
@@ -17,7 +16,7 @@ function PrettyJsonBlock({ value }: { value: unknown }) {
     text = String(value);
   }
   return (
-    <pre className="app-jsonblock">
+    <pre className="bg-muted border border-border rounded-lg p-3 text-xs font-mono overflow-x-auto my-2">
       {text}
     </pre>
   );
@@ -33,7 +32,7 @@ export function CustomDataRenderer({ data }: CustomDataRendererProps) {
       return <PrettyJsonBlock value={data} />;
     }
     return (
-      <div className="app-datatable">
+      <div className="my-3 overflow-x-auto rounded-lg border border-border">
         <Table aria-label="Structured data table" borders>
           <Thead>
             <Tr>
@@ -52,7 +51,7 @@ export function CustomDataRenderer({ data }: CustomDataRendererProps) {
                   {headers.map((_, ci) => (
                     <Td key={`cell-${ri}-${ci}`} dataLabel={headers[ci]}>
                       {cells[ci] != null && typeof cells[ci] === 'object' ? (
-                        <code>{JSON.stringify(cells[ci])}</code>
+                        <code className="text-xs font-mono">{JSON.stringify(cells[ci])}</code>
                       ) : (
                         String(cells[ci] ?? '')
                       )}
@@ -75,7 +74,7 @@ export function CustomDataRenderer({ data }: CustomDataRendererProps) {
   if (type === 'list' && Array.isArray(data.items)) {
     const items = data.items;
     return (
-      <ul className="app-datalist">
+      <ul className="list-disc pl-6 my-2 space-y-1 text-sm text-foreground/90">
         {items.map((item, i) => (
           <li key={`item-${i}`}>{typeof item === 'object' ? JSON.stringify(item) : String(item)}</li>
         ))}

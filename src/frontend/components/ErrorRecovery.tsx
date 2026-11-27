@@ -7,7 +7,6 @@ import {
   EmptyStateBody,
   ExpandableSection,
 } from '@patternfly/react-core';
-import './rich-content.css';
 import { ExclamationCircleIcon, ExclamationTriangleIcon } from '@patternfly/react-icons';
 
 export interface ErrorRecoveryProps {
@@ -104,19 +103,19 @@ export function ErrorRecovery({
             className="pf-v6-u-mb-md"
             isIndented
           >
-            <div className="app-error-details">
+            <div className="text-left font-mono text-sm py-2">
               {errorId != null && errorId !== '' && (
-                <p>
+                <p className="mb-2">
                   <strong>Error ID:</strong> {errorId}
                 </p>
               )}
               {errorMessage !== '' && (
-                <p>
+                <p className="mb-2">
                   <strong>Message:</strong> {errorMessage}
                 </p>
               )}
               {errorDetails != null && errorDetails !== '' && (
-                <pre>
+                <pre className="m-0 text-xs whitespace-pre-wrap overflow-auto max-h-32 p-2 rounded bg-black/10">
                   {errorDetails}
                 </pre>
               )}

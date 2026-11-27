@@ -1,8 +1,7 @@
 import { Button } from '@patternfly/react-core';
-import { BugIcon } from '@patternfly/react-icons';
+import { Bug } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { selectDebugMode, setDebugMode } from '../redux/slices/userSettings';
-import './dialogs.css';
 
 export function DebugToggle() {
   const dispatch = useAppDispatch();
@@ -12,11 +11,11 @@ export function DebugToggle() {
     <Button
       variant="plain"
       size="sm"
-      className={debugMode ? 'app-debug-toggle--on' : undefined}
+      className={`!p-1.5 ${debugMode ? 'text-yellow-500' : 'text-muted-foreground'}`}
       onClick={() => dispatch(setDebugMode(!debugMode))}
       aria-label={debugMode ? 'Disable debug mode' : 'Enable debug mode'}
-      aria-pressed={debugMode}
-      icon={<BugIcon />}
-    />
+    >
+      <Bug className="w-4 h-4" />
+    </Button>
   );
 }

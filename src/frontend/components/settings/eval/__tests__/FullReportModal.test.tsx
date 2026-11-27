@@ -36,7 +36,7 @@ describe('FullReportModal tag filter', () => {
     );
     // target chip buttons specifically — conv header badges have the same text
     expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'HITL' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hitl' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Tool Use' })).toBeInTheDocument();
   });
 
@@ -45,7 +45,7 @@ describe('FullReportModal tag filter', () => {
       <FullReportModal result={makeResult(['hitl', 'tool_use'])} prevScore={null} onClose={() => {}} />
     );
     // click the chip button, not the header badge
-    fireEvent.click(screen.getByRole('button', { name: 'HITL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hitl' }));
     // conv_0 (hitl) visible, conv_1 (tool_use) hidden
     // use /Conv 0/ regex because header button text includes the badge label
     expect(screen.getByRole('button', { name: /Conv 0/ })).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe('FullReportModal tag filter', () => {
     render(
       <FullReportModal result={makeResult(['hitl', 'tool_use'])} prevScore={null} onClose={() => {}} />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'HITL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hitl' }));
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
     expect(screen.getByRole('button', { name: /Conv 0/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Conv 1/ })).toBeInTheDocument();

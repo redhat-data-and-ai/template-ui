@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Alert, AlertActionCloseButton } from '@patternfly/react-core';
-import './rich-content.css';
 
 type AnnouncementType = 'info' | 'warning' | 'danger' | 'success';
 
@@ -74,7 +73,7 @@ export function AnnouncementBanner() {
   const variant = toVariant(payload.type);
 
   return (
-    <div className="app-announcement">
+    <div className="w-full shrink-0 border-b border-border">
       <Alert
         variant={variant}
         isInline
