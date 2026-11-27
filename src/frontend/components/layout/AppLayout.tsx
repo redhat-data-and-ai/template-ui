@@ -491,13 +491,20 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 
   return (
-    <Page masthead={masthead} sidebar={sidebar} className="app-page">
+    <Page
+      masthead={masthead}
+      sidebar={sidebar}
+      className="app-page"
+      mainContainerId="main-content"
+      skipToContent={
+        <a href="#main-content" className="skip-to-main">
+          Skip to main content
+        </a>
+      }
+    >
       {overlayOpen && (
         <div className="app-sidebar-backdrop" aria-hidden="true" onClick={closeOverlay} />
       )}
-      <a href="#main-content" className="skip-to-main">
-        Skip to main content
-      </a>
       <KeyboardShortcutsDialog isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       {/* PatternFly Modal traps focus and restores focus on close. */}
       <SessionExpiredModal isOpen={sessionExpired} />
@@ -506,10 +513,11 @@ export function AppLayout({ children }: AppLayoutProps) {
           console.error('Main content error:', error, errorInfo);
         }}
       >
-        <main id="main-content" className="app-main">
+        {/* PatternFly Page renders the single <main> (mainContainerId); keep this a plain div. */}
+        <div className="app-main">
           <DisclaimerBanner />
           <div className="app-content-surface">{children}</div>
-        </main>
+        </div>
       </ErrorBoundary>
     </Page>
   );

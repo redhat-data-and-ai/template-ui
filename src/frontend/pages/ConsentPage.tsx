@@ -67,7 +67,7 @@ export function ConsentPage() {
   ];
 
   return (
-    <Bullseye className="app-consent">
+    <Bullseye component="main" className="app-consent">
       <Card className="app-consent__card">
         <CardBody className="pf-v6-u-p-xl">
           <Flex

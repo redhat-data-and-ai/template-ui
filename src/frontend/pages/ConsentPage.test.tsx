@@ -26,6 +26,15 @@ describe('ConsentPage', () => {
     expect(screen.getByText('AI Technology Usage Notice')).toBeDefined();
   });
 
+  it('exposes a single main landmark', () => {
+    render(
+      <MemoryRouter>
+        <ConsentPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+  });
+
   it('calls API on approve', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
