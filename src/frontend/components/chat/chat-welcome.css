@@ -59,3 +59,9 @@
   outline: 2px solid var(--app-accent-strong);
   outline-offset: 2px;
 }
+
+/* Prompt gallery: one column on phones. */
+@media (max-width: 37.5rem) {
+  .chat-welcome__gallery { grid-template-columns: minmax(0, 1fr); }
+  .chat-welcome .pf-chatbot--layout--welcome .pf-chatbot__hello { font-size: var(--pf-t--global--font--size--2xl); }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -34,6 +34,7 @@ import { markChatAsClientCreated, isClientCreatedChat } from '../../services/new
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
 import { useProjects } from '../../hooks/useProjects';
+import { useIsDesktop } from '../../hooks/useIsDesktop';
 import type { RootState } from '../../redux/store';
 
 function toSafeDate(value: unknown): Date {
@@ -96,7 +97,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     assignThreadToProject,
     unassignAllThreads,
   } = useProjects();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isDesktop = useIsDesktop();
+  // Inline on desktop, an overlay (closed by default) below the PF xl breakpoint.
+  const [sidebarOpen, setSidebarOpen] = useState(isDesktop);
+  const wasOpenRef = useRef(sidebarOpen);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const navigate = useNavigate();
@@ -112,6 +116,42 @@ export function AppLayout({ children }: AppLayoutProps) {
       setAuthExpiredCallback(null);
     };
   }, []);
+
+  useEffect(() => {
+    setSidebarOpen(isDesktop);
+  }, [isDesktop]);
+
+  const closeOverlay = useCallback(() => {
+    if (!isDesktop) setSidebarOpen(false);
+  }, [isDesktop]);
+
+  // Navigating (chat, project, settings, new chat) dismisses the overlay.
+  useEffect(() => {
+    closeOverlay();
+  }, [location.pathname, closeOverlay]);
+
+  const overlayOpen = !isDesktop && sidebarOpen;
+
+  useEffect(() => {
+    if (!overlayOpen) return undefined;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [overlayOpen]);
+
+  // Move focus into the overlay when it opens, back to the toggle when it closes.
+  useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = sidebarOpen;
+    if (isDesktop || wasOpen === sidebarOpen) return;
+    if (sidebarOpen) {
+      document.querySelector<HTMLElement>('#app-sidebar button, #app-sidebar a, #app-sidebar input')?.focus();
+    } else {
+      document.getElementById('nav-toggle')?.focus();
+    }
+  }, [sidebarOpen, isDesktop]);
 
   const currentChatId = useMemo(() => {
     const match = /^\/chat\/([^/]+)/.exec(location.pathname);
@@ -278,7 +318,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     [chats]
   );
 
-  const handleSelectChat = (chatId: string) => navigate(`/chat/${chatId}`);
+  const handleSelectChat = (chatId: string) => {
+    navigate(`/chat/${chatId}`);
+    closeOverlay();
+  };
 
   const handleNewChat = useCallback((projectId?: string) => {
     // Only the per-project "+" control passes projectId. The sidebar
@@ -300,7 +343,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       dispatch(updateProjectThreadCount({ projectId, delta: 1 }));
     }
     navigate(`/chat/${newChatId}`, { state: { newChat: true } });
-  }, [dispatch, navigate]);
+    closeOverlay();
+  }, [dispatch, navigate, closeOverlay]);
 
   const handleDeleteChat = useCallback(
     async (chatId: string) => {
@@ -412,7 +456,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   });
 
   const masthead = (
-    <AppMasthead isSidebarOpen={!sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)} />
+    <AppMasthead isSidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />
   );
 
   const sidebar = (
@@ -422,7 +466,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       }}
     >
       <AppSidebar
-        isOpen={!sidebarCollapsed}
+        isOpen={sidebarOpen}
         currentChatId={currentChatId}
         chatHistory={sidebarChats}
         tokenExpiry={tokenExpiry}
@@ -443,6 +487,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <Page masthead={masthead} sidebar={sidebar} className="h-screen bg-background text-foreground">
+      {overlayOpen && (
+        <div className="app-sidebar-backdrop" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
+      )}
       <a href="#main-content" className="skip-to-main sr-only">
         Skip to main content
       </a>

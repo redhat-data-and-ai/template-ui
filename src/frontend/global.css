@@ -350,6 +350,28 @@ input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c
   box-shadow: none;
 }
 
+/* Below PF xl the sidebar is an overlay: opaque, shadowed, with a tap-away backdrop. */
+@media (max-width: 74.99rem) {
+  #app-sidebar.pf-v6-c-page__sidebar {
+    --pf-v6-c-page__sidebar--BackgroundColor: var(--app-page-bg);
+    --pf-v6-c-page__sidebar--BoxShadow: var(--pf-t--global--box-shadow--lg);
+    background-color: var(--app-page-bg);
+  }
+  #app-sidebar.pf-v6-c-page__sidebar.pf-m-expanded {
+    box-shadow: var(--pf-t--global--box-shadow--lg);
+    border-inline-end: var(--pf-t--global--border--width--regular) solid var(--app-border);
+  }
+}
+.app-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--pf-t--global--z-index--sm) - 1);
+  background-color: var(--pf-t--global--background--color--backdrop--default, rgba(0, 0, 0, 0.4));
+}
+@media (min-width: 75rem) {
+  .app-sidebar-backdrop { display: none; }
+}
+
 .app-sidebar-body {
   display: flex;
   flex-direction: column;

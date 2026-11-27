@@ -52,7 +52,7 @@ export function AppMasthead({ isSidebarOpen, onToggleSidebar }: AppMastheadProps
   );
 
   return (
-    <Masthead>
+    <Masthead display={{ default: 'inline' }}>
       <MastheadMain>
         <MastheadToggle>
           <PageToggleButton

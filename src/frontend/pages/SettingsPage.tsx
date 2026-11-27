@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, CardBody, CardTitle, Nav, NavItem, NavList, Title } from '@patternfly/react-core';
+import { Button, Card, CardBody, CardTitle, Nav, NavItem, NavList, Tab, Tabs, TabTitleText, Title } from '@patternfly/react-core';
 import { ArrowLeftIcon } from '@patternfly/react-icons';
 import { ProfileSection } from '../components/settings/ProfileSection';
 import { MemoryList } from '../components/settings/MemoryList';
@@ -10,6 +10,7 @@ import { AlwaysAllowedTools } from '../components/settings/AlwaysAllowedTools';
 import { DeveloperSettings } from '../components/settings/DeveloperSettings';
 import { AuthorizationSettings } from '../components/settings/AuthorizationSettings';
 import '../components/settings/settings.css';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useAppSelector } from '../redux/hooks';
 import { selectDeveloperMode } from '../redux/slices/userSettings';
 import { OAuthConnections } from '../components/settings/OAuthConnections';
@@ -40,11 +41,15 @@ const TAB_CONTENT: Record<TabId, React.FC> = {
   developer: DeveloperSettings,
 };
 
+/** Below this width the vertical section nav becomes horizontal tabs. */
+const NARROW_QUERY = '(max-width: 56.25rem)';
+
 const VALID_TABS = new Set<string>(TABS.map((t) => t.id));
 
 export function SettingsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isNarrow = useMediaQuery(NARROW_QUERY);
   const developerMode = useAppSelector(selectDeveloperMode);
   const features = useAppSelector((state: RootState) => state.config.features);
   const [activeTab, setActiveTab] = useState<TabId>(() => {
@@ -83,22 +88,41 @@ export function SettingsPage() {
 
       <div className="app-settings__scroll">
         <div className="app-settings__layout">
-          <Nav aria-label="Settings sections" className="app-settings__nav">
-            <NavList>
+          {isNarrow ? (
+            <Tabs
+              aria-label="Settings sections"
+              className="app-settings__tabs"
+              activeKey={active?.id}
+              onSelect={(_e, key) => setActiveTab(key as TabId)}
+              usePageInsets={false}
+            >
               {visibleTabs.map((tab) => (
-                <NavItem
+                <Tab
                   key={tab.id}
-                  itemId={tab.id}
-                  to={`#${tab.id}`}
-                  preventDefault
-                  isActive={activeTab === tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.label}
-                </NavItem>
+                  eventKey={tab.id}
+                  title={<TabTitleText>{tab.label}</TabTitleText>}
+                  aria-controls="settings-panel"
+                />
               ))}
-            </NavList>
-          </Nav>
+            </Tabs>
+          ) : (
+            <Nav aria-label="Settings sections" className="app-settings__nav">
+              <NavList>
+                {visibleTabs.map((tab) => (
+                  <NavItem
+                    key={tab.id}
+                    itemId={tab.id}
+                    to={`#${tab.id}`}
+                    preventDefault
+                    isActive={activeTab === tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                  >
+                    {tab.label}
+                  </NavItem>
+                ))}
+              </NavList>
+            </Nav>
+          )}
 
           {active && Content && (
             <Card id="settings-panel" className="app-settings__panel" aria-label={active.label}>

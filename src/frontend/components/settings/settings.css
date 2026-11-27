@@ -27,10 +27,15 @@
   max-width: 64rem;
   margin-inline: auto;
 }
-@media (max-width: 640px) {
+@media (max-width: 56.25rem) {
   .app-settings__layout {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+.app-settings__tabs { min-width: 0; max-width: 100%; }
+@media (max-width: 56.25rem) {
+  .app-settings__header { padding-inline: var(--pf-t--global--spacer--md); }
+  .app-settings__scroll { padding-inline: var(--pf-t--global--spacer--md); }
 }
 .app-settings__nav {
   --pf-v6-c-nav--RowGap: var(--pf-t--global--spacer--sm);

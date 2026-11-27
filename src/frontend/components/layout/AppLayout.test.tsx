@@ -72,20 +72,25 @@ vi.mock('../sidebar/AppSidebar', () => ({
     onNewChat,
     onDeleteProject,
     onDeleteChat,
+    onSelectChat,
+    isOpen,
   }: {
+    isOpen: boolean;
+    onSelectChat: (id: string) => void;
     onNewChat: () => void;
     onDeleteProject: (id: string, options?: { keepThreads?: boolean }) => Promise<boolean>;
     onDeleteChat: (id: string) => void;
   }) => (
-    <>
+    <div data-testid="sidebar" data-open={String(isOpen)}>
       <button type="button" onClick={() => onNewChat()}>new-chat</button>
+      <button type="button" onClick={() => onSelectChat('c1')}>select-chat</button>
       <button type="button" onClick={() => { void onDeleteProject('p1'); }}>
         delete-project
       </button>
       <button type="button" onClick={() => { void onDeleteChat('c1'); }}>
         delete-chat
       </button>
-    </>
+    </div>
   ),
 }));
 
@@ -377,5 +382,77 @@ describe('AppLayout — project thread hydration', () => {
     expect(store.getState().chats.chats.find((c) => c.id === 'c-old')?.project_id).toBe('p1');
     expect(getProjects).toHaveBeenCalled();
     expect(getThreadsByProject).toHaveBeenCalledWith('p1');
+  });
+});
+
+function mockViewport(desktop: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: desktop,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      onchange: null,
+      dispatchEvent: vi.fn(),
+    }),
+  });
+}
+
+describe('AppLayout — responsive sidebar', () => {
+  beforeEach(() => {
+    vi.mocked(getAllThreadsByUserId).mockResolvedValue([]);
+    mocks.getProjects.mockResolvedValue([]);
+    mocks.getThreadsByProject.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it('starts open on desktop', () => {
+    mockViewport(true);
+    renderLayout(createTestStore());
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
+    expect(document.querySelector('.app-sidebar-backdrop')).toBeNull();
+  });
+
+  it('starts closed below the xl breakpoint and opens from the toggle', async () => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
+    expect(document.querySelector('.app-sidebar-backdrop')).not.toBeNull();
+  });
+
+  it.each(['new-chat', 'select-chat'])('closes after %s, returning focus to the toggle', async (name) => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    const toggle = screen.getByRole('button', { name: 'Toggle navigation' });
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name }));
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    expect(toggle).toHaveFocus();
+  });
+
+  it('closes on Escape and on backdrop click', async () => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    await userEvent.click(document.querySelector('.app-sidebar-backdrop') as HTMLElement);
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('stays open after navigation on desktop', async () => {
+    mockViewport(true);
+    renderLayout(createTestStore());
+    await userEvent.click(screen.getByRole('button', { name: 'select-chat' }));
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
   });
 });

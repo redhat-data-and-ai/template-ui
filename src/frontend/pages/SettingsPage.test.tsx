@@ -1,5 +1,5 @@
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
 import { render, screen, within } from "@testing-library/react";
@@ -123,5 +123,40 @@ describe("SettingsPage", () => {
     await user.click(screen.getByRole("radio", { name: "Dark" }));
     expect(screen.getByRole("radio", { name: "Dark" })).toBeChecked();
     expect(localStorage.getItem(themeStorageKey())).toBe("dark");
+  });
+});
+
+describe("SettingsPage narrow layout", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    Object.assign(window, {
+      APP_DATA: { userRole: "users" },
+      USER_DATA: { displayName: "Dev", preferred_username: "dev" },
+    });
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: query.includes("max-width"),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    });
+  });
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it("renders horizontal tabs instead of the vertical nav, hiding Developer by default", async () => {
+    renderPage();
+    expect(screen.queryByRole("navigation", { name: "Settings sections" })).toBeNull();
+    const tabs = within(screen.getByRole("tablist")).getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs).toEqual([
+      "Profile", "Your Memories", "Custom Rules", "Appearance", "Tool Approvals", "Authorization", "MCP OAuth",
+    ]);
+    await userEvent.click(screen.getByRole("tab", { name: "Appearance" }));
+    expect(screen.getByRole("tab", { name: "Appearance" })).toHaveAttribute("aria-selected", "true");
+    expect(document.getElementById("settings-title-appearance")).not.toBeNull();
   });
 });
