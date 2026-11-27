@@ -6,6 +6,7 @@ import { ChatComposer } from '../components/chat/ChatComposer';
 import { useAppDispatch } from '../redux/hooks';
 import { addChat, ChatItem } from '../redux/slices/chats';
 import { markChatAsClientCreated } from '../services/newChatTracker';
+import './pages.css';
 
 function builtinQuickPrompts(): string[] {
   return [
@@ -53,9 +54,9 @@ export function HomePage() {
   );
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="app-home">
       {/* Center content area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
+      <div className="app-home__center">
         <ChatWelcome
           userName={userDisplayName || 'there'}
           agentTitle={window.APP_DATA?.agentName || 'Agent'}
@@ -65,8 +66,8 @@ export function HomePage() {
       </div>
 
       {/* Bottom input bar */}
-      <div className="px-6 pb-4 pt-3">
-        <div className="max-w-2xl mx-auto">
+      <div className="app-home__composer">
+        <div className="app-home__composer-inner">
           <ChatComposer
             id="home-chat-input"
             formLabel="Start a new chat"

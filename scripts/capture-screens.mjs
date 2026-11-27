@@ -73,12 +73,16 @@ const PAGES = {
     yield 'chat';
 
     await page.goto(`${base}/settings`);
-    await page.waitForSelector('[role="tab"]', { state: 'visible' });
-    const names = (await page.getByRole('tab').allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+    // Wide viewports use a vertical nav, narrow ones tabs.
+    const sections = page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link');
+    const tabs = page.getByRole('tab');
+    await page.waitForSelector('[role="tab"], nav[aria-label="Settings sections"] a', { state: 'visible' });
+    const useTabs = (await tabs.count()) > 0;
+    const items = useTabs ? tabs : sections;
+    const names = (await items.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
     for (const name of names) {
-      await page.getByRole('tab', { name, exact: false }).first().click();
-      await page.waitForSelector('[role="tabpanel"]:not([hidden])', { state: 'visible' });
-      await page.waitForTimeout(300);
+      await items.filter({ hasText: name }).first().click();
+      await page.waitForTimeout(400);
       yield `settings-${slug(name)}`;
     }
 

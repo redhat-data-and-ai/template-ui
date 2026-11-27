@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ConsentPage } from './ConsentPage';
 
@@ -16,13 +16,14 @@ describe('ConsentPage', () => {
   });
 
   it('renders authorization page', () => {
-    const { getByText } = render(
+    render(
       <MemoryRouter>
         <ConsentPage />
       </MemoryRouter>,
     );
-    expect(getByText('Authorization Required')).toBeDefined();
-    expect(getByText('Acknowledge & Proceed')).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'Authorization Required' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Acknowledge & Proceed' })).toBeDefined();
+    expect(screen.getByText('AI Technology Usage Notice')).toBeDefined();
   });
 
   it('calls API on approve', async () => {
@@ -32,13 +33,13 @@ describe('ConsentPage', () => {
     });
     vi.stubGlobal('fetch', mockFetch);
 
-    const { getByText } = render(
+    render(
       <MemoryRouter>
         <ConsentPage />
       </MemoryRouter>,
     );
 
-    fireEvent.click(getByText('Acknowledge & Proceed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge & Proceed' }));
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/auth/consent/approve', expect.any(Object));
@@ -50,19 +51,20 @@ describe('ConsentPage', () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: false });
     vi.stubGlobal('fetch', mockFetch);
 
-    const { getByText } = render(
+    render(
       <MemoryRouter>
         <ConsentPage />
       </MemoryRouter>,
     );
 
-    fireEvent.click(getByText('Acknowledge & Proceed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge & Proceed' }));
 
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
     await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
 
-    expect(getByText(/Failed to approve consent/)).toBeDefined();
+    expect(screen.getByRole('alert').textContent).toMatch(/Failed to approve consent/);
+    expect(screen.getByRole('button', { name: 'Acknowledge & Proceed' })).toBeEnabled();
     expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 });

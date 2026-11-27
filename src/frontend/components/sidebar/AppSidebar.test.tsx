@@ -112,7 +112,7 @@ describe('AppSidebar — create project', () => {
 
     const warning = await screen.findByRole('alert');
     expect(warning).toHaveTextContent(/already exists/i);
-    expect(warning.className).toMatch(/destructive|danger|red/i);
+    expect(warning.className).toMatch(/pf-m-error/);
     expect(onCreateProject).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: /new project/i })).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
