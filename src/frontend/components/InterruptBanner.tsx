@@ -177,6 +177,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
           <div className="app-interrupt__actions">
             <Button
               variant="primary"
+              className="app-approve"
               size="sm"
               icon={<CheckCircleIcon />}
               isDisabled={isSubmitting}

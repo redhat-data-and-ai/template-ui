@@ -20,7 +20,7 @@ export function ToolApprovalControls({ approval }: { approval: ToolApproval }) {
         <p className="app-approval__hint">Waiting for the current approval to finish…</p>
       )}
       <div className="app-approval__actions">
-        <Button ref={approveRef} variant="primary" size="sm" icon={<CheckIcon />} isDisabled={approval.disabled}
+        <Button ref={approveRef} variant="primary" className="app-approve" size="sm" icon={<CheckIcon />} isDisabled={approval.disabled}
           onClick={() => approval.decide({ type: 'approve' })} aria-label={`Approve tool call: ${name}`}>
           Approve
         </Button>

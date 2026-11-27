@@ -87,3 +87,18 @@
   color: #dc2626;
 }
 .app-interrupt-auth__actions { margin-top: 0.75rem; }
+
+/* Approve is PF success green (Reject stays danger). Light: green-60 fill + white text, darker green-70 on hover.
+   Dark: PF's light green fill with dark text, slightly deeper green on hover. Declared on the button, so raise specificity. */
+.pf-v6-c-button.pf-m-primary.app-approve {
+  --pf-v6-c-button--m-primary--BackgroundColor: var(--pf-t--global--color--status--success--default);
+  --pf-v6-c-button--m-primary--Color: var(--pf-t--global--text--color--inverse);
+  --pf-v6-c-button--m-primary--hover--BackgroundColor: var(--pf-t--global--color--status--success--hover);
+  --pf-v6-c-button--m-primary--hover--Color: var(--pf-t--global--text--color--inverse);
+  /* Keyboard focus (autofocused on approval cards) keeps the base green; the focus ring carries the state. */
+  --pf-v6-c-button--m-primary--m-clicked--BackgroundColor: var(--pf-t--global--color--status--success--default);
+}
+.pf-v6-theme-dark .pf-v6-c-button.pf-m-primary.app-approve {
+  --pf-v6-c-button--m-primary--hover--BackgroundColor: var(--pf-t--color--green--50);
+  --pf-v6-c-button--m-primary--m-clicked--BackgroundColor: var(--pf-t--global--color--status--success--default);
+}
