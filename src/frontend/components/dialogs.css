@@ -28,13 +28,14 @@
 
 /* Debug panel (chat page right rail) */
 .app-debug { font-family: var(--pf-t--global--font--family--mono); }
-.app-debug__title { color: var(--pf-t--global--text--color--status--warning--default); }
-.app-debug .pf-v6-c-description-list__text { font-size: var(--pf-t--global--font--size--xs); }
-.app-debug .pf-v6-c-description-list__term .pf-v6-c-description-list__text { color: var(--app-text-secondary); font-weight: normal; }
+.app-debug .app-debug__title { color: var(--pf-t--global--text--color--regular); }
+.app-debug .app-debug__counts { display: grid; row-gap: var(--pf-t--global--spacer--xs); margin: 0; font-size: var(--pf-t--global--font--size--xs); }
+.app-debug .app-debug__row { display: grid; grid-template-columns: 7rem 1fr; column-gap: var(--pf-t--global--spacer--sm); }
+.app-debug .app-debug__row dt { color: var(--app-text-secondary); font-weight: normal; }
+.app-debug .app-debug__row dd { margin: 0; text-align: left; }
 .app-debug__label { font-size: var(--pf-t--global--font--size--xs); color: var(--app-text-secondary); margin: var(--pf-t--global--spacer--md) 0 var(--pf-t--global--spacer--xs); }
-.app-debug .pf-v6-c-description-list { --pf-v6-c-description-list--m-horizontal__term--width: 6rem; --pf-v6-c-description-list--RowGap: var(--pf-t--global--spacer--xs); }
-.app-debug .pf-v6-c-code-block__pre { font-size: var(--pf-t--global--font--size--xs); max-height: 12rem; overflow: auto; white-space: pre-wrap; word-break: break-word; }
-.app-debug-toggle--on { color: var(--pf-t--global--icon--color--status--warning--default); }
+.app-debug .app-debug__state { margin: 0; padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--xs) var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--sm); font-family: inherit; font-size: var(--pf-t--global--font--size--xs); line-height: 1.4; background: var(--pf-t--global--background--color--secondary--default); border-radius: var(--pf-t--global--border--radius--small); max-height: 12rem; overflow: auto; white-space: pre; }
+.app-debug-toggle--on { background: var(--pf-t--global--background--color--action--plain--clicked); }
 
 /* Eval panel (sidebar) */
 .app-eval { padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md); border-top: var(--pf-t--global--border--width--regular) solid var(--app-border); }

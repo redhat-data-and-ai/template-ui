@@ -4,12 +4,6 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
-  CodeBlock,
-  CodeBlockCode,
-  DescriptionList,
-  DescriptionListDescription,
-  DescriptionListGroup,
-  DescriptionListTerm,
 } from '@patternfly/react-core';
 import './dialogs.css';
 import type { StreamingState } from '../redux/slices/chats';
@@ -43,32 +37,30 @@ export function DebugPanel({ messages, streamingState }: DebugPanelProps) {
         <CardTitle className="app-debug__title">Debug</CardTitle>
       </CardHeader>
       <CardBody>
-        <DescriptionList isCompact isHorizontal isFluid columnModifier={{ default: '1Col' }} aria-label="Debug counts">
+        <dl className="app-debug__counts" aria-label="Debug counts">
           {stats.map(([term, value]) => (
-            <DescriptionListGroup key={term}>
-              <DescriptionListTerm>{term}</DescriptionListTerm>
-              <DescriptionListDescription>{value}</DescriptionListDescription>
-            </DescriptionListGroup>
+            <div key={term} className="app-debug__row">
+              <dt>{term}</dt>
+              <dd>{value}</dd>
+            </div>
           ))}
-        </DescriptionList>
+        </dl>
 
         <p className="app-debug__label">Streaming State</p>
-        <CodeBlock>
-          <CodeBlockCode>
-            {JSON.stringify(
-              {
-                isLoading: streamingState.isLoading,
-                isConnected: streamingState.isConnected,
-                runId: streamingState.currentRunId,
-                activeSubAgent: streamingState.activeSubAgent?.name ?? null,
-                pendingInterrupt: streamingState.pendingInterrupt != null,
-                taskSteps: streamingState.taskSteps.length,
-              },
-              null,
-              2,
-            )}
-          </CodeBlockCode>
-        </CodeBlock>
+        <pre className="app-debug__state">
+          {JSON.stringify(
+            {
+              isLoading: streamingState.isLoading,
+              isConnected: streamingState.isConnected,
+              runId: streamingState.currentRunId,
+              activeSubAgent: streamingState.activeSubAgent?.name ?? null,
+              pendingInterrupt: streamingState.pendingInterrupt != null,
+              taskSteps: streamingState.taskSteps.length,
+            },
+            null,
+            1,
+          )}
+        </pre>
       </CardBody>
     </Card>
   );
