@@ -50,36 +50,4 @@
   outline-offset: 2px;
   --pf-v6-c-form-control--after--BorderColor: var(--app-accent-strong);
 }
-.app-kbd-combo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--pf-t--global--spacer--xs); }
-.app-kbd-combo__hint { color: var(--app-text-secondary); font-size: var(--pf-t--global--font--size--sm); }
-.app-muted { color: var(--app-text-secondary); }
-
-.app-boundary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 25rem;
-  padding: var(--pf-t--global--spacer--xl);
-}
-.app-boundary__inner { width: 100%; max-width: 32rem; }
-
-/* Debug panel (chat page right rail) */
-.app-debug { font-family: var(--pf-t--global--font--family--mono); }
-.app-debug__title { color: var(--pf-t--global--text--color--status--warning--default); }
-.app-debug .pf-v6-c-description-list__text { font-size: var(--pf-t--global--font--size--xs); }
-.app-debug .pf-v6-c-description-list__term .pf-v6-c-description-list__text { color: var(--app-text-secondary); font-weight: normal; }
-.app-debug__label { font-size: var(--pf-t--global--font--size--xs); color: var(--app-text-secondary); margin: var(--pf-t--global--spacer--md) 0 var(--pf-t--global--spacer--xs); }
-.app-debug .pf-v6-c-description-list { --pf-v6-c-description-list--m-horizontal__term--width: 6rem; --pf-v6-c-description-list--RowGap: var(--pf-t--global--spacer--xs); }
-.app-debug .pf-v6-c-code-block__pre { font-size: var(--pf-t--global--font--size--xs); max-height: 12rem; overflow: auto; white-space: pre-wrap; word-break: break-word; }
-.app-debug-toggle--on { color: var(--pf-t--global--icon--color--status--warning--default); }
-
-/* Eval panel (sidebar) */
-.app-eval { padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md); border-top: var(--pf-t--global--border--width--regular) solid var(--app-border); }
-.app-eval__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pf-t--global--spacer--sm); margin-bottom: var(--pf-t--global--spacer--xs); }
-.app-eval__connect { display: flex; flex-direction: column; gap: var(--pf-t--global--spacer--xs); }
-.app-eval__notice { margin-bottom: var(--pf-t--global--spacer--sm); }
-
-/* PF draws its own focus ring on the form-control wrapper; drop the global outline on the inner control (no double box). */
-.pf-v6-c-modal-box .pf-v6-c-form-control :is(input, textarea):focus-visible { outline: none; }
 .app-kbd-combo { max-width: 100%; }
