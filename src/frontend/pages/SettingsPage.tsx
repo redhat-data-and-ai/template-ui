@@ -131,7 +131,7 @@ export function SettingsPage() {
           )}
 
           {active && Content && (
-            <Card id="settings-panel" className="app-settings__panel" aria-label={active.label}>
+            <Card id="settings-panel" className={`app-settings__panel${active.id === 'developer' ? ' app-settings__panel--developer' : ''}`} aria-label={active.label}>
               {active.id !== 'developer' ? (
                 <CardTitle component="h2" id={`settings-title-${active.id}`}>
                   {active.panelTitle ?? active.label}

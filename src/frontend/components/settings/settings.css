@@ -61,6 +61,10 @@
 .app-settings__panel {
   min-width: 0;
 }
+/* Developer has no visible panel title (which supplies the top inset elsewhere): match the bottom inset. */
+.app-settings__panel--developer > .pf-v6-c-card__body {
+  padding-block-start: var(--pf-v6-c-card--child--PaddingBlockEnd, var(--pf-t--global--spacer--lg));
+}
 .app-settings__stack {
   display: flex;
   flex-direction: column;
