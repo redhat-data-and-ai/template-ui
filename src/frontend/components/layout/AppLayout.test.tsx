@@ -449,6 +449,35 @@ describe('AppLayout — responsive sidebar', () => {
     expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
   });
 
+  it('ignores Escape that is already handled or comes from an input or menu', async () => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    const sidebar = screen.getByTestId('sidebar');
+
+    const input = document.createElement('input');
+    sidebar.appendChild(input);
+    input.focus();
+    await userEvent.keyboard('{Escape}');
+    expect(sidebar).toHaveAttribute('data-open', 'true');
+    input.remove();
+
+    const menu = document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    sidebar.appendChild(menu);
+    menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(sidebar).toHaveAttribute('data-open', 'true');
+    menu.remove();
+
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    handled.preventDefault();
+    document.body.dispatchEvent(handled);
+    expect(sidebar).toHaveAttribute('data-open', 'true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(sidebar).toHaveAttribute('data-open', 'false');
+  });
+
   it('stays open after navigation on desktop', async () => {
     mockViewport(true);
     renderLayout(createTestStore());

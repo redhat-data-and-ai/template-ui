@@ -142,7 +142,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   useEffect(() => {
     if (!overlayOpen) return undefined;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeOverlay();
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // Escape inside a rename box, an open menu or a dialog belongs to that widget.
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest('input, textarea, [role="menu"], [role="listbox"], [role="dialog"], .pf-v6-c-menu, .pf-v6-c-menu-toggle.pf-m-expanded')) return;
+      closeOverlay();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
