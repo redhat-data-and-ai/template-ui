@@ -27,7 +27,6 @@ WORKDIR /opt/app-root/src
 COPY --chown=1001:0 package*.json ./
 COPY --chown=1001:0 src ./src
 COPY --chown=1001:0 public ./public
-COPY --chown=1001:0 components.json ./
 COPY --chown=1001:0 eslint.config.js ./
 COPY --chown=1001:0 vite.config.ts ./
 COPY --chown=1001:0 vite-env.d.ts ./
