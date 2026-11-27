@@ -585,18 +585,21 @@ export function ChatPage({ threadId }: { threadId: string }) {
         <h1 className="pf-v6-screen-reader">{currentChat?.title || 'Chat'}</h1>
         <div className="app-chat-split">
           <div className="app-chat-main">
-            {hasToolCalls && (
-              <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
-            )}
             <ReconnectingBanner streamingState={streamingState} maxRetries={MAX_RETRIES} />
-            {thread.pendingInterrupts.length > 0 && (
-              <div className="app-chat-pending" role="status">
-                <span>{thread.pendingInterrupts.length} pending approval{thread.pendingInterrupts.length === 1 ? '' : 's'}</span>
-                <Button variant="link" size="sm" isDisabled={thread.isResuming || thread.isLoading} onClick={() => {
-                  thread.refreshInterrupts().catch(() => dispatch(addToast({ title: 'Unable to refresh approvals', variant: 'danger' })));
-                }}>Refresh approvals</Button>
-              </div>
-            )}
+            {/* Top area (progress strip + pending approvals): CSS draws the divider only while it has content. */}
+            <div className="app-chat-top">
+              {hasToolCalls && (
+                <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
+              )}
+              {thread.pendingInterrupts.length > 0 && (
+                <div className="app-chat-pending" role="status">
+                  <span>{thread.pendingInterrupts.length} pending approval{thread.pendingInterrupts.length === 1 ? '' : 's'}</span>
+                  <Button variant="link" size="sm" isDisabled={thread.isResuming || thread.isLoading} onClick={() => {
+                    thread.refreshInterrupts().catch(() => dispatch(addToast({ title: 'Unable to refresh approvals', variant: 'danger' })));
+                  }}>Refresh approvals</Button>
+                </div>
+              )}
+            </div>
             <ChatMessagesView
               key={threadId}
               messages={thread.messages}

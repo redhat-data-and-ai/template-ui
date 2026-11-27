@@ -33,11 +33,22 @@
   flex-direction: column;
   min-width: 0;
 }
+/* L10: hairline divider under the top area, full panel width, only when something is in it. */
+.app-chat-top:not(:empty) {
+  flex: none;
+  border-block-end: 1px solid var(--app-border);
+}
 .app-chat-pending {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 1rem;
+}
+/* L5: one look for "Refresh approvals" in every state; disabled is a link-coloured-grey, not a filled grey button. */
+.app-chat-pending .pf-v6-c-button.pf-m-link,
+.app-chat-pending .pf-v6-c-button.pf-m-link:disabled,
+.app-chat-pending .pf-v6-c-button.pf-m-link.pf-m-disabled {
+  background-color: transparent;
 }
 
 /* Debug side panel: desktop only. */
