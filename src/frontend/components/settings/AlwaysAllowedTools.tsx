@@ -53,7 +53,7 @@ export function AlwaysAllowedTools() {
       </Card>
 
       {autoApproveAll && (
-        <Alert isInline variant="warning" title="Tool approvals are bypassed">
+        <Alert component="h3" isInline variant="warning" title="Tool approvals are bypassed">
           All tools will execute automatically without approval. Individual tool permissions below
           are bypassed.
         </Alert>

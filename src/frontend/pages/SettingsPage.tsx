@@ -132,10 +132,15 @@ export function SettingsPage() {
 
           {active && Content && (
             <Card id="settings-panel" className="app-settings__panel" aria-label={active.label}>
-              {active.id !== 'developer' && (
+              {active.id !== 'developer' ? (
                 <CardTitle component="h2" id={`settings-title-${active.id}`}>
                   {active.panelTitle ?? active.label}
                 </CardTitle>
+              ) : (
+                // Visually unchanged: the Developer cards carry their own titles, but the page outline needs an h2.
+                <h2 className="pf-v6-screen-reader" id={`settings-title-${active.id}`}>
+                  {active.panelTitle ?? active.label}
+                </h2>
               )}
               <CardBody>
                 <Content />

@@ -58,7 +58,7 @@ function CollapsibleSection({
           'aria-expanded': open,
         }}
       >
-        <CardTitle id={`${id}-title`} className="app-dev__card-title">{title}</CardTitle>
+        <CardTitle component="h3" id={`${id}-title`} className="app-dev__card-title">{title}</CardTitle>
       </CardHeader>
       <CardExpandableContent>
         <CardBody className="app-dev__card-body">{children}</CardBody>
@@ -75,7 +75,7 @@ function SectionHeader({ icon, children }: { icon: React.ReactNode; children: Re
   return (
     <>
       <Divider className="app-dev__divider" />
-      <Title headingLevel="h4" size="md" className="app-dev__title">
+      <Title headingLevel="h3" size="md" className="app-dev__title">
         <span className="app-dev__title-icon" aria-hidden="true">{icon}</span>
         {children}
       </Title>

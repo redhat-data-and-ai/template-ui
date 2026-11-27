@@ -32,12 +32,12 @@ export function MemoryList() {
 
   return (
     <div className="app-settings__stack">
-      <Alert isInline variant="info" title="Memories">
+      <Alert component="h3" isInline variant="info" title="Memories">
         These are memories the agent has created about you across conversations. You can delete them
         at any time.
       </Alert>
 
-      {error && <Alert isInline variant="danger" title={error} />}
+      {error && <Alert component="h3" isInline variant="danger" title={error} />}
 
       {memoriesLoading ? (
         <div className="app-settings__center">

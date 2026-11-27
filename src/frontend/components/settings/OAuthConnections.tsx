@@ -191,7 +191,7 @@ export function OAuthConnections() {
   if (error && connections === null) {
     return (
       <div className="app-settings__stack">
-        <Alert isInline variant="danger" title={error} />
+        <Alert component="h3" isInline variant="danger" title={error} />
         <div>
           <Button variant="secondary" onClick={() => void load()}>
             Retry
@@ -223,7 +223,7 @@ export function OAuthConnections() {
         Manage OAuth connections for MCP servers. Disconnecting clears tokens stored for this agent;
         you can authenticate again at any time.
       </p>
-      {error && <Alert isInline variant="danger" title={error} />}
+      {error && <Alert component="h3" isInline variant="danger" title={error} />}
       <ul className="app-settings__list">
         {connections.map((connection) => {
           const name = displayName(connection);

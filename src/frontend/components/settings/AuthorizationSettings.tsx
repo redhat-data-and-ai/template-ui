@@ -78,6 +78,7 @@ export function AuthorizationSettings() {
   return (
     <div className="app-settings__stack">
       <Alert
+        component="h3"
         isInline
         variant={consentStatus?.hasConsent ? 'success' : 'danger'}
         title={consentStatus?.hasConsent ? 'Authorization Granted' : 'Not Authorized'}
@@ -107,7 +108,7 @@ export function AuthorizationSettings() {
             </List>
           </div>
 
-          <Alert isInline variant="warning" title="Revoke Authorization">
+          <Alert component="h3" isInline variant="warning" title="Revoke Authorization">
             <p style={{ marginBlockEnd: 'var(--pf-t--global--spacer--md)' }}>
               Revoking will remove the agent&apos;s ability to act on your behalf. You will need to
               re-authorize to continue using the application.
@@ -130,7 +131,7 @@ export function AuthorizationSettings() {
         </div>
       )}
 
-      {error && <Alert isInline isLiveRegion variant="danger" title={error} role="alert" />}
+      {error && <Alert component="h3" isInline isLiveRegion variant="danger" title={error} role="alert" />}
     </div>
   );
 }

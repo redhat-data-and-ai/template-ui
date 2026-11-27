@@ -48,7 +48,7 @@ export function RulesEditor() {
 
   return (
     <div className="app-settings__stack">
-      <Alert isInline variant="warning" title="Rules apply to every conversation">
+      <Alert component="h3" isInline variant="warning" title="Rules apply to every conversation">
         Custom rules shape how the agent responds. They apply to every conversation unless
         individually disabled.
       </Alert>
