@@ -1,18 +1,17 @@
-import type { ComponentType } from "react";
 import {
-  CogIcon,
-  FileAltIcon,
-  FolderOpenIcon,
-  TerminalIcon,
-} from "@patternfly/react-icons";
-import type { SVGIconProps } from "@patternfly/react-icons/dist/esm/createIcon";
+  FolderOpen,
+  FileText,
+  Terminal,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 
-const toolIconMap: Record<string, ComponentType<SVGIconProps>> = {
-  ls: FolderOpenIcon,
-  read_file: FileAltIcon,
-  execute: TerminalIcon,
+const toolIconMap: Record<string, LucideIcon> = {
+  ls: FolderOpen,
+  read_file: FileText,
+  execute: Terminal,
 };
 
-export function getToolIcon(toolName: string): ComponentType<SVGIconProps> {
-  return toolIconMap[toolName] ?? CogIcon;
+export function getToolIcon(toolName: string): LucideIcon {
+  return toolIconMap[toolName] ?? Settings;
 }

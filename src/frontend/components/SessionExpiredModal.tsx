@@ -1,13 +1,11 @@
 import {
   Button,
-  Content,
   Modal,
   ModalBody,
   ModalFooter,
   ModalHeader,
   ModalVariant,
 } from '@patternfly/react-core';
-import './dialogs.css';
 
 export interface SessionExpiredModalProps {
   isOpen: boolean;
@@ -32,10 +30,10 @@ export function SessionExpiredModal({ isOpen }: Readonly<SessionExpiredModalProp
     >
       <ModalHeader title="Session Expired" />
       <ModalBody>
-        <Content component="p">
+        <p className="mb-3">
           Your session has expired. Please log in again to continue.
-        </Content>
-        <Content component="small" className="app-muted">Your work has been saved.</Content>
+        </p>
+        <p className="text-muted-foreground text-sm">Your work has been saved.</p>
       </ModalBody>
       <ModalFooter>
         <Button variant="primary" onClick={goToLogin}>

@@ -1,12 +1,13 @@
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import tailwindcss from "@tailwindcss/vite";
 
 // https://vitejs.dev/config/
 const proxyTarget = `http://127.0.0.1:${process.env.PORT || 8080}`;
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   build: {
     lib: {
       entry: path.resolve(__dirname, "src/frontend/main.tsx"),

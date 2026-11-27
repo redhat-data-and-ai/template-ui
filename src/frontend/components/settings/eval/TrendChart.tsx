@@ -9,8 +9,10 @@ import {
   CartesianGrid,
 } from 'recharts';
 import type { EvalTrendsResponse } from './eval-types';
-import { Card, CardBody, Content } from '@patternfly/react-core';
-import { friendlyMetricName, SERIES_COLORS } from './eval-utils';
+import { friendlyMetricName, useDarkMode } from './eval-utils';
+
+const CHART_COLORS_LIGHT = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed'];
+const CHART_COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
 
 /** Formats an axis tick label as time-only when all points share a date, otherwise as a short date. */
 function formatTickLabel(iso: string, allSameDay: boolean): string {
@@ -39,17 +41,19 @@ interface TrendChartProps {
 
 /** Full-width Recharts line chart showing overall and per-metric score trends over time. */
 export function TrendChart({ data }: TrendChartProps) {
+  const isDark = useDarkMode();
+
   if (!data.overall || data.overall.length < 2) {
     return (
-      <Card isCompact>
-        <CardBody>
-          <Content component="p">Need at least 2 eval runs to show trends.</Content>
-        </CardBody>
-      </Card>
+      <div className="rounded-lg border border-border bg-card px-4 py-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Need at least 2 eval runs to show trends.
+        </p>
+      </div>
     );
   }
 
-  const colors = SERIES_COLORS;
+  const colors = isDark ? CHART_COLORS_DARK : CHART_COLORS_LIGHT;
   const metricKeys = Object.keys(data.metrics);
 
   const timestamps = [...new Set([
@@ -83,12 +87,12 @@ export function TrendChart({ data }: TrendChartProps) {
   });
 
   const allKeys = ['Overall', ...metricKeys];
-  const gridColor = 'var(--pf-t--global--border--color--default)';
-  const axisTickColor = 'var(--pf-t--global--text--color--subtle)';
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const axisTickColor = isDark ? '#a1a1aa' : '#71717a';
 
   return (
-    <Card isCompact>
-      <CardBody>
+    <div>
+      <div className="rounded-lg border border-border bg-card p-3">
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
             <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
@@ -110,20 +114,18 @@ export function TrendChart({ data }: TrendChartProps) {
               contentStyle={{
                 fontSize: 12,
                 borderRadius: 8,
-                border: '1px solid var(--pf-t--global--border--color--default)',
-                backgroundColor: 'var(--pf-t--global--background--color--floating--default)',
-                color: 'var(--pf-t--global--text--color--regular)',
+                border: '1px solid var(--border)',
+                backgroundColor: 'var(--card)',
+                color: 'var(--foreground)',
               }}
-              itemStyle={{ color: 'var(--pf-t--global--text--color--regular)' }}
-              labelStyle={{ color: 'var(--pf-t--global--text--color--regular)', fontWeight: 600 }}
+              itemStyle={{ color: 'var(--foreground)' }}
+              labelStyle={{ color: 'var(--foreground)', fontWeight: 600 }}
               labelFormatter={(label: string) => formatTooltipLabel(label)}
               formatter={(value: number, name: string) => [`${value}%`, friendlyMetricName(name)]}
             />
             <Legend
-              wrapperStyle={{ fontSize: 'var(--pf-t--global--font--size--body--sm)', paddingTop: 8 }}
-              formatter={(value: string) => (
-                <span style={{ color: 'var(--pf-t--global--text--color--regular)' }}>{friendlyMetricName(value)}</span>
-              )}
+              wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              formatter={(value: string) => friendlyMetricName(value)}
             />
             {allKeys.map((key, i) => (
               <Line
@@ -131,17 +133,16 @@ export function TrendChart({ data }: TrendChartProps) {
                 type="monotone"
                 dataKey={key}
                 stroke={colors[i % colors.length]}
-                // Nested widths and marker sizes: when every series has the same values each one stays visible.
-                strokeWidth={Math.max(2, 5 - i)}
+                strokeWidth={key === 'Overall' ? 2.5 : 2}
                 strokeDasharray={key === 'Overall' ? '6 3' : undefined}
-                dot={{ r: Math.max(3, 7 - i), strokeWidth: 2, fill: 'var(--pf-t--global--background--color--primary--default)' }}
-                activeDot={{ r: 8 }}
+                dot={{ r: 4, strokeWidth: 2, fill: isDark ? '#1e1e2e' : '#ffffff' }}
+                activeDot={{ r: 6 }}
                 connectNulls
               />
             ))}
           </LineChart>
         </ResponsiveContainer>
-      </CardBody>
-    </Card>
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { Message } from "@langchain/langgraph-sdk";
-import type { ProcessedEvent } from "./activity";
+import { ProcessedEvent } from "../components/ActivityTimeline";
 
 export interface ChatItem {
   id: string;

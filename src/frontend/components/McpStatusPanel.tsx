@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ExpandableSection, Label } from '@patternfly/react-core';
-import './rich-content.css';
 
 export interface McpStatusPanelProps {
   readonly mcpEvents: ReadonlyArray<{ readonly tool: string; readonly status: string; readonly timestamp: number }>;
@@ -34,7 +33,7 @@ export function McpStatusPanel({ mcpEvents }: McpStatusPanelProps) {
   }
 
   return (
-    <div className="app-mcpstatus" role="region" aria-label="MCP tool status">
+    <div className="max-w-3xl mx-auto px-3 pt-2" role="region" aria-label="MCP tool status">
       <ExpandableSection
         toggleText="MCP tool activity"
         isExpanded={expanded}
@@ -42,13 +41,13 @@ export function McpStatusPanel({ mcpEvents }: McpStatusPanelProps) {
         isIndented
         className="pf-v6-u-mb-sm"
       >
-        <ul className="app-mcpstatus__list">
+        <ul className="list-none m-0 p-0 space-y-2">
           {mcpEvents.map((evt, idx) => (
             <li
               key={`${evt.tool}-${evt.timestamp}-${idx}`}
-              className="app-mcpstatus__item"
+              className="flex flex-wrap items-center gap-2 text-sm"
             >
-              <span className="app-mcpstatus__tool">{evt.tool}</span>
+              <span className="font-mono text-xs text-foreground">{evt.tool}</span>
               <Label color={labelColorForStatus(evt.status)} isCompact>
                 {evt.status}
               </Label>

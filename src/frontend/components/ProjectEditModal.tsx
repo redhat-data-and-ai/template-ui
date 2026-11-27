@@ -8,13 +8,8 @@ import {
   ModalVariant,
   TextInput,
   TextArea,
-  Form,
   FormGroup,
-  FormHelperText,
-  HelperText,
-  HelperTextItem,
 } from '@patternfly/react-core';
-import './dialogs.css';
 
 interface ProjectEditModalProps {
   isOpen: boolean;
@@ -79,36 +74,32 @@ export function ProjectEditModal({
     >
       <ModalHeader title={title} />
       <ModalBody>
-        <Form onSubmit={(e) => e.preventDefault()}>
-          <FormGroup label="Name" isRequired fieldId="project-name">
-            <TextInput
-              id="project-name"
-              value={name}
-              validated={error ? 'error' : 'default'}
-              onChange={(_e, val) => {
-                setName(val);
-                setError(null);
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && void handleSave()}
-              autoFocus
-            />
-            {error && (
-              <FormHelperText>
-                <HelperText>
-                  <HelperTextItem variant="error" role="alert">{error}</HelperTextItem>
-                </HelperText>
-              </FormHelperText>
-            )}
-          </FormGroup>
-          <FormGroup label="Description" fieldId="project-desc">
-            <TextArea
-              id="project-desc"
-              value={description}
-              onChange={(_e, val) => setDescription(val)}
-              rows={3}
-            />
-          </FormGroup>
-        </Form>
+        <FormGroup label="Name" isRequired fieldId="project-name">
+          <TextInput
+            id="project-name"
+            value={name}
+            validated={error ? 'error' : 'default'}
+            onChange={(_e, val) => {
+              setName(val);
+              setError(null);
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && void handleSave()}
+            autoFocus
+          />
+          {error && (
+            <p className="text-sm text-destructive mt-1" role="alert">
+              {error}
+            </p>
+          )}
+        </FormGroup>
+        <FormGroup label="Description" fieldId="project-desc" className="mt-3">
+          <TextArea
+            id="project-desc"
+            value={description}
+            onChange={(_e, val) => setDescription(val)}
+            rows={3}
+          />
+        </FormGroup>
       </ModalBody>
       <ModalFooter>
         <Button

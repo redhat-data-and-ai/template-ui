@@ -1,15 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  EmptyStateBody,
-  Switch,
-  TextArea,
-} from '@patternfly/react-core';
-import { OutlinedFileAltIcon, PlusIcon, TrashIcon } from '@patternfly/react-icons';
+import { Button, Switch } from '@patternfly/react-core';
+import { Plus, Trash2, ScrollText, AlertCircle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import {
   addRuleAndPersist,
@@ -47,80 +38,96 @@ export function RulesEditor() {
   };
 
   return (
-    <div className="app-settings__stack">
-      <Alert component="h3" isInline variant="warning" title="Rules apply to every conversation">
-        Custom rules shape how the agent responds. They apply to every conversation unless
-        individually disabled.
-      </Alert>
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+        <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          Custom rules shape how the agent responds. They apply to every conversation
+          unless individually disabled.
+        </p>
+      </div>
 
-      <div className="app-settings__row" style={{ alignItems: 'flex-end' }}>
-        <TextArea
+      <div className="flex gap-2">
+        <textarea
           value={draft}
-          onChange={(_event, value) => setDraft(value)}
+          onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="e.g. Always respond in British English"
           aria-label="New rule"
-          resizeOrientation="vertical"
+          className="flex-1 rounded-xl px-3.5 py-2.5 text-sm resize-none min-h-[40px] border-0 bg-secondary/50 placeholder:opacity-60 focus:bg-card focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none"
+          style={{ border: '1px solid var(--border)', boxShadow: 'none' }}
           rows={2}
-          style={{ flex: 1 }}
         />
-        <Button variant="primary" isDisabled={!draft.trim()} onClick={handleAdd} icon={<PlusIcon />}>
+        <Button
+          variant="primary"
+          size="sm"
+          isDisabled={!draft.trim()}
+          onClick={handleAdd}
+          className="self-end"
+          icon={<Plus className="w-4 h-4" />}
+        >
           Add
         </Button>
       </div>
 
       {rules.length === 0 ? (
-        <EmptyState headingLevel="h3" titleText="No custom rules" icon={OutlinedFileAltIcon} variant="sm">
-          <EmptyStateBody>Add instructions for the agent to follow</EmptyStateBody>
-        </EmptyState>
+        <div className="flex flex-col items-center py-8 text-center">
+          <ScrollText className="w-8 h-8 text-muted-foreground/30 mb-2" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">No custom rules</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Add instructions for the agent to follow
+          </p>
+        </div>
       ) : (
         <>
-          <ul className="app-settings__list">
+          <ul className="space-y-2">
             {rules.map((rule) => (
-              <li key={rule.id}>
-                <Card isCompact style={{ width: '100%' }}>
-                  <CardBody>
-                    <div className="app-settings__row" style={{ alignItems: 'flex-start' }}>
-                      <Switch
-                        id={`rule-toggle-${rule.id}`}
-                        aria-label={`Toggle rule: ${rule.content.substring(0, 50)}`}
-                        isChecked={rule.isActive}
-                        onChange={(_event, checked) => {
-                          dispatch(setRuleActive({ id: rule.id, isActive: checked }));
-                          void dispatch(
-                            persistRule({
-                              id: rule.id,
-                              content: rule.content,
-                              isActive: checked,
-                            }),
-                          );
-                        }}
-                      />
-                      <p
-                        className={`app-settings__item-text${rule.isActive ? '' : ' app-settings__item-text--off'}`}
-                      >
-                        {rule.content}
-                      </p>
-                      <Button
-                        variant="plain"
-                        icon={<TrashIcon />}
-                        aria-label={`Remove rule: ${rule.content.substring(0, 50)}`}
-                        onClick={() => {
-                          dispatch(removeRule(rule.id));
-                          void dispatch(persistRemoveRule(rule.id));
-                        }}
-                      />
-                    </div>
-                  </CardBody>
-                </Card>
+              <li
+                key={rule.id}
+                className="group flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-secondary/30 transition-colors"
+              >
+                <Switch
+                  id={`rule-toggle-${rule.id}`}
+                  aria-label={`Toggle rule: ${rule.content.substring(0, 50)}`}
+                  isChecked={rule.isActive}
+                  onChange={(_event, checked) => {
+                    dispatch(setRuleActive({ id: rule.id, isActive: checked }));
+                    void dispatch(
+                      persistRule({
+                        id: rule.id,
+                        content: rule.content,
+                        isActive: checked,
+                      }),
+                    );
+                  }}
+                  className="mt-0.5"
+                />
+                <p
+                  className={`flex-1 text-sm leading-relaxed ${
+                    rule.isActive ? 'text-foreground' : 'text-muted-foreground line-through'
+                  }`}
+                >
+                  {rule.content}
+                </p>
+                <button
+                  onClick={() => {
+                    dispatch(removeRule(rule.id));
+                    void dispatch(persistRemoveRule(rule.id));
+                  }}
+                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  aria-label={`Remove rule: ${rule.content.substring(0, 50)}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </li>
             ))}
           </ul>
           {rules.length > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="flex justify-end">
               <Button
-                variant="link"
+                variant="plain"
                 isDanger
+                size="sm"
                 onClick={() => {
                   dispatch(clearRules());
                   void dispatch(persistClearRules());

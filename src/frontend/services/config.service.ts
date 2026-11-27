@@ -10,9 +10,6 @@ export interface BrandingConfig {
   title: string;
   version: string;
   favicon_url?: string;
-  platform_name?: string;
-  platform_name_emphasis?: string;
-  platform_url?: string;
   colors: {
     light: BrandingThemeColors;
     dark: BrandingThemeColors;

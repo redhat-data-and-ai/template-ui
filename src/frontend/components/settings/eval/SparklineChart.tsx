@@ -12,7 +12,7 @@ export function SparklineChart({
   data,
   width = 120,
   height = 32,
-  color = 'var(--pf-t--global--color--nonstatus--blue--default)',
+  color = '#2563eb',
 }: SparklineChartProps) {
   if (data.length < 2) return null;
 

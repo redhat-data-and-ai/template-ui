@@ -5,12 +5,8 @@ import {
   CardHeader,
   CardTitle,
   Label,
-  List,
-  ListItem,
-  Spinner,
 } from '@patternfly/react-core';
-import { CheckCircleIcon, FileAltIcon, RobotIcon, WrenchIcon } from '@patternfly/react-icons';
-import './progress.css';
+import { Bot, CheckCircle, FileText, Loader2, Wrench } from 'lucide-react';
 import { isSubAgentToolCall, extractSubAgentName, detectArtifactKind } from '../types/deep-agent';
 
 interface TasksSidebarProps {
@@ -63,12 +59,6 @@ function extractEntries(messages: Message[]): ToolCallEntry[] {
   return entries;
 }
 
-/** True when TasksSidebar would render (tool-call entries exist, or a run is in flight). */
-// eslint-disable-next-line react-refresh/only-export-components
-export function hasTasksSidebarContent(messages: Message[], isLoading: boolean): boolean {
-  return isLoading || extractEntries(messages).length > 0;
-}
-
 export function TasksSidebar({ messages, isLoading }: TasksSidebarProps) {
   const entries = extractEntries(messages);
   if (entries.length === 0 && !isLoading) return null;
@@ -77,49 +67,60 @@ export function TasksSidebar({ messages, isLoading }: TasksSidebarProps) {
   const total = entries.length;
 
   return (
-    <Card isCompact className="app-tasks-sidebar">
+    <Card isCompact className="h-full">
       <CardHeader>
-        <CardTitle>
-          <span className="app-tasks-sidebar__title">
-            <span>Tasks & Tools</span>
-            {total > 0 && (
-              <Label isCompact color={completed === total ? 'green' : 'blue'}>
-                {completed}/{total}
-              </Label>
-            )}
-          </span>
+        <CardTitle className="text-sm flex items-center justify-between w-full">
+          <span>Tasks & Tools</span>
+          {total > 0 && (
+            <Label isCompact color={completed === total ? 'green' : 'blue'}>
+              {completed}/{total}
+            </Label>
+          )}
         </CardTitle>
       </CardHeader>
-      <CardBody className="app-tasks-sidebar__body">
-        {entries.length > 0 && (
-          <List isPlain className="app-tasks-sidebar__list">
-            {entries.map((entry) => (
-              <ListItem
-                key={entry.id}
-                icon={entry.isSubAgent ? <RobotIcon /> : <WrenchIcon />}
-              >
-                <span className="app-tasks-sidebar__row">
-                  <span className={`app-tasks-sidebar__name${entry.isSubAgent ? ' app-tasks-sidebar__name--agent' : ''}`}>
+      <CardBody className="overflow-y-auto space-y-1.5 pt-0!">
+        {entries.map((entry) => {
+          const Icon = entry.isSubAgent ? Bot : Wrench;
+          const StatusIcon = entry.hasResult ? CheckCircle : Loader2;
+
+          return (
+            <div
+              key={entry.id}
+              className="flex items-start gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
+            >
+              <Icon className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xs font-medium truncate ${entry.isSubAgent ? 'capitalize' : 'font-mono'}`}>
                     {entry.name}
                   </span>
-                  {entry.hasResult
-                    ? <CheckCircleIcon color="var(--pf-t--global--icon--color--status--success--default)" aria-label="Complete" />
-                    : <Spinner size="sm" aria-label="Running" />}
-                </span>
+                  <StatusIcon
+                    className={`w-3 h-3 shrink-0 ${
+                      entry.hasResult ? 'text-green-500' : 'text-blue-500 animate-spin'
+                    }`}
+                  />
+                </div>
                 {entry.resultPreview && (
-                  <span className="app-tasks-sidebar__preview">{entry.resultPreview}</span>
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                    {entry.resultPreview}
+                  </p>
                 )}
                 {entry.resultKind && entry.resultKind !== 'text' && (
-                  <Label isCompact color="grey" icon={<FileAltIcon />}>
-                    {entry.resultKind}
-                  </Label>
+                  <div className="mt-0.5">
+                    <Label isCompact color="grey">
+                      <FileText className="w-2 h-2 mr-0.5" />
+                      {entry.resultKind}
+                    </Label>
+                  </div>
                 )}
-              </ListItem>
-            ))}
-          </List>
-        )}
+              </div>
+            </div>
+          );
+        })}
         {entries.length === 0 && isLoading && (
-          <p className="app-tasks-sidebar__empty">Waiting for tasks...</p>
+          <p className="text-xs text-muted-foreground text-center py-4">
+            Waiting for tasks...
+          </p>
         )}
       </CardBody>
     </Card>
