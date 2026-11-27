@@ -20,12 +20,12 @@ html, body {
 /* Restore sane defaults for plain (non-PatternFly) fields. PatternFly form
    controls draw their own box on a wrapper, so they and the chat composer are
    excluded to avoid a double border. */
-textarea:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
-input[type="text"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
-input[type="search"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
-input[type="email"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
-input[type="password"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *),
-input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *) {
+textarea:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="text"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="search"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="email"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="password"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input) {
   background-color: var(--app-surface-raised);
   color: var(--app-text);
   border: 1px solid var(--app-border);
@@ -40,12 +40,12 @@ input::placeholder {
   color: var(--app-text-secondary);
   opacity: 0.7;
 }
-textarea:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
-input[type="text"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
-input[type="search"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
-input[type="email"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
-input[type="password"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus,
-input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):focus {
+textarea:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="text"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="search"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="email"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="password"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus {
   border-color: var(--app-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent) 20%, transparent);
   outline: none;
