@@ -15,6 +15,7 @@ const BRANDING_PROPS = [
   '--app-accent-hover',
   '--app-on-accent',
   '--app-accent-strong',
+  '--app-link',
   '--app-page-bg',
   '--app-surface-raised',
   '--app-text',
@@ -76,7 +77,10 @@ export function applyBrandingColors(
     set('--app-accent-hover', palette.primary);
     set('--app-on-accent', pickOnColor(palette.primary));
   }
-  if (palette.accent) set('--app-accent-strong', palette.accent);
+  if (palette.accent) {
+    set('--app-accent-strong', palette.accent);
+    set('--app-link', palette.accent);
+  }
   if (palette.background) {
     set('--app-page-bg', palette.background);
     set('--app-surface-raised', deriveSurface(palette.background, mode));

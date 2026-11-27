@@ -64,6 +64,7 @@ describe('applyBrandingColors / clearBrandingColors', () => {
       el,
     );
     expect(el.style.getPropertyValue('--app-accent-strong')).toBe('#a60000');
+    expect(el.style.getPropertyValue('--app-link')).toBe('#a60000');
     expect(el.style.getPropertyValue('--app-page-bg')).toBe('#ffffff');
     expect(el.style.getPropertyValue('--app-surface-raised')).toBe(deriveSurface('#ffffff', 'light'));
     expect(el.style.getPropertyValue('--app-text')).toBe('#1a1a1a');

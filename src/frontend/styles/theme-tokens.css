@@ -33,6 +33,9 @@ html {
   --app-accent-hover: #fbb5a6;
   --app-accent-strong: #c45c42;
   --app-accent-strong-hover: #a84a34;
+  /* Text links need AA contrast (accent-strong is only 4.2:1 on white); borders and rings keep accent-strong. */
+  --app-link: #a84a34;
+  --app-link-hover: #8a3c2a;
   --app-accent-on: #1a1a1a;
   /* Text/icon colour on accent fills. Overwritten at runtime for branded agents. */
   --app-on-accent: var(--app-accent-on);
@@ -87,8 +90,8 @@ html {
   --app-chat-user-border: #f6c7bb;
 
   /* PatternFly overrides */
-  --pf-t--global--text--color--link--default: var(--app-accent-strong);
-  --pf-t--global--text--color--link--hover: var(--app-accent-strong-hover);
+  --pf-t--global--text--color--link--default: var(--app-link);
+  --pf-t--global--text--color--link--hover: var(--app-link-hover);
 }
 
 /* PF declares the primary-button vars inside .pf-v6-c-button, which beats
@@ -130,6 +133,8 @@ html {
   --app-danger-text: #ff858f;
   --app-accent-strong: var(--app-accent);
   --app-accent-strong-hover: var(--app-accent-hover);
+  --app-link: var(--app-accent-strong);
+  --app-link-hover: var(--app-accent-strong-hover);
   --app-accent-border: rgba(248, 163, 144, 0.75);
   --app-accent-muted-bg: rgba(248, 163, 144, 0.18);
 

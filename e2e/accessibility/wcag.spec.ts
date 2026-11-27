@@ -87,6 +87,77 @@ test.describe.parallel("WCAG 2.1 AA", () => {
           });
         });
 
+        test.describe("PF link colour token", () => {
+          test.beforeEach(async ({ page }) => {
+            await mountPalette(page, palette);
+            await seedTheme(page, mode);
+          });
+
+          // Link-variant buttons use PF's brand colour; plain links (Content, Menu, Breadcrumb) use the
+          // link token that the theme overrides. Pin its contrast on page and card backgrounds.
+          test("plain link text meets AA contrast", async ({ page }) => {
+            await page.goto("/");
+            await page.waitForSelector("textarea", { state: "visible" });
+            const ratios = await page.evaluate(() => {
+              const host = document.createElement("div");
+              host.className = "pf-v6-c-content";
+              host.innerHTML = '<a href="#probe">Probe link text</a>';
+              document.body.appendChild(host);
+              const resolve = (value: string) => {
+                const el = document.createElement("span");
+                el.style.color = value;
+                document.body.appendChild(el);
+                const m = getComputedStyle(el)
+                  .color.match(/[\d.]+/g)!
+                  .map(Number);
+                el.remove();
+                return m.slice(0, 3);
+              };
+              const lum = ([r, g, b]: number[]) => {
+                const f = (c: number) =>
+                  (c /= 255) <= 0.03928
+                    ? c / 12.92
+                    : ((c + 0.055) / 1.055) ** 2.4;
+                return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+              };
+              const ratio = (a: number[], b: number[]) => {
+                const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+                return (hi + 0.05) / (lo + 0.05);
+              };
+              const link = resolve(
+                getComputedStyle(host.querySelector("a")!).color,
+              );
+              const root = getComputedStyle(document.documentElement);
+              return ["--app-page-bg", "--app-surface-raised"].map((v) =>
+                ratio(link, resolve(root.getPropertyValue(v).trim())),
+              );
+            });
+            for (const r of ratios) expect(r).toBeGreaterThanOrEqual(4.5);
+          });
+        });
+
+        test.describe("New Project modal (link-variant Cancel button)", () => {
+          test.beforeEach(async ({ page }) => {
+            await mountPalette(page, palette);
+            await seedTheme(page, mode);
+          });
+
+          test("has no violations", async ({ page }) => {
+            await page.goto("/");
+            await page
+              .getByRole("button", { name: /new project/i })
+              .first()
+              .click();
+            const dialog = page.getByRole("dialog");
+            await dialog
+              .getByRole("button", { name: "Cancel" })
+              .waitFor({ state: "visible" });
+            await page.waitForTimeout(300); // modal animation
+            const violations = await runAxe(page);
+            expect(violations, formatViolations(violations)).toHaveLength(0);
+          });
+        });
+
         test.describe("Chat page", () => {
           test.beforeEach(async ({ page }) => {
             await mountPalette(page, palette);
