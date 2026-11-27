@@ -11,7 +11,7 @@
 # not receive security rebuilds: 24.18.0-builder still ships
 # ca-certificates-2025.2.80_v9.0.304-9.hum1, which carries the eMudhra roots
 # removed by CVE-2026-114406. 24-builder has 2026.2.92_v9.0.319-2.hum1.
-FROM registry.access.redhat.com/hi/nodejs:24-builder
+FROM registry.access.redhat.com/hi/nodejs:26-builder
 
 USER root
 
