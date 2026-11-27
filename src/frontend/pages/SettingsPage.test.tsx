@@ -115,6 +115,21 @@ describe("SettingsPage", () => {
     expect(await screen.findByText("Agent Information")).toBeInTheDocument();
   });
 
+  it("Developer: Agent Information and Agent Evaluation are separate collapsible cards", async () => {
+    Object.assign(window, { APP_DATA: { userRole: "builders" } });
+    renderPage(true);
+    const user = userEvent.setup();
+    await user.click(within(nav()).getByRole("link", { name: "Developer" }));
+    const info = await screen.findByRole("button", { name: "Agent Information" });
+    const evaluation = screen.getByRole("button", { name: "Agent Evaluation" });
+    expect(info).toHaveAttribute("aria-expanded", "true");
+    expect(evaluation).toHaveAttribute("aria-expanded", "true");
+    expect(info.closest("#dev-agent-information")).not.toBe(evaluation.closest("#dev-agent-evaluation"));
+    await user.click(info);
+    expect(info).toHaveAttribute("aria-expanded", "false");
+    expect(evaluation).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("Appearance: Light selected for light theme; choosing Dark persists it", async () => {
     const user = userEvent.setup();
     renderPage();

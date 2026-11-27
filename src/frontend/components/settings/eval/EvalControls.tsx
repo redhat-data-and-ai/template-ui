@@ -55,7 +55,6 @@ export function EvalControls({
       {triggerState.message && (
         <Alert
           isInline
-          isPlain
           variant={triggerState.status === 'success' ? 'success' : triggerState.status === 'error' ? 'danger' : 'info'}
           title={triggerState.message}
         />

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Card,
+  CardBody,
+  CardExpandableContent,
+  CardHeader,
+  CardTitle,
   ClipboardCopyButton,
   CodeBlock,
   CodeBlockAction,
@@ -29,10 +34,12 @@ import type { RootState } from '../../redux/store';
 import { fetchAgentStructure, type AgentNode, type AgentStructure } from '../../services/agent-structure';
 
 function CollapsibleSection({
+  id,
   title,
   defaultOpen = true,
   children,
 }: {
+  id: string;
   title: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
@@ -40,13 +47,23 @@ function CollapsibleSection({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <ExpandableSection
-      toggleText={title}
-      isExpanded={open}
-      onToggle={(_event, expanded) => setOpen(expanded)}
-    >
-      {children}
-    </ExpandableSection>
+    <Card isCompact isExpanded={open} className="app-dev__card" id={id}>
+      <CardHeader
+        className="app-dev__card-header"
+        onExpand={() => setOpen((prev) => !prev)}
+        isToggleRightAligned
+        toggleButtonProps={{
+          id: `${id}-toggle`,
+          'aria-label': title,
+          'aria-expanded': open,
+        }}
+      >
+        <CardTitle id={`${id}-title`} className="app-dev__card-title">{title}</CardTitle>
+      </CardHeader>
+      <CardExpandableContent>
+        <CardBody className="app-dev__card-body">{children}</CardBody>
+      </CardExpandableContent>
+    </Card>
   );
 }
 
@@ -380,7 +397,7 @@ export function DeveloperSettings() {
 
   return (
     <div className="app-settings__stack">
-      <CollapsibleSection title="Agent Information" defaultOpen={true}>
+      <CollapsibleSection id="dev-agent-information" title="Agent Information" defaultOpen={true}>
         <p>
           <span className="app-settings__muted">Agent Version: </span>
           <code className="app-dev__code">{branding?.version ?? '—'}</code>
@@ -397,7 +414,7 @@ export function DeveloperSettings() {
           <AgentDetailsList structure={structure} />
         </> : null}
       </CollapsibleSection>
-      <CollapsibleSection title="Agent Evaluation">
+      <CollapsibleSection id="dev-agent-evaluation" title="Agent Evaluation">
         <EvalDashboard />
       </CollapsibleSection>
     </div>

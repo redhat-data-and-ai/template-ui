@@ -100,6 +100,17 @@ html {
   --pf-v6-c-button--m-primary--hover--Color: var(--app-on-accent);
 }
 
+/* Secondary buttons are neutral grey (not PF's blue outline). */
+.pf-v6-c-button.pf-m-secondary:not(.pf-m-danger) {
+  --pf-v6-c-button--m-secondary--Color: var(--pf-t--global--text--color--regular);
+  --pf-v6-c-button--m-secondary--BorderColor: var(--pf-t--global--border--color--default);
+  --pf-v6-c-button--m-secondary--hover--Color: var(--pf-t--global--text--color--regular);
+  --pf-v6-c-button--m-secondary--hover--BorderColor: var(--pf-t--global--text--color--subtle);
+  --pf-v6-c-button--m-secondary--hover--BackgroundColor: var(--pf-t--global--background--color--secondary--hover);
+  --pf-v6-c-button--m-secondary--focus--Color: var(--pf-t--global--text--color--regular);
+  --pf-v6-c-button--m-secondary--active--Color: var(--pf-t--global--text--color--regular);
+}
+
 /* Selected toggle-group item uses the portal salmon (like the portal's selected chip).
    PF declares these vars on the button, so re-declare them at higher specificity. */
 .pf-v6-c-toggle-group__button.pf-m-selected,

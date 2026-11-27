@@ -135,6 +135,26 @@
   background-color: var(--pf-t--global--background--color--secondary--default);
 }
 
+/* Developer page: each section is its own bordered card with a grey header strip. */
+.app-dev__card {
+  --pf-v6-c-card--BorderWidth: var(--pf-t--global--border--width--regular);
+  --pf-v6-c-card--BorderColor: var(--app-border);
+  border: var(--pf-t--global--border--width--regular) solid var(--app-border);
+  overflow: hidden;
+}
+.app-dev__card-header {
+  background-color: var(--pf-t--global--background--color--secondary--default);
+  border-block-end: var(--pf-t--global--border--width--regular) solid var(--app-border);
+}
+.app-dev__card-title {
+  font-weight: var(--pf-t--global--font--weight--body--bold);
+  color: var(--pf-t--global--text--color--regular);
+}
+.app-dev__card .pf-v6-c-card__body.app-dev__card-body {
+  padding-block-start: var(--pf-t--global--spacer--md);
+  padding-block-end: var(--pf-t--global--spacer--md);
+}
+
 /* Developer page: section hierarchy, agent tree, field captions. */
 .app-dev__section {
   display: flex;

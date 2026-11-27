@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert } from '@patternfly/react-core';
+import { Alert, Spinner } from '@patternfly/react-core';
 
 interface EvalStatusBarProps {
   status: string | null;
@@ -47,7 +47,12 @@ export function EvalStatusBar({ status, score, pass, fail, error = 0, triggeredA
 
   if (isRunning) {
     return (
-      <Alert isInline variant="info" title={elapsed ? `Evaluating… ${elapsed}` : 'Evaluating…'} />
+      <Alert
+        isInline
+        variant="info"
+        customIcon={<Spinner size="md" aria-hidden="true" />}
+        title={elapsed ? `Evaluating… ${elapsed}` : 'Evaluating…'}
+      />
     );
   }
 
