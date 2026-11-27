@@ -100,15 +100,18 @@ html {
   --pf-v6-c-button--m-primary--hover--Color: var(--app-on-accent);
 }
 
-/* Secondary buttons are neutral grey (not PF's blue outline). */
+/* Secondary buttons are neutral grey (not PF's brand-blue outline) in every
+   state. Only real PF variables: default, hover, clicked (focus/pressed), icon. */
 .pf-v6-c-button.pf-m-secondary:not(.pf-m-danger) {
   --pf-v6-c-button--m-secondary--Color: var(--pf-t--global--text--color--regular);
   --pf-v6-c-button--m-secondary--BorderColor: var(--pf-t--global--border--color--default);
+  --pf-v6-c-button--m-secondary__icon--Color: var(--pf-t--global--icon--color--regular);
   --pf-v6-c-button--m-secondary--hover--Color: var(--pf-t--global--text--color--regular);
   --pf-v6-c-button--m-secondary--hover--BorderColor: var(--pf-t--global--text--color--subtle);
-  --pf-v6-c-button--m-secondary--hover--BackgroundColor: var(--pf-t--global--background--color--secondary--hover);
-  --pf-v6-c-button--m-secondary--focus--Color: var(--pf-t--global--text--color--regular);
-  --pf-v6-c-button--m-secondary--active--Color: var(--pf-t--global--text--color--regular);
+  --pf-v6-c-button--m-secondary--hover__icon--Color: var(--pf-t--global--icon--color--regular);
+  --pf-v6-c-button--m-secondary--m-clicked--Color: var(--pf-t--global--text--color--regular);
+  --pf-v6-c-button--m-secondary--m-clicked--BorderColor: var(--pf-t--global--text--color--subtle);
+  --pf-v6-c-button--m-secondary--m-clicked__icon--Color: var(--pf-t--global--icon--color--regular);
 }
 
 /* Selected toggle-group item uses the portal salmon (like the portal's selected chip).
