@@ -72,7 +72,8 @@
     "js-cookie": ">=3.0.7",
     "langsmith": ">=0.6.0",
     "proxy-addr": "^2.0.8",
-    "shell-quote": ">=1.11.0"
+    "shell-quote": ">=1.11.0",
+    "source-map-js": "^1.2.2"
   },
   "engines": {
     "node": ">=22.13.0"
