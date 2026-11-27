@@ -8,6 +8,11 @@
   transition: border-color 0.15s ease;
 }
 .composer-box:focus-within { border-color: var(--app-accent-strong); }
+/* WCAG 2.4.11 / 1.4.11: a 2px ring, only while the textarea has focus; the idle look is the single border. */
+.composer-box:has(textarea:focus-visible) {
+  outline: 2px solid var(--app-accent-strong);
+  outline-offset: 0;
+}
 .composer-box .pf-v6-c-form-control {
   --pf-v6-c-form-control--BackgroundColor: transparent;
   border: 0;
