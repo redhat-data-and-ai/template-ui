@@ -278,3 +278,12 @@
 .app-dev__prompt {
   width: 100%;
 }
+
+/* Eval report conversations: titles are text, not links (same treatment as the Developer cards). */
+.app-eval-conv .pf-v6-c-expandable-section__toggle .pf-v6-c-button {
+  --pf-v6-c-button--Color: var(--app-text);
+  --pf-v6-c-button--hover--Color: var(--app-text);
+  --pf-v6-c-button--m-link--Color: var(--app-text);
+  --pf-v6-c-button--m-link--hover--Color: var(--app-text);
+  color: var(--app-text);
+}

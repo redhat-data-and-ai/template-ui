@@ -11,7 +11,7 @@ import {
 } from '@patternfly/react-core';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@patternfly/react-table';
 import type { Turn, ConvStats } from './eval-types';
-import { friendlyMetricName, friendlyConversationName, friendlyTagName } from './eval-utils';
+import { friendlyMetricName, friendlyConversationName, friendlyTagName, parseTags, tagKey } from './eval-utils';
 
 interface ConversationDetailTableProps {
   turns: Turn[];
@@ -32,7 +32,8 @@ const TAG_COLORS: Record<string, LabelColor> = {
 
 /** Returns the PF Label colour for a tag, falling back to blue for unknown tags. */
 function tagColor(tag: string): LabelColor {
-  return TAG_COLORS[tag] ?? 'blue';
+  const first = parseTags(tag)[0];
+  return (first && TAG_COLORS[tagKey(first)]) || 'blue';
 }
 
 /** Renders a per-conversation metrics table grouped by turn, with result badges and scores. */
@@ -173,7 +174,7 @@ export function ConversationDetailTable({
             const convTag = convTurns[0]?.tag;
 
             return (
-              <Card key={conv} isCompact>
+              <Card key={conv} isCompact className="app-eval-conv">
                 <CardBody>
                   <ExpandableSection
                     isExpanded={isOpen}
