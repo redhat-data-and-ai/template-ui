@@ -12,9 +12,10 @@
 }
 .app-consent__logo {
   height: 2.5rem;
-  width: 2.5rem;
-  color: var(--app-accent-strong);
+  width: auto;
+  max-width: 100%;
 }
+.app-consent__logo--default { color: #ee0000; }
 .app-consent__center { text-align: center; }
 .app-consent__list {
   list-style: none;

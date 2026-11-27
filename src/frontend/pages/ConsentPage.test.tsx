@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { Provider } from 'react-redux';
+import { createTestStore } from '../test-utils/createTestStore';
 import { ConsentPage } from './ConsentPage';
 
 const mockNavigate = vi.fn();
@@ -17,9 +19,9 @@ describe('ConsentPage', () => {
 
   it('renders authorization page', () => {
     render(
-      <MemoryRouter>
+      <Provider store={createTestStore()}><MemoryRouter>
         <ConsentPage />
-      </MemoryRouter>,
+      </MemoryRouter></Provider>,
     );
     expect(screen.getByRole('heading', { level: 1, name: 'Authorization Required' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Acknowledge & Proceed' })).toBeDefined();
@@ -28,9 +30,9 @@ describe('ConsentPage', () => {
 
   it('exposes a single main landmark', () => {
     render(
-      <MemoryRouter>
+      <Provider store={createTestStore()}><MemoryRouter>
         <ConsentPage />
-      </MemoryRouter>,
+      </MemoryRouter></Provider>,
     );
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
@@ -43,9 +45,9 @@ describe('ConsentPage', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     render(
-      <MemoryRouter>
+      <Provider store={createTestStore()}><MemoryRouter>
         <ConsentPage />
-      </MemoryRouter>,
+      </MemoryRouter></Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Acknowledge & Proceed' }));
@@ -61,9 +63,9 @@ describe('ConsentPage', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     render(
-      <MemoryRouter>
+      <Provider store={createTestStore()}><MemoryRouter>
         <ConsentPage />
-      </MemoryRouter>,
+      </MemoryRouter></Provider>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Acknowledge & Proceed' }));

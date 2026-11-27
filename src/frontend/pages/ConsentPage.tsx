@@ -13,10 +13,13 @@ import {
 import { CheckCircleIcon } from '@patternfly/react-icons';
 import { RedHatLogo } from '../components/RedHatLogo';
 import { buildAppPath } from '../lib/app-paths';
+import { useAppSelector } from '../redux/hooks';
+import type { RootState } from '../redux/store';
 import './consent.css';
 
 export function ConsentPage() {
   const navigate = useNavigate();
+  const branding = useAppSelector((state: RootState) => state.config.branding);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +83,12 @@ export function ConsentPage() {
               gap={{ default: 'gapSm' }}
               alignItems={{ default: 'alignItemsCenter' }}
             >
-              <RedHatLogo className="app-consent__logo" />
+              {/* Same mark as the masthead: the agent's logo, or the untinted red default (never the accent colour). */}
+              {branding?.logo_url ? (
+                <img src={branding.logo_url} alt="" className="app-consent__logo" />
+              ) : (
+                <RedHatLogo className="app-consent__logo app-consent__logo--default" />
+              )}
               <Title headingLevel="h1" size="2xl" className="app-consent__center">
                 Authorization Required
               </Title>
