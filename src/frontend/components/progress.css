@@ -78,7 +78,11 @@
 /* Tasks sidebar (debug) */
 .app-tasks-sidebar { height: 100%; }
 .app-tasks-sidebar .app-tasks-sidebar__title { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: var(--pf-t--global--spacer--sm); font-size: 0.875rem; }
-.app-tasks-sidebar .app-tasks-sidebar__body { overflow-y: auto; }
+.app-tasks-sidebar .app-tasks-sidebar__body { overflow-x: hidden; overflow-y: auto; }
+/* Let the list text shrink so long result previews ellipsize instead of forcing a horizontal scrollbar. */
+.app-tasks-sidebar .pf-v6-c-list__item,
+.app-tasks-sidebar .pf-v6-c-list__item-text { min-width: 0; }
+.app-tasks-sidebar .pf-v6-c-list__item-text { flex: 1 1 0%; overflow: hidden; }
 .app-tasks-sidebar .app-tasks-sidebar__row { display: flex; align-items: center; gap: var(--pf-t--global--spacer--sm); min-width: 0; }
 .app-tasks-sidebar .app-tasks-sidebar__name { font-size: 0.75rem; font-weight: var(--pf-t--global--font--weight--body--bold); font-family: var(--pf-t--global--font--family--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-tasks-sidebar .app-tasks-sidebar__name--agent { font-family: inherit; text-transform: capitalize; }

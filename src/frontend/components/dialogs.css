@@ -34,7 +34,7 @@
 .app-debug .app-debug__row dt { color: var(--app-text-secondary); font-weight: normal; }
 .app-debug .app-debug__row dd { margin: 0; text-align: left; }
 .app-debug__label { font-size: var(--pf-t--global--font--size--xs); color: var(--app-text-secondary); margin: var(--pf-t--global--spacer--md) 0 var(--pf-t--global--spacer--xs); }
-.app-debug .app-debug__state { margin: 0; padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--xs) var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--sm); font-family: inherit; font-size: var(--pf-t--global--font--size--xs); line-height: 1.4; background: var(--pf-t--global--background--color--secondary--default); border-radius: var(--pf-t--global--border--radius--small); max-height: 12rem; overflow: auto; white-space: pre; }
+.app-debug .app-debug__state { margin: 0; padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--xs) var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--sm); font-family: inherit; font-size: var(--pf-t--global--font--size--xs); line-height: 1.4; background: var(--pf-t--global--background--color--secondary--default); border-radius: var(--pf-t--global--border--radius--small); max-height: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .app-debug-toggle--on { background: var(--pf-t--global--background--color--action--plain--clicked); }
 
 /* Eval panel (sidebar) */
