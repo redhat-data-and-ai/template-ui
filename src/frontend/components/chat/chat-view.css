@@ -169,3 +169,13 @@
 .app-toolcall-extra { margin-top: 0.5rem; }
 
 .app-chat-composer-pad { padding: 0.75rem 0.75rem 1rem; }
+
+/* PF pins the jump buttons at 75% of the panel, on top of the cards. Park them in the right gutter instead
+   (below the header actions for "top", above the composer for "bottom"). Raised specificity + !important to beat PF's. */
+.app-chat-view .pf-chatbot__jump {
+  inset-inline-start: auto !important;
+  inset-inline-end: 0.75rem !important;
+  transform: none !important;
+}
+.app-chat-view .pf-chatbot__jump--top { inset-block-start: 3.25rem !important; }
+.app-chat-view .pf-chatbot__jump--bottom { inset-block-end: 8rem !important; }
