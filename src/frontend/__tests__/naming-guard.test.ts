@@ -23,11 +23,16 @@ function collect(): string[] {
   } catch {
     /* config dir optional */
   }
+  try {
+    files.push(...walk(path.join(ROOT, 'scripts'), ['.mjs', '.js', '.ts', '.sh']));
+  } catch {
+    /* scripts dir optional */
+  }
   return files;
 }
 
 describe('naming guard (neutral public template)', () => {
-  it('has no product-specific names in src, index.html or config', () => {
+  it('has no product-specific names in src, index.html, config or scripts', () => {
     const offenders = collect().filter((f) => FORBIDDEN.test(readFileSync(f, 'utf8')));
     expect(offenders.map((f) => path.relative(ROOT, f))).toEqual([]);
   });

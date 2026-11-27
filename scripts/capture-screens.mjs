@@ -4,7 +4,7 @@
  *
  * Usage:
  *   node scripts/capture-screens.mjs --base <url> --out <dir>
- *     [--widths 1440,1920] [--modes light,dark] [--set template-ui|portal]
+ *     [--widths 1440,1920] [--modes light,dark] [--set template-ui]
  *
  * Writes <dir>/<set>-<page>-<mode>-<width>.png. Theme is chosen by writing the
  * set's localStorage key before navigation. Screenshots are never committed.
@@ -13,7 +13,7 @@ import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
-const THEME_KEYS = { 'template-ui': 'template-ui-theme', portal: 'ai-factory-theme' };
+const THEME_KEYS = { 'template-ui': 'template-ui-theme' };
 
 function parseArgs(argv) {
   const args = { widths: '1440,1920', modes: 'light,dark', set: 'template-ui' };
@@ -28,27 +28,6 @@ function parseArgs(argv) {
 }
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-/** The portal gates the app behind a consent screen (stored server-side in its mock). */
-async function acceptPortalConsent(page) {
-  const agree = page.getByRole('button', { name: 'Agree and Continue' });
-  if (await agree.isVisible().catch(() => false)) {
-    await page.getByLabel(/I accept/).check();
-    await agree.click();
-    await page.waitForLoadState('networkidle');
-  }
-}
-
-/** Dismiss the first-visit welcome dialog if it is showing. */
-async function dismissPortalDialog(page) {
-  await acceptPortalConsent(page);
-  await page.waitForTimeout(800);
-  const no = page.getByRole('button', { name: "Don't show again" });
-  if (await no.isVisible().catch(() => false)) {
-    await no.click();
-    await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  }
-}
 
 const turn = (id, userMessage) => ({
   id,
@@ -108,37 +87,6 @@ const PAGES = {
     } else {
       console.warn('  ! "Add Test Case" button not visible; dialog capture skipped');
     }
-  },
-
-  portal: async function* (page, base) {
-    // The first-visit "Welcome" dialog is the modal capture; consent comes first.
-    await page.goto(`${base}/build`);
-    await page.waitForLoadState('networkidle');
-    await acceptPortalConsent(page);
-    await page.getByRole('dialog').waitFor({ state: 'visible' });
-    await page.waitForTimeout(300);
-    yield 'modal';
-    await dismissPortalDialog(page);
-    yield* [];
-
-    await page.goto(`${base}/discover`);
-    await page.waitForLoadState('networkidle');
-    await dismissPortalDialog(page);
-    yield 'discover';
-
-    await page.goto(`${base}/build/agents/create`);
-    await page.waitForLoadState('networkidle');
-    await dismissPortalDialog(page);
-    yield 'build-form';
-
-    await page.goto(`${base}/discover`);
-    await page.waitForLoadState('networkidle');
-    await dismissPortalDialog(page);
-    await page.getByRole('button', { name: 'Help' }).first().click();
-    await page.getByRole('menuitem', { name: /Factory Guide/i }).click();
-    await page.getByLabel('Type your question').waitFor({ state: 'visible' });
-    await page.waitForTimeout(500);
-    yield 'help-drawer-factory-guide';
   },
 };
 
