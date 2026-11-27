@@ -130,7 +130,7 @@ export function AuthorizationSettings() {
         </div>
       )}
 
-      {error && <Alert isInline variant="danger" title={error} />}
+      {error && <Alert isInline isLiveRegion variant="danger" title={error} role="alert" />}
     </div>
   );
 }
