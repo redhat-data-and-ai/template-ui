@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Button, Label, Spinner, Title } from '@patternfly/react-core';
+import { DownloadIcon } from '@patternfly/react-icons';
+import { Table, Tbody, Td, Th, Thead, Tr } from '@patternfly/react-table';
 import { buildAppPath } from '../../../lib/app-paths';
 import type { EvalHistoryRun, EvalRow } from './eval-types';
 
@@ -104,100 +106,99 @@ export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
   };
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--sm)' }}>
+      <Title headingLevel="h4" size="md">
         Eval Runs
-      </p>
-      <div className="rounded-lg border border-border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-secondary/30 text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">Time</th>
-              <th className="px-3 py-2 font-medium text-right">Score</th>
-              <th className="px-3 py-2 font-medium text-right">Pass</th>
-              <th className="px-3 py-2 font-medium text-right">Fail</th>
-              <th className="px-3 py-2 font-medium text-center w-10"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageRuns.map((run, i) => {
-              const pct = Math.round(run.eval_score * 100);
-              const isLoading = loadingRow === run.completed_at;
-              const hasError = errorRow === run.completed_at;
-              const globalIndex = page * PAGE_SIZE + i;
+      </Title>
+      <Table aria-label="Eval runs" variant="compact">
+        <Thead>
+          <Tr>
+            <Th>Time</Th>
+            <Th modifier="fitContent">Score</Th>
+            <Th modifier="fitContent">Pass</Th>
+            <Th modifier="fitContent">Fail</Th>
+            <Th screenReaderText="Download" />
+          </Tr>
+        </Thead>
+        <Tbody>
+          {pageRuns.map((run, i) => {
+            const pct = Math.round(run.eval_score * 100);
+            const isLoading = loadingRow === run.completed_at;
+            const hasError = errorRow === run.completed_at;
+            const globalIndex = page * PAGE_SIZE + i;
 
-              return (
-                <tr
-                  key={`${page}_${i}`}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`View report for run at ${formatTimestamp(run.completed_at)}`}
-                  onClick={() => handleRowClick(run)}
-                  onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); handleRowClick(run); } }}
-                  className="border-t border-border cursor-pointer hover:bg-secondary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary transition-colors"
-                  title="Click to view full report"
-                >
-                  <td className="px-3 py-2.5 text-foreground">
-                    {isLoading && (
-                      <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse mr-2" />
-                    )}
-                    {hasError && (
-                      <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" title="Failed to load report" />
-                    )}
-                    {formatTimestamp(run.completed_at)}
-                    {globalIndex === 0 && (
-                      <span className="ml-2 text-[10px] font-medium text-primary bg-primary/10 rounded px-1.5 py-0.5">
-                        Latest
-                      </span>
-                    )}
-                  </td>
-                  <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${
-                    pct >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-                  }`}>
+            return (
+              <Tr
+                key={`${page}_${i}`}
+                isClickable
+                tabIndex={0}
+                role="button"
+                aria-label={`View report for run at ${formatTimestamp(run.completed_at)}`}
+                onRowClick={(event) => {
+                  if ((event?.target as HTMLElement | null)?.closest('button')) return;
+                  void handleRowClick(run);
+                }}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+                    e.preventDefault();
+                    void handleRowClick(run);
+                  }
+                }}
+                title="Click to view full report"
+              >
+                <Td dataLabel="Time">
+                  {isLoading && <Spinner size="sm" aria-label="Loading report" />}{' '}
+                  {hasError && (
+                    <Label isCompact color="red" title="Failed to load report">
+                      Failed
+                    </Label>
+                  )}{' '}
+                  {formatTimestamp(run.completed_at)}
+                  {globalIndex === 0 && (
+                    <>
+                      {' '}
+                      <Label isCompact>Latest</Label>
+                    </>
+                  )}
+                </Td>
+                <Td dataLabel="Score">
+                  <Label isCompact color={pct >= 70 ? 'green' : 'red'}>
                     {pct}%
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-foreground">
-                    {run.pass}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-foreground">
-                    {run.fail}
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <button
-                      onClick={(e) => handleDownload(e, run)}
-                      className="text-muted-foreground hover:text-foreground p-1"
-                      title="Download JSON"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  </Label>
+                </Td>
+                <Td dataLabel="Pass">{run.pass}</Td>
+                <Td dataLabel="Fail">{run.fail}</Td>
+                <Td isActionCell>
+                  <Button
+                    variant="plain"
+                    aria-label="Download JSON"
+                    title="Download JSON"
+                    icon={<DownloadIcon />}
+                    onClick={(e) => void handleDownload(e, run)}
+                  />
+                </Td>
+              </Tr>
+            );
+          })}
+        </Tbody>
+      </Table>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-xs text-muted-foreground tabular-nums">
+        <div className="app-settings__row">
+          <span className="app-settings__muted">
             Page {page + 1} of {totalPages}
           </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="text-xs px-3 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
+          <div className="app-settings__row">
+            <Button variant="secondary" onClick={() => setPage((p) => Math.max(0, p - 1))} isDisabled={page === 0}>
               Previous
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page === totalPages - 1}
-              className="text-xs px-3 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              isDisabled={page === totalPages - 1}
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       )}

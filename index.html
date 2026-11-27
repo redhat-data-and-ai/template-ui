@@ -4,23 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script>
-    // FOUC prevention: apply theme classes before first paint
+    // FOUC prevention: apply theme class before first paint.
+    // Mirrors resolveInitialTheme/themeStorageKey (src/frontend/lib/theme-storage.ts, app-paths.ts).
     (function() {
+      var dark = false;
       try {
-        var stored = localStorage.getItem('template-ui-settings');
-        var theme = stored ? JSON.parse(stored).theme || 'dark' : 'dark';
-      } catch(e) {
-        var theme = 'dark';
-      }
-      var html = document.documentElement;
-      if (theme === 'dark') {
-        html.classList.add('dark', 'pf-v6-theme-dark');
-      } else {
-        html.classList.remove('dark', 'pf-v6-theme-dark');
-      }
+        var parts = [];
+        var basePath = window.APP_DATA && window.APP_DATA.basePath;
+        if (basePath && basePath !== '/') {
+          parts = basePath.replace(/^\/|\/$/g, '').split('/');
+        }
+        if (parts.length < 2) {
+          parts = location.pathname.split('/').filter(Boolean);
+        }
+        var scope = parts.length >= 2 ? parts[0] + '/' + parts[1] : '';
+        var key = scope ? 'template-ui-theme:' + scope : 'template-ui-theme';
+        var stored = localStorage.getItem(key);
+        dark = stored === 'dark' || stored === 'light'
+          ? stored === 'dark'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch (e) {}
+      document.documentElement.classList.toggle('pf-v6-theme-dark', dark);
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <title>Template UI</title>
 </head>
 <body>

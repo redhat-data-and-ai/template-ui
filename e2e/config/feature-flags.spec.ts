@@ -11,8 +11,8 @@ import { HomePage } from '../page-objects/HomePage';
  * when debug_mode_default=true the toggle shows "Disable debug mode"
  * (because the flag pre-sets debugMode in the Redux userSettings slice).
  *
- * The DebugToggle is rendered in the AppLayout header and is therefore
- * visible on every page once the app mounts.
+ * The DebugToggle lives in the chat header and is only rendered once a thread
+ * is open (never on the /chat welcome page).
  */
 test.describe('Config: feature flags', () => {
   test('debug_mode_default=false: debug toggle shows "Enable debug mode" aria-label', async ({
@@ -22,6 +22,9 @@ test.describe('Config: feature flags', () => {
     await mockAgentStream(page, 'Hello');
     const home = new HomePage(page);
     await home.goto();
+    await expect(page.getByRole('button', { name: /debug mode/i })).toHaveCount(0);
+    await home.submitPrompt('Hi');
+    await page.waitForURL(/\/chat\/[^/]+/);
 
     await expect(
       page.getByRole('button', { name: /enable debug mode/i }),
@@ -35,6 +38,8 @@ test.describe('Config: feature flags', () => {
     await mockAgentStream(page, 'Hello');
     const home = new HomePage(page);
     await home.goto();
+    await home.submitPrompt('Hi');
+    await page.waitForURL(/\/chat\/[^/]+/);
 
     await expect(
       page.getByRole('button', { name: /disable debug mode/i }),

@@ -1,29 +1,16 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from 'react-redux';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Page,
-  Masthead,
-  MastheadMain,
-  MastheadBrand,
-  MastheadToggle,
-  MastheadContent,
-  PageSidebar,
-  PageSidebarBody,
-  PageToggleButton,
-  Toolbar,
-  ToolbarContent,
-  ToolbarItem,
-  ToolbarGroup,
 } from '@patternfly/react-core';
-import { BarsIcon } from '@patternfly/react-icons';
-import { RedHatLogo } from '../RedHatLogo';
-import { Sidebar } from '../Sidebar';
+import { AppMasthead } from './AppMasthead';
+import { DisclaimerBanner } from './DisclaimerBanner';
+import { AppSidebar } from '../sidebar/AppSidebar';
 import { KeyboardShortcutsDialog } from '../KeyboardShortcutsDialog';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { SessionExpiredModal } from '../SessionExpiredModal';
-import { DebugToggle } from '../DebugToggle';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import {
   selectAllChats,
@@ -47,6 +34,7 @@ import { markChatAsClientCreated, isClientCreatedChat } from '../../services/new
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { releaseStreamingManager } from '../../lib/streaming/streamingManagerRegistry';
 import { useProjects } from '../../hooks/useProjects';
+import { useIsDesktop } from '../../hooks/useIsDesktop';
 import type { RootState } from '../../redux/store';
 
 function toSafeDate(value: unknown): Date {
@@ -101,7 +89,6 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const dispatch = useAppDispatch();
   const chats = useAppSelector(selectAllChats);
-  const branding = useAppSelector((state: RootState) => state.config.branding);
   const {
     sidebarProjects,
     createProject,
@@ -110,7 +97,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     assignThreadToProject,
     unassignAllThreads,
   } = useProjects();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isDesktop = useIsDesktop();
+  // Inline (collapsible) on desktop, an overlay (closed by default) below the PF xl breakpoint.
+  // Each mode keeps its own flag, so crossing the breakpoint never renders the overlay open.
+  const [desktopOpen, setDesktopOpen] = useState(true);
+  const [narrowOpen, setNarrowOpen] = useState(false);
+  const sidebarOpen = isDesktop ? desktopOpen : narrowOpen;
   const [sessionExpired, setSessionExpired] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const navigate = useNavigate();
@@ -126,6 +118,45 @@ export function AppLayout({ children }: AppLayoutProps) {
       setAuthExpiredCallback(null);
     };
   }, []);
+
+  // Reset the mode we are leaving; the state is not visible while it is inactive.
+  useEffect(() => {
+    if (isDesktop) setNarrowOpen(false);
+    else setDesktopOpen(true);
+  }, [isDesktop]);
+
+  // Dismiss the overlay on a user action and hand focus back to the toggle.
+  const closeOverlay = useCallback(() => {
+    if (isDesktop) return;
+    setNarrowOpen(false);
+    document.getElementById('nav-toggle')?.focus();
+  }, [isDesktop]);
+
+  // Any other navigation (shortcuts, links) dismisses the overlay without moving focus.
+  useEffect(() => {
+    setNarrowOpen(false);
+  }, [location.pathname]);
+
+  const overlayOpen = !isDesktop && narrowOpen;
+
+  useEffect(() => {
+    if (!overlayOpen) return undefined;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // Escape inside a rename box, an open menu or a dialog belongs to that widget.
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest('input, textarea, [role="menu"], [role="listbox"], [role="dialog"], .pf-v6-c-menu, .pf-v6-c-menu-toggle.pf-m-expanded')) return;
+      closeOverlay();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [overlayOpen, closeOverlay]);
+
+  // Move focus into the overlay when the user opens it.
+  useEffect(() => {
+    if (!overlayOpen) return;
+    document.querySelector<HTMLElement>('#app-sidebar button, #app-sidebar a, #app-sidebar input')?.focus();
+  }, [overlayOpen]);
 
   const currentChatId = useMemo(() => {
     const match = /^\/chat\/([^/]+)/.exec(location.pathname);
@@ -268,12 +299,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [chats]);
 
   const userData = useMemo(() => window.USER_DATA, []);
-  const userName =
-    userData?.displayName ||
-    userData?.name ||
-    userData?.given_name ||
-    userData?.preferred_username ||
-    'User';
   const tokenExpiry = useMemo(() => {
     if (userData?.expiresAt) {
       return new Date(userData.expiresAt);
@@ -298,7 +323,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     [chats]
   );
 
-  const handleSelectChat = (chatId: string) => navigate(`/chat/${chatId}`);
+  const handleSelectChat = (chatId: string) => {
+    navigate(`/chat/${chatId}`);
+    closeOverlay();
+  };
 
   const handleNewChat = useCallback((projectId?: string) => {
     // Only the per-project "+" control passes projectId. The sidebar
@@ -320,7 +348,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       dispatch(updateProjectThreadCount({ projectId, delta: 1 }));
     }
     navigate(`/chat/${newChatId}`, { state: { newChat: true } });
-  }, [dispatch, navigate]);
+    closeOverlay();
+  }, [dispatch, navigate, closeOverlay]);
 
   const handleDeleteChat = useCallback(
     async (chatId: string) => {
@@ -432,88 +461,50 @@ export function AppLayout({ children }: AppLayoutProps) {
   });
 
   const masthead = (
-    <Masthead display={{ default: 'inline' }} className="!bg-card !border-b !border-border">
-      <MastheadToggle>
-        <PageToggleButton
-          variant="plain"
-          aria-label="Toggle sidebar"
-          isSidebarOpen={!sidebarCollapsed}
-          onSidebarToggle={() => setSidebarCollapsed((prev) => !prev)}
-          id="nav-toggle"
-        >
-          <BarsIcon />
-        </PageToggleButton>
-      </MastheadToggle>
-      <MastheadMain>
-        <MastheadBrand>
-          <Link to="/" className="flex items-center gap-2 no-underline text-inherit" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="flex items-center gap-2">
-              {branding?.logo_url ? (
-                <img
-                  src={branding.logo_url}
-                  alt={branding.title || 'Logo'}
-                  className="h-5 w-auto"
-                  style={{ height: '1.25rem', width: 'auto', maxHeight: '1.25rem' }}
-                />
-              ) : (
-                <RedHatLogo className="h-5 w-auto" style={{ color: '#ee0000' }} />
-              )}
-              <span className="text-base font-semibold text-foreground">
-                {branding?.title || window.APP_DATA?.agentName || 'Agent'}
-              </span>
-            </div>
-          </Link>
-        </MastheadBrand>
-      </MastheadMain>
-      <MastheadContent>
-        <Toolbar id="masthead-toolbar" isFullHeight>
-          <ToolbarContent>
-            <ToolbarGroup align={{ default: 'alignEnd' }}>
-              <ToolbarItem>
-                <DebugToggle />
-              </ToolbarItem>
-            </ToolbarGroup>
-          </ToolbarContent>
-        </Toolbar>
-      </MastheadContent>
-    </Masthead>
+    <AppMasthead isSidebarOpen={sidebarOpen} onToggleSidebar={() => (isDesktop ? setDesktopOpen((v) => !v) : setNarrowOpen((v) => !v))} />
   );
 
   const sidebar = (
-    <PageSidebar isSidebarOpen={!sidebarCollapsed} aria-label="Sidebar navigation" role="navigation">
-      <PageSidebarBody isFilled className="min-h-0">
-        <ErrorBoundary
-          onError={(error, errorInfo) => {
-            console.error('Sidebar error:', error, errorInfo);
-          }}
-        >
-          <Sidebar
-            userName={userName}
-            currentChatId={currentChatId}
-            chatHistory={sidebarChats}
-            tokenExpiry={tokenExpiry}
-            activeSubAgent={activeSubAgent}
-            onNewChat={handleNewChat}
-            onSelectChat={handleSelectChat}
-            onDeleteChat={handleDeleteChat}
-            onRenameChat={handleRenameChat}
-            projects={sidebarProjects}
-            onCreateProject={createProject}
-            onUpdateProject={updateProject}
-            onDeleteProject={handleDeleteProject}
-            onAssignThread={assignThreadToProject}
-            onUnassignAll={handleUnassignAll}
-          />
-        </ErrorBoundary>
-      </PageSidebarBody>
-    </PageSidebar>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error('Sidebar error:', error, errorInfo);
+      }}
+    >
+      <AppSidebar
+        isOpen={sidebarOpen}
+        currentChatId={currentChatId}
+        chatHistory={sidebarChats}
+        tokenExpiry={tokenExpiry}
+        activeSubAgent={activeSubAgent}
+        onNewChat={handleNewChat}
+        onSelectChat={handleSelectChat}
+        onDeleteChat={handleDeleteChat}
+        onRenameChat={handleRenameChat}
+        projects={sidebarProjects}
+        onCreateProject={createProject}
+        onUpdateProject={updateProject}
+        onDeleteProject={handleDeleteProject}
+        onAssignThread={assignThreadToProject}
+        onUnassignAll={handleUnassignAll}
+      />
+    </ErrorBoundary>
   );
 
   return (
-    <Page masthead={masthead} sidebar={sidebar} className="h-screen bg-background text-foreground">
-      <a href="#main-content" className="skip-to-main sr-only">
-        Skip to main content
-      </a>
+    <Page
+      masthead={masthead}
+      sidebar={sidebar}
+      className="app-page"
+      mainContainerId="main-content"
+      skipToContent={
+        <a href="#main-content" className="skip-to-main">
+          Skip to main content
+        </a>
+      }
+    >
+      {overlayOpen && (
+        <div className="app-sidebar-backdrop" aria-hidden="true" onClick={closeOverlay} />
+      )}
       <KeyboardShortcutsDialog isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       {/* PatternFly Modal traps focus and restores focus on close. */}
       <SessionExpiredModal isOpen={sessionExpired} />
@@ -522,9 +513,11 @@ export function AppLayout({ children }: AppLayoutProps) {
           console.error('Main content error:', error, errorInfo);
         }}
       >
-        <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {children}
-        </main>
+        {/* PatternFly Page renders the single <main> (mainContainerId); keep this a plain div. */}
+        <div className="app-main">
+          <DisclaimerBanner />
+          <div className="app-content-surface">{children}</div>
+        </div>
       </ErrorBoundary>
     </Page>
   );

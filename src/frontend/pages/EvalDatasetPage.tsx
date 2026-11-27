@@ -1,10 +1,30 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, type Ref } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Search, Database, Loader2, ChevronDown } from 'lucide-react';
+import {
+  Alert,
+  AlertActionLink,
+  Button,
+  Card,
+  FormSelect,
+  FormSelectOption,
+  MenuToggle,
+  type MenuToggleElement,
+  SearchInput,
+  Select,
+  SelectList,
+  SelectOption,
+  Spinner,
+  Title,
+  Toolbar,
+  ToolbarContent,
+  ToolbarItem,
+} from '@patternfly/react-core';
+import { ArrowLeftIcon, PlusCircleIcon } from '@patternfly/react-icons';
 import { buildAgentApiUrl } from '@/lib/app-paths';
 import type { TestCase, CaseTag } from '../components/eval-dataset/eval-dataset-types';
 import { EvalDatasetTable } from '../components/eval-dataset/EvalDatasetTable';
 import { AddTestCaseModal } from '../components/eval-dataset/AddTestCaseModal';
+import '../components/eval-dataset/eval-dataset.css';
 
 interface AgentModel {
   model: string;
@@ -27,6 +47,7 @@ export function EvalDatasetPage() {
   const [editingCase, setEditingCase] = useState<TestCase | undefined>();
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState<CaseTag | 'all'>('all');
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -170,121 +191,130 @@ export function EvalDatasetPage() {
   }
 
 
+  const tagLabel = TAG_OPTIONS.find((o) => o.value === tagFilter)?.label ?? 'All tags';
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background">
-      {/* Top bar */}
-      <div className="shrink-0 border-b border-border bg-card/60 backdrop-blur-sm px-6 py-3">
-        <div className="max-w-6xl mx-auto flex items-center gap-3">
-          <button
-            onClick={() => navigate('/settings?tab=developer')}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-            aria-label="Back to settings"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <Database className="w-4 h-4 text-muted-foreground" />
-          <h1 className="text-lg font-semibold text-foreground">Eval Dataset</h1>
+    <div className="app-eval">
+      <div className="app-eval__header">
+        <Button
+          variant="plain"
+          onClick={() => navigate('/settings?tab=developer')}
+          aria-label="Back to settings"
+          icon={<ArrowLeftIcon />}
+        />
+        <Title headingLevel="h1" size="xl">Eval Dataset</Title>
 
-          {/* Judge model selector */}
-          {!loading && availableModels.length > 0 && (
-            <div className="ml-4 flex items-center gap-2">
-              <span className="text-xs text-muted-foreground shrink-0">Judge model</span>
-              <div className="relative">
-                <select
-                  value={judgeModel}
-                  onChange={(e) => { setJudgeModel(e.target.value); saveDataset(cases, e.target.value); }}
-                  className="appearance-none rounded-md border border-border bg-background pl-3 pr-7 py-1 text-xs text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
-                >
-                  {availableModels.map((m) => (
-                    <option key={m.model} value={m.model}>
-                      {m.model}{m.default ? ' (orchestrator)' : ` (${m.source.replace('subagent:', '')})`}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-              </div>
-            </div>
-          )}
+        {!loading && availableModels.length > 0 && (
+          <div className="app-eval__judge">
+            <span className="app-eval__muted">Judge model</span>
+            <FormSelect
+              aria-label="Judge model"
+              value={judgeModel}
+              onChange={(_e, value) => { setJudgeModel(value); saveDataset(cases, value); }}
+            >
+              {availableModels.map((m) => (
+                <FormSelectOption
+                  key={m.model}
+                  value={m.model}
+                  label={`${m.model}${m.default ? ' (orchestrator)' : ` (${m.source.replace('subagent:', '')})`}`}
+                />
+              ))}
+            </FormSelect>
+          </div>
+        )}
 
-          {!loading && (
-            <span className="ml-auto text-xs text-muted-foreground">
-              {cases.length} test case{cases.length !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
+        {!loading && (
+          <span className="app-eval__muted app-eval__header-count">
+            {cases.length} test case{cases.length !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-6 py-6 space-y-4">
-
+      <div className="app-eval__scroll">
+        <div className="app-eval__content">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              <span className="text-sm">Loading dataset…</span>
+            <div className="app-eval__center">
+              <Spinner size="lg" aria-label="Loading dataset" />
+              <span className="app-eval__muted">Loading dataset…</span>
             </div>
           ) : loadError ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-8 text-center">
-              <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>
-              <button
-                onClick={() => { setLoadError(''); void loadDataset(); }}
-                className="mt-3 text-xs text-red-600 dark:text-red-400 underline"
-              >
-                Retry
-              </button>
-            </div>
+            <Alert
+              variant="danger"
+              isInline
+              title={loadError}
+              actionLinks={
+                <AlertActionLink onClick={() => { setLoadError(''); void loadDataset(); }}>
+                  Retry
+                </AlertActionLink>
+              }
+            />
           ) : (
             <>
-              {/* Toolbar */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative flex-1 min-w-48">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search test cases…"
-                    className="w-full pr-3 py-2 rounded-md border border-border bg-background text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    style={{ paddingLeft: '2.5rem' }}
-                  />
-                </div>
+              <Card>
+                <Toolbar className="app-eval__toolbar">
+                  <ToolbarContent>
+                    <ToolbarItem className="app-eval__toolbar-search">
+                      <SearchInput
+                        aria-label="Search test cases"
+                        placeholder="Search test cases…"
+                        value={search}
+                        onChange={(_e, value) => setSearch(value)}
+                        onClear={() => setSearch('')}
+                      />
+                    </ToolbarItem>
+                    <ToolbarItem>
+                      <Select
+                        isOpen={tagMenuOpen}
+                        selected={tagFilter}
+                        onSelect={(_e, value) => { setTagFilter(value as CaseTag | 'all'); setTagMenuOpen(false); }}
+                        onOpenChange={setTagMenuOpen}
+                        toggle={(toggleRef: Ref<MenuToggleElement>) => (
+                          <MenuToggle
+                            ref={toggleRef}
+                            aria-label="Filter by tag"
+                            onClick={() => setTagMenuOpen((o) => !o)}
+                            isExpanded={tagMenuOpen}
+                          >
+                            {tagLabel}
+                          </MenuToggle>
+                        )}
+                      >
+                        <SelectList>
+                          {TAG_OPTIONS.map((opt) => (
+                            <SelectOption key={opt.value} value={opt.value} isSelected={tagFilter === opt.value}>
+                              {opt.label}
+                            </SelectOption>
+                          ))}
+                        </SelectList>
+                      </Select>
+                    </ToolbarItem>
+                    <ToolbarItem align={{ default: 'alignEnd' }}>
+                      <Button
+                        variant="primary"
+                        icon={<PlusCircleIcon />}
+                        onClick={() => { setEditingCase(undefined); setModalOpen(true); }}
+                      >
+                        Add Test Case
+                      </Button>
+                    </ToolbarItem>
+                  </ToolbarContent>
+                </Toolbar>
+                <EvalDatasetTable
+                  cases={filtered}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                />
+              </Card>
 
-                <select
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value as CaseTag | 'all')}
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                >
-                  {TAG_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={() => { setEditingCase(undefined); setModalOpen(true); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-sm font-medium text-white hover:bg-primary/90 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Test Case
-                </button>
-              </div>
-
-              {/* Table */}
-              <EvalDatasetTable
-                cases={filtered}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-
-              {/* Footer */}
               {cases.length > 0 && (
-                <div className="flex items-center justify-between pt-2">
-                  <p className="text-xs text-muted-foreground">
+                <div className="app-eval__footer">
+                  <span className="app-eval__muted">
                     {filtered.length !== cases.length
                       ? `Showing ${filtered.length} of ${cases.length} cases`
                       : `${cases.length} test case${cases.length !== 1 ? 's' : ''} in dataset`}
-                  </p>
+                  </span>
                   {saveError && (
-                    <p className="text-xs text-red-600">{saveError}</p>
+                    <Alert variant="danger" isInline isPlain title={saveError} />
                   )}
                 </div>
               )}

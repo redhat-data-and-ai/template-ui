@@ -38,6 +38,7 @@ import {
 import type { RootState } from "../redux/store";
 import { selectTheme } from "../redux/slices/userSettings";
 import { useChatActions } from "../contexts/ChatActionsContext";
+import "./mcp-app-host.css";
 
 export interface McpAppHostProps {
   mcpApp: McpAppDescriptor;
@@ -733,14 +734,14 @@ export function McpAppHost({
       {error ? (
         <div
           role="alert"
-          className="text-xs text-destructive bg-muted border border-border rounded-lg p-3"
+          className="app-mcp-host__note app-mcp-host__note--error"
         >
           MCP App failed to load: {error}
         </div>
       ) : tornDown ? (
-        <div className="text-xs text-muted-foreground p-3">Interactive UI closed.</div>
+        <div className="app-mcp-host__note">Interactive UI closed.</div>
       ) : !cspReady ? (
-        <div className="text-xs text-muted-foreground p-3">Loading interactive UI…</div>
+        <div className="app-mcp-host__note">Loading interactive UI…</div>
       ) : (
         <div
           style={{
@@ -749,7 +750,7 @@ export function McpAppHost({
             height,
             minHeight: 120,
           }}
-          className="overflow-hidden"
+          className="app-mcp-host__frame"
         >
           <AppRenderer
             ref={appRef}

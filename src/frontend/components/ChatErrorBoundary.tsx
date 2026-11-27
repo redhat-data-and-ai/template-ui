@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { ErrorRecovery } from './ErrorRecovery';
+import './dialogs.css';
 import { buildAppPath } from '../lib/app-paths';
 
 interface Props {
@@ -43,8 +44,8 @@ export class ChatErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-full p-8">
-          <div className="max-w-lg w-full">
+        <div className="app-boundary">
+          <div className="app-boundary__inner">
             <ErrorRecovery
               title="Chat Error"
               status="warning"

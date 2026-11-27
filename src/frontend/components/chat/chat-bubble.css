@@ -1,0 +1,224 @@
+/*
+ * Chat transcript in the portal help-drawer bubble style.
+ * Values follow the portal's HelpDrawerPanel.css (.chat-bubble*), mapped onto
+ * the --app-chat-* tokens in styles/theme-tokens.css. Selectors stay
+ * class-qualified so they win over PatternFly defaults.
+ */
+
+/* === Transcript container (PatternFly ChatbotContent + MessageBox) === */
+.pf-chatbot__content.app-chat-transcript {
+  display: flex;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The surrounding .app-content-surface is the only frame. */
+  background-color: transparent;
+}
+
+.pf-chatbot__messagebox.app-chat-messagebox {
+  width: 100%;
+  max-width: 48rem;
+  height: 100%;
+  padding: 2rem 1rem 1rem;
+}
+
+@media (min-width: 48rem) {
+  .pf-chatbot__messagebox.app-chat-messagebox {
+    padding-inline: 1.5rem;
+  }
+}
+
+.app-chat-messagebox .app-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* === Bubbles === */
+.app-chat-transcript .chat-bubble,
+.chat-bubble {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 92%;
+  min-width: 0;
+  animation: app-chat-fade-in 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes app-chat-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-bubble.chat-bubble--bot {
+  align-self: flex-start;
+}
+
+.chat-bubble.chat-bubble--user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.chat-bubble.chat-bubble--wide {
+  width: 100%;
+  max-width: 100%;
+}
+
+.chat-bubble .chat-bubble-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--app-accent) 0%, var(--app-accent-strong) 100%);
+  color: #fff;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.chat-bubble .chat-bubble-avatar svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.chat-bubble .chat-bubble-avatar.chat-bubble-avatar--danger,
+.chat-bubble--danger .chat-bubble-avatar {
+  background: var(--pf-t--global--color--status--danger--default);
+}
+
+.chat-bubble .chat-bubble-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.chat-bubble--user .chat-bubble-col {
+  align-items: flex-end;
+}
+
+.chat-bubble--wide .chat-bubble-col {
+  flex: 1 1 auto;
+}
+
+.chat-bubble .chat-bubble-content {
+  padding: 0.6rem 0.85rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* Bot: neutral surface */
+.chat-bubble.chat-bubble--bot > .chat-bubble-col > .chat-bubble-content {
+  background: var(--app-chat-bot-bg);
+  color: var(--app-chat-bot-text);
+  border-top-left-radius: 0.25rem;
+}
+
+/* User: soft accent, not solid */
+.chat-bubble.chat-bubble--user > .chat-bubble-col > .chat-bubble-content {
+  background: var(--app-chat-user-bg);
+  color: var(--app-chat-user-text);
+  border: 1px solid var(--app-chat-user-border);
+  border-top-right-radius: 0.25rem;
+}
+
+/* Tool-call / sub-agent messages: the cards carry their own surface. */
+.chat-bubble.chat-bubble--plain > .chat-bubble-col > .chat-bubble-content {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Inherit bubble text colour inside rendered markdown. */
+.chat-bubble .chat-bubble-content .app-markdown,
+.chat-bubble .chat-bubble-content .app-markdown p,
+.chat-bubble .chat-bubble-content .app-markdown li {
+  color: inherit;
+}
+
+.chat-bubble .chat-bubble-content .app-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+/* === Edit mode === */
+.chat-bubble.chat-bubble--editing {
+  width: 100%;
+  max-width: 100%;
+}
+
+.chat-bubble--editing .chat-bubble-col,
+.chat-bubble--editing .chat-bubble-content {
+  width: 100%;
+}
+
+.chat-bubble--editing .app-chat-edit-input {
+  width: 100%;
+  min-height: 5.5rem;
+  padding: 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--app-chat-user-border);
+  background: var(--pf-t--global--background--color--primary--default);
+  color: var(--pf-t--global--text--color--regular);
+  font-size: 0.875rem;
+}
+
+/* === Bubble actions === */
+.chat-bubble .chat-bubble-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.125rem;
+  margin-top: 0.15rem;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+.chat-bubble .chat-bubble-col:hover > .chat-bubble-actions,
+.chat-bubble .chat-bubble-col:focus-within > .chat-bubble-actions {
+  opacity: 1;
+}
+
+/* Action buttons stay neutral grey. A selected rating (aria-pressed) is shown
+   by the filled thumb icon and a slightly stronger text colour only. */
+.chat-bubble .chat-bubble-actions button {
+  color: var(--pf-t--global--text--color--subtle);
+}
+
+.chat-bubble .chat-bubble-actions button:not(:disabled):hover,
+.chat-bubble .chat-bubble-actions button[aria-pressed="true"] {
+  color: var(--pf-t--global--text--color--regular);
+}
+
+/* A rating locks both buttons (disabled); keep the chosen one at full strength. */
+.chat-bubble .chat-bubble-actions button[aria-pressed="true"]:disabled {
+  opacity: 1;
+}
+
+/* A recorded rating stays visible without hover. */
+.chat-bubble .chat-bubble-actions:has(button[aria-pressed="true"]) {
+  opacity: 1;
+}
+
+.chat-bubble .app-chat-meta {
+  margin-top: 0.15rem;
+  font-size: 0.6875rem;
+  color: var(--pf-t--global--text--color--subtle);
+}
+
+/* === Typing indicator === */
+.chat-bubble .app-chat-typing-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--app-accent-strong);
+}

@@ -1,0 +1,289 @@
+/* Settings page layout: PF Nav + Card, no header band or divider. */
+.app-settings {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-settings__header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  padding: var(--pf-t--global--spacer--md) var(--pf-t--global--spacer--lg) 0;
+}
+.app-settings__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pf-t--global--spacer--md) var(--pf-t--global--spacer--lg) var(--pf-t--global--spacer--lg);
+}
+.app-settings__layout {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: var(--pf-t--global--spacer--lg);
+  align-items: start;
+  max-width: 64rem;
+  margin-inline: auto;
+}
+@media (max-width: 56.25rem) {
+  .app-settings__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.app-settings__tabs { min-width: 0; max-width: 100%; }
+@media (max-width: 56.25rem) {
+  .app-settings__header { padding-inline: var(--pf-t--global--spacer--md); }
+  .app-settings__scroll { padding-inline: var(--pf-t--global--spacer--md); }
+}
+.app-settings__nav {
+  --pf-v6-c-nav--RowGap: var(--pf-t--global--spacer--sm);
+  position: relative;
+  padding-inline-start: var(--pf-t--global--spacer--sm);
+}
+.app-settings__nav .pf-v6-c-nav__list {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Current item: PF raised row plus a bar in the gutter, as in the sidebar. */
+.app-settings__nav .pf-v6-c-nav__item {
+  position: relative;
+}
+.app-settings__nav .pf-v6-c-nav__link.pf-m-current::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--pf-t--global--spacer--sm) * -1);
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--pf-t--global--border--color--clicked);
+}
+.app-settings__panel {
+  min-width: 0;
+}
+/* Developer has no visible panel title (which supplies the top inset elsewhere): match the bottom inset. */
+.app-settings__panel--developer > .pf-v6-c-card__body {
+  padding-block-start: var(--pf-v6-c-card--child--PaddingBlockEnd, var(--pf-t--global--spacer--lg));
+}
+.app-settings__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--lg);
+}
+.app-settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pf-t--global--spacer--md);
+}
+.app-settings__row > :first-child {
+  min-width: 0;
+}
+.app-settings__muted {
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--sm);
+}
+.app-settings__avatar {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--pf-t--global--font--size--2xl);
+  font-weight: 700;
+  background-color: var(--pf-t--global--background--color--secondary--default);
+  color: var(--app-text);
+  flex: none;
+}
+.app-settings__item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-settings__item-text--off {
+  color: var(--app-text-secondary);
+  text-decoration: line-through;
+}
+.app-settings__theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pf-t--global--spacer--md);
+}
+.app-settings__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--sm);
+}
+.app-settings__list > li {
+  display: flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--md);
+  min-width: 0;
+}
+.app-settings__center {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--pf-t--global--spacer--lg);
+}
+.app-settings__inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+}
+/* Light mode: the white surface hides PF's raised current row, so give it a neutral grey. */
+:root:not(.pf-v6-theme-dark) .app-settings__nav .pf-v6-c-nav__link.pf-m-current {
+  background-color: var(--pf-t--global--background--color--secondary--default);
+}
+
+/* Developer page: each section is its own bordered card with a grey header strip. */
+.app-dev__card {
+  --pf-v6-c-card--BorderWidth: var(--pf-t--global--border--width--regular);
+  --pf-v6-c-card--BorderColor: var(--app-border);
+  border: var(--pf-t--global--border--width--regular) solid var(--app-border);
+  overflow: hidden;
+}
+.app-dev__card-header {
+  background-color: var(--pf-t--global--background--color--secondary--default);
+  border-block-end: var(--pf-t--global--border--width--regular) solid var(--app-border);
+}
+.app-dev__card-title {
+  font-weight: var(--pf-t--global--font--weight--body--bold);
+  color: var(--pf-t--global--text--color--regular);
+}
+.app-dev__card .pf-v6-c-card__body.app-dev__card-body {
+  padding-block-start: var(--pf-t--global--spacer--md);
+  padding-block-end: var(--pf-t--global--spacer--md);
+}
+
+/* Developer page: section hierarchy, agent tree, field captions. */
+.app-dev__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+  margin-block-start: var(--pf-t--global--spacer--lg);
+}
+.app-dev__divider {
+  --pf-v6-c-divider--BackgroundColor: var(--app-border);
+  --pf-v6-c-divider--after--BackgroundColor: var(--app-border);
+  margin-block-end: var(--pf-t--global--spacer--xs);
+}
+.app-dev__title {
+  display: flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  font-weight: 700;
+}
+.app-dev__title-icon {
+  display: inline-flex;
+  color: var(--app-accent-strong, var(--pf-t--global--icon--color--brand--default));
+}
+.app-dev__agent-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  color: var(--app-text);
+  font-weight: 600;
+}
+.app-dev__agent-icon {
+  color: var(--app-accent-strong, var(--pf-t--global--icon--color--brand--default));
+}
+.app-dev__agent-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  color: var(--app-text);
+  font-weight: 600;
+}
+.app-dev__tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+}
+.app-dev__children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+  margin-inline-start: var(--pf-t--global--spacer--sm);
+  padding-inline-start: var(--pf-t--global--spacer--lg);
+  border-inline-start: 2px solid var(--app-border);
+}
+/* Names are text, not links; chevron on the right for the Agents list. */
+.app-dev__node .pf-v6-c-expandable-section__toggle .pf-v6-c-button,
+.app-dev__agent .pf-v6-c-expandable-section__toggle .pf-v6-c-button {
+  --pf-v6-c-button--Color: var(--app-text);
+  --pf-v6-c-button--hover--Color: var(--app-text);
+  --pf-v6-c-button--m-link--Color: var(--app-text);
+  --pf-v6-c-button--m-link--hover--Color: var(--app-text);
+  color: var(--app-text);
+}
+.app-dev__agent .pf-v6-c-expandable-section__toggle,
+.app-dev__agent .pf-v6-c-expandable-section__toggle .pf-v6-c-button {
+  display: flex;
+  width: 100%;
+}
+.app-dev__agent .pf-v6-c-expandable-section__toggle .pf-v6-c-button {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  padding-inline: 0;
+  background: transparent;
+}
+.app-dev__agent .pf-v6-c-expandable-section__toggle .pf-v6-c-button__text {
+  flex: 1 1 auto;
+  text-align: start;
+}
+.app-dev__agent .pf-v6-c-expandable-section__content,
+.app-dev__node .pf-v6-c-expandable-section__content {
+  padding-inline-start: var(--pf-t--global--spacer--xl);
+  margin-block-start: var(--pf-t--global--spacer--sm);
+}
+.app-dev__agent .pf-v6-c-expandable-section__content {
+  padding-inline-start: var(--pf-t--global--spacer--lg);
+  border-inline-start: 2px solid var(--app-border);
+  margin-inline-start: var(--pf-t--global--spacer--sm);
+}
+.app-dev__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+}
+.app-dev__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--xs);
+  align-items: flex-start;
+}
+.app-dev__field > * {
+  max-width: 100%;
+}
+.app-dev__caption {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.app-dev__code {
+  font-family: var(--pf-t--global--font--family--mono);
+  font-size: var(--pf-t--global--font--size--sm);
+  padding: var(--pf-t--global--spacer--xs) var(--pf-t--global--spacer--sm);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background-color: var(--pf-t--global--background--color--secondary--default);
+  color: var(--app-text);
+}
+.app-dev__prompt {
+  width: 100%;
+}
+
+/* Eval report conversations: titles are text, not links (same treatment as the Developer cards). */
+.app-eval-conv .pf-v6-c-expandable-section__toggle .pf-v6-c-button {
+  --pf-v6-c-button--Color: var(--app-text);
+  --pf-v6-c-button--hover--Color: var(--app-text);
+  --pf-v6-c-button--m-link--Color: var(--app-text);
+  --pf-v6-c-button--m-link--hover--Color: var(--app-text);
+  color: var(--app-text);
+}

@@ -1,14 +1,11 @@
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
+import { Card, CardBody, Content, Title, ToggleGroup, ToggleGroupItem } from '@patternfly/react-core';
 import type { EvalTrendsResponse } from './eval-types';
-import { useDarkMode } from './eval-utils';
+import { SERIES_COLORS } from './eval-utils';
 import { MetricTrendCard } from './MetricTrendCard';
 import { TrendChart } from './TrendChart';
 
 type View = 'cards' | 'chart';
-
-const COLORS_LIGHT = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed'];
-const COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
 
 interface MetricTrendsSectionProps {
   data: EvalTrendsResponse;
@@ -17,11 +14,10 @@ interface MetricTrendsSectionProps {
 /** Toggleable section rendering metric trends as either sparkline cards or a combined line chart. */
 export function MetricTrendsSection({ data }: MetricTrendsSectionProps) {
   const [view, setView] = useState<View>('cards');
-  const isDark = useDarkMode();
 
   const metricKeys = Object.keys(data.metrics);
   const hasMetrics = metricKeys.length > 0;
-  const colors = isDark ? COLORS_DARK : COLORS_LIGHT;
+  const colors = SERIES_COLORS;
 
   // ISO timestamp of the most recent overall run — used to determine which
   // metric cards should show a "current" value vs. a stale historical one.
@@ -33,53 +29,33 @@ export function MetricTrendsSection({ data }: MetricTrendsSectionProps) {
 
   if (!hasMetrics && (!data.overall || data.overall.length < 2)) {
     return (
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--sm)' }}>
+        <Title headingLevel="h4" size="md">
           Score Trends
-        </p>
-        <div className="rounded-lg border border-border bg-card px-4 py-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Need at least 2 eval runs to show trends.
-          </p>
-        </div>
+        </Title>
+        <Card isCompact>
+          <CardBody>
+            <Content component="p">Need at least 2 eval runs to show trends.</Content>
+          </CardBody>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--md)' }}>
+      <div className="app-settings__row">
+        <Title headingLevel="h4" size="md">
           Score Trends
-        </p>
-        <div className="flex rounded-md border border-border overflow-hidden text-xs">
-          <button
-            onClick={() => setView('cards')}
-            className={cn(
-              'px-3 py-1 font-medium transition-colors',
-              view === 'cards'
-                ? 'bg-primary text-white'
-                : 'bg-card text-muted-foreground hover:text-foreground',
-            )}
-          >
-            Cards
-          </button>
-          <button
-            onClick={() => setView('chart')}
-            className={cn(
-              'px-3 py-1 font-medium transition-colors border-l border-border',
-              view === 'chart'
-                ? 'bg-primary text-white'
-                : 'bg-card text-muted-foreground hover:text-foreground',
-            )}
-          >
-            Chart
-          </button>
-        </div>
+        </Title>
+        <ToggleGroup aria-label="Trend view">
+          <ToggleGroupItem text="Cards" buttonId="trend-view-cards" isSelected={view === 'cards'} onChange={() => setView('cards')} />
+          <ToggleGroupItem text="Chart" buttonId="trend-view-chart" isSelected={view === 'chart'} onChange={() => setView('chart')} />
+        </ToggleGroup>
       </div>
 
       {view === 'cards' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="app-settings__theme-grid">
           {data.overall.length > 0 && (
             <MetricTrendCard
               metricKey="Overall"

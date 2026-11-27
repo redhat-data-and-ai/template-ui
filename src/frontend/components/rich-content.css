@@ -1,0 +1,196 @@
+/* Rich content inside chat bubbles: markdown, code blocks, tool-call card bodies.
+   Markdown values follow the portal "Markdown inside bot bubbles" rules.
+   Scoped, unlayered component CSS. */
+
+/* === Markdown === */
+.app-markdown {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  color: inherit;
+}
+.app-markdown h1,
+.app-markdown h2,
+.app-markdown h3,
+.app-markdown h4 {
+  margin: 0.75rem 0 0.35rem;
+  line-height: 1.3;
+  font-weight: var(--pf-t--global--font--weight--heading--default);
+  color: inherit;
+}
+.app-markdown h1 { font-size: 1.25rem; }
+.app-markdown h2 { font-size: 1.125rem; }
+.app-markdown h3 { font-size: 1rem; }
+.app-markdown h4 { font-size: 0.9375rem; }
+.app-markdown > :first-child { margin-top: 0; }
+.app-markdown p { margin: 0 0 0.5rem; color: inherit; }
+.app-markdown > :last-child,
+.app-markdown p:last-child { margin-bottom: 0; }
+.app-markdown strong { font-weight: 700; }
+.app-markdown code {
+  font-family: var(--pf-t--global--font--family--mono);
+  font-size: 0.75rem;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  background: var(--app-secondary-muted-bg);
+}
+.app-markdown ul,
+.app-markdown ol {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+.app-markdown ol { list-style: decimal; }
+.app-markdown li { margin-bottom: 0.2rem; color: inherit; }
+.app-markdown li:last-child { margin-bottom: 0; }
+.app-markdown a {
+  color: var(--app-accent-strong-hover);
+  text-decoration: underline;
+}
+.app-markdown blockquote {
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--app-accent-border);
+  color: var(--pf-t--global--text--color--subtle);
+}
+.app-markdown hr {
+  margin: 0.75rem 0;
+  border: 0;
+  border-top: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+}
+.app-markdown .app-markdown__table {
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+  border-radius: var(--pf-t--global--border--radius--small);
+}
+.app-markdown table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.app-markdown th,
+.app-markdown td {
+  padding: 0.35rem 0.65rem;
+  text-align: left;
+  border-bottom: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+}
+.app-markdown tr:last-child td { border-bottom: 0; }
+.app-markdown th {
+  font-weight: 700;
+  background: var(--app-secondary-muted-bg);
+}
+
+/* === Code block (PF CodeBlock + ClipboardCopyButton) === */
+.app-markdown .app-codeblock {
+  margin: 0.5rem 0;
+  max-width: 100%;
+  border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background: var(--pf-t--global--background--color--secondary--default);
+  color: var(--pf-t--global--text--color--regular);
+}
+.app-markdown .app-codeblock .pf-v6-c-code-block__header { justify-content: flex-end; padding-block: 0.125rem 0; }
+.app-markdown .app-codeblock .pf-v6-c-code-block__content { overflow-x: auto; }
+.app-markdown .app-codeblock pre {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  font-size: 0.8125rem;
+}
+.app-markdown .app-codeblock code { padding: 0; background: none; font-size: inherit; }
+
+/* === Tool-call card body (arguments / result boxes use .app-subagent-box) === */
+.app-toolcall__body {
+  display: flex;
+  flex-direction: column;
+  padding: var(--pf-t--global--spacer--md);
+  max-height: 24rem;
+  overflow-y: auto;
+}
+.app-toolcall__label {
+  margin: var(--pf-t--global--spacer--md) 0 var(--pf-t--global--spacer--xs);
+  font-size: 0.75rem;
+  font-weight: var(--pf-t--global--font--weight--body--bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pf-t--global--text--color--subtle);
+}
+.app-toolcall__body > .app-toolcall__label:first-child { margin-top: 0; }
+.app-toolcall__label--error { color: var(--pf-t--global--text--color--status--danger--default); }
+
+/* === Artifact viewer === */
+.app-artifact__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pf-t--global--spacer--sm);
+  padding: var(--pf-t--global--spacer--xs) var(--pf-t--global--spacer--md);
+  border-bottom: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+}
+.app-artifact__title { display: inline-flex; align-items: center; gap: var(--pf-t--global--spacer--sm); min-width: 0; }
+.app-artifact__name { font-size: 0.8125rem; font-weight: var(--pf-t--global--font--weight--body--bold); overflow-wrap: anywhere; }
+.app-artifact__body { max-height: 20rem; overflow: auto; padding: var(--pf-t--global--spacer--md); }
+.app-artifact__body pre {
+  margin: 0;
+  font-family: var(--pf-t--global--font--family--mono);
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* === Structured data (custom_data) === */
+.app-jsonblock {
+  margin: 0.5rem 0;
+  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+  border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background: var(--pf-t--global--background--color--secondary--default);
+  font-family: var(--pf-t--global--font--family--mono);
+  font-size: 0.8125rem;
+  overflow-x: auto;
+}
+.app-datatable { margin: 0.75rem 0; overflow-x: auto; border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default); border-radius: var(--pf-t--global--border--radius--small); }
+.app-datalist { margin: 0.5rem 0; padding-left: 1.5rem; list-style: disc; font-size: 0.875rem; }
+
+/* === MCP tool status === */
+.app-mcpstatus { max-width: 48rem; margin: 0 auto; padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md) 0; }
+.app-mcpstatus__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--pf-t--global--spacer--sm); }
+.app-mcpstatus__item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pf-t--global--spacer--sm); font-size: 0.875rem; }
+.app-mcpstatus__tool { font-family: var(--pf-t--global--font--family--mono); font-size: 0.8125rem; }
+
+/* === Banners === */
+.app-announcement { width: 100%; flex-shrink: 0; }
+.app-reconnecting { padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md); }
+.app-error-details { text-align: left; font-family: var(--pf-t--global--font--family--mono); font-size: 0.8125rem; padding-block: var(--pf-t--global--spacer--sm); }
+.app-error-details p { margin: 0 0 var(--pf-t--global--spacer--sm); }
+.app-error-details pre {
+  margin: 0;
+  max-height: 8rem;
+  overflow: auto;
+  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+  border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background: var(--pf-t--global--background--color--secondary--default);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+}
+.app-feedback-comment { padding-left: 2.25rem; margin-top: var(--pf-t--global--spacer--xs); }
+.app-feedback-comment__box {
+  min-width: 17.5rem;
+  max-width: 25rem;
+  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+  border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background: var(--pf-t--global--background--color--secondary--default);
+}
+.app-feedback-comment__box textarea {
+  width: 100%;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.875rem;
+  outline: none;
+}
+.app-feedback-comment__box:focus-within {
+  border-color: var(--app-accent-strong);
+  outline: 2px solid var(--app-accent-strong);
+  outline-offset: 2px;
+}
+.app-feedback-comment__actions { display: flex; justify-content: flex-end; gap: var(--pf-t--global--spacer--sm); margin-top: var(--pf-t--global--spacer--xs); }

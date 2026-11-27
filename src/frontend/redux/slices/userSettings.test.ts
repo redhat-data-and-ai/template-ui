@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { scopedStorageKey } from '../../lib/app-paths';
+import { themeStorageKey } from '../../lib/theme-storage';
 import userSettingsReducer, {
   addAlwaysAllowedTool,
   clearAlwaysAllowedTools,
@@ -43,6 +46,54 @@ describe('userSettings slice', () => {
     const base = userSettingsReducer(freshState(), setTheme('light'));
     const s = userSettingsReducer(base, toggleTheme());
     expect(s.theme).toBe('dark');
+  });
+
+  it('legacy settings survive theme reset', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        theme: 'dark',
+        debugMode: true,
+        alwaysAllowedTools: ['ls'],
+        autoApproveAllTools: true,
+      }),
+    );
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: false, media: q }));
+    vi.resetModules();
+    const { default: reducer } = await import('./userSettings');
+    const s = reducer(undefined, { type: '@@INIT' });
+    vi.unstubAllGlobals();
+    expect(s.theme).toBe('light');
+    expect(s.debugMode).toBe(true);
+    expect(s.alwaysAllowedTools).toEqual(['ls']);
+    expect(s.autoApproveAllTools).toBe(true);
+  });
+
+  it('setTheme persists explicit choice', () => {
+    userSettingsReducer(freshState(), setTheme('dark'));
+    expect(localStorage.getItem(themeStorageKey())).toBe('dark');
+  });
+
+  it('theme key is resolved once at init, not per write', async () => {
+    window.history.pushState({}, '', '/');
+    vi.resetModules();
+    const mod = await import('./userSettings');
+    const initKey = themeStorageKey();
+    expect(initKey).toBe('template-ui-theme');
+    window.history.pushState({}, '', '/agents/foo/chat');
+    expect(themeStorageKey()).toBe('template-ui-theme:agents/foo');
+    const base = mod.default(undefined, { type: '@@INIT' });
+    mod.default(base, mod.setTheme('dark'));
+    window.history.pushState({}, '', '/');
+    expect(localStorage.getItem(initKey)).toBe('dark');
+    expect(localStorage.getItem('template-ui-theme:agents/foo')).toBeNull();
+  });
+
+  it('index.html pre-paint script uses the theme key', () => {
+    const html = readFileSync(resolve(__dirname, '../../../../index.html'), 'utf8');
+    expect(html).toContain("'template-ui-theme'");
+    expect(html).toContain('pf-v6-theme-dark');
+    expect(html).not.toContain("classList.add('dark'");
   });
 
   // ── Always-allowed tools ───────────────────────────────────────────────────
@@ -118,7 +169,7 @@ describe('userSettings slice', () => {
     vi.resetModules();
     const { default: freshReducer } = await import('./userSettings');
     const s = freshReducer(undefined, { type: '@@INIT' });
-    expect(s.theme).toBe('dark'); // default
+    expect(s.theme).toBe('light'); // OS default (jsdom has no dark preference)
     expect(s.alwaysAllowedTools).toEqual([]); // default
   });
 

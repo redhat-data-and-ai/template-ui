@@ -1,0 +1,203 @@
+/* App sidebar, nav rows and project list (PatternFly PageSidebar + Nav). */
+/* Borderless on the page background, like the platform portal. */
+#app-sidebar.pf-v6-c-page__sidebar {
+  --pf-v6-c-page__sidebar--BorderInlineEndWidth: 0;
+  --pf-v6-c-page__sidebar--BoxShadow: none;
+  --pf-v6-c-page__sidebar--BackgroundColor: transparent;
+  border-inline-end: 0;
+  box-shadow: none;
+}
+
+/* Below PF xl the sidebar is an overlay: opaque, shadowed, with a tap-away backdrop. */
+@media (max-width: 74.99rem) {
+  #app-sidebar.pf-v6-c-page__sidebar {
+    --pf-v6-c-page__sidebar--BackgroundColor: var(--app-page-bg);
+    --pf-v6-c-page__sidebar--BoxShadow: var(--pf-t--global--box-shadow--lg);
+    background-color: var(--app-page-bg);
+  }
+  #app-sidebar.pf-v6-c-page__sidebar.pf-m-expanded {
+    box-shadow: var(--pf-t--global--box-shadow--lg);
+    border-inline-end: var(--pf-t--global--border--width--regular) solid var(--app-border);
+  }
+}
+.app-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--pf-t--global--z-index--sm) - 1);
+  background-color: var(--pf-t--global--background--color--backdrop--default, rgba(0, 0, 0, 0.4));
+}
+@media (min-width: 75rem) {
+  .app-sidebar-backdrop { display: none; }
+}
+
+.app-sidebar-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--pf-t--global--spacer--sm);
+}
+.app-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--pf-t--global--spacer--sm);
+  --pf-v6-c-nav--RowGap: var(--pf-t--global--spacer--sm);
+  padding-block-start: 0;
+}
+.app-sidebar-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--sm);
+  /* Must equal .app-main's padding-block-start so both first items share a top edge. */
+  padding-block-start: var(--app-shell-top-gap);
+}
+.app-sidebar-top > .pf-v6-c-button {
+  height: 40px;
+  min-height: 40px;
+  padding-block: 0;
+  align-items: center;
+  justify-content: center;
+}
+.app-sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.app-sidebar-scroll .pf-v6-c-nav__list {
+  /* The list is a grid with an auto track: a long nowrap title would widen it past the container. */
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-sidebar-scroll .pf-v6-c-nav__item {
+  min-width: 0;
+}
+.app-sidebar-footer {
+  flex: none;
+  margin-inline: var(--pf-t--global--spacer--md);
+  padding-block: var(--pf-t--global--spacer--md);
+  padding-inline: var(--pf-t--global--spacer--sm);
+  border: 0;
+  border-block-start: var(--pf-t--global--border--width--regular) solid
+    var(--pf-t--global--border--color--default);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--pf-t--global--spacer--sm);
+}
+.app-sidebar-footer__text {
+  font-size: var(--pf-t--global--font--size--sm);
+  color: var(--app-text-secondary);
+}
+
+.app-nav-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-nav-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.app-nav-row > .pf-v6-c-nav__link {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  padding-inline-end: 2.5rem;
+}
+.app-nav-row__actions {
+  position: absolute;
+  inset-inline-end: var(--pf-t--global--spacer--xs);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+.app-nav-row:hover .app-nav-row__actions,
+.app-nav-row:focus-within .app-nav-row__actions,
+.app-nav-row--active .app-nav-row__actions,
+.app-nav-row__actions:has(.app-nav-row__toggle--open) {
+  opacity: 1;
+}
+.app-nav-row--dragging {
+  opacity: 0.5;
+}
+/* Active item: PatternFly's raised current row (neutral surface, normal text)
+   plus a bar in the left gutter, as in the platform portal. */
+.app-sidebar-scroll {
+  padding-inline-start: var(--pf-t--global--spacer--sm);
+}
+.app-nav-row--active::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--pf-t--global--spacer--sm) * -1);
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--pf-t--global--border--color--clicked);
+}
+.app-nav-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-inline: var(--pf-t--global--spacer--sm);
+}
+.app-nav-empty {
+  padding: var(--pf-t--global--spacer--xs) var(--pf-t--global--spacer--md);
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--sm);
+  list-style: none;
+}
+.app-nav-new-project {
+  width: 100%;
+  justify-content: flex-start;
+}
+.app-project-row__toggle {
+  flex: none;
+  padding: var(--pf-t--global--spacer--sm);
+  background: none;
+  border: 0;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+}
+.app-project-row__chevron {
+  transition: transform 0.15s ease;
+}
+.app-project-row__chevron.is-expanded {
+  transform: rotate(90deg);
+}
+.app-project-row__link {
+  gap: var(--pf-t--global--spacer--sm);
+}
+.app-project-row__count {
+  margin-inline-start: auto;
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--sm);
+}
+.app-project-chats {
+  margin-inline-start: var(--pf-t--global--spacer--xl);
+  padding: 0;
+  list-style: none;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+.app-drop-zone {
+  border-radius: var(--pf-t--global--border--radius--small);
+}
+.app-drop-zone--over {
+  outline: 2px solid var(--app-accent-border);
+  background: var(--app-accent-muted-bg);
+}
+.app-dialog-note {
+  margin-block-start: var(--pf-t--global--spacer--sm);
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--sm);
+}
+.app-spin {
+  animation: app-spin 1s linear infinite;
+}
+.app-nav-section-title {
+  padding-inline: var(--pf-t--global--spacer--md);
+  padding-block-end: var(--pf-t--global--spacer--xs);
+}
+.app-capitalize { text-transform: capitalize; }

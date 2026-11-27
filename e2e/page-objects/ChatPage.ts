@@ -15,11 +15,11 @@ export class ChatPage {
    * one AI message bubble to appear in the DOM.
    */
   async waitForAIResponse(timeout = 15_000): Promise<void> {
-    // The sr-only aria-live region in ChatPage.tsx announces "Response complete".
-    // Use the .sr-only qualifier to avoid matching the chat messages live-log element.
+    // The screen-reader aria-live region in ChatPage.tsx announces "Response complete".
+    // Use the .pf-v6-screen-reader qualifier to avoid matching the chat messages live-log element.
     await this.page.waitForFunction(
       () => {
-        const liveRegion = document.querySelector('.sr-only[aria-live="polite"]');
+        const liveRegion = document.querySelector('.pf-v6-screen-reader[aria-live="polite"]');
         return liveRegion?.textContent?.includes('Response complete');
       },
       { timeout },

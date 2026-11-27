@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import {
+  Alert,
+  Button,
+  List,
+  ListItem,
+  Spinner,
+  Title,
+} from '@patternfly/react-core';
 import { buildAppPath } from '../../lib/app-paths';
 
 interface ConsentStatus {
@@ -62,118 +69,69 @@ export function AuthorizationSettings() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8" role="status" aria-label="Loading authorization status">
-        <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary/30 border-t-primary" />
+      <div className="app-settings__center" role="status" aria-label="Loading authorization status">
+        <Spinner size="lg" aria-hidden="true" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
-      {/* Status indicator */}
-      <div className="flex items-center gap-3 p-4 rounded-lg bg-secondary border border-border">
-        {consentStatus?.hasConsent ? (
-          <CheckCircle className="w-6 h-6 text-green-500 dark:text-green-400 shrink-0" />
-        ) : (
-          <XCircle className="w-6 h-6 text-destructive shrink-0" />
-        )}
-        <div>
-          <p className="font-medium text-foreground">
-            {consentStatus?.hasConsent ? 'Authorization Granted' : 'Not Authorized'}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {consentStatus?.hasConsent
-              ? 'You have authorized this agent to act on your behalf'
-              : 'This agent does not have your authorization'}
-          </p>
-        </div>
-      </div>
+    <div className="app-settings__stack">
+      <Alert
+        component="h3"
+        isInline
+        variant={consentStatus?.hasConsent ? 'success' : 'danger'}
+        title={consentStatus?.hasConsent ? 'Authorization Granted' : 'Not Authorized'}
+      >
+        {consentStatus?.hasConsent
+          ? 'You have authorized this agent to act on your behalf'
+          : 'This agent does not have your authorization'}
+      </Alert>
 
       {consentStatus?.hasConsent && (
         <>
-          {/* Consent details */}
           {consentStatus.grantedAt && (
-            <div className="text-sm">
-              <span className="text-muted-foreground">Authorized on: </span>
-              <span className="text-foreground font-medium">
-                {new Date(consentStatus.grantedAt).toLocaleString()}
-              </span>
-            </div>
+            <p>
+              <span className="app-settings__muted">Authorized on: </span>
+              <strong>{new Date(consentStatus.grantedAt).toLocaleString()}</strong>
+            </p>
           )}
 
-          {/* What was granted */}
           <div>
-            <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-primary" />
+            <Title headingLevel="h3" size="md" style={{ marginBlockEnd: 'var(--pf-t--global--spacer--sm)' }}>
               Granted Permissions
-            </h3>
-            <ul className="space-y-1.5 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">
-                <CheckCircle className="w-3.5 h-3.5 text-green-500 dark:text-green-400 shrink-0" />
-                Authenticate with connected platforms using your SSO session
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="w-3.5 h-3.5 text-green-500 dark:text-green-400 shrink-0" />
-                Execute actions on your behalf through MCP tools and skills
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle className="w-3.5 h-3.5 text-green-500 dark:text-green-400 shrink-0" />
-                Read and process data from connected platforms
-              </li>
-            </ul>
+            </Title>
+            <List isPlain>
+              <ListItem>Authenticate with connected platforms using your SSO session</ListItem>
+              <ListItem>Execute actions on your behalf through MCP tools and skills</ListItem>
+              <ListItem>Read and process data from connected platforms</ListItem>
+            </List>
           </div>
 
-          {/* Revoke section */}
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
-            <div className="flex items-start gap-2 mb-3">
-              <AlertTriangle className="w-5 h-5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
-              <div>
-                <h4 className="font-medium text-foreground mb-1">Revoke Authorization</h4>
-                <p className="text-sm text-muted-foreground">
-                  Revoking will remove the agent's ability to act on your behalf.
-                  You will need to re-authorize to continue using the application.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleRevoke}
-              disabled={isRevoking}
-              className="px-4 py-2 rounded-lg bg-destructive text-white hover:bg-destructive/90 transition-colors disabled:opacity-70 disabled:cursor-not-allowed text-sm font-medium flex items-center gap-2"
-            >
-              {isRevoking ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
-                  Revoking…
-                </>
-              ) : (
-                'Revoke Authorization'
-              )}
-            </button>
-          </div>
+          <Alert component="h3" isInline variant="warning" title="Revoke Authorization">
+            <p style={{ marginBlockEnd: 'var(--pf-t--global--spacer--md)' }}>
+              Revoking will remove the agent&apos;s ability to act on your behalf. You will need to
+              re-authorize to continue using the application.
+            </p>
+            <Button variant="danger" onClick={handleRevoke} isDisabled={isRevoking} isLoading={isRevoking}>
+              {isRevoking ? 'Revoking…' : 'Revoke Authorization'}
+            </Button>
+          </Alert>
         </>
       )}
 
       {!consentStatus?.hasConsent && (
-        <div className="text-center py-4">
-          <p className="text-muted-foreground mb-4 text-sm">
+        <div>
+          <p className="app-settings__muted" style={{ marginBlockEnd: 'var(--pf-t--global--spacer--md)' }}>
             To use this agent, you need to grant authorization.
           </p>
-          <button
-            type="button"
-            onClick={() => navigate('/consent', { replace: true })}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium"
-          >
+          <Button variant="primary" onClick={() => navigate('/consent', { replace: true })}>
             Grant Authorization
-          </button>
+          </Button>
         </div>
       )}
 
-      {error && (
-        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3" role="alert">
-          <p className="text-sm text-destructive">{error}</p>
-        </div>
-      )}
+      {error && <Alert component="h3" isInline isLiveRegion variant="danger" title={error} role="alert" />}
     </div>
   );
 }

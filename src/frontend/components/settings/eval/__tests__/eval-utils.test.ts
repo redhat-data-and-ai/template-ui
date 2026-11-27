@@ -4,6 +4,8 @@ import {
   computeDelta,
   isLiveEvalRun,
   evalTriggerDoneMessage,
+  friendlyTagName,
+  parseTags,
 } from '../eval-utils';
 
 describe('friendlyMetricName', () => {
@@ -130,5 +132,23 @@ describe('evalTriggerDoneMessage', () => {
 
   it('returns null for a queued in-progress run', () => {
     expect(evalTriggerDoneMessage({ eval_status: 'in_progress' })).toBeNull();
+  });
+});
+
+describe('tag display', () => {
+  it('parses JSON-array tag strings and falls back to the raw string', () => {
+    expect(parseTags('["Non Hitl"]')).toEqual(['Non Hitl']);
+    expect(parseTags('["A", "B"]')).toEqual(['A', 'B']);
+    expect(parseTags('[not json')).toEqual(['[not json']);
+    expect(parseTags('tool_use')).toEqual(['tool_use']);
+    expect(parseTags('  ')).toEqual([]);
+  });
+
+  it('renders clean labels', () => {
+    expect(friendlyTagName('["Non Hitl"]')).toBe('Non-HITL');
+    expect(friendlyTagName('non_hitl')).toBe('Non-HITL');
+    expect(friendlyTagName('hitl')).toBe('HITL');
+    expect(friendlyTagName('tool_use')).toBe('Tool Use');
+    expect(friendlyTagName('["Multi Turn","hitl"]')).toBe('Multi Turn, HITL');
   });
 });

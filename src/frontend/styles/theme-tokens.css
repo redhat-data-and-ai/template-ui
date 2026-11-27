@@ -1,0 +1,166 @@
+/**
+ * Neutral design tokens (colors and surfaces).
+ * Ported from the platform portal palette. Layout lives in components.
+ */
+
+html {
+  font-size: 100%; /* 16px - default */
+}
+
+@media (min-width: 1600px) {
+  html {
+    font-size: 18px;
+  }
+}
+@media (min-width: 1800px) {
+  html {
+    font-size: 20px;
+  }
+}
+@media (min-width: 2000px) {
+  html {
+    font-size: 22px;
+  }
+}
+@media (min-width: 2200px) {
+  html {
+    font-size: 24px;
+  }
+}
+
+:root {
+  --app-accent: #f8a390;
+  --app-accent-hover: #fbb5a6;
+  --app-accent-strong: #c45c42;
+  --app-accent-strong-hover: #a84a34;
+  /* Text links need AA contrast (accent-strong is only 4.2:1 on white); borders and rings keep accent-strong. */
+  --app-link: #a84a34;
+  --app-link-hover: #8a3c2a;
+  --app-accent-on: #1a1a1a;
+  /* Text/icon colour on accent fills. Overwritten at runtime for branded agents. */
+  --app-on-accent: var(--app-accent-on);
+  --app-accent-border: rgba(196, 92, 66, 0.55);
+  --app-accent-muted-bg: rgba(248, 163, 144, 0.35);
+
+  /* Secondary - supportive actions (browse, cancel, outline CTAs) */
+  --app-secondary: #6b6560;
+  --app-secondary-hover: #57534e;
+  --app-secondary-strong: #44403c;
+  --app-secondary-strong-hover: #292524;
+  --app-secondary-on: #ffffff;
+  --app-secondary-border: rgba(68, 64, 60, 0.38);
+  --app-secondary-muted-bg: rgba(107, 101, 96, 0.12);
+
+  --app-positive: #1f7a4f;
+  --app-info: #2b6cb8;
+  --app-warning: #f97316;
+  --app-danger: #dc3545;
+  /* Status text uses darker shades in light mode for readable small text. */
+  --app-caution-text: #806000;
+  --app-warning-text: #a44500;
+  --app-danger-text: #b42332;
+
+  /* Page-level neutrals track PatternFly so they follow light/dark. */
+  --app-page-bg: var(--pf-t--global--background--color--secondary--default);
+  --app-text: var(--pf-t--global--text--color--regular);
+  --app-text-secondary: var(--pf-t--global--text--color--subtle);
+  --app-border: var(--pf-t--global--border--color--default);
+
+  /* Inset surfaces - recessed content on feature panels */
+  --app-surface-inset: rgba(255, 255, 255, 0.92);
+  --app-surface-inset-border: rgba(0, 0, 0, 0.12);
+
+  /* Interactive neutral surfaces - chips, toggles, filter controls */
+  --app-surface-interactive: rgba(255, 255, 255, 0.85);
+  --app-surface-interactive-hover: rgba(248, 163, 144, 0.15);
+
+  /* Raised surfaces - elevated panels and floating cards */
+  --app-surface-raised: #ffffff;
+
+  /* Disclaimer banner - warm stone, not status colors */
+  --app-disclaimer-bg: #f3efe8;
+  --app-disclaimer-border: rgba(68, 64, 60, 0.14);
+  --app-disclaimer-text: #3f3b37;
+
+  /* Chat bubbles */
+  --app-chat-bot-bg: #f3f1ef;
+  --app-chat-bot-text: #18181b;
+  --app-chat-user-bg: #fff1ed;
+  --app-chat-user-text: #a83d29;
+  --app-chat-user-border: #f6c7bb;
+
+  /* PatternFly overrides */
+  --pf-t--global--text--color--link--default: var(--app-link);
+  --pf-t--global--text--color--link--hover: var(--app-link-hover);
+}
+
+/* PF declares the primary-button vars inside .pf-v6-c-button, which beats
+   anything set on :root. Re-declare on the component (higher specificity). */
+.pf-v6-c-button.pf-m-primary {
+  --pf-v6-c-button--m-primary--BackgroundColor: var(--app-accent);
+  --pf-v6-c-button--m-primary--Color: var(--app-on-accent);
+  --pf-v6-c-button--m-primary--hover--BackgroundColor: var(--app-accent-hover);
+  --pf-v6-c-button--m-primary--hover--Color: var(--app-on-accent);
+}
+
+/* Secondary buttons are neutral grey (not PF's brand-blue outline) in every
+   state. Only real PF variables: default, hover, clicked (focus/pressed), icon. */
+.pf-v6-c-button.pf-m-secondary:not(.pf-m-danger) {
+  --pf-v6-c-button--m-secondary--Color: var(--pf-t--global--text--color--regular);
+  --pf-v6-c-button--m-secondary--BorderColor: var(--pf-t--global--border--color--default);
+  --pf-v6-c-button--m-secondary__icon--Color: var(--pf-t--global--icon--color--regular);
+  --pf-v6-c-button--m-secondary--hover--Color: var(--pf-t--global--text--color--regular);
+  --pf-v6-c-button--m-secondary--hover--BorderColor: var(--pf-t--global--text--color--subtle);
+  --pf-v6-c-button--m-secondary--hover__icon--Color: var(--pf-t--global--icon--color--regular);
+  --pf-v6-c-button--m-secondary--m-clicked--Color: var(--pf-t--global--text--color--regular);
+  --pf-v6-c-button--m-secondary--m-clicked--BorderColor: var(--pf-t--global--text--color--subtle);
+  --pf-v6-c-button--m-secondary--m-clicked__icon--Color: var(--pf-t--global--icon--color--regular);
+}
+
+/* Selected toggle-group item uses the portal salmon (like the portal's selected chip).
+   PF declares these vars on the button, so re-declare them at higher specificity. */
+.pf-v6-c-toggle-group__button.pf-m-selected,
+.pf-v6-c-toggle-group__button.pf-m-selected:hover {
+  --pf-v6-c-toggle-group__button--m-selected--BackgroundColor: var(--app-accent);
+  --pf-v6-c-toggle-group__button--m-selected--Color: var(--app-on-accent);
+  --pf-v6-c-toggle-group__button--m-selected--before--BorderColor: var(--app-accent);
+  --pf-v6-c-toggle-group__button--m-selected-selected--before--BorderInlineStartColor: var(--app-accent);
+}
+
+.pf-v6-theme-dark {
+  --app-caution-text: #f0c24b;
+  --app-warning-text: #ff9c66;
+  --app-danger-text: #ff858f;
+  --app-accent-strong: var(--app-accent);
+  --app-accent-strong-hover: var(--app-accent-hover);
+  --app-link: var(--app-accent-strong);
+  --app-link-hover: var(--app-accent-strong-hover);
+  --app-accent-border: rgba(248, 163, 144, 0.75);
+  --app-accent-muted-bg: rgba(248, 163, 144, 0.18);
+
+  --app-secondary: #a8a29e;
+  --app-secondary-hover: #d6d3d1;
+  --app-secondary-strong: #e7e5e4;
+  --app-secondary-strong-hover: #f5f5f4;
+  --app-secondary-on: #1a1a1a;
+  --app-secondary-border: rgba(168, 162, 158, 0.45);
+  --app-secondary-muted-bg: rgba(168, 162, 158, 0.14);
+
+  --app-surface-inset: rgba(255, 255, 255, 0.06);
+  --app-surface-inset-border: rgba(255, 255, 255, 0.14);
+
+  --app-surface-interactive: rgba(255, 255, 255, 0.04);
+  --app-surface-interactive-hover: rgba(248, 163, 144, 0.12);
+
+  --app-surface-raised: #161616;
+
+  --app-disclaimer-bg: #3a3632;
+  --app-disclaimer-border: rgba(216, 208, 198, 0.18);
+  --app-disclaimer-text: #e4dcd3;
+
+  --app-chat-bot-bg: #1d1d21;
+  --app-chat-bot-text: #f4f4f5;
+  --app-chat-user-bg: #3a211b;
+  --app-chat-user-text: #ffb3a1;
+  --app-chat-user-border: #68372c;
+}

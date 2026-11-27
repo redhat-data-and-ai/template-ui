@@ -1,6 +1,7 @@
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { Card, CardBody, Content, Label } from '@patternfly/react-core';
+import { ArrowDownIcon, ArrowUpIcon } from '@patternfly/react-icons';
 import type { MetricTrendPoint } from './eval-types';
-import { friendlyMetricName } from './eval-utils';
+import { friendlyMetricName, scoreTone, toneTextColor } from './eval-utils';
 import { SparklineChart } from './SparklineChart';
 
 interface MetricTrendCardProps {
@@ -35,48 +36,37 @@ export function MetricTrendCard({ metricKey, points, color, latestOverallAt }: M
   const prevPct = prev?.pass_rate != null ? Math.round(prev.pass_rate * 100) : null;
   const delta = pct != null && prevPct != null ? pct - prevPct : null;
 
-  const isGood = pct != null && pct >= 70;
-  const isBad = pct != null && pct < 50;
-  const scoreCls = pct == null
-    ? 'text-muted-foreground'
-    : isGood
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : isBad
-        ? 'text-red-600 dark:text-red-400'
-        : 'text-amber-600 dark:text-amber-400';
+  const tone = pct == null ? null : scoreTone(pct);
 
   const sparkData = sorted
     .map((p) => p.pass_rate)
     .filter((v): v is number => v != null);
 
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
-        {friendlyMetricName(metricKey)}
-      </p>
-      <div className="flex items-end justify-between gap-2">
-        <div className="flex items-baseline gap-2">
-          <span className={`text-2xl font-bold tabular-nums ${scoreCls}`}>
-            {pct != null ? `${pct}%` : '—'}
-          </span>
-          {delta != null && delta !== 0 && (
-            <span
-              className={`inline-flex items-center gap-0.5 text-xs font-medium ${
-                delta > 0
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-red-600 dark:text-red-400'
-              }`}
+    <Card isCompact>
+      <CardBody>
+        <Content component="small" style={{ textTransform: 'uppercase' }}>
+          {friendlyMetricName(metricKey)}
+        </Content>
+        <div className="app-settings__row" style={{ alignItems: 'flex-end' }}>
+          <div className="app-settings__inline">
+            <strong
+              style={{
+                fontSize: 'var(--pf-t--global--font--size--2xl)',
+                color: tone ? toneTextColor(tone) : undefined,
+              }}
             >
-              {delta > 0 ? (
-                <><TrendingUp className="w-3.5 h-3.5" /> {delta}pts</>
-              ) : (
-                <><TrendingDown className="w-3.5 h-3.5" /> {Math.abs(delta)}pts</>
-              )}
-            </span>
-          )}
+              {pct != null ? `${pct}%` : '—'}
+            </strong>
+            {delta != null && delta !== 0 && (
+              <Label isCompact color={delta > 0 ? 'green' : 'red'} icon={delta > 0 ? <ArrowUpIcon /> : <ArrowDownIcon />}>
+                {Math.abs(delta)}pts
+              </Label>
+            )}
+          </div>
+          {sparkData.length >= 2 && <SparklineChart data={sparkData} color={color} />}
         </div>
-        {sparkData.length >= 2 && <SparklineChart data={sparkData} color={color} />}
-      </div>
-    </div>
+      </CardBody>
+    </Card>
   );
 }

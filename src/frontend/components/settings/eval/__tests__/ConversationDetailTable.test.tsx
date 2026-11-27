@@ -34,7 +34,7 @@ describe('ConversationDetailTable', () => {
       />
     );
     expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Hitl' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'HITL' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Tool Use' })).toBeInTheDocument();
   });
 
@@ -48,7 +48,7 @@ describe('ConversationDetailTable', () => {
         onTagChange={onTagChange}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Hitl' }));
+    fireEvent.click(screen.getByRole('button', { name: 'HITL' }));
     expect(onTagChange).toHaveBeenCalledWith('hitl');
   });
 

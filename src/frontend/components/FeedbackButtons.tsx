@@ -1,7 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
-import { ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Button } from '@patternfly/react-core';
+import {
+  OutlinedThumbsDownIcon,
+  OutlinedThumbsUpIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
+} from '@patternfly/react-icons';
 
-import { cn } from '../lib/utils';
 import { useAppDispatch } from '../redux/hooks';
 import { setMessageFeedback } from '../redux/slices/chats';
 import { addToast } from '../redux/slices/toasts';
@@ -123,39 +128,28 @@ export function useFeedback({
   };
 }
 
-/** Inline thumbs-up and thumbs-down buttons */
+/** Inline thumbs-up and thumbs-down buttons (neutral grey; a selected rating shows as the filled icon). */
 export function FeedbackButtons({ fb }: { fb: FeedbackState }) {
-  const baseBtn =
-    'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
-
   return (
     <>
-      <button
-        type="button"
-        className={cn(
-          baseBtn,
-          fb.existingFeedback === 'up' && 'text-primary bg-primary/10 hover:bg-primary/15 hover:text-primary',
-        )}
-        disabled={fb.disabled}
-        aria-pressed={fb.existingFeedback === 'up' ? true : false}
+      <Button
+        variant="plain"
+        size="sm"
+        isDisabled={fb.disabled}
+        aria-pressed={fb.existingFeedback === 'up'}
         aria-label="Rate response as helpful"
+        icon={fb.existingFeedback === 'up' ? <ThumbsUpIcon /> : <OutlinedThumbsUpIcon />}
         onClick={fb.handleThumbsUp}
-      >
-        <ThumbsUp className={cn('h-3.5 w-3.5', fb.existingFeedback === 'up' && 'fill-current')} strokeWidth={2} />
-      </button>
-      <button
-        type="button"
-        className={cn(
-          baseBtn,
-          fb.existingFeedback === 'down' && 'text-primary bg-primary/10 hover:bg-primary/15 hover:text-primary',
-        )}
-        disabled={fb.disabled}
-        aria-pressed={fb.existingFeedback === 'down' ? true : false}
+      />
+      <Button
+        variant="plain"
+        size="sm"
+        isDisabled={fb.disabled}
+        aria-pressed={fb.existingFeedback === 'down'}
         aria-label="Rate response as not helpful"
+        icon={fb.existingFeedback === 'down' ? <ThumbsDownIcon /> : <OutlinedThumbsDownIcon />}
         onClick={fb.handleThumbsDown}
-      >
-        <ThumbsDown className={cn('h-3.5 w-3.5', fb.existingFeedback === 'down' && 'fill-current')} strokeWidth={2} />
-      </button>
+      />
     </>
   );
 }
@@ -174,33 +168,24 @@ export function FeedbackCommentBox({ fb }: { fb: FeedbackState }) {
   };
 
   return (
-    <div className="pl-11 mt-1">
-      <div className="rounded-lg border border-border bg-muted/50 p-3 min-w-[280px] max-w-[400px] animate-in fade-in slide-in-from-top-1 duration-200">
+    <div className="app-feedback-comment">
+      <div className="app-feedback-comment__box">
         <textarea
           value={fb.comment}
           onChange={(e) => fb.setComment(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="What went wrong? (optional)"
-          className="w-full resize-none border-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          aria-label="Feedback comment"
           autoFocus
           rows={1}
         />
-        <div className="mt-2 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            onClick={fb.cancelComment}
-          >
+        <div className="app-feedback-comment__actions">
+          <Button variant="link" size="sm" onClick={fb.cancelComment}>
             Cancel
-          </button>
-          <button
-            type="button"
-            className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40"
-            disabled={fb.isSubmitting}
-            onClick={fb.handleCommentSubmit}
-          >
+          </Button>
+          <Button variant="primary" size="sm" isDisabled={fb.isSubmitting} onClick={fb.handleCommentSubmit}>
             {fb.isSubmitting ? 'Sending...' : 'Send'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

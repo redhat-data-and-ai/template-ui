@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { mountConfig } from '../helpers/config-mount';
 import { SettingsPage } from '../page-objects/SettingsPage';
-import { setLocalStorageSettings, getLocalStorageSettings } from '../helpers/local-storage';
+import { setLocalStorageSettings } from '../helpers/local-storage';
 
 /**
  * Settings page tests:
@@ -80,17 +80,19 @@ test.describe('Settings page', () => {
 
     // Toggle to "Dark" theme
     const darkOption = page.getByRole('radio', { name: /dark/i });
-    await darkOption.click();
+    // PF selectable cards cover the radio with a label overlay; clicking the card toggles it.
+    await page.locator('label[for="theme-radio-dark"]').click();
 
-    const stored = await getLocalStorageSettings(page);
-    expect(stored?.theme).toBe('dark');
+    await expect(darkOption).toBeChecked();
+    expect(await page.evaluate(() => localStorage.getItem('template-ui-theme'))).toBe('dark');
+    await expect(page.locator('html')).toHaveClass(/pf-v6-theme-dark/);
 
     // Toggle back to "Light"
     const lightOption = page.getByRole('radio', { name: /light/i });
-    await lightOption.click();
+    await page.locator('label[for="theme-radio-light"]').click();
 
-    const stored2 = await getLocalStorageSettings(page);
-    expect(stored2?.theme).toBe('light');
+    await expect(lightOption).toBeChecked();
+    expect(await page.evaluate(() => localStorage.getItem('template-ui-theme'))).toBe('light');
   });
 
   // ── Pre-populated settings from localStorage ───────────────────────────────

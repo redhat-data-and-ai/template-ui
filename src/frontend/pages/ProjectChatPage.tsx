@@ -1,8 +1,21 @@
 import { useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { Button, Modal, ModalBody, ModalFooter, ModalHeader, ModalVariant, Spinner } from '@patternfly/react-core';
-import { Plus, MessageSquare, FolderMinus } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardBody,
+  EmptyState,
+  EmptyStateBody,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  ModalVariant,
+  Spinner,
+  Title,
+} from '@patternfly/react-core';
+import { CommentsIcon, FolderMinusIcon, PlusIcon } from '@patternfly/react-icons';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { addChat, selectChatsByProject, type ChatItem } from '../redux/slices/chats';
 import {
@@ -13,6 +26,7 @@ import {
 } from '../redux/slices/projects';
 import { addToast } from '../redux/slices/toasts';
 import { markChatAsClientCreated } from '../services/newChatTracker';
+import './pages.css';
 
 export function ProjectChatPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -63,17 +77,17 @@ export function ProjectChatPage() {
 
   if (isLoading && !project) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
+      <div className="app-center-fill">
         <Spinner size="lg" aria-label="Loading project" />
-        <p className="text-muted-foreground">Loading project...</p>
+        <p>Loading project...</p>
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Project not found</p>
+      <div className="app-center-fill">
+        <p>Project not found</p>
       </div>
     );
   }
@@ -81,26 +95,26 @@ export function ProjectChatPage() {
   const visibleCount = Math.max(project.thread_count, projectChats.length);
 
   return (
-    <div className="flex flex-col h-full min-h-0 p-6 max-w-3xl mx-auto">
-      <div className="shrink-0 mb-6">
-        <h1 className="text-2xl font-bold">{project.project_name}</h1>
+    <div className="app-project">
+      <div className="app-project__head">
+        <Title headingLevel="h1" size="2xl">{project.project_name}</Title>
         {project.project_description && (
-          <p className="text-muted-foreground mt-1">{project.project_description}</p>
+          <p className="app-project__desc">{project.project_description}</p>
         )}
-        <p className="text-sm text-muted-foreground mt-2">
+        <p className="app-project__count">
           {visibleCount} conversation(s)
         </p>
       </div>
 
-      <div className="shrink-0 flex flex-wrap gap-2">
-        <Button variant="primary" onClick={startChat} icon={<Plus className="w-4 h-4" />}>
+      <div className="app-project__actions">
+        <Button variant="primary" onClick={startChat} icon={<PlusIcon />}>
           New Chat in Project
         </Button>
         {visibleCount > 0 && (
           <Button
             variant="secondary"
             onClick={() => setUnassignConfirmOpen(true)}
-            icon={<FolderMinus className="w-4 h-4" />}
+            icon={<FolderMinusIcon />}
           >
             Unassign all
           </Button>
@@ -108,20 +122,20 @@ export function ProjectChatPage() {
       </div>
 
       <div
-        className="mt-6 flex-1 min-h-0 overflow-y-auto space-y-2"
+        className="app-project__list"
         role="region"
         aria-label="Project conversations"
       >
         {projectChats.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground">
-            <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            <p>No conversations yet. Start one above.</p>
-          </div>
+          <EmptyState variant="sm" icon={CommentsIcon} titleText="No conversations yet" headingLevel="h2">
+            <EmptyStateBody>Start one above.</EmptyStateBody>
+          </EmptyState>
         ) : (
           projectChats.map((chat) => (
-            <div
+            <Card
               key={chat.id}
-              className="p-3 rounded-lg border border-border hover:bg-secondary/50 cursor-pointer transition-colors"
+              isCompact
+              className="app-project__item"
               onClick={() => navigate(`/chat/${chat.id}`)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -132,9 +146,11 @@ export function ProjectChatPage() {
               role="button"
               tabIndex={0}
             >
-              <p className="font-medium">{chat.title}</p>
-              <p className="text-sm text-muted-foreground truncate">{chat.preview}</p>
-            </div>
+              <CardBody>
+                <div className="app-project__item-title">{chat.title}</div>
+                <div className="app-project__item-preview">{chat.preview}</div>
+              </CardBody>
+            </Card>
           ))
         )}
       </div>

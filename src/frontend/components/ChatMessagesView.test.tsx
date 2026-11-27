@@ -284,3 +284,59 @@ describe('ChatMessagesView — explicit interrupt ownership', () => {
     expect(onResume).toHaveBeenCalledWith([{type:'approve'},{type:'approve'}],'a');
   });
 });
+
+describe('ChatMessagesView — PatternFly Chatbot transcript', () => {
+  const AI_REPLY = { type: 'ai', id: 'msg-ai-1', content: 'Hi there', tool_calls: [] } as unknown as Message;
+  const HUMAN_2 = { type: 'human', id: 'msg-human-2', content: 'Thanks', tool_calls: [] } as unknown as Message;
+  const AI_REPLY_2 = { type: 'ai', id: 'msg-ai-2', content: 'Any time', tool_calls: [] } as unknown as Message;
+
+  function renderView(messages: Message[]) {
+    return render(
+      <Provider store={makeStore()}>
+        <ChatMessagesView {...makeBaseProps({ messages })} />
+      </Provider>,
+    );
+  }
+
+  it('wraps the transcript in ChatbotContent and MessageBox', () => {
+    const { container } = renderView([HUMAN_MESSAGE, AI_REPLY]);
+    const content = container.querySelector('.pf-chatbot__content');
+    expect(content).not.toBeNull();
+    const box = content!.querySelector('.pf-chatbot__messagebox');
+    expect(box).not.toBeNull();
+    expect(within(box as HTMLElement).getByRole('log', { name: 'Chat messages' })).toBeInTheDocument();
+  });
+
+  it('renders one portal-style bubble per message', () => {
+    const { container } = renderView([HUMAN_MESSAGE, AI_REPLY, HUMAN_2, AI_REPLY_2]);
+    const log = screen.getByRole('log', { name: 'Chat messages' });
+    expect(log.querySelectorAll('.chat-bubble')).toHaveLength(4);
+    expect(log.querySelectorAll('.chat-bubble--user')).toHaveLength(2);
+    expect(log.querySelectorAll('.chat-bubble--bot')).toHaveLength(2);
+    expect(screen.getAllByRole('article', { name: 'Message from human' })).toHaveLength(2);
+    expect(screen.getAllByRole('article', { name: 'Message from assistant' })).toHaveLength(2);
+    expect(container.querySelector('.chat-bubble--user .chat-bubble-content')).toHaveTextContent('Hello agent');
+  });
+
+  it('keeps copy, edit and feedback buttons inside the bubble actions', () => {
+    renderView([HUMAN_MESSAGE, AI_REPLY]);
+    const [humanBubble] = screen.getAllByRole('article', { name: 'Message from human' });
+    const [aiBubble] = screen.getAllByRole('article', { name: 'Message from assistant' });
+    const humanActions = humanBubble.querySelector('.chat-bubble-actions') as HTMLElement;
+    const aiActions = aiBubble.querySelector('.chat-bubble-actions') as HTMLElement;
+    expect(within(humanActions).getByRole('button', { name: 'Copy message' })).toBeInTheDocument();
+    expect(within(humanActions).getByRole('button', { name: 'Edit message' })).toBeInTheDocument();
+    expect(within(aiActions).getByRole('button', { name: 'Copy message' })).toBeInTheDocument();
+    expect(within(aiActions).getByRole('button', { name: 'Rate response as helpful' })).toBeInTheDocument();
+    expect(within(aiActions).getByRole('button', { name: 'Rate response as not helpful' })).toBeInTheDocument();
+  });
+
+  it('renders the thinking indicator as a bot bubble while loading', () => {
+    render(
+      <Provider store={makeStore()}>
+        <ChatMessagesView {...makeBaseProps({ messages: [HUMAN_MESSAGE], isLoading: true })} />
+      </Provider>,
+    );
+    expect(screen.getByRole('status', { name: 'Agent is thinking' })).toHaveClass('chat-bubble--bot');
+  });
+});

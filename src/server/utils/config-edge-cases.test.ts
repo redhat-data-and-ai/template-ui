@@ -200,7 +200,7 @@ describe("Env override precedence over YAML", () => {
     process.env.BRANDING_PRIMARY_LIGHT = "#123456";
 
     const settings = getSettings();
-    expect(settings.branding.colors.light.primary).toBe("#123456");
+    expect(settings.branding.colors?.light.primary).toBe("#123456");
     restore();
   });
 

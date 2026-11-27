@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createTestStore } from '../../test-utils/createTestStore';
 import { addChat } from '../../redux/slices/chats';
@@ -67,25 +67,30 @@ vi.mock('../../lib/streaming/streamingManagerRegistry', () => ({
   releaseStreamingManager: vi.fn(),
 }));
 
-vi.mock('../Sidebar', () => ({
-  Sidebar: ({
+vi.mock('../sidebar/AppSidebar', () => ({
+  AppSidebar: ({
     onNewChat,
     onDeleteProject,
     onDeleteChat,
+    onSelectChat,
+    isOpen,
   }: {
+    isOpen: boolean;
+    onSelectChat: (id: string) => void;
     onNewChat: () => void;
     onDeleteProject: (id: string, options?: { keepThreads?: boolean }) => Promise<boolean>;
     onDeleteChat: (id: string) => void;
   }) => (
-    <>
+    <div data-testid="sidebar" data-open={String(isOpen)}>
       <button type="button" onClick={() => onNewChat()}>new-chat</button>
+      <button type="button" onClick={() => onSelectChat('c1')}>select-chat</button>
       <button type="button" onClick={() => { void onDeleteProject('p1'); }}>
         delete-project
       </button>
       <button type="button" onClick={() => { void onDeleteChat('c1'); }}>
         delete-chat
       </button>
-    </>
+    </div>
   ),
 }));
 
@@ -144,6 +149,21 @@ function renderLayout(store: ReturnType<typeof createTestStore>) {
     </Provider>,
   );
 }
+
+describe('AppLayout — disclaimer', () => {
+  it('renders exactly one disclaimer, even around the home composer', async () => {
+    vi.mocked(getAllThreadsByUserId).mockResolvedValue([]);
+    render(
+      <Provider store={createTestStore()}>
+        <MemoryRouter>
+          <AppLayout><HomePage /></AppLayout>
+        </MemoryRouter>
+      </Provider>,
+    );
+    expect(screen.getAllByText(/You are interacting with an AI tool/)).toHaveLength(1);
+    await waitFor(() => expect(getAllThreadsByUserId).toHaveBeenCalled());
+  });
+});
 
 describe('AppLayout — project delete and chat count', () => {
   beforeEach(() => {
@@ -362,5 +382,154 @@ describe('AppLayout — project thread hydration', () => {
     expect(store.getState().chats.chats.find((c) => c.id === 'c-old')?.project_id).toBe('p1');
     expect(getProjects).toHaveBeenCalled();
     expect(getThreadsByProject).toHaveBeenCalledWith('p1');
+  });
+});
+
+function mockViewport(desktop: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: desktop,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      onchange: null,
+      dispatchEvent: vi.fn(),
+    }),
+  });
+}
+
+describe('AppLayout — responsive sidebar', () => {
+  beforeEach(() => {
+    vi.mocked(getAllThreadsByUserId).mockResolvedValue([]);
+    mocks.getProjects.mockResolvedValue([]);
+    mocks.getThreadsByProject.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it('starts open on desktop', () => {
+    mockViewport(true);
+    renderLayout(createTestStore());
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
+    expect(document.querySelector('.app-sidebar-backdrop')).toBeNull();
+  });
+
+  it('starts closed below the xl breakpoint and opens from the toggle', async () => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
+    expect(document.querySelector('.app-sidebar-backdrop')).not.toBeNull();
+  });
+
+  it.each(['new-chat', 'select-chat'])('closes after %s, returning focus to the toggle', async (name) => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    const toggle = screen.getByRole('button', { name: 'Toggle navigation' });
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name }));
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    expect(toggle).toHaveFocus();
+  });
+
+  it('closes on Escape and on backdrop click', async () => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    await userEvent.click(document.querySelector('.app-sidebar-backdrop') as HTMLElement);
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('ignores Escape that is already handled or comes from an input or menu', async () => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    const sidebar = screen.getByTestId('sidebar');
+
+    const input = document.createElement('input');
+    sidebar.appendChild(input);
+    input.focus();
+    await userEvent.keyboard('{Escape}');
+    expect(sidebar).toHaveAttribute('data-open', 'true');
+    input.remove();
+
+    const menu = document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    sidebar.appendChild(menu);
+    menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(sidebar).toHaveAttribute('data-open', 'true');
+    menu.remove();
+
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    handled.preventDefault();
+    document.body.dispatchEvent(handled);
+    expect(sidebar).toHaveAttribute('data-open', 'true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(sidebar).toHaveAttribute('data-open', 'false');
+  });
+
+  it('stays open after navigation on desktop', async () => {
+    mockViewport(true);
+    renderLayout(createTestStore());
+    await userEvent.click(screen.getByRole('button', { name: 'select-chat' }));
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
+  });
+
+  it('returns focus to the toggle when the user closes the overlay with Escape', async () => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    const toggle = screen.getByRole('button', { name: 'Toggle navigation' });
+    await userEvent.click(toggle);
+    await userEvent.keyboard('{Escape}');
+    expect(toggle).toHaveFocus();
+    await userEvent.click(toggle);
+    await userEvent.click(toggle);
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    expect(toggle).toHaveFocus();
+  });
+
+  it('keeps focus in the composer and the overlay closed when crossing desktop to narrow', async () => {
+    const listeners = new Set<() => void>();
+    let desktop = true;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        get matches() { return desktop; },
+        media: query,
+        addEventListener: (_: string, cb: () => void) => listeners.add(cb),
+        removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
+      }),
+    });
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => {
+      seen.push(`${document.querySelector('.app-sidebar-backdrop') ? 'backdrop' : ''}${document.querySelector('[data-testid="sidebar"]')?.getAttribute('data-open')}`);
+    });
+    renderLayout(createTestStore());
+    const composer = document.createElement('textarea');
+    document.body.appendChild(composer);
+    composer.focus();
+    observer.observe(document.body, { subtree: true, attributes: true, childList: true });
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
+    act(() => {
+      desktop = false;
+      listeners.forEach((cb) => cb());
+    });
+    observer.disconnect();
+    expect(composer).toHaveFocus();
+    composer.remove();
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    expect(document.querySelector('.app-sidebar-backdrop')).toBeNull();
+    expect(seen.some((v) => v.includes('backdrop') || v.endsWith('true'))).toBe(false);
   });
 });

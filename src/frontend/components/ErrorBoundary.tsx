@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { ErrorRecovery } from './ErrorRecovery';
+import './dialogs.css';
 import { buildAppPath } from '../lib/app-paths';
 
 interface Props {
@@ -55,8 +56,8 @@ export class ErrorBoundary extends Component<Props, State> {
         this.state.error?.stack ?? this.state.error?.message;
 
       return (
-        <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8">
-          <div className="max-w-md w-full">
+        <div className="app-boundary">
+          <div className="app-boundary__inner">
             <ErrorRecovery
               title="Something went wrong"
               errorMessage="An unexpected error occurred. You can try reloading the page or going back."

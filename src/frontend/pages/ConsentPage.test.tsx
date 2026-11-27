@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { Provider } from 'react-redux';
+import { createTestStore } from '../test-utils/createTestStore';
 import { ConsentPage } from './ConsentPage';
 
 const mockNavigate = vi.fn();
@@ -16,13 +18,23 @@ describe('ConsentPage', () => {
   });
 
   it('renders authorization page', () => {
-    const { getByText } = render(
-      <MemoryRouter>
+    render(
+      <Provider store={createTestStore()}><MemoryRouter>
         <ConsentPage />
-      </MemoryRouter>,
+      </MemoryRouter></Provider>,
     );
-    expect(getByText('Authorization Required')).toBeDefined();
-    expect(getByText('Acknowledge & Proceed')).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'Authorization Required' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Acknowledge & Proceed' })).toBeDefined();
+    expect(screen.getByText('AI Technology Usage Notice')).toBeDefined();
+  });
+
+  it('exposes a single main landmark', () => {
+    render(
+      <Provider store={createTestStore()}><MemoryRouter>
+        <ConsentPage />
+      </MemoryRouter></Provider>,
+    );
+    expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
   it('calls API on approve', async () => {
@@ -32,13 +44,13 @@ describe('ConsentPage', () => {
     });
     vi.stubGlobal('fetch', mockFetch);
 
-    const { getByText } = render(
-      <MemoryRouter>
+    render(
+      <Provider store={createTestStore()}><MemoryRouter>
         <ConsentPage />
-      </MemoryRouter>,
+      </MemoryRouter></Provider>,
     );
 
-    fireEvent.click(getByText('Acknowledge & Proceed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge & Proceed' }));
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/auth/consent/approve', expect.any(Object));
@@ -50,19 +62,20 @@ describe('ConsentPage', () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: false });
     vi.stubGlobal('fetch', mockFetch);
 
-    const { getByText } = render(
-      <MemoryRouter>
+    render(
+      <Provider store={createTestStore()}><MemoryRouter>
         <ConsentPage />
-      </MemoryRouter>,
+      </MemoryRouter></Provider>,
     );
 
-    fireEvent.click(getByText('Acknowledge & Proceed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge & Proceed' }));
 
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
     await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
 
-    expect(getByText(/Failed to approve consent/)).toBeDefined();
+    expect(screen.getByRole('alert').textContent).toMatch(/Failed to approve consent/);
+    expect(screen.getByRole('button', { name: 'Acknowledge & Proceed' })).toBeEnabled();
     expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 });

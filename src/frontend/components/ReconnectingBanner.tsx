@@ -1,4 +1,5 @@
 import { Alert } from '@patternfly/react-core';
+import './rich-content.css';
 import type { StreamingState } from '@/redux/slices/chats';
 
 interface ReconnectingBannerProps {
@@ -17,7 +18,7 @@ export function ReconnectingBanner({ streamingState, maxRetries }: ReconnectingB
     : '';
 
   return (
-    <Alert variant="warning" isInline title="Reconnecting..." role="status" aria-live="polite">
+    <Alert variant="warning" isInline className="app-reconnecting" title="Reconnecting..." role="status" aria-live="polite">
       {attemptText}{midResponseWarning ? '.' : ''}{midResponseWarning}
     </Alert>
   );

@@ -1,0 +1,65 @@
+/* Value boxes inside the expanded sub-agent card (delegation, result, arguments).
+   Scoped, unlayered component CSS. */
+.app-subagent-box {
+  margin: 0;
+  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+  border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background: var(--pf-t--global--background--color--secondary--default);
+  color: var(--pf-t--global--text--color--regular);
+  font-family: var(--pf-t--global--font--family--mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+pre.app-subagent-box {
+  max-height: 15rem;
+  overflow: auto;
+}
+
+/* Sub-agent card: one border (PF Card), padded content, no avatar of its own. */
+.app-subagent { width: 100%; min-width: 0; }
+
+.app-subagent .app-subagent__card--attention {
+  border-color: var(--pf-t--global--border--color--status--warning--default);
+}
+
+.app-subagent .app-subagent__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  min-width: 0;
+}
+
+.app-subagent .app-subagent__name {
+  font-weight: var(--pf-t--global--font--weight--body--bold);
+  text-transform: capitalize;
+}
+
+.app-subagent .app-subagent__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+}
+
+.app-subagent .app-subagent__label {
+  margin: 0 0 var(--pf-t--global--spacer--xs);
+  font-size: 0.75rem;
+  font-weight: var(--pf-t--global--font--weight--body--bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pf-t--global--text--color--subtle);
+}
+
+.app-subagent .app-subagent__processing {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--pf-t--global--text--color--subtle);
+}
+
+.app-subagent .app-subagent__args {
+  padding: var(--pf-t--global--spacer--md);
+  border-top: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+}

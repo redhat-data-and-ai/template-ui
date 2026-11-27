@@ -1,9 +1,10 @@
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestStore } from '../test-utils/createTestStore';
+import { setDebugMode } from '../redux/slices/userSettings';
 import { addChat, setLoadingThreads, updateChat, updateStreamingState } from '../redux/slices/chats';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
 import { getThreadFeedback } from '../services/feedback-api';
@@ -16,7 +17,9 @@ const health = vi.hoisted(() => ({ status: 'healthy' }));
 vi.mock('../hooks/useAgentHealth', () => ({ useAgentHealth: () => health }));
 vi.mock('../services/agent-rest', () => ({ getThreadStateAndInterrupt: vi.fn() }));
 vi.mock('../services/feedback-api', () => ({ getThreadFeedback: vi.fn(async () => ({})) }));
-vi.mock('../components/ChatMessagesView', () => ({ ChatMessagesView: () => <div>Messages</div> }));
+vi.mock('../components/ChatMessagesView', () => ({
+  ChatMessagesView: ({ headerActions }: { headerActions?: React.ReactNode }) => <div>Messages{headerActions}</div>,
+}));
 
 const messages = [{ type: 'human', id: 'h1', content: 'Original request' }] as any;
 const newer = [{ type: 'ai', id: 'new', content: 'Resume completed' }] as any;
@@ -40,6 +43,59 @@ function setup() {
   const old = { messages, interrupt: { id: 'consumed', value: 'Approve old action', resumable: true }, interrupts: [{ id: 'consumed', value: 'Approve old action', resumable: true }] };
   return { store, thread, ui, view, resolveOld, old };
 }
+
+describe('ChatPage debug toggle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    releaseAllStreamingManagers();
+    localStorage.clear();
+  });
+
+  it('shows the global debug toggle in the chat header and flips debugMode', async () => {
+    const { store, view, resolveOld, old } = setup();
+    await act(async () => { resolveOld(old); });
+    const btn = await screen.findByRole('button', { name: 'Enable debug mode' });
+    act(() => btn.click());
+    expect(store.getState().userSettings.debugMode).toBe(true);
+    expect(screen.getByRole('button', { name: 'Disable debug mode' })).toBeInTheDocument();
+    view.unmount();
+  });
+});
+
+describe('ChatPage debug panel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    releaseAllStreamingManagers();
+    localStorage.clear();
+  });
+
+  async function openPanel(msgs: any[]) {
+    const { store, thread, ui, view, resolveOld, old } = setup();
+    await act(async () => { resolveOld(old); });
+    act(() => { store.dispatch(setDebugMode(true)); });
+    thread.messages = msgs;
+    view.rerender(ui());
+    return view;
+  }
+
+  it('omits the Tasks & Tools slot and divider when there are no tool calls', async () => {
+    const view = await openPanel(messages);
+    expect(screen.queryByText('Tasks & Tools')).toBeNull();
+    const slot = screen.getByTestId('debug-panel-slot');
+    expect(slot.className).not.toContain('app-debug-aside__section--divided');
+    view.unmount();
+  });
+
+  it('shows Tasks & Tools above a divider when the thread has tool calls', async () => {
+    const view = await openPanel([
+      ...messages,
+      { type: 'ai', id: 'a1', content: '', tool_calls: [{ id: 'tc1', name: 'search', args: {} }] },
+    ]);
+    expect(screen.getByText('Tasks & Tools')).toBeInTheDocument();
+    expect(screen.getByTestId('debug-panel-slot').className).toContain('app-debug-aside__section--divided');
+    view.unmount();
+  });
+});
 
 describe('ChatPage hydration ordering', () => {
   beforeEach(() => {

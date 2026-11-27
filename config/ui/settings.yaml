@@ -3,17 +3,11 @@ branding:
   version: "v1.0.0"
   logo_url: "/dist/frontend/redhat-logo.svg"
   favicon_url: "/dist/frontend/redhat-logo.svg"
-  colors:
-    light:
-      primary: "#0066cc"
-      accent: "#a60000"
-      background: "#ffffff"
-      foreground: "#1a1a1a"
-    dark:
-      primary: "#4dabf7"
-      accent: "#f56e6e"
-      background: "#0a1628"
-      foreground: "#f0f4f8"
+  # Optional platform name shown in the masthead before the agent title.
+  # Env overrides: BRANDING_PLATFORM_NAME, BRANDING_PLATFORM_NAME_EMPHASIS, BRANDING_PLATFORM_URL
+  # platform_name: "Acme"
+  # platform_name_emphasis: "Agent Hub"
+  # platform_url: "https://hub.example.com"   # http/https only
 
 features:
   debug_mode_default: false

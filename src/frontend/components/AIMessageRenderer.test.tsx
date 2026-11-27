@@ -147,3 +147,19 @@ describe('AIMessageRenderer — tool display', () => {
     expect(screen.getByText('PR created')).toBeInTheDocument();
   });
 });
+
+describe('AIMessageRenderer — bubble content only', () => {
+  it('renders the reply body without its own card or avatar (ChatBubble supplies both)', () => {
+    const { container } = render(<AIMessageRenderer message={makeMsg({ content: 'Plain reply' })} />);
+    expect(screen.getByText('Plain reply')).toBeInTheDocument();
+    expect(container.querySelector('.chat-bubble')).toBeNull();
+    expect(container.querySelector('.gradient-brand')).toBeNull();
+    expect(container.querySelector('.shadow-card')).toBeNull();
+  });
+
+  it('renders tool calls without the separate settings avatar column', () => {
+    const { container } = render(<AIMessageRenderer message={makeMsg({ tool_calls: [CREATE_PR_TOOL_CALL] })} />);
+    expect(screen.getByRole('button', { name: /expand tool call: github_create_pr/i })).toBeInTheDocument();
+    expect(container.querySelector('.rounded-full')).toBeNull();
+  });
+});

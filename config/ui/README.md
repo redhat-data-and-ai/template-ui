@@ -29,18 +29,21 @@ branding:
   title: "Deep Agent"                        # Browser tab title and masthead heading
   logo_url: "/dist/frontend/redhat-logo.svg" # Path or URL served by the server
   favicon_url: "/dist/frontend/redhat-logo.svg"
+  # colors is optional. Omit it (or any single value) to keep the built-in palette.
   colors:
     light:
-      primary: "#0066cc"    # Primary action color (buttons, links)
-      accent: "#a60000"     # Accent / highlight color
+      primary: "#f8a390"    # Buttons and active states (maps to the accent)
+      accent: "#c45c42"     # Links and text actions (maps to the strong accent)
       background: "#ffffff" # Page background
       foreground: "#1a1a1a" # Default text color
     dark:
-      primary: "#4dabf7"
-      accent: "#f56e6e"
-      background: "#0a1628"
-      foreground: "#f0f4f8"
+      primary: "#f8a390"
+      accent: "#f8a390"
+      background: "#1a1a1a"
+      foreground: "#f0f0f0"
 ```
+
+**Colors are optional.** Every value you set is applied as-is; anything you leave out falls back to the built-in default palette. `primary` drives buttons and active navigation (`--app-accent`, with text colour picked automatically for contrast); `accent` drives links and text actions (`--app-accent-strong`). Check contrast of your own values: link text needs 4.5:1 against the background. See the README "Theming" section.
 
 **Color values must be 6-digit hex** (`#rrggbb`). The server validates colors at startup and fails with a clear error on malformed values.
 

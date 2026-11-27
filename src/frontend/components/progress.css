@@ -1,0 +1,103 @@
+/* Task progress strip, todos and tasks sidebar.
+   Scoped component CSS. */
+
+/* Horizontal strip: never scrolls vertically; scrolls horizontally only when the
+   steps overflow, with a thin scrollbar visible on hover/scroll only. */
+.app-task-strip {
+  /* flex-shrink 0: overflow:hidden would otherwise let the flex column squash the strip and clip the pills */
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.app-task-strip:hover,
+.app-task-strip:focus-within {
+  scrollbar-color: var(--pf-t--global--border--color--default) transparent;
+}
+
+.app-task-strip::-webkit-scrollbar { height: 6px; width: 0; }
+.app-task-strip::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.app-task-strip:hover::-webkit-scrollbar-thumb { background: var(--pf-t--global--border--color--default); }
+
+.app-task-strip .app-task-strip__row { display: flex; align-items: center; width: max-content; }
+.app-task-strip .app-task-strip__item { display: flex; align-items: center; flex-shrink: 0; }
+.app-task-strip .app-task-strip__connector {
+  display: inline-block;
+  width: 16px;
+  height: 1px;
+  background: var(--app-border);
+}
+.app-task-strip .app-task-strip__connector--done {
+  background: color-mix(in srgb, var(--pf-t--global--color--status--success--default) 60%, var(--app-border));
+}
+.app-task-strip .app-task-strip__sub { text-transform: capitalize; font-weight: var(--pf-t--global--font--weight--body--bold); }
+
+/* Todos (strip above composer + inline list) */
+.app-todos .app-todos__header {
+  display: flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  margin-bottom: var(--pf-t--global--spacer--xs);
+  color: var(--pf-t--global--text--color--subtle);
+}
+.app-todos .app-todos__title {
+  font-size: 0.75rem;
+  font-weight: var(--pf-t--global--font--weight--body--bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.app-todos .app-todos__count { margin-left: auto; font-size: 0.75rem; }
+.app-todos .app-todos__list { --pf-v6-c-list--m-plain__item--MarginBlockStart: 0; }
+.app-todos .app-todos__item { font-size: 0.8125rem; line-height: 1.4; }
+.app-todos .app-todos__item--pending { color: var(--pf-t--global--text--color--subtle); }
+.app-todos .app-todos__item--in_progress { font-weight: var(--pf-t--global--font--weight--body--bold); }
+.app-todos .app-todos__item--completed { color: var(--pf-t--global--text--color--status--success--default); }
+.app-todos .app-todos__item--struck { text-decoration: line-through; color: var(--pf-t--global--text--color--subtle); }
+.app-todos .app-todos__icon-gap { display: inline-block; width: 1em; }
+
+.app-todos.app-todos--strip {
+  border-top: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+  background: var(--pf-t--global--background--color--primary--default);
+}
+.app-todos--strip .app-todos__inner {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+}
+.app-todos.app-todos--box {
+  width: 100%;
+  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+  border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background: var(--pf-t--global--background--color--secondary--default);
+}
+
+/* Tasks sidebar (debug) */
+.app-tasks-sidebar { height: 100%; }
+.app-tasks-sidebar .app-tasks-sidebar__title { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: var(--pf-t--global--spacer--sm); font-size: 0.875rem; }
+.app-tasks-sidebar .app-tasks-sidebar__body { overflow-x: hidden; overflow-y: auto; }
+/* Let the list text shrink so long result previews ellipsize instead of forcing a horizontal scrollbar. */
+.app-tasks-sidebar .pf-v6-c-list__item,
+.app-tasks-sidebar .pf-v6-c-list__item-text { min-width: 0; }
+.app-tasks-sidebar .pf-v6-c-list__item-text { flex: 1 1 0%; overflow: hidden; }
+.app-tasks-sidebar .app-tasks-sidebar__row { display: flex; align-items: center; gap: var(--pf-t--global--spacer--sm); min-width: 0; }
+.app-tasks-sidebar .app-tasks-sidebar__name { font-size: 0.75rem; font-weight: var(--pf-t--global--font--weight--body--bold); font-family: var(--pf-t--global--font--family--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-tasks-sidebar .app-tasks-sidebar__name--agent { font-family: inherit; text-transform: capitalize; }
+.app-tasks-sidebar .app-tasks-sidebar__preview { display: block; font-size: 0.6875rem; color: var(--pf-t--global--text--color--subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-tasks-sidebar .app-tasks-sidebar__empty { margin: 0; padding: var(--pf-t--global--spacer--md) 0; text-align: center; font-size: 0.75rem; color: var(--pf-t--global--text--color--subtle); }
+
+/* Visible running spinner (default spinner colour blends with the label fill / is hairline-thin).
+   Shared by the task strip, the todo strip and the Tasks & Tools sidebar. */
+.app-task-strip .pf-v6-c-spinner.pf-m-sm,
+.app-todos .pf-v6-c-spinner.pf-m-sm,
+.app-tasks-sidebar .pf-v6-c-spinner.pf-m-sm {
+  --pf-v6-c-spinner--diameter: 0.75rem;
+  --pf-v6-c-spinner--Color: currentColor;
+  --pf-v6-c-spinner--m-sm--diameter: 0.75rem;
+}
+.app-task-strip .pf-v6-c-spinner .pf-v6-c-spinner__path,
+.app-todos .pf-v6-c-spinner .pf-v6-c-spinner__path,
+.app-tasks-sidebar .pf-v6-c-spinner .pf-v6-c-spinner__path { stroke: currentColor; stroke-width: 12; }

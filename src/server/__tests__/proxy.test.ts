@@ -111,7 +111,7 @@ describe('GET /api/config/branding', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body).toHaveProperty('title');
-    expect(body).toHaveProperty('colors');
+    expect(body).not.toHaveProperty('colors');
   });
 });
 

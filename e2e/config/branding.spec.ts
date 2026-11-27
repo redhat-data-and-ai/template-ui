@@ -57,7 +57,7 @@ test.describe('Config: branding', () => {
     expect(src).toContain('redhat-logo');
   });
 
-  test('full config: CSS custom property --primary is applied from branding colours', async ({
+  test('full config: CSS custom property --app-accent is applied from branding colours', async ({
     page,
   }) => {
     const customPrimary = '#abcdef';
@@ -73,12 +73,12 @@ test.describe('Config: branding', () => {
 
     // Wait for App.tsx's branding useEffect to set the CSS variable
     await page.waitForFunction(() => {
-      const val = document.documentElement.style.getPropertyValue('--primary');
+      const val = document.documentElement.style.getPropertyValue('--app-accent');
       return val !== '';
     });
 
     const primaryVar = await page.evaluate(() =>
-      document.documentElement.style.getPropertyValue('--primary'),
+      document.documentElement.style.getPropertyValue('--app-accent'),
     );
     expect(primaryVar.toLowerCase().replace(/\s+/g, '')).toBe(customPrimary);
   });

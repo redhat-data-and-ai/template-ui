@@ -1,3 +1,4 @@
+import './chat-page.css';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import type { Message } from '@langchain/langgraph-sdk';
@@ -23,9 +24,10 @@ import { ChatErrorBoundary } from '../components/ChatErrorBoundary';
 import { ReconnectingBanner } from '../components/ReconnectingBanner';
 import { InterruptBanner } from '../components/InterruptBanner';
 import { TaskProgressStepper } from '../components/TaskProgressStepper';
-import { TasksSidebar } from '../components/TasksSidebar';
+import { TasksSidebar, hasTasksSidebarContent } from '../components/TasksSidebar';
 import { DebugPanel } from '../components/DebugPanel';
-import { ProcessedEvent } from '../components/ActivityTimeline';
+import { DebugToggle } from '../components/DebugToggle';
+import type { ProcessedEvent } from '../types/activity';
 import { getThreadStateAndInterrupt } from '../services/agent-rest';
 import { isClientCreatedChat } from '../services/newChatTracker';
 import { getThreadFeedback } from '../services/feedback-api';
@@ -539,18 +541,18 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   if (chatsLoading || hydrating) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
+      <div className="app-chat-status">
         <Spinner size="lg" aria-label="Loading chat" />
-        <p className="text-muted-foreground">{hydrating ? 'Loading messages...' : 'Loading chat...'}</p>
+        <p className="app-chat-status__note">{hydrating ? 'Loading messages...' : 'Loading chat...'}</p>
       </div>
     );
   }
 
   if (threadId && !currentChat) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <h1 className="text-2xl text-muted-foreground font-bold">Chat Not Found</h1>
-        <p className="text-muted-foreground">The requested chat could not be found.</p>
+      <div className="app-chat-status">
+        <h1 className="app-chat-status__title">Chat Not Found</h1>
+        <p className="app-chat-status__note">The requested chat could not be found.</p>
         <Button variant="primary" onClick={() => navigate('/')}>Go Home</Button>
       </div>
     );
@@ -558,9 +560,9 @@ export function ChatPage({ threadId }: { threadId: string }) {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <h1 className="text-2xl text-destructive font-bold">Error</h1>
-        <p className="text-destructive">{error}</p>
+      <div className="app-chat-status">
+        <h1 className="app-chat-status__title app-chat-status__title--danger">Error</h1>
+        <p className="app-chat-status__note--danger">{error}</p>
         <Button variant="danger" onClick={() => window.location.reload()}>
           Retry
         </Button>
@@ -572,27 +574,32 @@ export function ChatPage({ threadId }: { threadId: string }) {
     (m) => m.type === 'ai' && Array.isArray((m as any).tool_calls) && (m as any).tool_calls.length > 0,
   );
 
+  const showTasks = hasTasksSidebarContent(thread.messages, thread.isLoading);
+
   return (
     <ChatErrorBoundary chatId={threadId} onRetry={handleRetry}>
       <ChatActionsProvider value={chatActions}>
-        <div aria-live="polite" className="sr-only">
+        <div aria-live="polite" className="pf-v6-screen-reader">
           {streamAnnouncement}
         </div>
-        <h1 className="sr-only">{currentChat?.title || 'Chat'}</h1>
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          <div className="flex-1 flex flex-col min-w-0">
-            {hasToolCalls && (
-              <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
-            )}
+        <h1 className="pf-v6-screen-reader">{currentChat?.title || 'Chat'}</h1>
+        <div className="app-chat-split">
+          <div className="app-chat-main">
             <ReconnectingBanner streamingState={streamingState} maxRetries={MAX_RETRIES} />
-            {thread.pendingInterrupts.length > 0 && (
-              <div className="flex items-center gap-3 px-4 py-2" role="status">
-                <span>{thread.pendingInterrupts.length} pending approval{thread.pendingInterrupts.length === 1 ? '' : 's'}</span>
-                <Button variant="link" size="sm" isDisabled={thread.isResuming || thread.isLoading} onClick={() => {
-                  thread.refreshInterrupts().catch(() => dispatch(addToast({ title: 'Unable to refresh approvals', variant: 'danger' })));
-                }}>Refresh approvals</Button>
-              </div>
-            )}
+            {/* Top area (progress strip + pending approvals): CSS draws the divider only while it has content. */}
+            <div className="app-chat-top">
+              {hasToolCalls && (
+                <TaskProgressStepper messages={thread.messages} isLoading={thread.isLoading} />
+              )}
+              {thread.pendingInterrupts.length > 0 && (
+                <div className="app-chat-pending" role="status">
+                  <span>{thread.pendingInterrupts.length} pending approval{thread.pendingInterrupts.length === 1 ? '' : 's'}</span>
+                  <Button variant="link" size="sm" isDisabled={thread.isResuming || thread.isLoading} onClick={() => {
+                    thread.refreshInterrupts().catch(() => dispatch(addToast({ title: 'Unable to refresh approvals', variant: 'danger' })));
+                  }}>Refresh approvals</Button>
+                </div>
+              )}
+            </div>
             <ChatMessagesView
               key={threadId}
               messages={thread.messages}
@@ -644,14 +651,20 @@ export function ChatPage({ threadId }: { threadId: string }) {
               chatInputRef={chatInputRef}
               onExportMarkdown={handleExportMarkdown}
               onExportJson={handleExportJson}
+              headerActions={<DebugToggle />}
             />
           </div>
           {debugMode && (
-            <div className="w-64 shrink-0 self-stretch border-l border-border hidden lg:flex lg:flex-col p-2 gap-2">
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto border-t border-border pt-2">
+            <div className="app-debug-aside">
+              {showTasks && (
+                <div className="app-debug-aside__section">
+                  <TasksSidebar messages={thread.messages} isLoading={thread.isLoading} />
+                </div>
+              )}
+              <div
+                className={`app-debug-aside__section${showTasks ? ' app-debug-aside__section--divided' : ''}`}
+                data-testid="debug-panel-slot"
+              >
                 <DebugPanel messages={thread.messages} streamingState={streamingState} />
               </div>
             </div>

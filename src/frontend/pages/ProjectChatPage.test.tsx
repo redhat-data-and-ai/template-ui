@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Provider } from 'react-redux';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@testing-library/react';
 import { createTestStore } from '../test-utils/createTestStore';
@@ -160,8 +160,12 @@ describe('ProjectChatPage', () => {
     );
 
     const list = screen.getByRole('region', { name: /project conversations/i });
-    expect(list.className).toMatch(/overflow-y-auto/);
-    expect(list.className).toMatch(/min-h-0/);
-    expect(screen.getByRole('button', { name: /old chat/i })).toBeInTheDocument();
+    // Scroll containment lives in pages.css (jsdom does not load it).
+    expect(list).toHaveClass('app-project__list');
+    const item = screen.getByRole('button', { name: /old chat/i });
+    expect(item).toBeInTheDocument();
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    expect(mockNavigate).toHaveBeenCalledWith('/chat/c1');
   });
 });

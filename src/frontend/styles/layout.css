@@ -1,0 +1,103 @@
+/* Content surface and disclaimer banner (ported from the platform portal). */
+:root {
+  --app-shell-top-gap: var(--pf-t--global--spacer--md);
+}
+
+.app-main {
+  padding-block-start: var(--app-shell-top-gap);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.app-disclaimer-slot {
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.app-disclaimer-banner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 0.9rem;
+  border-radius: 0.5rem;
+  background-color: var(--app-disclaimer-bg);
+  border: 1px solid var(--app-disclaimer-border);
+  color: var(--app-disclaimer-text);
+}
+
+.app-disclaimer-banner__text {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  font-weight: 500;
+}
+
+.app-content-surface {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: var(--pf-t--global--border--radius--large);
+  border: 1px solid var(--app-border);
+  background-color: var(--app-surface-raised);
+}
+
+/* Masthead brand typography (matches the platform portal BuilderMasthead). */
+.app-masthead-brand-wrap {
+  align-items: center;
+  min-width: 0;
+}
+.app-masthead-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  font-family: Arial, sans-serif;
+  font-size: 0.9rem;
+}
+.app-masthead-brand__link {
+  display: flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+.app-masthead-brand__logo {
+  height: 32px;
+  width: auto;
+}
+.app-masthead-brand__logo--default {
+  color: #ee0000;
+}
+.app-masthead-brand__platform {
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  font-weight: 400;
+}
+.app-masthead-brand__emphasis {
+  font-weight: 600;
+}
+.app-masthead-brand__divider {
+  height: 1.5rem;
+}
+.app-masthead-brand__title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

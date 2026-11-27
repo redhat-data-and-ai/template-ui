@@ -6,16 +6,16 @@ import { ChatPage } from '../page-objects/ChatPage';
 
 /**
  * Error-path tests covering:
- *   1. Agent unreachable   – /api/health/agent returns non-200; sidebar shows "Agent: offline".
+ *   1. Agent unreachable   – /api/health/agent returns non-200; sidebar shows "Agent: Unhealthy".
  *   2. Malformed stream    – SSE body contains invalid JSON; UI must not crash.
  *   3. Auth failure        – streaming endpoint returns 401; StreamingManager marks the stream
- *                            as failed (non-recoverable 4xx) and the sr-only aria-live region
+ *                            as failed (non-recoverable 4xx) and the screen-reader aria-live region
  *                            announces "Stream error".
  */
 test.describe('Error states', () => {
   // ── Agent unreachable ─────────────────────────────────────────────────────
 
-  test('agent unreachable: sidebar shows "Agent: offline" indicator', async ({ page }) => {
+  test('agent unreachable: sidebar shows "Agent: Unhealthy" badge', async ({ page }) => {
     // Mount base config with agentHealth='unhealthy' so the health endpoint
     // returns 503 / { status: 'unhealthy' } from the first poll onwards.
     await mountConfig(page, { title: 'Offline Agent Test' }, {}, 'unhealthy');
@@ -26,7 +26,9 @@ test.describe('Error states', () => {
 
     // useAgentHealth polls immediately on mount; the sidebar indicator updates
     // as soon as the first health check completes.
-    await expect(page.getByText('Agent: offline')).toBeVisible({ timeout: 15_000 });
+    const footer = page.locator('.app-sidebar-footer');
+    await expect(footer).toHaveText('Agent: Unhealthy', { timeout: 15_000 });
+    await expect(footer.locator('.pf-v6-c-label.pf-m-red')).toHaveText('Unhealthy');
   });
 
   // ── Malformed stream ──────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ test.describe('Error states', () => {
     // Wait for that live-region update rather than using an arbitrary sleep.
     await page.waitForFunction(
       () => {
-        const liveRegion = document.querySelector('.sr-only[aria-live="polite"]');
+        const liveRegion = document.querySelector('.pf-v6-screen-reader[aria-live="polite"]');
         const text = liveRegion?.textContent ?? '';
         return text.includes('Response complete') || text.includes('Stream error');
       },
@@ -65,7 +67,7 @@ test.describe('Error states', () => {
     await mountConfig(page);
     // 401 from the streaming endpoint is a non-recoverable 4xx; the
     // StreamingManager throws and the ChatPage announces "Stream error"
-    // through its sr-only aria-live polite region.
+    // through its screen-reader aria-live polite region.
     await mockStreamError(page, 401);
 
     const home = new HomePage(page);
@@ -78,7 +80,7 @@ test.describe('Error states', () => {
     // Wait for the live region to announce the failure
     await page.waitForFunction(
       () => {
-        const liveRegion = document.querySelector('.sr-only[aria-live="polite"]');
+        const liveRegion = document.querySelector('.pf-v6-screen-reader[aria-live="polite"]');
         return liveRegion?.textContent?.includes('Stream error');
       },
       { timeout: 15_000 },

@@ -1,0 +1,125 @@
+/* App-wide base rules: page frame, restored plain-field styling, scrollbars, focus. */
+
+html, body {
+  background-color: var(--app-page-bg);
+  color: var(--app-text);
+  height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-page {
+  height: 100vh;
+  background-color: var(--app-page-bg);
+  color: var(--app-text);
+}
+
+/* Restore sane defaults for plain (non-PatternFly) fields. PatternFly form
+   controls draw their own box on a wrapper, so they and the chat composer are
+   excluded to avoid a double border. */
+textarea:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="text"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="search"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="email"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="password"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input),
+input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input) {
+  background-color: var(--app-surface-raised);
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+textarea::placeholder,
+input::placeholder {
+  color: var(--app-text-secondary);
+  opacity: 0.7;
+}
+textarea:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="text"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="search"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="email"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="password"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus,
+input[type="url"]:not(.composer-input):not(.pf-v6-c-form-control *):not(.pf-v6-c-text-input-group *):not(.pf-v6-c-search-input *):not(.app-feedback-comment__box *):not(.app-chat-edit-input):focus {
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent) 20%, transparent);
+  outline: none;
+}
+
+/* PatternFly's page main container adds its own frame around our content surface. */
+.pf-v6-c-page__main-container {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Custom scrollbar for chat and nav scroll areas */
+.chat-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: rgb(115 115 115 / 0.15);
+  border-radius: 3px;
+}
+.chat-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgb(115 115 115 / 0.3);
+}
+
+/* Skip navigation: visually hidden until keyboard focus (MR-79) */
+.skip-to-main {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+.skip-to-main:focus,
+.skip-to-main:focus-visible {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 9999;
+  width: auto;
+  height: auto;
+  padding: 1rem;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  border-width: 0;
+  background: var(--app-page-bg);
+  color: var(--app-text);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+  outline: 2px solid var(--app-accent-strong);
+  outline-offset: 2px;
+}
+
+/* WCAG 2.1 AA focus visibility (MR-79) */
+:focus-visible {
+  outline: 2px solid var(--app-accent-strong, #c45c42);
+  outline-offset: 2px;
+}
+
+/* Media elements are block-level, as in the previous reset (no inline baseline gap).
+   Element selectors stay below every PatternFly class rule. */
+img, svg, video, canvas, audio, iframe, embed, object {
+  display: block;
+  vertical-align: middle;
+}
+img, video {
+  max-width: 100%;
+  height: auto;
+}

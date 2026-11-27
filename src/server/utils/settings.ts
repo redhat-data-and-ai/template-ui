@@ -96,7 +96,11 @@ interface BrandingConfig {
   title: string;
   version: string;
   favicon_url?: string;
-  colors: {
+  platform_name?: string;
+  platform_name_emphasis?: string;
+  platform_url?: string;
+  /** Optional: when absent, the UI's default palette applies. */
+  colors?: {
     light: BrandingThemeColors;
     dark: BrandingThemeColors;
   };
@@ -146,20 +150,6 @@ const DEFAULTS: UISettings = {
     title: "Deep Agent",
     version: "v1.0.0",
     favicon_url: "",
-    colors: {
-      light: {
-        primary: "#0066cc",
-        accent: "#a60000",
-        background: "#ffffff",
-        foreground: "#1a1a1a",
-      },
-      dark: {
-        primary: "#4dabf7",
-        accent: "#f56e6e",
-        background: "#0a1628",
-        foreground: "#f0f4f8",
-      },
-    },
   },
   features: {
     debug_mode_default: false,
@@ -296,6 +286,13 @@ function validateConfig(config: UISettings): void {
     throw new Error("Config validation error: branding.title is required");
   }
 
+  for (const key of ["platform_name", "platform_name_emphasis", "platform_url"] as const) {
+    const value = config.branding[key];
+    if (value !== undefined && typeof value !== "string") {
+      throw new Error(`Config validation error: branding.${key} must be a string`);
+    }
+  }
+
   // Color validation
   const validateColor = (path: string, value: string) => {
     if (!hexColorRegex.test(value)) {
@@ -305,14 +302,15 @@ function validateConfig(config: UISettings): void {
     }
   };
 
-  validateColor("branding.colors.light.primary", config.branding.colors.light.primary);
-  validateColor("branding.colors.light.accent", config.branding.colors.light.accent);
-  validateColor("branding.colors.light.background", config.branding.colors.light.background);
-  validateColor("branding.colors.light.foreground", config.branding.colors.light.foreground);
-  validateColor("branding.colors.dark.primary", config.branding.colors.dark.primary);
-  validateColor("branding.colors.dark.accent", config.branding.colors.dark.accent);
-  validateColor("branding.colors.dark.background", config.branding.colors.dark.background);
-  validateColor("branding.colors.dark.foreground", config.branding.colors.dark.foreground);
+  const colors = config.branding.colors;
+  if (colors) {
+    for (const mode of ["light", "dark"] as const) {
+      for (const key of ["primary", "accent", "background", "foreground"] as const) {
+        const value = colors[mode]?.[key];
+        if (value !== undefined) validateColor(`branding.colors.${mode}.${key}`, value);
+      }
+    }
+  }
 
   // Feature flags type validation
   if (typeof config.features.debug_mode_default !== "boolean") {
@@ -390,22 +388,33 @@ function applyEnvOverrides(config: UISettings): void {
   if (process.env.BRANDING_LOGO_URL) {
     config.branding.logo_url = process.env.BRANDING_LOGO_URL;
   }
+  if (process.env.BRANDING_PLATFORM_NAME) {
+    config.branding.platform_name = process.env.BRANDING_PLATFORM_NAME;
+  }
+  if (process.env.BRANDING_PLATFORM_NAME_EMPHASIS) {
+    config.branding.platform_name_emphasis = process.env.BRANDING_PLATFORM_NAME_EMPHASIS;
+  }
+  if (process.env.BRANDING_PLATFORM_URL) {
+    config.branding.platform_url = process.env.BRANDING_PLATFORM_URL;
+  }
   if (process.env.BRANDING_FAVICON_URL) {
     config.branding.favicon_url = process.env.BRANDING_FAVICON_URL;
   }
 
   // Branding color overrides (light theme)
-  if (!config.branding.colors) config.branding.colors = (DEFAULTS.branding.colors as typeof config.branding.colors);
-  if (!config.branding.colors.light) config.branding.colors.light = { ...DEFAULTS.branding.colors.light };
-  if (!config.branding.colors.dark) config.branding.colors.dark = { ...DEFAULTS.branding.colors.dark };
-  if (process.env.BRANDING_PRIMARY_LIGHT) config.branding.colors.light.primary = process.env.BRANDING_PRIMARY_LIGHT;
-  if (process.env.BRANDING_ACCENT_LIGHT) config.branding.colors.light.accent = process.env.BRANDING_ACCENT_LIGHT;
-  if (process.env.BRANDING_BG_LIGHT) config.branding.colors.light.background = process.env.BRANDING_BG_LIGHT;
-  if (process.env.BRANDING_FG_LIGHT) config.branding.colors.light.foreground = process.env.BRANDING_FG_LIGHT;
-  if (process.env.BRANDING_PRIMARY_DARK) config.branding.colors.dark.primary = process.env.BRANDING_PRIMARY_DARK;
-  if (process.env.BRANDING_ACCENT_DARK) config.branding.colors.dark.accent = process.env.BRANDING_ACCENT_DARK;
-  if (process.env.BRANDING_BG_DARK) config.branding.colors.dark.background = process.env.BRANDING_BG_DARK;
-  if (process.env.BRANDING_FG_DARK) config.branding.colors.dark.foreground = process.env.BRANDING_FG_DARK;
+  const setColor = (mode: "light" | "dark", key: keyof BrandingThemeColors, value: string | undefined) => {
+    if (!value) return;
+    const colors = (config.branding.colors ??= {} as NonNullable<BrandingConfig["colors"]>);
+    (colors[mode] ??= {} as BrandingThemeColors)[key] = value;
+  };
+  setColor("light", "primary", process.env.BRANDING_PRIMARY_LIGHT);
+  setColor("light", "accent", process.env.BRANDING_ACCENT_LIGHT);
+  setColor("light", "background", process.env.BRANDING_BG_LIGHT);
+  setColor("light", "foreground", process.env.BRANDING_FG_LIGHT);
+  setColor("dark", "primary", process.env.BRANDING_PRIMARY_DARK);
+  setColor("dark", "accent", process.env.BRANDING_ACCENT_DARK);
+  setColor("dark", "background", process.env.BRANDING_BG_DARK);
+  setColor("dark", "foreground", process.env.BRANDING_FG_DARK);
 
   // Feature overrides — support both new FEATURE_AUTH_ENABLED and legacy AUTH_ENABLED
   if (process.env.FEATURE_AUTH_ENABLED !== undefined) {

@@ -17,12 +17,15 @@ export class SettingsPage {
   }
 
   async clickTab(tab: SettingsTab): Promise<void> {
-    await this.page.getByRole('tab', { name: tab, exact: false }).click();
+    await this.page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('link', { name: tab, exact: false })
+      .click();
   }
 
   async selectTab(tab: SettingsTab): Promise<void> {
     await this.clickTab(tab);
-    await this.page.waitForSelector('[role="tabpanel"]:not([hidden])', { state: 'visible' });
+    await this.page.waitForSelector('#settings-panel', { state: 'visible' });
   }
 
   async expectTabContentVisible(heading: SettingsTab): Promise<void> {

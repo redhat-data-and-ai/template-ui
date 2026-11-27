@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Spinner } from '@patternfly/react-core';
-import { KeyRound, Link2, RefreshCw, Unplug } from 'lucide-react';
+import {
+  Alert,
+  Button,
+  Card,
+  CardBody,
+  EmptyState,
+  EmptyStateBody,
+  Label,
+  Spinner,
+} from '@patternfly/react-core';
+import { KeyIcon, LinkIcon, SyncAltIcon, UnlinkIcon } from '@patternfly/react-icons';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import { addToast } from '../../redux/slices/toasts';
 import { selectDeveloperMode } from '../../redux/slices/userSettings';
@@ -172,8 +181,8 @@ export function OAuthConnections() {
 
   if (connections === null && !error) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-        <Spinner size="sm" aria-label="Loading OAuth connections" />
+      <div role="status" className="app-settings__row" style={{ justifyContent: 'flex-start' }}>
+        <Spinner size="md" aria-label="Loading OAuth connections" />
         Loading OAuth connections…
       </div>
     );
@@ -181,132 +190,109 @@ export function OAuthConnections() {
 
   if (error && connections === null) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-destructive">{error}</p>
-        <Button variant="secondary" size="sm" onClick={() => void load()}>
-          Retry
-        </Button>
+      <div className="app-settings__stack">
+        <Alert component="h3" isInline variant="danger" title={error} />
+        <div>
+          <Button variant="secondary" onClick={() => void load()}>
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
 
   if (!connections || connections.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-        <KeyRound className="w-8 h-8 text-muted-foreground/40" aria-hidden="true" />
-        <p className="text-sm text-muted-foreground">
-          No OAuth-connected services are configured.
-        </p>
-        <p className="text-xs text-muted-foreground max-w-xs">
-          MCP servers that use OAuth or DCR will appear here so you can connect, re-authenticate,
-          or disconnect them.
-        </p>
-      </div>
+      <EmptyState
+        headingLevel="h3"
+        titleText="No OAuth-connected services are configured."
+        icon={KeyIcon}
+        variant="sm"
+      >
+        <EmptyStateBody>
+          MCP servers that use OAuth or DCR will appear here so you can connect, re-authenticate, or
+          disconnect them.
+        </EmptyStateBody>
+      </EmptyState>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <p className="text-sm text-muted-foreground">
-        Manage OAuth connections for MCP servers. Disconnecting clears tokens stored for this
-        agent; you can authenticate again at any time.
+    <div className="app-settings__stack">
+      <p className="app-settings__muted">
+        Manage OAuth connections for MCP servers. Disconnecting clears tokens stored for this agent;
+        you can authenticate again at any time.
       </p>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <ul style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {error && <Alert component="h3" isInline variant="danger" title={error} />}
+      <ul className="app-settings__list">
         {connections.map((connection) => {
           const name = displayName(connection);
           const busy = busyMcp === connection.mcp_name;
-          return (
-            <li
-              key={connection.mcp_name}
-              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-border bg-muted/30"
-              style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}
+          const reregister = showReregister && connection.auth_mode === 'dcr' && (
+            <Button
+              variant="secondary"
+              icon={<SyncAltIcon />}
+              isLoading={busy}
+              aria-label={`Re-register ${name}`}
+              onClick={() => void handleReregister(connection)}
             >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground break-words">{name}</p>
-                <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                  <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {connection.auth_mode}
-                  </span>
-                  <span
-                    className={
-                      connection.connected
-                        ? 'inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success'
-                        : 'inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground'
-                    }
-                  >
-                    {connection.connected ? 'Connected' : 'Not connected'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0 sm:justify-end flex-wrap">
-                {connection.connected ? (
-                  <>
-                    {showReregister && connection.auth_mode === 'dcr' && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="!px-2.5 !py-1 text-xs"
-                        icon={<RefreshCw className="w-3 h-3" />}
-                        isLoading={busy}
-                        aria-label={`Re-register ${name}`}
-                        onClick={() => void handleReregister(connection)}
-                      >
-                        Re-register
-                      </Button>
-                    )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="!px-2.5 !py-1 text-xs"
-                      icon={<Link2 className="w-3 h-3" />}
-                      isLoading={busy}
-                      aria-label={`Re-authenticate ${name}`}
-                      onClick={() => void handleAuthenticate(connection.mcp_name)}
-                    >
-                      Re-authenticate
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      className="!px-2.5 !py-1 text-xs"
-                      icon={<Unplug className="w-3 h-3" />}
-                      isLoading={busy}
-                      aria-label={`Disconnect ${name}`}
-                      onClick={() => void handleDisconnect(connection)}
-                    >
-                      Disconnect
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    {showReregister && connection.auth_mode === 'dcr' && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="!px-2.5 !py-1 text-xs"
-                        icon={<RefreshCw className="w-3 h-3" />}
-                        isLoading={busy}
-                        aria-label={`Re-register ${name}`}
-                        onClick={() => void handleReregister(connection)}
-                      >
-                        Re-register
-                      </Button>
-                    )}
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      className="!px-2.5 !py-1 text-xs"
-                      icon={<Link2 className="w-3 h-3" />}
-                      isLoading={busy}
-                      aria-label={`Authenticate ${name}`}
-                      onClick={() => void handleAuthenticate(connection.mcp_name)}
-                    >
-                      Authenticate
-                    </Button>
-                  </>
-                )}
-              </div>
+              Re-register
+            </Button>
+          );
+          return (
+            <li key={connection.mcp_name}>
+              <Card isCompact style={{ width: '100%' }}>
+                <CardBody>
+                  <div className="app-settings__row" style={{ flexWrap: 'wrap' }}>
+                    <div>
+                      <p style={{ overflowWrap: 'anywhere' }}>{name}</p>
+                      <div className="app-settings__row" style={{ justifyContent: 'flex-start', marginBlockStart: 'var(--pf-t--global--spacer--xs)' }}>
+                        <Label isCompact variant="outline">
+                          {connection.auth_mode}
+                        </Label>
+                        <Label isCompact color={connection.connected ? 'green' : undefined}>
+                          {connection.connected ? 'Connected' : 'Not connected'}
+                        </Label>
+                      </div>
+                    </div>
+                    <div className="app-settings__row" style={{ flexWrap: 'wrap' }}>
+                      {reregister}
+                      {connection.connected ? (
+                        <>
+                          <Button
+                            variant="secondary"
+                            icon={<LinkIcon />}
+                            isLoading={busy}
+                            aria-label={`Re-authenticate ${name}`}
+                            onClick={() => void handleAuthenticate(connection.mcp_name)}
+                          >
+                            Re-authenticate
+                          </Button>
+                          <Button
+                            variant="danger"
+                            icon={<UnlinkIcon />}
+                            isLoading={busy}
+                            aria-label={`Disconnect ${name}`}
+                            onClick={() => void handleDisconnect(connection)}
+                          >
+                            Disconnect
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          icon={<LinkIcon />}
+                          isLoading={busy}
+                          aria-label={`Authenticate ${name}`}
+                          onClick={() => void handleAuthenticate(connection.mcp_name)}
+                        >
+                          Authenticate
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
             </li>
           );
         })}

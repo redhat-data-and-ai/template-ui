@@ -65,7 +65,7 @@ agent:
 
     expect(settings.branding.logo_url).toBe("/test-logo.svg");
     expect(settings.branding.title).toBe("Test Agent");
-    expect(settings.branding.colors.light.primary).toBe("#ff0000");
+    expect(settings.branding.colors?.light.primary).toBe("#ff0000");
     expect(settings.features.debug_mode_default).toBe(true);
     expect(settings.features.auth_enabled).toBe(false);
     expect(settings.features.mcp_apps_enabled).toBe(true);
@@ -280,6 +280,43 @@ branding:
     expect(settings.features.auth_enabled).toBe(false);
   });
 
+  it("should load platform branding keys and let env override them", () => {
+    const yaml = `
+branding:
+  title: "T"
+  platform_name: "YamlName"
+  platform_name_emphasis: "Hub"
+  platform_url: "https://hub.example.com"
+`;
+    writeFileSync(testConfigPath, yaml);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+    delete process.env.BRANDING_PLATFORM_NAME;
+    let settings = getSettings();
+    expect(settings.branding.platform_name).toBe("YamlName");
+    expect(settings.branding.platform_name_emphasis).toBe("Hub");
+    expect(settings.branding.platform_url).toBe("https://hub.example.com");
+
+    resetSettings();
+    process.env.BRANDING_PLATFORM_NAME = "Acme";
+    process.env.BRANDING_PLATFORM_NAME_EMPHASIS = "Env Hub";
+    process.env.BRANDING_PLATFORM_URL = "https://env.example.com";
+    settings = getSettings();
+    expect(settings.branding.platform_name).toBe("Acme");
+    expect(settings.branding.platform_name_emphasis).toBe("Env Hub");
+    expect(settings.branding.platform_url).toBe("https://env.example.com");
+  });
+
+  it("should reject non-string platform branding values", () => {
+    writeFileSync(testConfigPath, `
+branding:
+  title: "T"
+  platform_name: 42
+`);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+    delete process.env.BRANDING_PLATFORM_NAME;
+    expect(() => getSettings()).toThrow(/branding.platform_name must be a string/);
+  });
+
   it("should merge partial YAML with defaults", () => {
     const partialYaml = `
 branding:
@@ -311,6 +348,37 @@ branding:
     expect(settings.features.debug_mode_default).toBe(false);
     expect(settings.agent.timeout_ms).toBe(30000);
     expect(settings.server.port).toBe(8080);
+  });
+
+  it("leaves branding.colors undefined when the config has no colors", () => {
+    writeFileSync(testConfigPath, `
+branding:
+  title: "No Colors"
+`);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+    for (const k of Object.keys(process.env)) {
+      if (k.startsWith("BRANDING_") && /(PRIMARY|ACCENT|BG|FG)_(LIGHT|DARK)$/.test(k)) delete process.env[k];
+    }
+
+    const settings = getSettings();
+    expect(settings.branding.colors).toBeUndefined();
+  });
+
+  it("preserves colors supplied in YAML", () => {
+    writeFileSync(testConfigPath, `
+branding:
+  title: "Colors"
+  colors:
+    light:
+      primary: "#123456"
+      accent: "#a60000"
+      background: "#ffffff"
+      foreground: "#1a1a1a"
+`);
+    process.env.UI_CONFIG_PATH = testConfigPath;
+
+    const settings = getSettings();
+    expect(settings.branding.colors?.light.primary).toBe("#123456");
   });
 
   it("should validate all 8 color fields", () => {

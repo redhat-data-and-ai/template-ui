@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 
-/** Reactively tracks whether the document root has the `dark` CSS class. */
+/** Reactively tracks whether the document root has the `pf-v6-theme-dark` CSS class. */
 export function useDarkMode(): boolean {
   const [isDark, setIsDark] = useState(
-    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('pf-v6-theme-dark'),
   );
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
+      setIsDark(document.documentElement.classList.contains('pf-v6-theme-dark'));
     });
     observer.observe(document.documentElement, { attributeFilter: ['class'] });
     return () => observer.disconnect();
@@ -76,9 +76,37 @@ export function computeDelta(
   return { value: 0, direction: 'same' };
 }
 
-/** Converts a snake_case tag string to Title Case for display. */
+/** Splits a raw tag into its labels. Tags arrive as plain strings or JSON-array strings (`["Non Hitl"]`). */
+export function parseTags(tag: string): string[] {
+  const raw = tag.trim();
+  if (raw.startsWith('[')) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((t) => String(t).trim()).filter(Boolean);
+      }
+    } catch {
+      // not JSON: fall through to the plain-string form
+    }
+  }
+  return raw ? [raw] : [];
+}
+
+/** Lower snake_case key for one tag label (`Non Hitl` / `non-hitl` -> `non_hitl`). */
+export function tagKey(label: string): string {
+  return label.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+/** Converts one tag label to a clean display name (`Non Hitl` -> `Non-HITL`, `tool_use` -> `Tool Use`). */
+function friendlyTagLabel(label: string): string {
+  return toTitleCase(label.replace(/[-]+/g, ' '))
+    .replace(/\bNon\s+Hitl\b/gi, 'Non-HITL')
+    .replace(/\bHitl\b/gi, 'HITL');
+}
+
+/** Display text for a raw tag: parses JSON-array strings and joins multiple labels with a comma. */
 export function friendlyTagName(tag: string): string {
-  return toTitleCase(tag);
+  return parseTags(tag).map(friendlyTagLabel).join(', ');
 }
 
 const TERMINAL_EVAL_STATUSES = new Set(['completed', 'failed', 'error', 'no_dataset']);
@@ -117,3 +145,25 @@ export function evalTriggerDoneMessage(data: {
   }
   return null;
 }
+
+export type ScoreTone = 'success' | 'warning' | 'danger';
+
+/** Maps a pass-rate percentage to a PF status tone (>=70 success, >=50 warning, else danger). */
+export function scoreTone(pct: number): ScoreTone {
+  return pct >= 70 ? 'success' : pct >= 50 ? 'warning' : 'danger';
+}
+
+/** PF status token for SVG/chart strokes. */
+export function toneChartColor(tone: ScoreTone): string {
+  return `var(--pf-t--global--icon--color--status--${tone}--default)`;
+}
+
+/** PF status token for text. */
+export function toneTextColor(tone: ScoreTone): string {
+  return `var(--pf-t--global--text--color--status--${tone}--default)`;
+}
+
+/** Categorical series colours as PF tokens (theme-aware, no hard-coded hex). */
+export const SERIES_COLORS = ['orangered', 'blue', 'green', 'yellow', 'purple'].map(
+  (c) => `var(--pf-t--global--color--nonstatus--${c}--default)`,
+);

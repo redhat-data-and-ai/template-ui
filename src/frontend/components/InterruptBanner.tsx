@@ -5,13 +5,14 @@ import {
   Button,
   TextInput,
 } from '@patternfly/react-core';
-import { Bot, CheckCircle, Link2, XCircle } from 'lucide-react';
+import { CheckCircleIcon, LinkIcon, RobotIcon, TimesCircleIcon } from '@patternfly/react-icons';
 import {
   openMcpOAuthPopup,
   startMcpOAuthConnect,
   verifyMcpOAuthConnected,
 } from '../services/mcp-oauth-api';
 import type { InterruptInfo } from '../types/deep-agent';
+import './tool-approval.css';
 
 interface InterruptBannerProps {
   readonly interrupt: InterruptInfo;
@@ -116,27 +117,27 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
 
   if (mcpAuth) {
     return (
-      <div className="w-full space-y-0 animate-fadeInUpSmooth">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
-            <Bot className="w-4 h-4 text-muted-foreground" />
+      <div className="app-interrupt-auth">
+        <div className="app-interrupt-auth__row">
+          <div className="app-interrupt-auth__avatar">
+            <RobotIcon aria-hidden="true" />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="prose prose-sm max-w-none text-foreground">
+          <div className="app-interrupt-auth__body">
+            <div className="app-interrupt-auth__text">
               <p>
                 To access external tools, you need to authenticate first.
                 Click the button below to securely connect your account.
               </p>
             </div>
             {connectError && (
-              <p className="text-sm text-red-600 mt-2">{connectError}</p>
+              <p className="app-interrupt-auth__error">{connectError}</p>
             )}
-            <div className="mt-3">
+            <div className="app-interrupt-auth__actions">
               {!oauthReady ? (
                 <Button
                   variant="primary"
                   size="sm"
-                  icon={<Link2 className="w-3.5 h-3.5" />}
+                  icon={<LinkIcon />}
                   isLoading={connecting}
                   onClick={() => void handleConnect()}
                 >
@@ -146,7 +147,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
                 <Button
                   variant="primary"
                   size="sm"
-                  icon={<CheckCircle className="w-3.5 h-3.5" />}
+                  icon={<CheckCircleIcon />}
                   isDisabled={isSubmitting}
                   onClick={() => onResume('continue')}
                 >
@@ -165,19 +166,20 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
 
   if (approval) {
     return (
-      <div className="mx-4 mb-3" role="alert">
+      <div className="app-interrupt" role="alert">
         <Alert
           variant="warning"
           title="Action Required"
           isInline
           actionClose={<AlertActionCloseButton onClose={onDismiss} />}
         >
-          <p className="text-sm mb-3 whitespace-pre-wrap">{valueStr}</p>
-          <div className="flex items-center gap-2">
+          <p className="app-interrupt__text">{valueStr}</p>
+          <div className="app-interrupt__actions">
             <Button
               variant="primary"
+              className="app-approve"
               size="sm"
-              icon={<CheckCircle className="w-3.5 h-3.5" />}
+              icon={<CheckCircleIcon />}
               isDisabled={isSubmitting}
               onClick={() => onResume('approved')}
             >
@@ -186,7 +188,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
             <Button
               variant="danger"
               size="sm"
-              icon={<XCircle className="w-3.5 h-3.5" />}
+              icon={<TimesCircleIcon />}
               isDisabled={isSubmitting}
               onClick={() => onResume('rejected')}
             >
@@ -199,14 +201,14 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
   }
 
   return (
-    <div className="mx-4 mb-3" role="alert">
+    <div className="app-interrupt" role="alert">
       <Alert
         title="Input Required"
         isInline
         actionClose={<AlertActionCloseButton onClose={onDismiss} />}
       >
-        <p className="text-sm mb-3 whitespace-pre-wrap">{valueStr}</p>
-        <div className="flex items-center gap-2">
+        <p className="app-interrupt__text">{valueStr}</p>
+        <div className="app-interrupt__actions">
           <TextInput
             value={response}
             onChange={(_e, val) => setResponse(val)}
@@ -215,7 +217,7 @@ export function InterruptBanner({ interrupt, onResume, onDismiss, isSubmitting =
             }}
             placeholder="Type your response..."
             aria-label="Interrupt response"
-            className="flex-1"
+            className="app-interrupt__input"
           />
           <Button
             variant="primary"

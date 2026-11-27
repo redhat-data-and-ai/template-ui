@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   Button,
+  Content,
+  DescriptionList,
+  DescriptionListDescription,
+  DescriptionListGroup,
+  DescriptionListTerm,
+  HelperText,
+  HelperTextItem,
   Label,
   Modal,
   ModalBody,
@@ -8,6 +16,8 @@ import {
   ModalVariant,
   Tooltip,
 } from '@patternfly/react-core';
+import { RedoIcon } from '@patternfly/react-icons';
+import './dialogs.css';
 import { buildAppPath } from '../lib/app-paths';
 import { useEvalStatus } from '../hooks/useEvalStatus';
 import type { McpAuthRequired } from '../hooks/useEvalDashboard';
@@ -108,60 +118,53 @@ export function EvalPanel() {
   const isRunning = triggering || eval_.status === 'in_progress';
 
   return (
-    <div
-      style={{
-        padding: '8px 16px',
-        borderTop: '1px solid var(--pf-global--BorderColor--100)',
-      }}
-    >
+    <div className="app-eval">
       {/* MCP auth required inline notice */}
       {authRequired.length > 0 && (
-        <div style={{ padding: '10px 12px', borderRadius: 6, background: 'var(--pf-global--BackgroundColor--200)', marginBottom: 8 }}>
-          <p style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>
-            Connect required services before running eval:
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <Alert
+          variant="info"
+          isInline
+          isPlain
+          className="app-eval__notice"
+          title="Connect required services before running eval"
+        >
+          <div className="app-eval__connect">
             {authRequired.map((server) => (
-              <div key={server.name} className="flex flex-col gap-1">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    setConnectError('');
-                    if (!isSafeConnectUrl(server.connect_url)) {
-                      setConnectError('Invalid connect URL from server.');
-                      return;
-                    }
-                    fetch(buildAppPath(`/api/proxy/agent${server.connect_url}`), { method: 'POST', credentials: 'same-origin' })
-                      .then((r) => r.json())
-                      .then((b: { authorize_url?: string }) => {
-                        if (b.authorize_url) {
-                          safeOpenAuthorize(b.authorize_url, `mcp-connect-${server.name}`, 'width=600,height=700');
-                        } else {
-                          setConnectError('No authorization URL returned — check the MCP server config.');
-                        }
-                      })
-                      .catch(() => setConnectError('Could not reach the MCP server — check your connection.'));
-                  }}
-                >
-                  Connect {server.name.charAt(0).toUpperCase() + server.name.slice(1)}
-                </Button>
-                {connectError && (
-                  <p style={{ fontSize: 12, color: 'var(--pf-global--danger-color--100, #c9190b)', marginTop: 2 }}>
-                    {connectError}
-                  </p>
-                )}
-              </div>
+              <Button
+                key={server.name}
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setConnectError('');
+                  if (!isSafeConnectUrl(server.connect_url)) {
+                    setConnectError('Invalid connect URL from server.');
+                    return;
+                  }
+                  fetch(buildAppPath(`/api/proxy/agent${server.connect_url}`), { method: 'POST', credentials: 'same-origin' })
+                    .then((r) => r.json())
+                    .then((b: { authorize_url?: string }) => {
+                      if (b.authorize_url) {
+                        safeOpenAuthorize(b.authorize_url, `mcp-connect-${server.name}`, 'width=600,height=700');
+                      } else {
+                        setConnectError('No authorization URL returned — check the MCP server config.');
+                      }
+                    })
+                    .catch(() => setConnectError('Could not reach the MCP server — check your connection.'));
+                }}
+              >
+                Connect {server.name.charAt(0).toUpperCase() + server.name.slice(1)}
+              </Button>
             ))}
+            {connectError && (
+              <HelperText>
+                <HelperTextItem variant="error">{connectError}</HelperTextItem>
+              </HelperText>
+            )}
+            <Content component="small">After connecting, click Evaluate again.</Content>
           </div>
-          <p style={{ marginTop: 8, fontSize: 12, color: 'var(--pf-global--Color--200)' }}>
-            After connecting, click Evaluate again.
-          </p>
-        </div>
+        </Alert>
       )}
-      <div
-        style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}
-      >
+      <div className="app-eval__row">
         <Button
           variant="secondary"
           size="sm"
@@ -181,7 +184,7 @@ export function EvalPanel() {
               isDisabled={isRunning}
               onClick={() => void handleEvaluate(true)}
             >
-              ↺
+              <RedoIcon />
             </Button>
           </Tooltip>
         )}
@@ -189,9 +192,9 @@ export function EvalPanel() {
         {badge()}
       </div>
       {triggerError && (
-        <p style={{ fontSize: 12, color: 'var(--pf-global--danger-color--100, #c9190b)', marginTop: 4 }}>
-          {triggerError}
-        </p>
+        <HelperText>
+          <HelperTextItem variant="error">{triggerError}</HelperTextItem>
+        </HelperText>
       )}
 
       {eval_.status === 'completed' && (
@@ -208,18 +211,30 @@ export function EvalPanel() {
       >
         <ModalHeader title="Eval Report" />
         <ModalBody>
-          <p>
-            <strong>Score:</strong>{' '}
-            {eval_.score !== null ? `${Math.round(eval_.score * 100)}%` : '—'}
-          </p>
-          <p>
-            <strong>Pass:</strong> {eval_.pass}&nbsp;&nbsp;
-            <strong>Fail:</strong> {eval_.fail}&nbsp;&nbsp;
-            <strong>Error:</strong> {eval_.error}
-          </p>
-          <p>
-            <strong>Config hash:</strong> <code>{eval_.configHash || '—'}</code>
-          </p>
+          <DescriptionList isHorizontal isCompact>
+            <DescriptionListGroup>
+              <DescriptionListTerm>Score</DescriptionListTerm>
+              <DescriptionListDescription>
+                {eval_.score !== null ? `${Math.round(eval_.score * 100)}%` : '—'}
+              </DescriptionListDescription>
+            </DescriptionListGroup>
+            <DescriptionListGroup>
+              <DescriptionListTerm>Pass</DescriptionListTerm>
+              <DescriptionListDescription>{eval_.pass}</DescriptionListDescription>
+            </DescriptionListGroup>
+            <DescriptionListGroup>
+              <DescriptionListTerm>Fail</DescriptionListTerm>
+              <DescriptionListDescription>{eval_.fail}</DescriptionListDescription>
+            </DescriptionListGroup>
+            <DescriptionListGroup>
+              <DescriptionListTerm>Error</DescriptionListTerm>
+              <DescriptionListDescription>{eval_.error}</DescriptionListDescription>
+            </DescriptionListGroup>
+            <DescriptionListGroup>
+              <DescriptionListTerm>Config hash</DescriptionListTerm>
+              <DescriptionListDescription><code>{eval_.configHash || '—'}</code></DescriptionListDescription>
+            </DescriptionListGroup>
+          </DescriptionList>
         </ModalBody>
       </Modal>
     </div>

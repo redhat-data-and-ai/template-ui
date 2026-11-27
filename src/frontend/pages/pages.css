@@ -1,0 +1,69 @@
+.app-home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.app-home__center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-inline: var(--pf-t--global--spacer--lg);
+  min-height: 0;
+  overflow-y: auto;
+}
+.app-home__composer {
+  padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--lg) var(--pf-t--global--spacer--md);
+}
+.app-home__composer-inner { max-width: 42rem; margin-inline: auto; }
+
+.app-project {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: var(--pf-t--global--spacer--lg);
+  max-width: 48rem;
+  margin-inline: auto;
+  width: 100%;
+}
+.app-project__head { flex-shrink: 0; margin-bottom: var(--pf-t--global--spacer--lg); }
+.app-project__desc { color: var(--app-text-secondary); margin-top: var(--pf-t--global--spacer--xs); }
+.app-project__count { color: var(--app-text-secondary); margin-top: var(--pf-t--global--spacer--sm); font-size: var(--pf-t--global--font--size--sm); }
+.app-project__actions { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: var(--pf-t--global--spacer--sm); }
+.app-project__list {
+  margin-top: var(--pf-t--global--spacer--lg);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--sm);
+}
+.app-project__item { cursor: pointer; }
+.app-project__item-title { font-weight: var(--pf-t--global--font--weight--body--bold); }
+.app-project__item-preview {
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-center-fill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--pf-t--global--spacer--md);
+  color: var(--app-text-secondary);
+}
+@media (max-width: 575px) {
+  .app-project { padding: var(--pf-t--global--spacer--md); }
+  .app-home__center, .app-home__composer { padding-inline: var(--pf-t--global--spacer--md); }
+}
+.app-project__item:hover { background: var(--pf-t--global--background--color--secondary--hover); }
+.app-project__item:focus-visible { outline: 2px solid var(--pf-t--global--border--color--clicked); outline-offset: 2px; }
