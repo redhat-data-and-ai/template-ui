@@ -34,6 +34,36 @@ import { isSubAgentToolCall, extractSubAgentName } from '@/types/deep-agent';
 import type { HITLInterruptValue, InterruptInfo } from '@/types/deep-agent';
 import { mergeMessageWithMcpModelContext } from '@/types/mcp-apps';
 
+type TokenPart = 'thinking' | 'text';
+
+function dispatchStreamToken(
+  dispatch: AppDispatch,
+  threadId: string,
+  content: string,
+  messageId: string | undefined,
+  part: TokenPart | undefined,
+  isStreamingTokensRef: { current: boolean },
+): void {
+  const isThinking = part === 'thinking';
+  dispatch(updateStreamingState({ chatId: threadId, state: { isThinking } }));
+  if (!isStreamingTokensRef.current) {
+    const message = {
+      type: 'ai',
+      content: isThinking ? '' : content,
+      tool_calls: [],
+      id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      ...(isThinking ? { thinking: content } : {}),
+    } as AIMessage;
+    dispatch(appendMessageToChat({ chatId: threadId, message }));
+    isStreamingTokensRef.current = true;
+    return;
+  }
+  dispatch(updateLastMessageInChat({
+    chatId: threadId,
+    content,
+    part: isThinking ? 'thinking' : 'text',
+  }));
+}
 
 function enrichInterrupt(interrupt: InterruptPayload): InterruptInfo {
   const raw = interrupt.value as string | HITLInterruptValue;
@@ -175,6 +205,7 @@ export function _startRecoveryPolling(
       state: {
         isLoading: false,
         isConnected: false,
+        isThinking: false,
         isReconnecting: false,
         reconnectAttempt: 0,
         error: originalErrorMessage || 'Agent is unavailable. Please try again.',
@@ -198,6 +229,7 @@ export function _startRecoveryPolling(
           state: {
             pendingInterrupts: interrupts ?? [enrichInterrupt(interrupt)],
             isLoading: false,
+            isThinking: false,
           },
         }));
         return;
@@ -223,6 +255,7 @@ export function _startRecoveryPolling(
           state: {
             isLoading: false,
             isConnected: false,
+            isThinking: false,
             isReconnecting: false,
             reconnectAttempt: 0,
             error: caughtErr.message || originalErrorMessage || 'Agent is unavailable. Please try again.',
@@ -264,9 +297,10 @@ function nextStreamingPartialForStatus(status: StreamStatus): Partial<StreamingS
         isLoading: false,
         isConnected: false,
         error: null,
+        isThinking: false,
       };
     case 'error':
-      return null;
+      return { isThinking: false };
   }
 }
 
@@ -535,25 +569,14 @@ export function useStreamingAPI(threadId: string) {
           streamEndedWithInterruptRef.current = false;
 
           const callbacks: StreamCallback = {
-            onToken(content, messageId) {
+            onToken(content, messageId, part) {
               lastTokenTimeRef.current = Date.now();
               lastSuccessfulConnectionRef.current = Date.now();
               setIsStreamStale(false);
               if (streamClockRef.current.firstTokenTime == null) {
                 streamClockRef.current.firstTokenTime = Date.now();
               }
-              if (!isStreamingTokensRef.current) {
-                const message: AIMessage = {
-                  type: 'ai',
-                  content,
-                  tool_calls: [],
-                  id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                };
-                dispatch(appendMessageToChat({ chatId: threadId, message }));
-                isStreamingTokensRef.current = true;
-                return;
-              }
-              dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+              dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
             },
             onDraftDiscard() {
               if (isStreamingTokensRef.current) {
@@ -562,6 +585,7 @@ export function useStreamingAPI(threadId: string) {
               }
             },
             onMessage(m) {
+              dispatch(updateStreamingState({ chatId: threadId, state: { isThinking: false } }));
               isStreamingTokensRef.current = false;
               if (m.type === 'human') {
                 return;
@@ -639,6 +663,7 @@ export function useStreamingAPI(threadId: string) {
                       state: {
                         isLoading: false,
                         isConnected: false,
+                        isThinking: false,
                         isReconnecting: false,
                         reconnectAttempt: 0,
                         error: lastStreamErrorRef.current?.message || 'Agent is unavailable. Please try again.',
@@ -660,7 +685,7 @@ export function useStreamingAPI(threadId: string) {
                       dispatch(updateStreamingState({
                         chatId: threadId,
                         state: {
-                          error: null, isLoading: false, isConnected: false,
+                          error: null, isLoading: false, isConnected: false, isThinking: false,
                           isReconnecting: false, reconnectAttempt: 0,
                           pendingInterrupts: interrupts ?? [enrichInterrupt(interrupt)],
                         },
@@ -680,7 +705,7 @@ export function useStreamingAPI(threadId: string) {
                         managerRef.current?.cancel();
                         dispatch(updateStreamingState({
                           chatId: threadId,
-                          state: { error: null, isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0 },
+                          state: { error: null, isLoading: false, isConnected: false, isThinking: false, isReconnecting: false, reconnectAttempt: 0 },
                         }));
                         setWasInterrupted(false);
                       }
@@ -693,7 +718,7 @@ export function useStreamingAPI(threadId: string) {
                       dispatch(updateStreamingState({
                         chatId: threadId,
                         state: {
-                          isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0,
+                          isLoading: false, isConnected: false, isThinking: false, isReconnecting: false, reconnectAttempt: 0,
                           error: caughtErr.message || 'Agent is unavailable. Please try again.',
                         },
                       }));
@@ -754,6 +779,7 @@ export function useStreamingAPI(threadId: string) {
                       error: error.message,
                       isLoading: false,
                       isConnected: false,
+                      isThinking: false,
                       isReconnecting: false,
                       reconnectAttempt: 0,
                       streamDroppedMidResponse: false,
@@ -806,7 +832,7 @@ export function useStreamingAPI(threadId: string) {
                   recoveryIntervalRef.current = null;
                 }
                 dispatch(updateStreamingState({ chatId: threadId, state: {
-                  isLoading: false, isConnected: false, isReconnecting: false,
+                  isLoading: false, isConnected: false, isThinking: false, isReconnecting: false,
                   reconnectAttempt: 0, streamDroppedMidResponse: false,
                 } }));
                 finish('success');
@@ -835,6 +861,7 @@ export function useStreamingAPI(threadId: string) {
                       state: {
                         isLoading: false,
                         isConnected: false,
+                        isThinking: false,
                         isReconnecting: false,
                         reconnectAttempt: 0,
                        error: lastStreamErrorRef.current?.message || 'Agent is unavailable. Please try again.',
@@ -855,7 +882,7 @@ export function useStreamingAPI(threadId: string) {
                       dispatch(updateStreamingState({
                         chatId: threadId,
                         state: {
-                          error: null, isLoading: false, isConnected: false,
+                          error: null, isLoading: false, isConnected: false, isThinking: false,
                           isReconnecting: false, reconnectAttempt: 0,
                           pendingInterrupts: interrupts ?? [enrichInterrupt(interrupt)],
                         },
@@ -871,7 +898,7 @@ export function useStreamingAPI(threadId: string) {
                       dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
                       dispatch(updateStreamingState({
                         chatId: threadId,
-                        state: { error: null, isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0 },
+                        state: { error: null, isLoading: false, isConnected: false, isThinking: false, isReconnecting: false, reconnectAttempt: 0 },
                       }));
                       setWasInterrupted(false);
                     }
@@ -883,7 +910,7 @@ export function useStreamingAPI(threadId: string) {
                       dispatch(updateStreamingState({
                         chatId: threadId,
                         state: {
-                          isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0,
+                          isLoading: false, isConnected: false, isThinking: false, isReconnecting: false, reconnectAttempt: 0,
                           error: caughtErr.message || 'Agent is unavailable. Please try again.',
                         },
                       }));
@@ -901,6 +928,7 @@ export function useStreamingAPI(threadId: string) {
                     state: {
                       isLoading: false,
                       isConnected: false,
+                      isThinking: false,
                       isReconnecting: false,
                       reconnectAttempt: 0,
                       streamDroppedMidResponse: false,
@@ -972,7 +1000,7 @@ export function useStreamingAPI(threadId: string) {
                 setMessages(msgs.map(m => JSON.parse(JSON.stringify(m))));
                 dispatch(updateStreamingState({
                   chatId: threadIdRef.current,
-                  state: { isLoading: false, error: null },
+                  state: { isLoading: false, isThinking: false, error: null },
                 }));
               }
             }, recoveryIntervalRef, recoveryDeadlineRef, wasInterruptedRef, RECOVERY_POLL_INTERVAL_MS, RECOVERY_POLL_TIMEOUT_MS, lastStreamErrorRef.current?.message);
@@ -983,6 +1011,7 @@ export function useStreamingAPI(threadId: string) {
               state: {
                 isLoading: false,
                 isConnected: false,
+                isThinking: false,
                 isReconnecting: false,
                 reconnectAttempt: 0,
                 error: err.message || 'Agent encountered an error.',
@@ -1025,6 +1054,7 @@ export function useStreamingAPI(threadId: string) {
               state: {
                 isLoading: false,
                 isConnected: false,
+                isThinking: false,
                 isReconnecting: false,
                 reconnectAttempt: 0,
                 error: lastStreamErrorRef.current?.message || 'Agent is unavailable. Please try again.',
@@ -1043,7 +1073,7 @@ export function useStreamingAPI(threadId: string) {
               messagesRef.current = serverMsgs;
               dispatch(updateChat({ id: threadId, updates: { messages: serverMsgs } }));
               dispatch(resolveAllPendingToolCalls({ chatId: threadId }));
-              dispatch(updateStreamingState({ chatId: threadId, state: { error: null, isLoading: false, isConnected: false } }));
+              dispatch(updateStreamingState({ chatId: threadId, state: { error: null, isLoading: false, isConnected: false, isThinking: false } }));
               setWasInterrupted(false);
             }
           } catch (caughtErr) {
@@ -1054,7 +1084,7 @@ export function useStreamingAPI(threadId: string) {
               dispatch(updateStreamingState({
                 chatId: threadId,
                 state: {
-                  isLoading: false, isConnected: false, isReconnecting: false, reconnectAttempt: 0,
+                  isLoading: false, isConnected: false, isThinking: false, isReconnecting: false, reconnectAttempt: 0,
                   error: caughtErr.message || 'Agent is unavailable. Please try again.',
                 },
               }));
@@ -1106,26 +1136,19 @@ export function useStreamingAPI(threadId: string) {
         throw new Error('Provide one decision for each requested action.');
       }
       manager.beginResume();
-      dispatch(updateStreamingState({ chatId: threadId, state: { isResuming: true, error: null } }));
+      dispatch(updateStreamingState({
+        chatId: threadId,
+        state: { isResuming: true, resumingInterruptId: interruptId, error: null },
+      }));
       const remaining = new Map(pending.filter(item => item.id !== interruptId).map(item => [item.id, item]));
+      let sawNewInterrupt = false;
       let failure: Error | null = null;
       let needsRefresh = false;
       try {
         const callbacks: StreamCallback = {
-          onToken(content, messageId) {
+          onToken(content, messageId, part) {
             lastTokenTimeRef.current = Date.now();
-            if (!isStreamingTokensRef.current) {
-              const message: AIMessage = {
-                type: 'ai',
-                content,
-                tool_calls: [],
-                id: messageId || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-              };
-              dispatch(appendMessageToChat({ chatId: threadId, message }));
-              isStreamingTokensRef.current = true;
-              return;
-            }
-            dispatch(updateLastMessageInChat({ chatId: threadId, content }));
+            dispatchStreamToken(dispatch, threadId, content, messageId, part, isStreamingTokensRef);
           },
           onDraftDiscard() {
             if (isStreamingTokensRef.current) {
@@ -1134,6 +1157,7 @@ export function useStreamingAPI(threadId: string) {
             }
           },
           onMessage(m) {
+            dispatch(updateStreamingState({ chatId: threadId, state: { isThinking: false } }));
             isStreamingTokensRef.current = false;
             if (m.type === 'human') return;
             if (m.type === 'ai' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
@@ -1155,9 +1179,14 @@ export function useStreamingAPI(threadId: string) {
             }
           },
           onInterrupt(interrupt) {
+            sawNewInterrupt = true;
             const item = enrichInterrupt(interrupt);
             remaining.set(item.id, item);
-            dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupt: item } }));
+            dispatch(updateStreamingState({
+              chatId: threadId,
+              state: { pendingInterrupt: item, isConnected: false, isThinking: false },
+            }));
+            managerRef.current?.cancel();
           },
           onError(error) { failure = error; },
           onStatusChange(status) {
@@ -1178,8 +1207,18 @@ export function useStreamingAPI(threadId: string) {
           resume: true,
           resumeResponses: { [interruptId]: response },
         }, callbacks);
-        if (manager.getStatus() === 'cancelled') failure = new Error('Approval submission was interrupted.');
+        if (manager.getStatus() === 'cancelled' && !sawNewInterrupt) {
+          failure = new Error('Approval submission was interrupted.');
+        }
         if (failure) throw failure;
+        if (sawNewInterrupt) {
+          try {
+            const state = await getThreadStateAndInterrupt(threadId);
+            for (const item of (state.interrupts ?? []).map(enrichInterrupt)) {
+              if (item.id) remaining.set(item.id, item);
+            }
+          } catch { /* Keep the interrupts already delivered. */ }
+        }
         const unresolved = [...remaining.values()];
         pendingInterruptsRef.current = unresolved;
         dispatch(updateStreamingState({ chatId: threadId, state: { pendingInterrupts: unresolved } }));
@@ -1200,7 +1239,10 @@ export function useStreamingAPI(threadId: string) {
         throw error;
       } finally {
         manager.endResume(needsRefresh);
-        dispatch(updateStreamingState({ chatId: threadId, state: { isResuming: false, isLoading: false, isConnected: false } }));
+        dispatch(updateStreamingState({
+          chatId: threadId,
+          state: { isResuming: false, resumingInterruptId: null, isLoading: false, isConnected: false, isThinking: false },
+        }));
       }
     }, [dispatch, threadId],
   );
@@ -1264,6 +1306,7 @@ export function useStreamingAPI(threadId: string) {
     pendingInterrupt: streamingState.pendingInterrupt,
     pendingInterrupts: streamingState.pendingInterrupts,
     isResuming: streamingState.isResuming,
+    resumingInterruptId: streamingState.resumingInterruptId,
     refreshInterrupts,
     taskSteps: streamingState.taskSteps,
     submit,

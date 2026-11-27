@@ -181,6 +181,35 @@ describe('StreamingManager', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
+  it('leaves the replacement stream cancellable after the old stream finishes aborting', async () => {
+    let secondSignal: AbortSignal | undefined;
+    vi.mocked(fetch)
+      .mockImplementationOnce((_url, opts) => new Promise((_resolve, reject) => {
+        opts?.signal?.addEventListener('abort', () => {
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }))
+      .mockImplementationOnce((_url, opts) => new Promise((_resolve, reject) => {
+        secondSignal = opts?.signal ?? undefined;
+        opts?.signal?.addEventListener('abort', () => {
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }));
+
+    const manager = new StreamingManager();
+    const first = manager.stream(BASE_REQUEST, makeCallbacks());
+    const second = manager.stream(BASE_REQUEST, makeCallbacks());
+    await first;
+    manager.cancel();
+
+    expect(secondSignal?.aborted).toBe(true);
+    await second;
+  });
+
   // ── getStatus() reflects current state ───────────────────────────────────
   it('getStatus() returns idle before and after a completed stream', async () => {
     const sseBody = makeTokenSSE('Hi', 0) + 'data: [DONE]\n\n';
@@ -336,6 +365,18 @@ describe('StreamingManager', () => {
     await manager.stream(BASE_REQUEST, callbacks);
 
     expect(callbacks.onToken).toHaveBeenCalledWith('Hello', 'server-msg-uuid');
+  });
+
+  it('forwards a thinking part from token SSE to onToken', async () => {
+    const payload = { type: 'token', content: 'Let me', chunk_id: 0, message_id: 'msg-1', part: 'thinking' };
+    const sseBody = `data: ${JSON.stringify(payload)}\n\n` + 'data: [DONE]\n\n';
+    vi.mocked(fetch).mockResolvedValueOnce(makeStreamResponse(sseBody));
+
+    const callbacks = makeCallbacks();
+    const manager = new StreamingManager();
+    await manager.stream(BASE_REQUEST, callbacks);
+
+    expect(callbacks.onToken).toHaveBeenCalledWith('Let me', 'msg-1', 'thinking');
   });
 
   // ── Error message extraction from non-2xx JSON body ───────────────────────
