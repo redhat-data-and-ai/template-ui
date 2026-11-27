@@ -89,7 +89,7 @@ export function ConsentPage() {
               </Content>
             </Flex>
 
-            <Alert variant="info" isInline title="AI Technology Usage Notice">
+            <Alert component="h2" variant="info" isInline title="AI Technology Usage Notice">
               You are about to use a Red Hat tool that utilizes AI technology to
               provide you with relevant information. By proceeding to use the
               tool, you acknowledge that the tool and any output provided are
@@ -108,7 +108,7 @@ export function ConsentPage() {
               ))}
             </ul>
 
-            <Alert variant="warning" isInline title="Important">
+            <Alert component="h2" variant="warning" isInline title="Important">
               Actions performed by this agent are executed under your identity.
               You will be able to review and approve individual tool calls
               during your session, and you can revoke consent at any time from
@@ -116,7 +116,7 @@ export function ConsentPage() {
             </Alert>
 
             {error && (
-              <Alert variant="danger" isInline title={error} role="alert" />
+              <Alert component="h2" variant="danger" isInline title={error} role="alert" />
             )}
 
             <Button
