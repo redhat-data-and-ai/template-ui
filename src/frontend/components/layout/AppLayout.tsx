@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -98,9 +98,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     unassignAllThreads,
   } = useProjects();
   const isDesktop = useIsDesktop();
-  // Inline on desktop, an overlay (closed by default) below the PF xl breakpoint.
-  const [sidebarOpen, setSidebarOpen] = useState(isDesktop);
-  const wasOpenRef = useRef(sidebarOpen);
+  // Inline (collapsible) on desktop, an overlay (closed by default) below the PF xl breakpoint.
+  // Each mode keeps its own flag, so crossing the breakpoint never renders the overlay open.
+  const [desktopOpen, setDesktopOpen] = useState(true);
+  const [narrowOpen, setNarrowOpen] = useState(false);
+  const sidebarOpen = isDesktop ? desktopOpen : narrowOpen;
   const [sessionExpired, setSessionExpired] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const navigate = useNavigate();
@@ -117,41 +119,40 @@ export function AppLayout({ children }: AppLayoutProps) {
     };
   }, []);
 
+  // Reset the mode we are leaving; the state is not visible while it is inactive.
   useEffect(() => {
-    setSidebarOpen(isDesktop);
+    if (isDesktop) setNarrowOpen(false);
+    else setDesktopOpen(true);
   }, [isDesktop]);
 
+  // Dismiss the overlay on a user action and hand focus back to the toggle.
   const closeOverlay = useCallback(() => {
-    if (!isDesktop) setSidebarOpen(false);
+    if (isDesktop) return;
+    setNarrowOpen(false);
+    document.getElementById('nav-toggle')?.focus();
   }, [isDesktop]);
 
-  // Navigating (chat, project, settings, new chat) dismisses the overlay.
+  // Any other navigation (shortcuts, links) dismisses the overlay without moving focus.
   useEffect(() => {
-    closeOverlay();
-  }, [location.pathname, closeOverlay]);
+    setNarrowOpen(false);
+  }, [location.pathname]);
 
-  const overlayOpen = !isDesktop && sidebarOpen;
+  const overlayOpen = !isDesktop && narrowOpen;
 
   useEffect(() => {
     if (!overlayOpen) return undefined;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSidebarOpen(false);
+      if (e.key === 'Escape') closeOverlay();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [overlayOpen]);
+  }, [overlayOpen, closeOverlay]);
 
-  // Move focus into the overlay when it opens, back to the toggle when it closes.
+  // Move focus into the overlay when the user opens it.
   useEffect(() => {
-    const wasOpen = wasOpenRef.current;
-    wasOpenRef.current = sidebarOpen;
-    if (isDesktop || wasOpen === sidebarOpen) return;
-    if (sidebarOpen) {
-      document.querySelector<HTMLElement>('#app-sidebar button, #app-sidebar a, #app-sidebar input')?.focus();
-    } else {
-      document.getElementById('nav-toggle')?.focus();
-    }
-  }, [sidebarOpen, isDesktop]);
+    if (!overlayOpen) return;
+    document.querySelector<HTMLElement>('#app-sidebar button, #app-sidebar a, #app-sidebar input')?.focus();
+  }, [overlayOpen]);
 
   const currentChatId = useMemo(() => {
     const match = /^\/chat\/([^/]+)/.exec(location.pathname);
@@ -456,7 +457,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   });
 
   const masthead = (
-    <AppMasthead isSidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />
+    <AppMasthead isSidebarOpen={sidebarOpen} onToggleSidebar={() => (isDesktop ? setDesktopOpen((v) => !v) : setNarrowOpen((v) => !v))} />
   );
 
   const sidebar = (
@@ -488,7 +489,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <Page masthead={masthead} sidebar={sidebar} className="h-screen bg-background text-foreground">
       {overlayOpen && (
-        <div className="app-sidebar-backdrop" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
+        <div className="app-sidebar-backdrop" aria-hidden="true" onClick={closeOverlay} />
       )}
       <a href="#main-content" className="skip-to-main sr-only">
         Skip to main content

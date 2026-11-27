@@ -159,4 +159,9 @@ describe("SettingsPage narrow layout", () => {
     expect(screen.getByRole("tab", { name: "Appearance" })).toHaveAttribute("aria-selected", "true");
     expect(document.getElementById("settings-title-appearance")).not.toBeNull();
   });
+
+  it("names the tablist itself", () => {
+    renderPage();
+    expect(screen.getByRole("tablist", { name: "Settings sections" })).toBeInTheDocument();
+  });
 });

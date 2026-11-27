@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Card, CardBody, CardTitle, Nav, NavItem, NavList, Tab, Tabs, TabTitleText, Title } from '@patternfly/react-core';
 import { ArrowLeftIcon } from '@patternfly/react-icons';
@@ -50,6 +50,11 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isNarrow = useMediaQuery(NARROW_QUERY);
+  // PF Tabs puts `aria-label` on its wrapper, not on the role=tablist list; label the list itself.
+  const tabsHostRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    tabsHostRef.current?.querySelector('[role="tablist"]')?.setAttribute('aria-label', 'Settings sections');
+  }, [isNarrow]);
   const developerMode = useAppSelector(selectDeveloperMode);
   const features = useAppSelector((state: RootState) => state.config.features);
   const [activeTab, setActiveTab] = useState<TabId>(() => {
@@ -89,8 +94,8 @@ export function SettingsPage() {
       <div className="app-settings__scroll">
         <div className="app-settings__layout">
           {isNarrow ? (
+            <div ref={tabsHostRef} className="app-settings__tabs-host">
             <Tabs
-              aria-label="Settings sections"
               className="app-settings__tabs"
               activeKey={active?.id}
               onSelect={(_e, key) => setActiveTab(key as TabId)}
@@ -105,6 +110,7 @@ export function SettingsPage() {
                 />
               ))}
             </Tabs>
+            </div>
           ) : (
             <Nav aria-label="Settings sections" className="app-settings__nav">
               <NavList>

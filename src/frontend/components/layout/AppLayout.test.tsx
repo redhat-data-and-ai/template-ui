@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createTestStore } from '../../test-utils/createTestStore';
 import { addChat } from '../../redux/slices/chats';
@@ -454,5 +454,53 @@ describe('AppLayout — responsive sidebar', () => {
     renderLayout(createTestStore());
     await userEvent.click(screen.getByRole('button', { name: 'select-chat' }));
     expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
+  });
+
+  it('returns focus to the toggle when the user closes the overlay with Escape', async () => {
+    mockViewport(false);
+    renderLayout(createTestStore());
+    const toggle = screen.getByRole('button', { name: 'Toggle navigation' });
+    await userEvent.click(toggle);
+    await userEvent.keyboard('{Escape}');
+    expect(toggle).toHaveFocus();
+    await userEvent.click(toggle);
+    await userEvent.click(toggle);
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    expect(toggle).toHaveFocus();
+  });
+
+  it('keeps focus in the composer and the overlay closed when crossing desktop to narrow', async () => {
+    const listeners = new Set<() => void>();
+    let desktop = true;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        get matches() { return desktop; },
+        media: query,
+        addEventListener: (_: string, cb: () => void) => listeners.add(cb),
+        removeEventListener: (_: string, cb: () => void) => listeners.delete(cb),
+      }),
+    });
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => {
+      seen.push(`${document.querySelector('.app-sidebar-backdrop') ? 'backdrop' : ''}${document.querySelector('[data-testid="sidebar"]')?.getAttribute('data-open')}`);
+    });
+    renderLayout(createTestStore());
+    const composer = document.createElement('textarea');
+    document.body.appendChild(composer);
+    composer.focus();
+    observer.observe(document.body, { subtree: true, attributes: true, childList: true });
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'true');
+    act(() => {
+      desktop = false;
+      listeners.forEach((cb) => cb());
+    });
+    observer.disconnect();
+    expect(composer).toHaveFocus();
+    composer.remove();
+    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-open', 'false');
+    expect(document.querySelector('.app-sidebar-backdrop')).toBeNull();
+    expect(seen.some((v) => v.includes('backdrop') || v.endsWith('true'))).toBe(false);
   });
 });
