@@ -17,17 +17,11 @@ branding:
   title: "Production Agent"
   logo_url: "/dist/frontend/redhat-logo.svg"
   favicon_url: "/dist/frontend/redhat-logo.svg"
-  colors:
-    light:
-      primary: "#0066cc"
-      accent: "#a60000"
-      background: "#ffffff"
-      foreground: "#1a1a1a"
-    dark:
-      primary: "#4dabf7"
-      accent: "#f56e6e"
-      background: "#0a1628"
-      foreground: "#f0f4f8"
+  # colors is optional; omit it to use the built-in palette. To brand, uncomment and set hex values:
+  #   `primary` -> buttons / active nav (accent), `accent` -> links / text actions (strong accent).
+  # colors:
+  #   light: { primary: "#...", accent: "#...", background: "#...", foreground: "#..." }
+  #   dark:  { primary: "#...", accent: "#...", background: "#...", foreground: "#..." }
 
 features:
   auth_enabled: true          # SSO enabled; credentials injected via env vars by agent-engine
