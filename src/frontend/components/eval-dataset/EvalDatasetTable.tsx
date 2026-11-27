@@ -36,7 +36,7 @@ export function EvalDatasetTable({ cases, onEdit, onDelete }: EvalDatasetTablePr
   }
 
   return (
-    <Table aria-label="Eval test cases" variant="compact">
+    <Table aria-label="Eval test cases" variant="compact" className="app-eval__table">
       <Thead>
         <Tr>
           <Th>Test Case</Th>

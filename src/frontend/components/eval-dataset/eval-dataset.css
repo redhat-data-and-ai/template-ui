@@ -145,3 +145,62 @@
 .app-eval-form__footer {
   flex-wrap: wrap;
 }
+
+/* Grid table: 1px lines between rows and columns. The surrounding Card already draws the outer border,
+   so the table adds none. Selectors are doubled-up to beat patternfly.css, which loads later. */
+.app-eval .app-eval__table.pf-v6-c-table {
+  --pf-v6-c-table--BorderColor: var(--app-border);
+  --pf-v6-c-table--m-compact--cell--PaddingBlockStart: var(--pf-t--global--spacer--sm);
+  --pf-v6-c-table--m-compact--cell--PaddingBlockEnd: var(--pf-t--global--spacer--sm);
+  border: 0;
+}
+.app-eval .app-eval__table .pf-v6-c-table__thead .pf-v6-c-table__tr {
+  background-color: var(--pf-t--global--background--color--secondary--default);
+}
+.app-eval .app-eval__table .pf-v6-c-table__th,
+.app-eval .app-eval__table .pf-v6-c-table__td {
+  padding-block: var(--pf-t--global--spacer--sm);
+  padding-inline: var(--pf-t--global--spacer--md);
+  vertical-align: middle;
+  border-inline-end: 1px solid var(--app-border);
+}
+.app-eval .app-eval__table .pf-v6-c-table__th:last-child,
+.app-eval .app-eval__table .pf-v6-c-table__td:last-child {
+  border-inline-end: 0;
+  text-align: end;
+}
+.app-eval .app-eval__table .pf-v6-c-table__tbody .pf-v6-c-table__tr,
+.app-eval .app-eval__table .pf-v6-c-table__thead .pf-v6-c-table__tr {
+  border-block-end: 1px solid var(--app-border);
+}
+.app-eval .app-eval__table .pf-v6-c-table__tbody .pf-v6-c-table__tr:last-child {
+  border-block-end: 0;
+}
+
+/* Grid table: 1px lines between rows and columns. The surrounding Card already draws the outer border,
+   so the table adds none. Selectors are prefixed with .app-eval to beat patternfly.css, which loads later. */
+.app-eval .app-eval__table.pf-v6-c-table {
+  --pf-v6-c-table--BorderColor: var(--app-border);
+  border: 0;
+}
+.app-eval .app-eval__table .pf-v6-c-table__thead .pf-v6-c-table__tr {
+  background-color: var(--pf-t--global--background--color--secondary--default);
+}
+.app-eval .app-eval__table .pf-v6-c-table__th,
+.app-eval .app-eval__table .pf-v6-c-table__td {
+  padding-block: var(--pf-t--global--spacer--sm);
+  padding-inline: var(--pf-t--global--spacer--md);
+  vertical-align: middle;
+  border-inline-end: 1px solid var(--app-border);
+}
+.app-eval .app-eval__table .pf-v6-c-table__th:last-child,
+.app-eval .app-eval__table .pf-v6-c-table__td:last-child {
+  border-inline-end: 0;
+  text-align: end;
+}
+.app-eval .app-eval__table .pf-v6-c-table__tr {
+  border-block-end: 1px solid var(--app-border);
+}
+.app-eval .app-eval__table .pf-v6-c-table__tbody .pf-v6-c-table__tr:last-child {
+  border-block-end: 0;
+}
