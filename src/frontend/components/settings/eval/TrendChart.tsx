@@ -120,8 +120,10 @@ export function TrendChart({ data }: TrendChartProps) {
               formatter={(value: number, name: string) => [`${value}%`, friendlyMetricName(name)]}
             />
             <Legend
-              wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-              formatter={(value: string) => friendlyMetricName(value)}
+              wrapperStyle={{ fontSize: 'var(--pf-t--global--font--size--body--sm)', paddingTop: 8 }}
+              formatter={(value: string) => (
+                <span style={{ color: 'var(--pf-t--global--text--color--regular)' }}>{friendlyMetricName(value)}</span>
+              )}
             />
             {allKeys.map((key, i) => (
               <Line
@@ -129,10 +131,11 @@ export function TrendChart({ data }: TrendChartProps) {
                 type="monotone"
                 dataKey={key}
                 stroke={colors[i % colors.length]}
-                strokeWidth={key === 'Overall' ? 2.5 : 2}
+                // Nested widths and marker sizes: when every series has the same values each one stays visible.
+                strokeWidth={Math.max(2, 5 - i)}
                 strokeDasharray={key === 'Overall' ? '6 3' : undefined}
-                dot={{ r: 4, strokeWidth: 2, fill: 'var(--pf-t--global--background--color--primary--default)' }}
-                activeDot={{ r: 6 }}
+                dot={{ r: Math.max(3, 7 - i), strokeWidth: 2, fill: 'var(--pf-t--global--background--color--primary--default)' }}
+                activeDot={{ r: 8 }}
                 connectNulls
               />
             ))}
