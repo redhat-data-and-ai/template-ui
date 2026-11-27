@@ -129,3 +129,123 @@
 :root:not(.pf-v6-theme-dark) .app-settings__nav .pf-v6-c-nav__link.pf-m-current {
   background-color: var(--pf-t--global--background--color--secondary--default);
 }
+
+/* Developer page: section hierarchy, agent tree, field captions. */
+.app-dev__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+  margin-block-start: var(--pf-t--global--spacer--lg);
+}
+.app-dev__divider {
+  --pf-v6-c-divider--BackgroundColor: var(--app-border);
+  --pf-v6-c-divider--after--BackgroundColor: var(--app-border);
+  margin-block-end: var(--pf-t--global--spacer--xs);
+}
+.app-dev__title {
+  display: flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  font-weight: 700;
+}
+.app-dev__title-icon {
+  display: inline-flex;
+  color: var(--app-accent-strong, var(--pf-t--global--icon--color--brand--default));
+}
+.app-dev__agent-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  color: var(--app-text);
+  font-weight: 600;
+}
+.app-dev__agent-icon {
+  color: var(--app-accent-strong, var(--pf-t--global--icon--color--brand--default));
+}
+.app-dev__agent-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  color: var(--app-text);
+  font-weight: 600;
+}
+.app-dev__tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+}
+.app-dev__children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+  margin-inline-start: var(--pf-t--global--spacer--sm);
+  padding-inline-start: var(--pf-t--global--spacer--lg);
+  border-inline-start: 2px solid var(--app-border);
+}
+/* Names are text, not links; chevron on the right for the Agents list. */
+.app-dev__node .pf-v6-c-expandable-section__toggle .pf-v6-c-button,
+.app-dev__agent .pf-v6-c-expandable-section__toggle .pf-v6-c-button {
+  --pf-v6-c-button--Color: var(--app-text);
+  --pf-v6-c-button--hover--Color: var(--app-text);
+  --pf-v6-c-button--m-link--Color: var(--app-text);
+  --pf-v6-c-button--m-link--hover--Color: var(--app-text);
+  color: var(--app-text);
+}
+.app-dev__agent .pf-v6-c-expandable-section__toggle,
+.app-dev__agent .pf-v6-c-expandable-section__toggle .pf-v6-c-button {
+  display: flex;
+  width: 100%;
+}
+.app-dev__agent .pf-v6-c-expandable-section__toggle .pf-v6-c-button {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  padding-inline: 0;
+  background: transparent;
+}
+.app-dev__agent .pf-v6-c-expandable-section__toggle .pf-v6-c-button__text {
+  flex: 1 1 auto;
+  text-align: start;
+}
+.app-dev__agent .pf-v6-c-expandable-section__content,
+.app-dev__node .pf-v6-c-expandable-section__content {
+  padding-inline-start: var(--pf-t--global--spacer--xl);
+  margin-block-start: var(--pf-t--global--spacer--sm);
+}
+.app-dev__agent .pf-v6-c-expandable-section__content {
+  padding-inline-start: var(--pf-t--global--spacer--lg);
+  border-inline-start: 2px solid var(--app-border);
+  margin-inline-start: var(--pf-t--global--spacer--sm);
+}
+.app-dev__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+}
+.app-dev__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--xs);
+  align-items: flex-start;
+}
+.app-dev__field > * {
+  max-width: 100%;
+}
+.app-dev__caption {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-size: var(--pf-t--global--font--size--xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.app-dev__code {
+  font-family: var(--pf-t--global--font--family--mono);
+  font-size: var(--pf-t--global--font--size--sm);
+  padding: var(--pf-t--global--spacer--xs) var(--pf-t--global--spacer--sm);
+  border-radius: var(--pf-t--global--border--radius--small);
+  background-color: var(--pf-t--global--background--color--secondary--default);
+  color: var(--app-text);
+}
+.app-dev__prompt {
+  width: 100%;
+}

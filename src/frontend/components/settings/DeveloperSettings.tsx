@@ -5,6 +5,7 @@ import {
   CodeBlockAction,
   CodeBlockCode,
   ExpandableSection,
+  Divider,
   Label,
   LabelGroup,
   Modal,
@@ -14,7 +15,14 @@ import {
   Spinner,
   Title,
 } from '@patternfly/react-core';
-import { FileAltIcon, PlugIcon, WrenchIcon } from '@patternfly/react-icons';
+import {
+  CubesIcon,
+  FileAltIcon,
+  RobotIcon,
+  ServerIcon,
+  SitemapIcon,
+  WrenchIcon,
+} from '@patternfly/react-icons';
 import { EvalDashboard } from './eval';
 import { useAppSelector } from '../../redux/hooks';
 import type { RootState } from '../../redux/store';
@@ -46,6 +54,27 @@ function ChipList({ children }: { children: React.ReactNode }) {
   return <LabelGroup numLabels={50}>{children}</LabelGroup>;
 }
 
+function SectionHeader({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <>
+      <Divider className="app-dev__divider" />
+      <Title headingLevel="h4" size="md" className="app-dev__title">
+        <span className="app-dev__title-icon" aria-hidden="true">{icon}</span>
+        {children}
+      </Title>
+    </>
+  );
+}
+
+function AgentName({ name }: { name: string }) {
+  return (
+    <span className="app-dev__agent-name">
+      <RobotIcon className="app-dev__agent-icon" aria-hidden="true" />
+      <strong>{name}</strong>
+    </span>
+  );
+}
+
 function AgentTreeNode({ node }: { node: AgentNode }) {
   const hasBadges = Boolean(node.tools?.length || node.skills?.length || node.mcps?.length);
   const [expanded, setExpanded] = useState(true);
@@ -53,28 +82,29 @@ function AgentTreeNode({ node }: { node: AgentNode }) {
   const chips = (
     <ChipList>
       {node.skills?.map((skill) => (
-        <Label key={`skill-${skill}`} isCompact icon={<FileAltIcon />}>
+        <Label key={`skill-${skill}`} isCompact color="teal" icon={<FileAltIcon />}>
           {skill}
         </Label>
       ))}
       {node.tools?.map((tool) => (
-        <Label key={`tool-${tool}`} isCompact icon={<WrenchIcon />}>
+        <Label key={`tool-${tool}`} isCompact variant="outline" icon={<WrenchIcon />}>
           {tool}
         </Label>
       ))}
       {node.mcps?.map((mcp) => (
-        <Label key={`mcp-${mcp}`} isCompact icon={<PlugIcon />}>
+        <Label key={`mcp-${mcp}`} isCompact color="purple" icon={<ServerIcon />}>
           {mcp}
         </Label>
       ))}
     </ChipList>
   );
 
-  if (!hasBadges) return <strong>{node.name}</strong>;
+  if (!hasBadges) return <AgentName name={node.name} />;
 
   return (
     <ExpandableSection
-      toggleContent={<strong>{node.name}</strong>}
+      toggleContent={<AgentName name={node.name} />}
+      className="app-dev__node"
       isExpanded={expanded}
       onToggle={(_event, next) => setExpanded(next)}
     >
@@ -95,14 +125,12 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
   const availableSkills = Object.keys(structure.skills ?? {});
 
   return (
-    <div className="app-settings__stack" style={{ marginBlockStart: 'var(--pf-t--global--spacer--lg)' }}>
-      <Title headingLevel="h4" size="md">
-        Agent structure
-      </Title>
-      <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--md)' }}>
+    <div className="app-dev__section">
+      <SectionHeader icon={<SitemapIcon />}>Agent structure</SectionHeader>
+      <div className="app-dev__tree">
         <AgentTreeNode node={structure.orchestrator} />
         {displayedSubagentNames.length > 0 ? (
-          <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--md)', marginInlineStart: 'var(--pf-t--global--spacer--xl)' }}>
+          <div className="app-dev__children">
             {displayedSubagentNames.map((name) => (
               <AgentTreeNode key={name} node={structure.subagents[name]} />
             ))}
@@ -110,15 +138,15 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
         ) : null}
       </div>
       {availableSkills.length > 0 ? (
-        <div>
-          <Title headingLevel="h4" size="md" style={{ marginBlockEnd: 'var(--pf-t--global--spacer--sm)' }}>
-            Available skills
-          </Title>
+        <>
+          <SectionHeader icon={<FileAltIcon />}>Available skills</SectionHeader>
           <ChipList>
             {availableSkills.map((skill) => (
               <Label
                 key={skill}
                 isCompact
+                color="teal"
+                icon={<FileAltIcon />}
                 onClick={(event) => {
                   setSkillTrigger(event.currentTarget as HTMLElement);
                   setSelectedSkill(skill);
@@ -129,21 +157,19 @@ function AgentStructureTree({ structure }: { structure: AgentStructure }) {
               </Label>
             ))}
           </ChipList>
-        </div>
+        </>
       ) : null}
       {mcpServers.length > 0 ? (
-        <div>
-          <Title headingLevel="h4" size="md" style={{ marginBlockEnd: 'var(--pf-t--global--spacer--sm)' }}>
-            MCP servers
-          </Title>
+        <>
+          <SectionHeader icon={<ServerIcon />}>MCP servers</SectionHeader>
           <ChipList>
             {mcpServers.map(([name, server]) => (
-              <Label key={name} isCompact>
+              <Label key={name} isCompact color="purple" icon={<ServerIcon />}>
                 {server.display_name || name}
               </Label>
             ))}
           </ChipList>
-        </div>
+        </>
       ) : null}
       {selectedSkill ? (
         <SkillContentModal
@@ -226,8 +252,8 @@ function SkillContentModal({
 
 function DetailBlock({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <p className="app-settings__muted">{label}</p>
+    <div className="app-dev__field">
+      <p className="app-dev__caption">{label}</p>
       {children}
     </div>
   );
@@ -251,10 +277,10 @@ function AgentDetails({ agent, isMainAgent = false }: { agent: AgentNode; isMain
     }
   };
 
-  const codeChips = (items: string[]) => (
+  const codeChips = (items: string[], icon: React.ReactNode) => (
     <ChipList>
       {items.map((item) => (
-        <Label key={item} isCompact variant="outline">
+        <Label key={item} isCompact variant="outline" icon={icon}>
           <code>{item}</code>
         </Label>
       ))}
@@ -264,20 +290,16 @@ function AgentDetails({ agent, isMainAgent = false }: { agent: AgentNode; isMain
   return (
     <ExpandableSection
       toggleContent={
-        <span>
+        <span className="app-dev__agent-head">
           <strong>{agent.name}</strong>
-          {isMainAgent ? (
-            <>
-              {' '}
-              <Label isCompact>Main agent</Label>
-            </>
-          ) : null}
+          {isMainAgent ? <Label isCompact color="blue" variant="filled">Main agent</Label> : null}
         </span>
       }
+      className="app-dev__agent"
       isExpanded={open}
       onToggle={(_event, next) => setOpen(next)}
     >
-      <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--md)' }}>
+      <div className="app-dev__details">
         {!hasDetails ? <p className="app-settings__muted">No additional configuration.</p> : null}
         {agent.description ? (
           <DetailBlock label="Description">
@@ -286,17 +308,16 @@ function AgentDetails({ agent, isMainAgent = false }: { agent: AgentNode; isMain
         ) : null}
         {agent.model ? (
           <DetailBlock label="Model">
-            <Label isCompact variant="outline">
-              <code>{agent.model}</code>
-            </Label>
+            <code className="app-dev__code">{agent.model}</code>
           </DetailBlock>
         ) : null}
-        {agent.tools?.length ? <DetailBlock label="Tools">{codeChips(agent.tools)}</DetailBlock> : null}
-        {agent.skills?.length ? <DetailBlock label="Skills">{codeChips(agent.skills)}</DetailBlock> : null}
-        {agent.mcps?.length ? <DetailBlock label="MCP servers">{codeChips(agent.mcps)}</DetailBlock> : null}
+        {agent.tools?.length ? <DetailBlock label="Tools">{codeChips(agent.tools, <WrenchIcon />)}</DetailBlock> : null}
+        {agent.skills?.length ? <DetailBlock label="Skills">{codeChips(agent.skills, <FileAltIcon />)}</DetailBlock> : null}
+        {agent.mcps?.length ? <DetailBlock label="MCP servers">{codeChips(agent.mcps, <ServerIcon />)}</DetailBlock> : null}
         {agent.body ? (
           <DetailBlock label="System prompt">
             <CodeBlock
+              className="app-dev__prompt"
               actions={
                 <CodeBlockAction>
                   <ClipboardCopyButton
@@ -325,10 +346,8 @@ function AgentDetails({ agent, isMainAgent = false }: { agent: AgentNode; isMain
 
 function AgentDetailsList({ structure }: { structure: AgentStructure }) {
   return (
-    <div className="app-settings__stack" style={{ gap: 'var(--pf-t--global--spacer--md)', marginBlockStart: 'var(--pf-t--global--spacer--lg)' }}>
-      <Title headingLevel="h4" size="md">
-        Agents
-      </Title>
+    <div className="app-dev__section">
+      <SectionHeader icon={<CubesIcon />}>Agents</SectionHeader>
       <AgentDetails agent={structure.orchestrator} isMainAgent />
       {Object.values(structure.subagents).map((agent) => (
         <AgentDetails key={agent.name} agent={agent} />
@@ -364,9 +383,7 @@ export function DeveloperSettings() {
       <CollapsibleSection title="Agent Information" defaultOpen={true}>
         <p>
           <span className="app-settings__muted">Agent Version: </span>
-          <Label isCompact variant="outline">
-            <code>{branding?.version ?? '—'}</code>
-          </Label>
+          <code className="app-dev__code">{branding?.version ?? '—'}</code>
         </p>
         {loadingStructure ? (
           <div className="app-settings__row" style={{ justifyContent: 'flex-start', marginBlockStart: 'var(--pf-t--global--spacer--md)' }} role="status">
