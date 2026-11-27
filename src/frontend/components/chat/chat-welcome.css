@@ -33,7 +33,12 @@
   font-size: var(--pf-t--global--font--size--md);
   font-weight: var(--pf-t--global--font--weight--body--default);
 }
-.chat-welcome .pf-chatbot--layout--welcome .pf-chatbot__question b { font-weight: var(--pf-t--global--font--weight--body--bold); }
+/* Agent name: PF's Content h1 and the 500 body-bold token left <b> barely heavier than the 400 text, so it did not read
+   as bold on live. Use the real bold weight, with specificity above PF's Content rules. */
+.chat-welcome .pf-chatbot--layout--welcome .pf-v6-c-content--h1 .pf-chatbot__question :is(b, strong) {
+  font-weight: var(--pf-t--global--font--weight--heading--bold);
+  color: var(--app-text);
+}
 .chat-welcome__subheading {
   color: var(--app-text-secondary);
   font-size: var(--pf-t--global--font--size--sm);
